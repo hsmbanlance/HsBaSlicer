@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package HsbaProto;
+
+import "point.proto";
+import "vector.proto";
+
+enum msg_slice_type 
+{
+    slicet_Same=0; // slices have the same heights and z_direction
+    slicet_Diff=1; // slices have different heights and z_direction, a string with [0-X]:h1, [X+1-Y]:h2, [Y+1-Z]:h3, ..., [N-1]:hN
+    slicet_Curved=2;// slices display a mesh file
+    slicet_Ring=3;// slices form a ring
+    slicet_None=4;// no slice
+    slicet_Unknown=5;// unknown slice type
+}
+
+message msg_slice_config
+{
+    msg_slice_type type = 1; // 0: same, 1: diff, 2: curved, 3: ring
+    float slice_height = 2; // mm z_direction
+    string diff_string = 3; // diff string 
+    float ring_radius = 4; // mm
+    msg_point3 ring_center = 5;// ring center
+    msg_vector3 ring_normal = 6;// ring normal
+    string curved_path =7; // curved surface path, as a mesh file
+}

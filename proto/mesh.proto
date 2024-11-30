@@ -1,0 +1,31 @@
+﻿syntax = "proto3";
+
+package HsbaProto;
+
+import "point.proto";
+import "vector.proto";
+
+message msg_stlmeshes
+{
+	message msg_stltrimesh
+	{
+		msg_point3 p0=1;
+		msg_point3 p1=2;
+		msg_point3 p2=3;
+		msg_vector3 normal=4;
+	}
+	repeated msg_stltrimesh trimesh=1;
+}
+
+message msg_topo_trimeshes
+{
+	message msg_topo_trimesh
+	{
+		uint32 p0=1;
+		uint32 p1=2;
+		uint32 p2=3;
+		msg_vector3 normal=4;
+	}
+	repeated msg_point3 vetex=1;
+	repeated msg_topo_trimesh trimesh=2;
+}

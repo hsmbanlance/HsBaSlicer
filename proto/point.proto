@@ -1,0 +1,16 @@
+﻿syntax = "proto3";
+
+package HsbaProto;
+
+message msg_point2
+{
+	float x=1;
+	float y=2;
+}
+
+message msg_point3
+{
+	float x=1;
+	float y=2;
+	float z=3;
+}
