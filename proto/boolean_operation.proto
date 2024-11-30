@@ -1,0 +1,12 @@
+﻿syntax = "proto3";
+
+package HsbaProto;
+
+enum msg_boolean_operation
+{
+	boolop_union = 0;
+	boolop_intersection = 1;
+	boolop_difference = 2;
+    boolop_xor = 3;
+	boolop_unknown = 4;
+}

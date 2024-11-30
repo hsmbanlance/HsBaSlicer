@@ -1,0 +1,15 @@
+﻿syntax = "proto3";
+
+package HsbaProto;
+
+import "point.proto";
+
+message msg_path3
+{
+	repeated msg_point3 point=1;
+}
+
+message msg_path2
+{
+	repeated msg_point2 point=1;
+}

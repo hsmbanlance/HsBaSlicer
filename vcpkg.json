@@ -1,0 +1,34 @@
+{
+  "license": "AGPL-3.0-or-later",
+  "dependencies": [
+    "boost-asio",
+    "boost-graph",
+    "boost-locale",
+    "boost-log",
+    "boost-nowide",
+    "boost-polygon",
+    "boost-property-tree",
+    "boost-test",
+    "cgal",
+    "clipper2",
+    "eigen3",
+    {
+      "name": "libigl",
+      "features": [
+        "cgal"
+      ]
+    },
+    "libjpeg-turbo",
+    "liblzma",
+    "libpng",
+    "miniz",
+    {
+      "name": "opencascade",
+      "platform": "!android & !ios"
+    },
+    "openvdb",
+    "protobuf",
+    "rapidjson",
+    "vcpkg-pkgconfig-get-modules"
+  ]
+}

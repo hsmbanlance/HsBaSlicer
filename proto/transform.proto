@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package HsbaProto;
+
+message msg_quaternion
+{
+    float x=1;
+    float y=2;
+    float z=3;
+    float w=4;
+}
+
+message msg_transform3
+{
+    repeated float matrix = 1;
+}
+
+message msg_transform2
+{
+    repeated float matrix = 1;
+}

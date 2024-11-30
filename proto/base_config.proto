@@ -1,0 +1,42 @@
+﻿syntax = "proto3";
+
+package HsbaProto;
+
+enum msg_technology_type
+{
+    techt_Fff=0;// fff or fdm
+    techt_Sla=1;// sla
+    techt_Slm=2;//slm
+    techt_Sls=3;//sls
+    techt_Lom=4;//lon
+    techt_3dp=5;//3dp
+    techt_Waam=6;//waam
+    techt_Unknown=7;//unknown
+}
+
+enum msg_output_type
+{
+    outt_Gcode=0;// gcode file as .gcode or .nc
+    outt_Amf=1;// amf file or 3mf file as .amf or .3mf
+    outt_RL=2;// robot language file
+    outt_Zipper=3;// zipper file
+    outt_Unknown=4;//unknown
+}
+
+enum msg_profiles_format
+{
+    prformat_JSON=0;// json file
+    prformat_XML=1;// xml file
+    prformat_INI=2;// ini file 
+    prformat_YAML=3;// yaml file
+    prformat_Unknown=4;//unknown
+}
+
+message msg_base_config
+{
+    int32 version = 1;// version of the protocol
+    msg_technology_type technology_type = 2;// technology type
+    msg_profiles_format profiles_format = 3;// profiles format
+    msg_output_type output_type = 4;// output type
+    string output_filename = 5;// output filename
+}
