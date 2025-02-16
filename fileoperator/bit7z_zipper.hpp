@@ -39,7 +39,7 @@ namespace HsBa::Slicer
     void Bit7zExtract(const std::string& archive, const std::string& outdir, const std::string& password = "",
         const std::string& dll_path = HSBA_7Z_DLL);
     void Bit7zExtract(const std::string& archive,
-        /*out*/std::map<std::string, std::vector<std::byte>>& bufs, const std::string& password = "",
+        /*out*/std::map<std::string, std::vector<bit7z::byte_t>>& bufs, const std::string& password = "",
         const std::string& dll_path = HSBA_7Z_DLL);
 
     enum class ZipperFormat
@@ -66,16 +66,16 @@ namespace HsBa::Slicer
         Bit7zZipper() :format_{ ZipperFormat::SevenZip }, dll_path_{HSBA_7Z_DLL} {}
         Bit7zZipper(std::string_view dll_path,ZipperFormat format,std::string_view password)
             :dll_path_{dll_path},format_{format},password_{password}{}
-        void AddByteFile(std::string_view name, const std::vector<std::byte>& data);
+        void AddByteFile(std::string_view name, const std::vector<bit7z::byte_t>& data);
         void AddByteFile(std::string_view name, const std::string& data) override;
         void AddFile(std::string_view name, std::string_view path) override;
         //To add duplicate file, filename add "_duplicate"
-        void AddByteFileIgnoreDuplicate(std::string_view name, const std::vector<std::byte>& data);
+        void AddByteFileIgnoreDuplicate(std::string_view name, const std::vector<bit7z::byte_t>& data);
         void AddByteFileIgnoreDuplicate(std::string_view name, const std::string& data) override;
         void AddFileIgnoreDuplicate(std::string_view name, std::string_view path) override;
         void Save(std::string_view filePath) override;
     private:
-        using Bytes = std::vector<std::byte>;
+        using Bytes = std::vector<bit7z::byte_t>;
         using BytesFileName = std::variant<Bytes, std::string>;
         using ByteFiles = std::map<std::string, BytesFileName>;
         ByteFiles byteFilesWaitCompress_;

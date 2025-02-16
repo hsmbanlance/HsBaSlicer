@@ -101,6 +101,7 @@ option(HSBA_USE_BIT7Z "use bit7z" ON)
 
 if (HSBA_USE_BIT7Z)
 	add_compile_definitions(USE_BIT7Z)
+	find_package(unofficial-bit7z CONFIG REQUIRED)
 endif()
 
 # subdirectory。

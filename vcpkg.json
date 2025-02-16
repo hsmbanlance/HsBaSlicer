@@ -29,6 +29,7 @@
     "openvdb",
     "protobuf",
     "rapidjson",
-    "vcpkg-pkgconfig-get-modules"
+    "vcpkg-pkgconfig-get-modules",
+    "bit7z"
   ]
 }

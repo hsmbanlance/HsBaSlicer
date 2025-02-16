@@ -18,7 +18,7 @@ namespace HsBa::Slicer
 		const std::string& dll_path)
 	{
 		bit7z::Bit7zLibrary lib{ dll_path };
-		bit7z::BitFileExtractor ex{ lib };
+		bit7z::BitFileExtractor ex{ lib, bit7z::BitFormat::SevenZip };
 		if (!password.empty())
 		{
 			ex.setPassword(password);
@@ -26,11 +26,11 @@ namespace HsBa::Slicer
 		ex.extract(archive, outdir);
 	}
 	void HsBa::Slicer::Bit7zExtract(const std::string& archive,
-		std::map<std::string, std::vector<std::byte>>& bufs,
+		std::map<std::string, std::vector<bit7z::byte_t>>& bufs,
 		const std::string& password, const std::string& dll_path)
 	{
 		bit7z::Bit7zLibrary lib{ dll_path };
-		bit7z::BitFileExtractor ex{ lib };
+		bit7z::BitFileExtractor ex{ lib, bit7z::BitFormat::SevenZip };
 		if (!password.empty())
 		{
 			ex.setPassword(password);
@@ -38,7 +38,7 @@ namespace HsBa::Slicer
 		ex.extract(archive, bufs);
 	}
 
-	void Bit7zZipper::AddByteFile(std::string_view name, const std::vector<std::byte>& data)
+	void Bit7zZipper::AddByteFile(std::string_view name, const std::vector<bit7z::byte_t>& data)
 	{
 		auto [add, add_res] = byteFilesWaitCompress_.emplace(name, data);
 		if (!add_res)
@@ -49,10 +49,10 @@ namespace HsBa::Slicer
 
 	void Bit7zZipper::AddByteFile(std::string_view name, const std::string& data)
 	{
-		std::vector<std::byte> bytes(data.size());
+		std::vector<bit7z::byte_t> bytes(data.size());
 		for (size_t i = 0; i != data.size(); ++i)
 		{
-			bytes[i] = static_cast<std::byte>(data[i]);
+			bytes[i] = static_cast<bit7z::byte_t>(data[i]);
 		}
 		AddByteFile(name, bytes);
 	}
@@ -66,7 +66,7 @@ namespace HsBa::Slicer
 		}
 	}
 
-	void Bit7zZipper::AddByteFileIgnoreDuplicate(std::string_view name, const std::vector<std::byte>& data)
+	void Bit7zZipper::AddByteFileIgnoreDuplicate(std::string_view name, const std::vector<bit7z::byte_t>& data)
 	{
 		if (byteFilesWaitCompress_.count(std::string{ name }))
 		{
@@ -80,10 +80,10 @@ namespace HsBa::Slicer
 
 	void Bit7zZipper::AddByteFileIgnoreDuplicate(std::string_view name, const std::string& data)
 	{
-		std::vector<std::byte> bytes(data.size());
+		std::vector<bit7z::byte_t> bytes(data.size());
 		for (size_t i = 0; i != data.size(); ++i)
 		{
-			bytes[i] = static_cast<std::byte>(data[i]);
+			bytes[i] = static_cast<bit7z::byte_t>(data[i]);
 		}
 		AddByteFile(name, bytes);
 	}

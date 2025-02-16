@@ -18,5 +18,6 @@ target_link_libraries(HsBaSlicerFileOperator PUBLIC HsBaSlicerBase
 )
 
 if(HSBA_USE_BIT7Z)
-  target_link_libraries(HsBaSlicerFileOperator PUBLIC bit7z)
+  find_package(unofficial-bit7z CONFIG REQUIRED)
+  target_link_libraries(HsBaSlicerFileOperator PUBLIC unofficial::bit7z::bit7z64)
 endif()
