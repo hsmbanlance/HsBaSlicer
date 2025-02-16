@@ -16,6 +16,13 @@
 
 namespace HsBa::Slicer::Log
 {
+	namespace
+	{
+		std::string GetSourceLocation(const std::source_location& location)
+		{
+			return "[" + std::string{ location.file_name() } + ":" + std::to_string(location.line()) + "] " + location.function_name() + ": ";
+		}
+	}
 	static boost::log::trivial::severity_level GetLogLevel(int log_level)
 	{
 		switch (log_level)
@@ -153,25 +160,25 @@ namespace HsBa::Slicer::Log
 		switch (log_lv)
 		{
 		case 0:
-			BOOST_LOG_TRIVIAL(trace) << "[" << location.file_name() << ":" << location.line() << "] " << location.function_name() <<": " << message;
+			BOOST_LOG_TRIVIAL(trace) << GetSourceLocation(location)<< message;
 			break;
 		case 1:
-			BOOST_LOG_TRIVIAL(debug) << "[" << location.file_name() << ":" << location.line() << "] " << location.function_name() << ": " << message;
+			BOOST_LOG_TRIVIAL(debug) << GetSourceLocation(location) << message;
 			break;
 		case 2:
-			BOOST_LOG_TRIVIAL(info) << "[" << location.file_name() << ":" << location.line() << "] " << location.function_name() << ": " << message;
+			BOOST_LOG_TRIVIAL(info) << GetSourceLocation(location) << message;
 			break;
 		case 3:
-			BOOST_LOG_TRIVIAL(warning) << "[" << location.file_name() << ":" << location.line() << "] " << location.function_name() << ": " << message;
+			BOOST_LOG_TRIVIAL(warning) << GetSourceLocation(location) << message;
 			break;
 		case 4:
-			BOOST_LOG_TRIVIAL(error) << "[" << location.file_name() << ":" << location.line() << "] " << location.function_name() << ": " << message;
+			BOOST_LOG_TRIVIAL(error) << GetSourceLocation(location) << message;
 			break;
 		case 5:
-			BOOST_LOG_TRIVIAL(fatal) << "[" << location.file_name() << ":" << location.line() << "] " << location.function_name() << ": " << message;
+			BOOST_LOG_TRIVIAL(fatal) << GetSourceLocation(location) << message;
 			break;
 		default:
-			BOOST_LOG_TRIVIAL(info) << "[" << location.file_name() << ":" << location.line() << "] " << location.function_name() << ": " << message;
+			BOOST_LOG_TRIVIAL(info) << GetSourceLocation(location) << message;
 			break;
 		}
 	}
@@ -182,7 +189,7 @@ namespace HsBa::Slicer::Log
 		{
 			instance_ = &LoggerSingletone::GetInstance();
 		}
-		BOOST_LOG_TRIVIAL(debug) << "[" << location.file_name() << ":" << location.line() << "] " << location.function_name() << ": " << message;
+		BOOST_LOG_TRIVIAL(debug) << GetSourceLocation(location) << message;
 	}
 
 	void LoggerSingletone::LogInfo(std::string_view message, const std::source_location& location)
@@ -191,7 +198,7 @@ namespace HsBa::Slicer::Log
 		{
 			instance_ = &LoggerSingletone::GetInstance();
 		}
-		BOOST_LOG_TRIVIAL(info) << "[" << location.file_name() << ":" << location.line() << "] " << location.function_name() << ": " << message;
+		BOOST_LOG_TRIVIAL(info) << GetSourceLocation(location) << message;
 	}
 
 	void LoggerSingletone::LogWarning(std::string_view message, const std::source_location& location)
@@ -200,7 +207,7 @@ namespace HsBa::Slicer::Log
 		{
 			instance_ = &LoggerSingletone::GetInstance();
 		}
-		BOOST_LOG_TRIVIAL(warning) << "[" << location.file_name() << ":" << location.line() << "] " << location.function_name() << ": " << message;
+		BOOST_LOG_TRIVIAL(warning) << GetSourceLocation(location) << message;
 	}
 
 	void LoggerSingletone::LogError(std::string_view message, const std::source_location& location)
@@ -209,7 +216,36 @@ namespace HsBa::Slicer::Log
 		{
 			instance_ = &LoggerSingletone::GetInstance();
 		}
-		BOOST_LOG_TRIVIAL(error) << "[" << location.file_name() << ":" << location.line() << "] " << location.function_name() << ": " << message;
+		BOOST_LOG_TRIVIAL(error) << GetSourceLocation(location) << message;
 	}
-
+	namespace LogLiteral
+	{
+		LogState::LogState(const int log_lv, std::string_view message)
+			: log_lv_{ log_lv }, message_{ message }
+		{
+		}
+		LogState::~LogState()
+		{
+		}
+		void LogState::operator()(const std::source_location& location)
+		{
+			LoggerSingletone::Log(message_, log_lv_, location);
+		}
+		LogState operator""_log_debug(const char* message, std::size_t size)
+		{
+			return LogState{ 1, std::string_view{ message, size } };
+		}
+		LogState operator""_log_info(const char* message, std::size_t size)
+		{
+			return LogState{ 2, std::string_view{ message, size } };
+		}
+		LogState operator""_log_warning(const char* message, std::size_t size)
+		{
+			return LogState{ 3, std::string_view{ message, size } };
+		}
+		LogState operator""_log_error(const char* message, std::size_t size)
+		{
+			return LogState{ 4, std::string_view{ message, size } };
+		}
+	}// namespace HsBa::Slicer::Log::LogLiteral
 }// namespace HsBa::Slicer::Log

@@ -13,7 +13,16 @@ namespace HsBa::Slicer
 	/// streamable type,which can be used in stream operator,include input and output stream
 	/// </summary>
 	template<typename T>
-	concept CharStream = requires(T t, std::ostream& os, std::istream& is) {
+	concept CharStream = requires(T t, std::ostream & os, std::istream & is) {
+		{ os << t };
+		{ is >> t };
+	};
+
+	/// <summary>
+	/// wstreamable type,which can be used in stream operator,include input and output stream
+	/// </summary>
+	template<typename T>
+	concept WCharStream = requires(T t, std::wostream & os, std::wistream & is) {
 		{ os << t };
 		{ is >> t };
 	};
@@ -21,12 +30,12 @@ namespace HsBa::Slicer
 	/// <summary>
 	/// put_value and get_value member function,for boost::ptree
 	/// </summary>
-	template<typename T,typename Tran>
+	template<typename T, typename Tran>
 	concept StrTranslator = requires(T t, std::string str, Tran tr) {
 		{ tr.put_value(t) }->std::convertible_to<std::string>;
 		{ tr.get_value(str) }->std::same_as<T>;
 	};
-	
+
 	/// <summary>
 	/// is enumeration type
 	/// </summary>
@@ -91,7 +100,7 @@ namespace HsBa::Slicer
 	/// <summary>
 	/// Hasher is T hasher, like std::hash
 	/// </summary>
-	template<typename T,typename Hasher>
+	template<typename T, typename Hasher>
 	concept Hash = requires(T t, Hasher hasher)
 	{
 		{ hasher(t) }->std::convertible_to<size_t>;
@@ -104,7 +113,7 @@ namespace HsBa::Slicer
 	/// <summary>
 	/// T has operator== and Hasher is T hasher, like std::hash
 	/// </summary>
-	template<typename T,typename Hasher>
+	template<typename T, typename Hasher>
 	concept EqualAndHash = std::equality_comparable<T> && Hash<T, Hasher>;
 
 	/// <summary>
@@ -120,26 +129,26 @@ namespace HsBa::Slicer
 	template<typename T>
 	concept CStyleString = std::same_as<T, const char*> || std::same_as<T, const wchar_t*>
 		|| std::same_as<T, const char16_t*> || std::same_as<T, const char32_t*> ||
-		std::same_as<T,const char8_t*>;
+		std::same_as<T, const char8_t*>;
 	/// <summary>
 	/// std string container or c style string
 	/// </summary>
 	template<typename T>
 	concept String = StdString<T> || CStyleString<T>;
-	
+
 	/// <summary>
 	/// std string view
 	/// </summary>
 	template<typename T>
-	concept StringView = std::same_as<T,std::string_view> || std::same_as<T,std::wstring_view> ||
-		std::same_as<T,std::u16string_view> || std::same_as<T,std::u32string_view> ||
-		std::same_as<T,std::u8string_view>;
+	concept StringView = std::same_as<T, std::string_view> || std::same_as<T, std::wstring_view> ||
+		std::same_as<T, std::u16string_view> || std::same_as<T, std::u32string_view> ||
+		std::same_as<T, std::u8string_view>;
 
 	/// <summary>
 	/// allocator for T
 	/// </summary>
 	template<typename T, typename Allocator>
-	concept TAllocator = requires(Allocator alloc, std::size_t n,T* p) {
+	concept TAllocator = requires(Allocator alloc, std::size_t n, T * p) {
 		{ alloc.allocate(n) } -> std::same_as<T*>;
 		{ alloc.deallocate(p, n) };
 			requires std::is_constructible_v<Allocator>;

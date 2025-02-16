@@ -11,15 +11,17 @@ using namespace std;
 int main()
 {
 	auto& log = HsBa::Slicer::Log::LoggerSingletone::GetInstance();
+	using namespace HsBa::Slicer::Log::LogLiteral;
 	if (log.UseLogFile())
 	{
-		log.LogInfo("use log file");
+		"use log file"_log_info();
 	}
 	else
 	{
-		log.LogWarning("not use log file");
+		"not use log file"_log_warning();
 	}
 	initialize();
+	"initialize"_log_info();
 	cout << "Hello CMake." << endl;
 	HsBa::Slicer::Log::LoggerSingletone::DeleteInstance();
 	return 0;

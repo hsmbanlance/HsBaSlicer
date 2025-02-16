@@ -10,6 +10,7 @@
     filename_check.cpp
     concepts.hpp
     template_helper.hpp
+    coroutine.hpp
     any_visit.hpp
     boost_std_convert.hpp
     base_interface.hpp

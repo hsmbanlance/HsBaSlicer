@@ -2,6 +2,7 @@
 #include <boost/test/included/unit_test.hpp>
 
 #include <base/template_helper.hpp>
+#include <base/coroutine.hpp>
 
 BOOST_AUTO_TEST_SUITE(generator_tasks)
 
