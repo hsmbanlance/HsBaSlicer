@@ -38,7 +38,7 @@ BOOST_AUTO_TEST_CASE(test_generator_invoke)
 {
 	BOOST_TEST_MESSAGE("Run generator invoke test");
 	std::list<int> l{ 0, 1, 2, 3, 4, 5 };
-	auto gen = HsBa::Slicer::Utils::GeneratorInvoke([](int i) {return i * i; }, l);
+	auto gen = HsBa::Slicer::Utils::GeneratorInvoke<int,std::list>([](int i) {return i * i; }, l);
 	int i = 0;
 	for (const auto v : gen)
 	{
@@ -55,8 +55,8 @@ BOOST_AUTO_TEST_CASE(test_generator_invoke_throw)
 		BOOST_TEST_MESSAGE("Generator canceled"); }
 	);
 	std::list<int> l{ 0, 1, 2, 3, 4, 5 };
-	auto gen = HsBa::Slicer::Utils::GeneratorInvoke
-	([](int i) {
+	auto gen = HsBa::Slicer::Utils::GeneratorInvoke<int, std::list>(
+	[](int i) {
 		if (i >= 3)
 		{
 			throw std::length_error("Simulated exception");

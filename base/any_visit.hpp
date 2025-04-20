@@ -15,12 +15,6 @@ namespace HsBa::Slicer::Utils
 
     // visit any
     // ref: https://codereview.stackexchange.com/questions/275440/visit-for-stdany
-    
-    template<typename T, typename... Us>
-    struct AllTheSame {
-        static_assert((std::is_same_v<T, Us> && ...));
-        using type = T;
-    };
 
     /// <summary>
     /// visit std::any

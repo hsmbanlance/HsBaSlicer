@@ -12,10 +12,13 @@
     template_helper.hpp
     coroutine.hpp
     any_visit.hpp
+    tuple_each.hpp
     boost_std_convert.hpp
     base_interface.hpp
     eigen_translator.hpp
-    eigen_translator.cpp)
+    eigen_translator.cpp
+    units.hpp
+)
 
 find_package(boost_locale REQUIRED CONFIG)
 find_package(boost_nowide REQUIRED CONFIG)

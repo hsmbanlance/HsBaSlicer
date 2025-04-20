@@ -111,9 +111,29 @@ add_test(
   )
 
 
+#enum simple convert test
+add_executable(enum_simple_convert_test EnumSimpleConvert/enum_simple_convert_test.cpp)
+
+target_link_libraries(enum_simple_convert_test
+	HsBaSlicerBase
+	Boost::unit_test_framework
+)
+
+target_compile_definitions(enum_simple_convert_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME enum_simple_convert_test
+  COMMAND $<TARGET_FILE:enum_simple_convert_test>
+  -t enum_simple_convert
+  )
+
 add_custom_target(RunAllTests
   COMMAND ${CMAKE_CTEST_COMMAND} -V
-  DEPENDS anyvisit_test coroutines_test filename_check_test configmap_test boost_std_convert_test
+  DEPENDS anyvisit_test coroutines_test filename_check_test configmap_test boost_std_convert_test enum_simple_convert_test
 )
 
 add_custom_command(TARGET anyvisit_test POST_BUILD
@@ -134,4 +154,8 @@ add_custom_command(TARGET configmap_test POST_BUILD
 
 add_custom_command(TARGET boost_std_convert_test POST_BUILD
   COMMAND ${CMAKE_CTEST_COMMAND} -V -R boost_std_convert_test 
+)
+
+add_custom_command(TARGET enum_simple_convert_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R enum_simple_convert_test 
 )

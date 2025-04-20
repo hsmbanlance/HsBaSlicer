@@ -521,6 +521,7 @@ namespace HsBa::Slicer::Utils
 	{
 		friend class CustomAllocatorTaskAwaiter<T, Executor, Allocator>;
 	public:
+		using allocator_type = Allocator;
 		/// <summary>
 		/// coroutines task result
 		/// </summary>
@@ -855,6 +856,7 @@ namespace HsBa::Slicer::Utils
 	class CustomAllocatorGenerator
 	{
 	public:
+		using allocator_type = Allocator;
 		struct promise_type
 		{
 			using return_type = CustomAllocatorGenerator<T, Allocator>;
@@ -1004,17 +1006,9 @@ namespace HsBa::Slicer::Utils
 
 	};
 
-	/// <summary>
-	/// generator invoke list
-	/// </summary>
-	/// <typeparam name="Callback">callback function</typeparam>
-	/// <typeparam name="Arg">list container value type</typeparam>
-	/// <param name="callback">callback function</param>
-	/// <param name="arg">list</param>
-	/// <returns>returns Generator</returns>
-	template<typename Callback, typename Arg>
-		requires std::invocable<Callback, Arg>
-	inline auto GeneratorInvoke(Callback&& callback, const std::list<Arg>& arg)
+	template<typename Arg, template<typename> typename Container,typename Callback>
+		requires std::invocable<Callback, Arg> && (std::ranges::range<Container<Arg>> && !std::same_as<Container<Arg>,std::vector<bool>>)
+	inline auto GeneratorInvoke(Callback&& callback, const Container<Arg>& arg)
 		-> Generator<std::invoke_result_t<Callback, Arg>>
 	{
 		for (const auto& i : arg)
@@ -1022,239 +1016,17 @@ namespace HsBa::Slicer::Utils
 			co_yield std::forward<Callback>(callback)(i);
 		}
 	}
-	/// <summary>
-	/// generator invoke vector
-	/// </summary>
-	/// <typeparam name="Callback">callback function</typeparam>
-	/// <typeparam name="Arg">vector container value type, bool is not supported</typeparam>
-	/// <param name="arg">vector</param>
-	/// <returns>returns Generator</returns>
-	template<typename Callback, typename Arg>
-		requires std::invocable<Callback, Arg>&& std::negation_v<std::is_same<Arg, bool>>
-	inline auto GeneratorInvoke(Callback&& callback, const std::vector<Arg>& arg)
-		-> Generator<std::invoke_result_t<Callback, Arg>>
-	{
-		for (const auto& i : arg)
-		{
-			co_yield std::forward<Callback>(callback)(i);
-		}
-	}
-	/// <summary>
-	/// generator invoke set
-	/// </summary>
-	/// <typeparam name="Callback">callback function</typeparam>
-	/// <typeparam name="Arg">set container value type</typeparam>
-	/// <param name="callback">callback function</param>
-	/// <param name="arg">set</param>
-	/// <returns>returns Generator</returns>
-	template<typename Callback, typename Arg>
-		requires std::invocable<Callback, Arg>
-	inline auto GeneratorInvoke(Callback&& callback, const std::set<Arg>& arg)
-		-> Generator<std::invoke_result_t<Callback, Arg>>
-	{
-		for (const auto& i : arg)
-		{
-			co_yield std::forward<Callback>(callback)(i);
-		}
-	}
-	/// <summary>
-	/// generator invoke unordered_set
-	/// </summary>
-	/// <typeparam name="Callback">callback function</typeparam>
-	/// <typeparam name="Arg">unordered_set container value type</typeparam>
-	/// <param name="callback">callback function</param>
-	/// <param name="arg">unordered_set</param>
-	/// <returns>returns Generator</returns>
-	template<typename Callback, typename Arg>
-		requires std::invocable<Callback, Arg>
-	inline auto GeneratorInvoke(Callback&& callback, const std::unordered_set<Arg>& arg)
-		-> Generator<std::invoke_result_t<Callback, Arg>>
-	{
-		for (const auto& i : arg)
-		{
-			co_yield std::forward<Callback>(callback)(i);
-		}
-	}
-	/// <summary>
-	/// generator invoke list with other argument
-	/// </summary>
-	/// <typeparam name="Callback">callback function</typeparam>
-	/// <typeparam name="T">other argument type</typeparam>
-	/// <typeparam name="Arg">list container value type</typeparam>
-	/// <param name="callback">callback function</param>
-	/// <param name="t">other argument</param>
-	/// <param name="arg">list</param>
-	/// <returns>returns Generator</returns>
-	template<typename Callback, typename T, typename Arg>
-		requires std::invocable<Callback, T, Arg>
-	inline auto GeneratorInvoke(Callback&& callback, T&& t, const std::list<Arg>& arg)
-		-> Generator<decltype(std::declval<Callback>()(std::declval<T>(), std::declval<Arg>()))>
-	{
-		for (const auto& i : arg)
-		{
-			co_yield std::forward<Callback>(callback)(std::forward<T>(t), i);
-		}
-	}
-	/// <summary>
-	/// generator invoke vector with other argument
-	/// </summary>
-	/// <typeparam name="Callback">callback function</typeparam>
-	/// <typeparam name="T">other argument type</typeparam>
-	/// <typeparam name="Arg">vector container value type, not bool</typeparam>
-	/// <param name="callback">callback function</param>
-	/// <param name="t">other argument</param>
-	/// <param name="arg">vector</param>
-	/// <returns>returns Generator</returns>
-	template<typename Callback, typename T, typename Arg>
-		requires std::invocable<Callback, T, Arg>&& std::negation_v<std::is_same<Arg, bool>>
-	inline auto GeneratorInvoke(Callback&& callback, T&& t, const std::vector<Arg>& arg)
-		-> Generator<decltype(std::declval<Callback>()(std::declval<T>(), std::declval<Arg>()))>
-	{
-		for (const auto& i : arg)
-		{
-			co_yield std::forward<Callback>(callback)(std::forward<T>(t), i);
-		}
-	}
-	/// <summary>
-	/// generator invoke set with other argument
-	/// </summary>
-	/// <typeparam name="Callback">callback function</typeparam>
-	/// <typeparam name="T">other argument type</typeparam>
-	/// <typeparam name="Arg">set container value type</typeparam>
-	/// <param name="callback">callback function</param>
-	/// <param name="t">other argument</param>
-	/// <param name="arg">set</param>
-	/// <returns>returns Generator</returns>
-	template<typename Callback, typename T, typename Arg>
-		requires std::invocable<Callback, T, Arg>
-	inline auto GeneratorInvoke(Callback&& callback, T&& t, const std::set<Arg>& arg)
-		-> Generator<decltype(std::declval<Callback>()(std::declval<T>(), std::declval<Arg>()))>
-	{
-		for (const auto& i : arg)
-		{
-			co_yield std::forward<Callback>(callback)(std::forward<T>(t), i);
-		}
-	}
-	/// <summary>
-	/// generator invoke unordered_set with other argument
-	/// </summary>
-	/// <typeparam name="Callback">callback function</typeparam>
-	/// <typeparam name="T">other argument type</typeparam>
-	/// <typeparam name="Arg">unordered_set container value type</typeparam>
-	/// <param name="callback">callback function</param>
-	/// <param name="t">other argument</param>
-	/// <param name="arg">unordered_set</param>
-	/// <returns>returns Generator</returns>
-	template<typename Callback, typename T, typename Arg>
-		requires std::invocable<Callback, T, Arg>
-	inline auto GeneratorInvoke(Callback&& callback, T&& t, const std::unordered_set<Arg>& arg)
-		-> Generator<decltype(std::declval<Callback>()(std::declval<T>(), std::declval<Arg>()))>
-	{
-		for (const auto& i : arg)
-		{
-			co_yield std::forward<Callback>(callback)(std::forward<T>(t), i);
-		}
-	}
+		
 #else
 	// not coroutine, use std::list as returns for avioding std::vector<bool>
-	template<typename Callback, typename Arg>
-		requires std::invocable<Callback, Arg>
-	inline auto GeneratorInvoke(Callback&& callback, const std::list<Arg>& arg)
-		-> std::list<std::invoke_result_t<Callback, Arg>>
-	{
-		using R = std::invoke_result_t<Callback, Arg>;
-		std::list<R> ret;
-		for (const auto& i : arg)
-		{
-			ret.emplace_back(std::forward<Callback>(callback)(i));
-		}
-		return ret;
-	}
-	template<typename Callback, typename Arg>
-		requires std::invocable<Callback, Arg>&& std::negation_v<std::is_same<Arg, bool>>
-	inline auto GeneratorInvoke(Callback&& callback, const std::vector<Arg>& arg)
-		-> std::list<std::invoke_result_t<Callback, Arg>>
-	{
-		using R = std::invoke_result_t<Callback, Arg>;
-		std::list<R> ret;
-		for (const auto& i : arg)
-		{
-			ret.emplace_back(std::forward<Callback>(callback)(i));
-		}
-		return ret;
-	}
-	template<typename Callback, typename Arg>
-		requires std::invocable<Callback, Arg>
-	inline auto GeneratorInvoke(Callback&& callback, const std::set<Arg>& arg)
-		-> std::list<std::invoke_result_t<Callback, Arg>>
-	{
-		using R = std::invoke_result_t<Callback, Arg>;
-		std::list<R> ret;
-		for (const auto& i : arg)
-		{
-			ret.emplace_back(std::forward<Callback>(callback)(i));
-		}
-		return ret;
-	}
-	template<typename Callback, typename Arg>
-		requires std::invocable<Callback, Arg>
-	inline auto GeneratorInvoke(Callback&& callback, const std::unordered_set<Arg>& arg)
-		-> std::list<std::invoke_result_t<Callback, Arg>>
-	{
-		using R = std::invoke_result_t<Callback, Arg>;
-		std::list<R> ret;
-		for (const auto& i : arg)
-		{
-			ret.emplace_back(std::forward<Callback>(callback)(i));
-		}
-		return ret;
-	}
-	template<typename Callback, typename T, typename Arg>
-		requires std::invocable<Callback, T, Arg>
-	inline auto GeneratorInvoke(Callback&& callback, T&& t, const std::list<Arg>& arg)
-		-> std::list<decltype(std::declval<Callback>()(std::declval<T>(), std::declval<Arg>()))>
-	{
-		using R = decltype(std::declval<Callback>()(std::declval<T>(), std::declval<Arg>()));
-		std::list<R> ret;
-		for (const auto& i : arg)
-		{
-			ret.emplace_back(std::forward<Callback>(callback)(std::forward<T>(t), i));
-		}
-		return ret;
-	}
-	template<typename Callback, typename T, typename Arg>
-		requires std::invocable<Callback, T, Arg>&& std::negation_v<std::is_same<Arg, bool>>
-	inline auto GeneratorInvoke(Callback&& callback, T&& t, const std::vector<Arg>& arg)
-		-> std::list<decltype(std::declval<Callback>()(std::declval<T>(), std::declval<Arg>()))>
+
+	template<typename Arg, template<typename> typename Container,typename Callback>
+		requires std::invocable<Callback, Arg> && (std::ranges::range<Container<Arg>> && !std::same_as<Container<Arg>, std::vector<bool>>)
+	inline auto GeneratorInvoke(Callback&& callback, const Container<Arg>& arg)
+		-> Container<std::invoke_result_t<Callback, Arg>>
 	{
 		using R = decltype(std::declval<Callback>()(std::forward<T>(t), std::declval<Arg>()));
-		std::list<R> ret;
-		for (const auto& i : arg)
-		{
-			ret.emplace_back(std::forward<Callback>(callback)(std::forward<T>(t), i));
-		}
-		return ret;
-	}
-	template<typename Callback, typename T, typename Arg>
-		requires std::invocable<Callback, T, Arg>
-	inline auto GeneratorInvoke(Callback&& callback, T&& t, const std::set<Arg>& arg)
-		-> std::list<decltype(std::declval<Callback>()(std::declval<T>(), std::declval<Arg>()))>
-	{
-		using R = decltype(std::declval<Callback>()(std::forward<T>(t), std::declval<Arg>()));
-		std::list<R> ret;
-		for (const auto& i : arg)
-		{
-			ret.emplace_back(std::forward<Callback>(callback)(std::forward<T>(t), i));
-		}
-		return ret;
-	}
-	template<typename Callback, typename T, typename Arg>
-		requires std::invocable<Callback, T, Arg>
-	inline auto GeneratorInvoke(Callback&& callback, T&& t, const std::unordered_set<Arg>& arg)
-		-> std::list<decltype(std::declval<Callback>()(std::declval<T>(), std::declval<Arg>()))>
-	{
-		using R = decltype(std::declval<Callback>()(std::forward<T>(t), std::declval<Arg>()));
-		std::list<R> ret;
+		Container<R> ret;
 		for (const auto& i : arg)
 		{
 			ret.emplace_back(std::forward<Callback>(callback)(std::forward<T>(t), i));
