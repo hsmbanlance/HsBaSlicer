@@ -8,6 +8,9 @@
     "boost-nowide",
     "boost-polygon",
     "boost-property-tree",
+    "boost-units",
+    "boost-uuid",
+    "boost-multiprecision",
     "boost-test",
     "cgal",
     "clipper2",
@@ -19,14 +22,11 @@
       ]
     },
     "libjpeg-turbo",
-    "liblzma",
     "libpng",
-    "miniz",
     {
       "name": "opencascade",
       "platform": "!android & !ios"
     },
-    "openvdb",
     "protobuf",
     "rapidjson",
     "vcpkg-pkgconfig-get-modules",

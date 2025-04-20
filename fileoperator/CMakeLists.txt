@@ -1,7 +1,5 @@
 ﻿add_library(HsBaSlicerFileOperator STATIC
 	IZipper.hpp
-	zipper.hpp
-	zipper.cpp
 	rw_ptree.hpp
 	rw_ptree.cpp 
 	bit7z_zipper.hpp
@@ -13,7 +11,6 @@ find_package(boost_log CONFIG REQUIRED)
 
 target_link_libraries(HsBaSlicerFileOperator PUBLIC HsBaSlicerBase 
 	Boost::log
-	miniz::miniz
 	rapidjson
 )
 

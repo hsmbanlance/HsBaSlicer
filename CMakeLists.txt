@@ -41,15 +41,19 @@ find_package(PkgConfig REQUIRED)
 
 #Boost
 ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
-find_package(boost REQUIRED COMPONENTS asio log nowide polygon property-tree graph locale test)
+find_package(boost REQUIRED COMPONENTS asio log nowide polygon property-tree graph locale units multiprecision test)
 
 #Clipper2
 pkg_check_modules(Clipper2 REQUIRED IMPORTED_TARGET Clipper2)
 
 #Compress
+#use bit7z operator zipper
+option(HSBA_USE_BIT7Z "use bit7z" ON)
 
-#miniz
-find_package(miniz CONFIG REQUIRED)
+if (HSBA_USE_BIT7Z)
+	add_compile_definitions(USE_BIT7Z)
+	find_package(unofficial-bit7z CONFIG REQUIRED)
+endif()
 
 #PNG
 find_package(PNG REQUIRED)
@@ -85,9 +89,6 @@ if(NOT ANDROID AND NOT IOS AND NOT SWITCH)
   add_compile_definitions(USE_CAD_KERNEL)
 endif()
 
-#openvdb for points cloud
-find_package(OpenVDB CONFIG REQUIRED)
-
 #protobuf out
 option(HSBA_PROTOBUF_OUT "protobuf out source" ON)
 
@@ -95,14 +96,6 @@ option(HSBA_PROTOBUF_OUT "protobuf out source" ON)
 
 #copy file to exe_dir
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/utils/logcfg.ini DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/HsBaSlicer)
-
-#use bit7z operator zipper
-option(HSBA_USE_BIT7Z "use bit7z" ON)
-
-if (HSBA_USE_BIT7Z)
-	add_compile_definitions(USE_BIT7Z)
-	find_package(unofficial-bit7z CONFIG REQUIRED)
-endif()
 
 # subdirectory。
 add_subdirectory("third_parts_without_vcpkg")
