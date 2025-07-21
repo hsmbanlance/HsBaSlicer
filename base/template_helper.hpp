@@ -28,16 +28,134 @@
 
 namespace HsBa::Slicer::Utils
 {
-	template<typename T, size_t N>
-	struct Template_Helper
+	template<CharType T, size_t N>
+	struct TemplateString
 	{
-		inline constexpr Template_Helper(const T(&arr)[N])
+		using Char = T;
+		using StringView = std::basic_string_view<T>;
+		using String = std::basic_string<T>;
+		inline constexpr TemplateString() = default;
+		inline constexpr TemplateString(const T(&str)[N])
 		{
-			std::copy(arr, arr + N, this->arr);
+			std::copy(str, str + N, this->str);
 		}
-		T arr[N];
+		template<size_t M>
+		inline constexpr TemplateString(const T(&str)[M])
+		{
+			if (M > N)
+			{
+				std::copy(str, str + N, this->str);
+			}
+			else
+			{
+				std::copy(str, str + M, this->str);
+			}
+		}
+		inline constexpr TemplateString(const std::array<T, N>& arr)
+		{
+			std::copy(arr.begin(), arr.end(), this->str);
+		}
+		inline constexpr TemplateString(std::basic_string_view<T> sv)
+		{
+			if (sv.size() > N)
+			{
+				std::copy(sv.data(), sv.data() + N, this->str);
+			}
+			else
+			{
+				std::copy(sv.data(), sv.data() + sv.size(), this->str);
+			}
+		}
+		inline constexpr T* begin() { return str; }
+		inline constexpr T* end() { return str + N; }
+		inline constexpr const T* begin() const { return str; }
+		inline constexpr const T* end() const { return str + N; }
+		inline constexpr size_t size() const { return N; }
+		inline constexpr T& operator[](size_t index) { return str[index]; }
+		inline constexpr const T& operator[](size_t index) const { return str[index]; }
+		inline constexpr bool empty() const { return N == 0; }
+		template<size_t M>
+		inline constexpr bool operator==(const TemplateString<T, M>& o) const
+		{
+			return static_cast<StringView>(*this) == static_cast<StringView>(o);
+		}
+		inline constexpr bool operator==(const StringView& o) const
+		{
+			return static_cast<StringView>(*this) == o;
+		}
+		inline explicit constexpr operator StringView() const
+		{
+			if(str[N - 1] == '\0')
+			{
+				return StringView{ str};
+			}
+			return StringView{ str, N };
+		}
+		inline explicit constexpr operator String() const
+		{
+			if(str[N - 1] == '\0')
+			{
+				return String{ str };
+			}
+			return String{ str, N };
+		}
+		inline explicit constexpr operator T*() const
+		{
+			return str;
+		}
+		inline constexpr StringView ToStringView() const
+		{
+			return static_cast<StringView>(*this);
+		}
+		inline constexpr String ToString() const
+		{
+			return static_cast<String>(*this);
+		}
+		inline TemplateString ToUpper(std::locale loc = std::locale()) const
+		{
+			return *this | std::views::transform([&loc](T c) { return std::toupper(c, loc); });
+		}
+		inline TemplateString ToLower(std::locale loc = std::locale()) const
+		{
+			return *this | std::views::transform([&loc](T c) { return std::tolower(c, loc); });
+		}
+		template<typename Container>
+		inline constexpr Container Split(StringView delimiter) const
+		{
+			Container result;
+			for (const auto& part : ToStringView() | std::views::split(delimiter))
+			{
+				result.emplace_back(part.begin(), part.end());
+			}
+			return result;
+		}
+		template<typename It>
+		constexpr TemplateString(It begin, It end)
+		{
+			It it = begin;
+			for (size_t i = 0; i < N && i < end - begin; ++i)
+			{
+				str[i] = *it;
+				++it;
+			}
+		}
+		template<size_t M>
+		constexpr TemplateString<T, M + N> operator+(const TemplateString<T, M>& o)
+		{
+			TemplateString<T, M + N> res;
+			std::copy(str, str + N, res.str);
+			auto n = ToStringView().size();
+			std::copy(o.str, o.str + M, res.str + n);
+			return res;
+		}
+		T str[N]{};
 	};
 
+	template<CharType T, size_t N>
+	std::basic_ostream<T>& operator<<(std::basic_ostream<T>& os, const TemplateString<T, N>& ts)
+	{
+		return os << static_cast<std::basic_string_view<T>>(ts);
+	}
 
 	/// <summary>
 	/// template call
@@ -48,11 +166,11 @@ namespace HsBa::Slicer::Utils
 	/// <param name="callback">callback function</param>
 	/// <param name="...args">arguments</param>
 	/// <returns>callback return</returns>
-	template<Template_Helper th, typename Callback, typename... Args>
-		requires std::invocable<Callback, decltype(th.arr), Args...>
+	template<TemplateString th, typename Callback, typename... Args>
+		requires std::invocable<Callback, typename decltype(th)::StringView, Args...>
 	inline auto template_call(Callback&& callback, Args&&... args)
 	{
-		return std::forward<Callback>(callback)(th.arr, std::forward<Args>(args)...);
+		return std::forward<Callback>(callback)(th.ToStringView(), std::forward<Args>(args)...);
 	}
 
 	/// <summary>

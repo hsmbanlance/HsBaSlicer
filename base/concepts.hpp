@@ -154,6 +154,10 @@ namespace HsBa::Slicer
 			requires std::is_constructible_v<Allocator>;
 			requires std::is_destructible_v<Allocator>;
 	};
+
+	template<typename T>
+	concept CharType = std::is_same_v<T, char> || std::is_same_v<T, wchar_t> || std::is_same_v<T, signed char> || std::is_same_v<T, unsigned char>
+		|| std::is_same_v<T, char16_t> || std::is_same_v<T, char32_t> || std::is_same_v<T, char8_t>;
 }// namespace HsBa::Slicer
 
 #endif // !HSBA_SLICER_CONCEPTS_HPP
