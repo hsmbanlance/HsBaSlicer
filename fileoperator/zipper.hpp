@@ -55,7 +55,7 @@ namespace HsBa::Slicer
 		mz_bool ZipAddMember(/*ref*/mz_zip_archive& archiver, const std::string& name, const Bytes& bytes) const;
 	};
 
-	void ExtractFile(std::string_view archive_path, std::string_view output_path, const char* password = nullptr);
+	void MiniZExtractFile(std::string_view archive_path, std::string_view output_path);
 }// namespace HsBa::Slicer
 
 #endif // !HSBA_SLICER_ZIPPER_HPP
