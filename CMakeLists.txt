@@ -1,7 +1,7 @@
 ﻿# CMakeList.txt: 顶层 CMake 项目文件，在此处执行全局配置
 # 并包含子项目。
 #
-cmake_minimum_required (VERSION 3.8)
+cmake_minimum_required (VERSION 3.21)
 
 # 如果支持，请为 MSVC 编译器启用热重载。
 if (POLICY CMP0141)
@@ -47,6 +47,8 @@ find_package(boost REQUIRED COMPONENTS asio log nowide polygon property-tree gra
 pkg_check_modules(Clipper2 REQUIRED IMPORTED_TARGET Clipper2)
 
 #Compress
+#miniz
+find_package(miniz CONFIG REQUIRED)
 #use bit7z operator zipper
 option(HSBA_USE_BIT7Z "use bit7z" ON)
 

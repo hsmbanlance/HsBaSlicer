@@ -30,6 +30,7 @@
     "protobuf",
     "rapidjson",
     "vcpkg-pkgconfig-get-modules",
-    "bit7z"
+    "bit7z",
+    "miniz"
   ]
 }
