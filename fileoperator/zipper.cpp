@@ -153,5 +153,34 @@ namespace HsBa::Slicer
 		mz_zip_reader_end(&archiver);
 	}
 
+	std::unordered_map<std::string, std::string> MiniZExtractFileToBuffer(std::string_view archive_path)
+	{
+		mz_zip_archive archiver{};
+		mz_zip_zero_struct(&archiver);
+		if (!mz_zip_reader_init_file(&archiver, archive_path.data(), 0))
+		{
+			throw IOError("Failed to open zip file");
+		}
+		std::unordered_map<std::string, std::string> result;
+		mz_uint file_count = mz_zip_reader_get_num_files(&archiver);
+		for (mz_uint i = 0; i != file_count; ++i)
+		{
+			mz_zip_archive_file_stat file_stat;
+			if (!mz_zip_reader_file_stat(&archiver, i, &file_stat))
+			{
+				mz_zip_reader_end(&archiver);
+				throw IOError("Failed to get file stat from zip");
+			}
+			std::string content(file_stat.m_uncomp_size, '\0');
+			if (!mz_zip_reader_extract_to_mem(&archiver, i, content.data(), content.size(), 0))
+			{
+				mz_zip_reader_end(&archiver);
+				throw IOError("Failed to extract file from zip");
+			}
+			result[file_stat.m_filename] = std::move(content);
+		}
+		mz_zip_reader_end(&archiver);
+		return result;
+	}
 }// namespace HsBa::Slicer
 

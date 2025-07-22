@@ -56,6 +56,9 @@ namespace HsBa::Slicer
 	};
 
 	void MiniZExtractFile(std::string_view archive_path, std::string_view output_path);
+
+	std::unordered_map<std::string, std::string> MiniZExtractFileToBuffer(
+		std::string_view archive_path);
 }// namespace HsBa::Slicer
 
 #endif // !HSBA_SLICER_ZIPPER_HPP
