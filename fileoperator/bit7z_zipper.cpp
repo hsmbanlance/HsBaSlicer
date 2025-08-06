@@ -158,6 +158,8 @@ namespace HsBa::Slicer
 
 	void Bit7zZipper::SaveAllFile(bit7z::BitArchiveWriter& compress,const std::string& path)
 	{
+		size_t fileCount = byteFilesWaitCompress_.size();
+		size_t currentFileIndex = 0;
 		compress.setPassword(password_);
 		compress.setOverwriteMode(bit7z::OverwriteMode::Overwrite);
 		for (const auto& [name, bytes] : byteFilesWaitCompress_)
@@ -175,6 +177,8 @@ namespace HsBa::Slicer
 				},
 				bytes
 			);
+			double progress = static_cast<double>(currentFileIndex) / fileCount;
+			RaiseEvent(progress, name);
 		}
 		compress.compressTo(path);
 	}

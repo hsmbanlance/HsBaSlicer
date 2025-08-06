@@ -89,6 +89,8 @@ namespace HsBa::Slicer
 	mz_bool Zipper::AddAllToZip(mz_zip_archive& archiver)
 	{
 		mz_bool status = MZ_OK;
+		size_t fileCount = byteFilesWaitCompress_.size();
+		size_t currentFileIndex = 0;
 		for (const auto& [name, bytes] : byteFilesWaitCompress_)
 		{
 			status = std::visit([&archiver, &name, this](auto&& arg)
@@ -107,6 +109,9 @@ namespace HsBa::Slicer
 			{
 				return status;
 			}
+			++currentFileIndex;
+			double progress = static_cast<double>(currentFileIndex) / fileCount;
+			RaiseEvent(progress, name);
 		}
 		return status;
 	}

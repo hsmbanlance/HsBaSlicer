@@ -11,6 +11,7 @@
 #include <miniz.h>
 
 #include "IZipper.hpp"
+#include "base/delegate.hpp"
 
 namespace HsBa::Slicer
 {
@@ -24,7 +25,7 @@ namespace HsBa::Slicer
 	};
 
 	//Zipper use miniz
-	class Zipper final : public IZipper
+	class Zipper final : public IZipper, public Utils::EventSource<Zipper, void, double, std::string_view>
 	{
 	public:
 		Zipper() = default;

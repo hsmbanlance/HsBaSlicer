@@ -13,6 +13,7 @@
 #endif // USE_BIT7Z
 
 #include "IZipper.hpp"
+#include "base/delegate.hpp"
 
 namespace HsBa::Slicer
 {
@@ -60,7 +61,7 @@ namespace HsBa::Slicer
         Unknown
     };
 
-    class Bit7zZipper final : public IZipper
+	class Bit7zZipper final : public IZipper, public Utils::EventSource<Bit7zZipper, void, double, std::string_view>
     {
     public:
         Bit7zZipper() :format_{ ZipperFormat::SevenZip }, dll_path_{HSBA_7Z_DLL} {}
