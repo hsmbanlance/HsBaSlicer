@@ -158,6 +158,26 @@ namespace HsBa::Slicer
 	template<typename T>
 	concept CharType = std::is_same_v<T, char> || std::is_same_v<T, wchar_t> || std::is_same_v<T, signed char> || std::is_same_v<T, unsigned char>
 		|| std::is_same_v<T, char16_t> || std::is_same_v<T, char32_t> || std::is_same_v<T, char8_t>;
+
+	template<typename T>
+	concept Addable = requires(T t, T u) {
+		{ t + u } -> std::same_as<T>;
+	};
+
+	template<typename T>
+	concept Subtractable = requires(T t, T u) {
+		{ t - u } -> std::same_as<T>;
+	};
+
+	template<typename T>
+	concept Multipliable = requires(T t, T u) {
+		{ t * u } -> std::same_as<T>;
+	};
+
+	template<typename T>
+	concept Dividable = requires(T t, T u) {
+		{ t / u } -> std::same_as<T>;
+	};
 }// namespace HsBa::Slicer
 
 #endif // !HSBA_SLICER_CONCEPTS_HPP

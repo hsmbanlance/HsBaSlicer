@@ -17,6 +17,7 @@
     base_interface.hpp
     eigen_translator.hpp
     eigen_translator.cpp
+    delegate.hpp
     units.hpp
 )
 

@@ -139,6 +139,15 @@ namespace HsBa::Slicer::Utils
 				++it;
 			}
 		}
+		template<std::ranges::range R>
+		constexpr TemplateString(const R& range)
+		{
+			auto it = std::ranges::begin(range);
+			for (size_t i = 0; i < N && it != std::ranges::end(range); ++i, ++it)
+			{
+				str[i] = *it;
+			}
+		}
 		template<size_t M>
 		constexpr TemplateString<T, M + N> operator+(const TemplateString<T, M>& o)
 		{
@@ -147,6 +156,22 @@ namespace HsBa::Slicer::Utils
 			auto n = ToStringView().size();
 			std::copy(o.str, o.str + M, res.str + n);
 			return res;
+		}
+		T& at(size_t index)
+		{
+			if (index >= N)
+			{
+				throw std::out_of_range("Index out of range");
+			}
+			return str[index];
+		}
+		const T& at(size_t index) const
+		{
+			if (index >= N)
+			{
+				throw std::out_of_range("Index out of range");
+			}
+			return str[index];
 		}
 		T str[N]{};
 	};
@@ -306,6 +331,84 @@ namespace HsBa::Slicer::Utils
 
 	template<typename... Us>
 	constexpr bool HasVoidV = (std::is_void_v<Us> || ...);
+
+	template<TemplateString th,typename T>
+	struct NamedRawPtr
+	{
+		T* ptr{ nullptr };
+		constexpr auto Name() const
+		{
+			return th.ToStringView();
+		}
+		using ValueType = T;
+		const T* Get() const
+		{
+			return ptr;
+		}
+		T* Get()
+		{
+			return ptr;
+		}
+		T * operator->()
+		{
+			return ptr;
+		}
+		const T* operator->() const
+		{
+			return ptr;
+		}
+		T& operator*()
+		{
+			return *ptr;
+		}
+		const T& operator*() const
+		{
+			return *ptr;
+		}
+		operator bool() const
+		{
+			return ptr != nullptr;
+		}
+	};
+
+	template<TemplateString th, typename T,template<typename> typename Ptr>
+	struct NamedPtr
+	{
+		Ptr<T> ptr{ nullptr };
+		constexpr auto Name() const
+		{
+			return th.ToStringView();
+		}
+		using ValueType = T;
+		const T* Get() const
+		{
+			return ptr.get();
+		}
+		T* Get()
+		{
+			return ptr.get();
+		}
+		T* operator->()
+		{
+			return ptr.get();
+		}
+		const T* operator->() const
+		{
+			return ptr.get();
+		}
+		T& operator*()
+		{
+			return *ptr;
+		}
+		const T& operator*() const
+		{
+			return *ptr;
+		}
+		operator bool() const
+		{
+			return ptr != nullptr;
+		}
+	};
 }// namespace HsBa::Slicer::Utils
 
 #endif // !HSBA_SLICER_TEMPLATE_HELPHER_HPP
