@@ -28,7 +28,7 @@ namespace HsBa::Slicer::Utils
 		void Add(CallbackType&& callback)
 		{
 			std::lock_guard lock(mutex_);
-			callbacks_.emplace_back(std::forward<decltype(callback)>(callback));
+			callbacks_.emplace_back(std::forward<CallbackType>(callback));
 		}
 		[[deprecated("std::functional has not operator== function")]]
 		void Remove(const Callback& callback)
@@ -156,7 +156,7 @@ namespace HsBa::Slicer::Utils
 		    requires std::invocable<CallbackType, Args...>
 		void Add(CallbackType&& callback)
 		{
-			event_.delegate_.Add(std::forward<decltype(callback)>(callback));
+			event_.delegate_.Add(std::forward<CallbackType>(callback));
 		}
 		[[deprecated("std::functional has not operator== function")]]
 		void Remove(const typename Event<R, Args...>::Callback& callback)
