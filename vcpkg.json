@@ -1,17 +1,18 @@
 {
   "license": "AGPL-3.0-or-later",
   "dependencies": [
+    "bit7z",
     "boost-asio",
     "boost-graph",
     "boost-locale",
     "boost-log",
+    "boost-multiprecision",
     "boost-nowide",
     "boost-polygon",
     "boost-property-tree",
+    "boost-test",
     "boost-units",
     "boost-uuid",
-    "boost-multiprecision",
-    "boost-test",
     "cgal",
     "clipper2",
     "eigen3",
@@ -23,14 +24,22 @@
     },
     "libjpeg-turbo",
     "libpng",
+    "miniz",
     {
       "name": "opencascade",
       "platform": "!android & !ios"
     },
     "protobuf",
     "rapidjson",
-    "vcpkg-pkgconfig-get-modules",
-    "bit7z",
-    "miniz"
+    "openssl",
+    {
+      "name": "sqlpp11",
+      "features": [
+        "sqlite3",
+        "mysql",
+        "postgresql"
+      ]
+    },
+    "vcpkg-pkgconfig-get-modules"
   ]
 }

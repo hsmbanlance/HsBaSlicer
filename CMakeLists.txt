@@ -91,6 +91,9 @@ if(NOT ANDROID AND NOT IOS AND NOT SWITCH)
   add_compile_definitions(USE_CAD_KERNEL)
 endif()
 
+#sqlpp11 with SQLite3 MySQL PostgreSQL
+find_package(sqlpp11 CONFIG REQUIRED COMPONENTS SQLite3 MySQL PostgreSQL)
+
 #protobuf out
 option(HSBA_PROTOBUF_OUT "protobuf out source" ON)
 

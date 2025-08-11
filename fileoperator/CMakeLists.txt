@@ -7,7 +7,10 @@
 	bit7z_zipper.hpp
 	bit7z_zipper.cpp
 	properties_doc.hpp
-	properties_doc.cpp)
+	properties_doc.cpp
+	sql_adapter.hpp
+	sql_adapter.cpp
+)
 
 find_package(boost_log CONFIG REQUIRED)
 
@@ -23,3 +26,6 @@ endif()
 
 
 target_link_libraries(HsBaSlicerFileOperator PUBLIC miniz::miniz)
+
+#Link Sqlpp11
+target_link_libraries(HsBaSlicerFileOperator PUBLIC sqlpp11::sqlite3 sqlpp11::mysql sqlpp11::postgresql)
