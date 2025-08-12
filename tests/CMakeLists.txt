@@ -161,7 +161,7 @@ add_custom_command(TARGET enum_simple_convert_test POST_BUILD
 )
 
 #filename check and operator
-#test for filename check
+#test for sql operator
 add_executable(sqlite_test
 	FilesOperator/sqlite_test.cpp
 )
@@ -186,4 +186,32 @@ add_test(
 
 add_custom_command(TARGET sqlite_test POST_BUILD
   COMMAND ${CMAKE_CTEST_COMMAND} -V -R sqlite_test 
+)
+
+#filename check and operator
+#test for sql operator
+add_executable(zipper_test
+	FilesOperator/zipper_test.cpp
+)
+
+target_link_libraries(zipper_test
+	HsBaSlicerBase
+	HsBaSlicerFileOperator
+	Boost::unit_test_framework
+)
+
+target_compile_definitions(zipper_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME zipper_test
+  COMMAND $<TARGET_FILE:zipper_test>
+  )
+
+
+add_custom_command(TARGET zipper_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R zipper_test
 )

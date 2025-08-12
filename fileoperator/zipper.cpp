@@ -81,8 +81,10 @@ namespace HsBa::Slicer
 		status = mz_zip_writer_finalize_archive(&archiver);
 		if (status <= MZ_OK && add_files_status <= MZ_OK)
 		{
+			mz_zip_writer_end(&archiver);
 			throw IOError("Failed to save zip file");
 		}
+		mz_zip_writer_end(&archiver);
 	}
 
 

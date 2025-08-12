@@ -2,7 +2,7 @@
 #ifndef HSBA_SLICER_LOGGER_HPP
 #define HSBA_SLICER_LOGGER_HPP
 
-#include <mutex>
+#include <shared_mutex>
 #include <source_location>
 
 #include <boost/log/core.hpp>
@@ -27,7 +27,7 @@ namespace HsBa::Slicer::Log
         LoggerSingletone& operator=(const LoggerSingletone&) = delete;
         LoggerSingletone(LoggerSingletone&&) = delete;
         LoggerSingletone& operator=(LoggerSingletone&&) = delete;
-        static std::mutex mutex_;
+        static std::shared_mutex mutex_;
         static LoggerSingletone* instance_;
         bool use_log_file_;
         std::string log_path_;

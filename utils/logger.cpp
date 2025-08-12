@@ -51,7 +51,7 @@ namespace HsBa::Slicer::Log
 
 	LoggerSingletone* LoggerSingletone::instance_ = nullptr;
 
-	std::mutex LoggerSingletone::mutex_{};
+	std::shared_mutex LoggerSingletone::mutex_{};
 
 	LoggerSingletone& LoggerSingletone::GetInstance()
 	{
@@ -147,7 +147,7 @@ namespace HsBa::Slicer::Log
 
 	bool LoggerSingletone::UseLogFile() const
 	{
-		std::lock_guard lock{ mutex_ };
+		std::shared_lock lock{ mutex_ };
 		return use_log_file_;
 	}
 
