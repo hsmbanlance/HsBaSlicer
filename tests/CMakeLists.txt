@@ -189,7 +189,7 @@ add_custom_command(TARGET sqlite_test POST_BUILD
 )
 
 #filename check and operator
-#test for sql operator
+#test for zipper operator
 add_executable(zipper_test
 	FilesOperator/zipper_test.cpp
 )
@@ -214,4 +214,32 @@ add_test(
 
 add_custom_command(TARGET zipper_test POST_BUILD
   COMMAND ${CMAKE_CTEST_COMMAND} -V -R zipper_test
+)
+
+#json convert test
+#test for json convert
+add_executable(json_convert_test
+	"ConfigMap/json_convert_test.cpp"
+)
+
+target_link_libraries(json_convert_test
+	HsBaSlicerBase
+	HsBaSlicerUtils
+	Boost::unit_test_framework
+)
+
+target_compile_definitions(json_convert_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME json_convert_test
+  COMMAND $<TARGET_FILE:json_convert_test>
+  )
+
+
+add_custom_command(TARGET json_convert_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R json_convert
 )

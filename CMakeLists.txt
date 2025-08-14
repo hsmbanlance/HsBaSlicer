@@ -41,7 +41,7 @@ find_package(PkgConfig REQUIRED)
 
 #Boost
 ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
-find_package(boost REQUIRED COMPONENTS asio log nowide polygon property-tree graph locale units multiprecision test)
+find_package(boost REQUIRED COMPONENTS asio log nowide polygon property-tree graph locale units multiprecision test pfr)
 
 #Clipper2
 pkg_check_modules(Clipper2 REQUIRED IMPORTED_TARGET Clipper2)

@@ -13,6 +13,7 @@
     "boost-test",
     "boost-units",
     "boost-uuid",
+    "boost-pfr",
     "cgal",
     "clipper2",
     "eigen3",
