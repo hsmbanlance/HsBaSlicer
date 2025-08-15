@@ -8,6 +8,9 @@
 #include <boost/pfr/core_name.hpp>
 
 #include <rapidjson/document.h>
+#include <rapidjson/writer.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/reader.h>
 
 #include "base/concepts.hpp"
 #include "base/error.hpp"
@@ -270,6 +273,30 @@ namespace HsBa::Slicer::Utils
 			throw InvalidArgumentError("JSON document is not an object");
 		}
 		return from_json<T>(static_cast<const rapidjson::Value&>(doc));
+	}
+
+	template<typename T>
+	std::ostream& write_json(std::ostream& os, const T& value)
+	{
+		rapidjson::Document doc = to_json(value);
+		rapidjson::StringBuffer buffer;
+		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+		doc.Accept(writer);
+		os << buffer.GetString();
+		return os;
+	}
+
+	template<typename T>
+	T read_json(std::istream& is)
+	{
+		rapidjson::Document doc;
+		std::string json_str((std::istreambuf_iterator<char>(is)), std::istreambuf_iterator<char>());
+		doc.Parse(json_str.c_str());
+		if (doc.HasParseError())
+		{
+			throw RuntimeError("JSON parse error: " + std::to_string(doc.GetParseError()));
+		}
+		return from_json<T>(doc);
 	}
 } // namespace HsBa::Slicer::Utils
 

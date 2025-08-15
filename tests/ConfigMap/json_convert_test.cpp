@@ -35,6 +35,16 @@ struct Family {
 	std::vector<Person> children;
 };
 
+class NoJson {
+public:
+	NoJson(int){}
+};
+
+struct ThrowStruct {
+	Person p;
+	NoJson no;
+};
+
 class WithJson {
 	int x = 0;
 	int y = 0;
@@ -194,6 +204,33 @@ BOOST_AUTO_TEST_CASE(struct_with_json_convert_with_json)
 	BOOST_REQUIRE_EQUAL(converted_person_move.p.sexuality, person_move_instance.p.sexuality);
 	BOOST_REQUIRE_EQUAL(converted_person_move.json , person_move_instance.json);
 	BOOST_TEST_MESSAGE("PersonMove JSON convert test completed successfully");
+}
+
+BOOST_AUTO_TEST_CASE(json_stream)
+{
+	// Create an instance of the struct
+	Testing::TestStruct test_instance{ 1, "Test", 3.14 };
+	// Write to JSON stream
+	std::ostringstream os;
+	HsBa::Slicer::Utils::write_json(os, test_instance);
+	BOOST_REQUIRE(!os.str().empty());
+	// Read from JSON stream
+	std::istringstream is(os.str());
+	auto converted_instance = HsBa::Slicer::Utils::read_json<Testing::TestStruct>(is);
+	BOOST_REQUIRE_EQUAL(converted_instance.id, test_instance.id);
+	BOOST_REQUIRE_EQUAL(converted_instance.name, test_instance.name);
+	BOOST_REQUIRE_EQUAL(converted_instance.value, test_instance.value);
+	BOOST_TEST_MESSAGE("JSON stream test completed successfully");
+}
+
+BOOST_AUTO_TEST_CASE(test_json_throw)
+{
+	static_assert(!std::is_aggregate_v<NoJson>);
+	Person p{ .age = 0,.name = "UnDefine",.sexuality = Sexual_Unknown };
+	NoJson no{ 1 };
+	ThrowStruct th{ p,no };
+	BOOST_REQUIRE_THROW(HsBa::Slicer::Utils::to_json(th), HsBa::Slicer::RuntimeError);
+	BOOST_TEST_MESSAGE("Member must be aggregate or number or string or enum or which has to_string and from_string methods");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
