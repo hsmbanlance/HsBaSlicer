@@ -18,6 +18,7 @@
     eigen_translator.hpp
     eigen_translator.cpp
     delegate.hpp
+    singleton.hpp
     units.hpp
 )
 

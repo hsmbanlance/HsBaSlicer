@@ -48,28 +48,6 @@ namespace HsBa::Slicer::Log
 		}
 	}
 
-
-	LoggerSingletone* LoggerSingletone::instance_ = nullptr;
-
-	std::shared_mutex LoggerSingletone::mutex_{};
-
-	LoggerSingletone& LoggerSingletone::GetInstance()
-	{
-		if (instance_)
-		{
-			return *instance_;
-		}
-		else
-		{
-			std::lock_guard lock{ mutex_ };
-			if (!instance_)
-			{
-				instance_ = new LoggerSingletone();
-			}
-			return *instance_;
-		}
-	}
-
 	LoggerSingletone::LoggerSingletone()
 	{
 		auto current_path = std::filesystem::current_path();
@@ -135,16 +113,6 @@ namespace HsBa::Slicer::Log
 		boost::log::core::get()->add_global_attribute("TimeStamp", boost::log::attributes::local_clock());
 	}
 
-	void LoggerSingletone::DeleteInstance()
-	{
-		std::lock_guard lock{ mutex_ };
-		if (instance_)
-		{
-			delete instance_;
-			instance_ = nullptr;
-		}
-	}
-
 	bool LoggerSingletone::UseLogFile() const
 	{
 		std::shared_lock lock{ mutex_ };
@@ -155,7 +123,7 @@ namespace HsBa::Slicer::Log
 	{
 		if (!instance_)
 		{
-			instance_ = &LoggerSingletone::GetInstance();
+			GetInstance();
 		}
 		switch (log_lv)
 		{
@@ -187,7 +155,7 @@ namespace HsBa::Slicer::Log
 	{
 		if (!instance_)
 		{
-			instance_ = &LoggerSingletone::GetInstance();
+			GetInstance();
 		}
 		BOOST_LOG_TRIVIAL(debug) << GetSourceLocation(location) << message;
 	}
@@ -196,7 +164,7 @@ namespace HsBa::Slicer::Log
 	{
 		if (!instance_)
 		{
-			instance_ = &LoggerSingletone::GetInstance();
+			GetInstance();
 		}
 		BOOST_LOG_TRIVIAL(info) << GetSourceLocation(location) << message;
 	}
@@ -205,7 +173,7 @@ namespace HsBa::Slicer::Log
 	{
 		if (!instance_)
 		{
-			instance_ = &LoggerSingletone::GetInstance();
+			GetInstance();
 		}
 		BOOST_LOG_TRIVIAL(warning) << GetSourceLocation(location) << message;
 	}
@@ -214,7 +182,7 @@ namespace HsBa::Slicer::Log
 	{
 		if (!instance_)
 		{
-			instance_ = &LoggerSingletone::GetInstance();
+			GetInstance();
 		}
 		BOOST_LOG_TRIVIAL(error) << GetSourceLocation(location) << message;
 	}

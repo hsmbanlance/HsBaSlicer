@@ -23,6 +23,5 @@ int main()
 	initialize();
 	"initialize"_log_info();
 	cout << "Hello CMake." << endl;
-	HsBa::Slicer::Log::LoggerSingletone::DeleteInstance();
 	return 0;
 }

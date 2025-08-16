@@ -7,13 +7,14 @@
 
 #include <boost/log/core.hpp>
 
+#include "base/singleton.hpp"
+
 namespace HsBa::Slicer::Log
 {
-    class LoggerSingletone
+	class LoggerSingletone : public Utils::Singleton<LoggerSingletone>
     {
     public:
-        static LoggerSingletone& GetInstance();
-        static void DeleteInstance();
+		friend class Utils::Singleton<LoggerSingletone>;
         bool UseLogFile() const;
         static void Log(std::string_view message,const int log_lv, const std::source_location& location = std::source_location::current());
         static void LogDebug(std::string_view message,const std::source_location& location = std::source_location::current());
@@ -27,8 +28,6 @@ namespace HsBa::Slicer::Log
         LoggerSingletone& operator=(const LoggerSingletone&) = delete;
         LoggerSingletone(LoggerSingletone&&) = delete;
         LoggerSingletone& operator=(LoggerSingletone&&) = delete;
-        static std::shared_mutex mutex_;
-        static LoggerSingletone* instance_;
         bool use_log_file_;
         std::string log_path_;
         int log_level_;
