@@ -371,6 +371,34 @@ namespace HsBa::Slicer::Utils
 		}
 	};
 
+	template<TemplateString th>
+	struct NamedRawPtr<th, void>
+	{
+		void* ptr;
+		constexpr auto Name() const
+		{
+			return th.ToStringView();
+		}
+		using ValueType = void;
+		const void* Get() const
+		{
+			return ptr;
+		}
+		void* Get()
+		{
+			return ptr;
+		}
+		[[deprecated("void pointer cannot be dereferenced")]]
+		void* operator->()
+		{
+			return ptr;
+		}
+		operator bool() const
+		{
+			return ptr != nullptr;
+		}
+	};
+
 	template<TemplateString th, typename T,template<typename> typename Ptr>
 	struct NamedPtr
 	{
