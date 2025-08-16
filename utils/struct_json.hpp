@@ -9,6 +9,7 @@
 
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
+#include <rapidjson/prettywriter.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/reader.h>
 
@@ -287,10 +288,90 @@ namespace HsBa::Slicer::Utils
 	}
 
 	template<typename T>
+	std::ostream& write_pretty_json(std::ostream& os, const T& value)
+	{
+		rapidjson::Document doc = to_json(value);
+		rapidjson::StringBuffer buffer;
+		rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
+		doc.Accept(writer);
+		os << buffer.GetString();
+		return os;
+	}
+
+	template<typename T>
+	std::string write_json(const T& value)
+	{
+		rapidjson::Document doc = to_json(value);
+		rapidjson::StringBuffer buffer;
+		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+		doc.Accept(writer);
+		return buffer.GetString();
+	}
+
+	template<typename T>
+	std::string write_pretty_json(const T& value)
+	{
+		rapidjson::Document doc = to_json(value);
+		rapidjson::StringBuffer buffer;
+		rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
+		doc.Accept(writer);
+		return buffer.GetString();
+	}
+
+	template<typename T>
+	void write_json(std::string_view path, const T& value)
+	{
+		std::ofstream ofs(path.data());
+		if (!ofs)
+		{
+			throw IOError("Failed to open file for writing: " + std::string(path));
+		}
+		write_json(ofs, value);
+		ofs.close();
+	}
+
+	template<typename T>
+	void write_pretty_json(std::string_view path, const T& value)
+	{
+		std::ofstream ofs(path.data());
+		if (!ofs)
+		{
+			throw IOError("Failed to open file for writing: " + std::string(path));
+		}
+		write_pretty_json(ofs, value);
+		ofs.close();
+	}
+
+	template<typename T>
 	T read_json(std::istream& is)
 	{
 		rapidjson::Document doc;
 		std::string json_str((std::istreambuf_iterator<char>(is)), std::istreambuf_iterator<char>());
+		doc.Parse(json_str.c_str());
+		if (doc.HasParseError())
+		{
+			throw RuntimeError("JSON parse error: " + std::to_string(doc.GetParseError()));
+		}
+		return from_json<T>(doc);
+	}
+
+	template<typename T>
+	T read_json_from_file(std::string_view path)
+	{
+		std::ifstream ifs(path.data());
+		if (!ifs)
+		{
+			throw IOError("Failed to open file for reading: " + std::string(path));
+		}
+		T value = read_json<T>(ifs);
+		ifs.close();
+		return value;
+	}
+
+	template<typename T>
+	T read_json_from_string(const std::string& json_str)
+	{
+		rapidjson::Document doc;
 		doc.Parse(json_str.c_str());
 		if (doc.HasParseError())
 		{
