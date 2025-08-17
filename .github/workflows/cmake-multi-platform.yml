@@ -64,7 +64,7 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update 
-        sudo apt-get install -y libgl1-mesa-dev libglu1-mesa-dev libx11-dev libxext-dev libxrandr-dev
+        sudo apt-get install -y libx11-dev mesa-common-dev libglu1-mesa-dev libxi-dev libxmu-dev libxmu-headers
         git clone https://github.com/microsoft/vcpkg.git
         cd vcpkg
         ./bootstrap-vcpkg.sh -disableMetrics
