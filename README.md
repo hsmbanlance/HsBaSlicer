@@ -1,4 +1,6 @@
-﻿# 如何构建
+﻿[![CMake on multiple platforms](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/cmake-multi-platform.yml)
+
+# 如何构建
 
 你需要安装CMake工具链和Vcpkg来进行构建。
 
@@ -28,6 +30,12 @@ sudo snap install cmake --classic
 ```
 
 CMake版本过低，构建时会发出警告。和Boost的构建有关。
+
+因为使用Openscade,需要安装X11开发包。
+如果使用的是Ubuntu 20.04或Debian 10.0以上版本，则可以直接安装X11开发包：
+```bash
+sudo apt install libx11-dev
+```
 
 安装git：
 
