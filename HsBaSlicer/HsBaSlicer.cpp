@@ -10,9 +10,9 @@ using namespace std;
 
 int main()
 {
-	auto& log = HsBa::Slicer::Log::LoggerSingletone::GetInstance();
+	auto log = HsBa::Slicer::Log::LoggerSingletone::GetInstance();
 	using namespace HsBa::Slicer::Log::LogLiteral;
-	if (log.UseLogFile())
+	if (log->UseLogFile())
 	{
 		"use log file"_log_info();
 	}

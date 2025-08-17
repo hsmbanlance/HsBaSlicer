@@ -374,7 +374,7 @@ namespace HsBa::Slicer::Utils
 	template<TemplateString th>
 	struct NamedRawPtr<th, void>
 	{
-		void* ptr;
+		void* ptr = nullptr;
 		constexpr auto Name() const
 		{
 			return th.ToStringView();

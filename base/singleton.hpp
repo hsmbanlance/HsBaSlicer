@@ -11,19 +11,12 @@ namespace HsBa::Slicer::Utils
 	class Singleton
 	{
 	public:
-		static T& GetInstance()
+		static std::shared_ptr<T> GetInstance()
 		{
-			if (!instance_) {
-				std::shared_lock<std::shared_mutex> read_lock(mutex_);
-				if (!instance_) {
-					read_lock.unlock();
-					std::unique_lock<std::shared_mutex> write_lock(mutex_);
-					if (!instance_) {
-						instance_ = std::shared_ptr<T>(new T());
-					}
-				}
-			}
-			return *instance_;
+			std::call_once(instance_flag_, []() {
+				instance_ = std::shared_ptr<T>(new T());
+				});
+			return instance_;
 		}
 		Singleton(const Singleton&) = delete;
 		Singleton& operator=(const Singleton&) = delete;
@@ -34,12 +27,15 @@ namespace HsBa::Slicer::Utils
 		~Singleton() = default;
 		static std::shared_ptr<T> instance_;
 		static std::shared_mutex mutex_;
+		static std::once_flag instance_flag_;
 	};
 
 	template <typename T>
 	std::shared_ptr<T> Singleton<T>::instance_ = nullptr;
 	template <typename T>
 	std::shared_mutex Singleton<T>::mutex_;
+	template <typename T>
+	std::once_flag Singleton<T>::instance_flag_;
 } // namespace HsBa::Slicer::Utils
 
 #endif // !HSBA_SLICER_SINGLETON_HPP
