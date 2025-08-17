@@ -36,6 +36,10 @@ CMake版本过低，构建时会发出警告。和Boost的构建有关。
 ```bash
 sudo apt install libx11-dev mesa-common-dev libglu1-mesa-dev libxi-dev libxmu-dev libxmu-headers
 ```
+编译libmysql需要安装
+```
+sudo apt install libncurses-dev libtirpc-dev
+```
 
 安装git：
 
