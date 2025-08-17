@@ -52,33 +52,37 @@ jobs:
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
-    - name: Install X11 development libraries (Linux only)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libx11-dev
-
     - name: Download vcpkg
       run: |
         git clone https://github.com/microsoft/vcpkg.git
         cd vcpkg
-        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          .\bootstrap-vcpkg.bat -disableMetrics
-          .\vcpkg integrate install
-        else
-          ./bootstrap-vcpkg.sh -disableMetrics
-          ./vcpkg integrate install
-        fi
+
+    - name: Bootstrap vcpkg on Windows
+      if: matrix.os == 'windows-latest'
+      run: |
+        .\bootstrap-vcpkg.bat -disableMetrics
+        .\vcpkg integrate install
+
+    - name: Bootstrap vcpkg on Linux
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        ./bootstrap-vcpkg.sh -disableMetrics
+        ./vcpkg integrate install
+
+    - name: Set VCPKG_ROOT environment variable
+      run: |
         echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> "$GITHUB_ENV"
         echo "VCPKG_FEATURE_FLAGS=versions" >> "$GITHUB_ENV"
 
-    - name: Install dependencies using vcpkg
+    - name: Install dependencies using vcpkg on Windows
+      if: matrix.os == 'windows-latest'
       run: |
-        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          .\vcpkg\vcpkg.exe install
-        else
-          ./vcpkg install
-        fi
+        .\vcpkg.exe install
+
+    - name: Install dependencies using vcpkg on Linux
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        ./vcpkg install
 
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
