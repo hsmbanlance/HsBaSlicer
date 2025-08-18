@@ -12,7 +12,7 @@ target_link_libraries(HsBaSlicerUtils PUBLIC
 	Boost::date_time
 	HsBaSlicerBase
 	HsBaSlicerFileOperator
-	RapidJSON
+	rapidjson
 )
 
 target_precompile_headers(HsBaSlicerUtils PRIVATE pch_headers.hpp)

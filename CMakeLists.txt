@@ -64,7 +64,7 @@ find_package(PNG REQUIRED)
 find_package(libjpeg-turbo CONFIG REQUIRED)
 
 #Protobuf
-find_package(protobuf CONFIG REQUIRED)
+find_package(Protobuf CONFIG REQUIRED)
 
 #RapidJSON
 find_package(RapidJSON CONFIG REQUIRED)
@@ -92,7 +92,7 @@ if(NOT ANDROID AND NOT IOS AND NOT SWITCH)
 endif()
 
 #sqlpp11 with SQLite3 MySQL PostgreSQL
-find_package(sqlpp11 CONFIG REQUIRED COMPONENTS SQLite3 MySQL PostgreSQL)
+find_package(Sqlpp11 CONFIG REQUIRED COMPONENTS SQLite3 MySQL PostgreSQL)
 
 #protobuf out
 option(HSBA_PROTOBUF_OUT "protobuf out source" ON)
