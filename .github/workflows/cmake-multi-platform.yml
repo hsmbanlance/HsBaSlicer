@@ -52,33 +52,41 @@ jobs:
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
-    - name: Create vcpkg cache directories
+    - name: Remove existing vcpkg directory if not cached
+      if: steps.cache-vcpkg.outputs.cache-hit != 'true'
       run: |
-        mkdir -p ${{ github.workspace }}/vcpkg/binary-cache
-        mkdir -p ${{ github.workspace }}/vcpkg/asset-cache
-
-    - name: Set vcpkg cache environment variables
-      run: |
-        echo "VCPKG_BINARY_SOURCES=clear;files,${{ github.workspace }}/vcpkg/binary-cache,readwrite" >> $GITHUB_ENV
-        echo "X_VCPKG_ASSET_SOURCES=clear;x-azurl,file://${{ github.workspace }}/vcpkg/asset-cache,,readwrite" >> $GITHUB_ENV
+        if [ -d "vcpkg" ]; then
+          rm -rf vcpkg
+        fi
 
     - name: Bootstrap vcpkg on Windows
-      if: matrix.os == 'windows-latest'
+      if: matrix.os == 'windows-latest' && steps.cache-vcpkg.outputs.cache-hit != 'true'
       run: |
-        git clone https://github.com/microsoft/vcpkg.git
-        cd vcpkg
-        .\bootstrap-vcpkg.bat -disableMetrics
-        .\vcpkg integrate install
+        Write-Output "Bootstrapping vcpkg on Windows"
+        rm -rf vcpkg
+        if (Test-Path -Path "vcpkg") {
+            Write-Output "vcpkg directory exists"
+        } else {
+            Write-Output "vcpkg directory does not exist"
+            git clone https://github.com/microsoft/vcpkg.git vcpkg
+            cd vcpkg
+            .\bootstrap-vcpkg.bat -disableMetrics
+            .\vcpkg integrate install
+        }
 
     - name: Bootstrap vcpkg on Linux
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-latest' && steps.cache-vcpkg.outputs.cache-hit != 'true'
       run: |
+        echo "Bootstrapping vcpkg on Linux"
+        rm -rf vcpkg
         sudo apt-get update
         sudo apt-get install -y libx11-dev mesa-common-dev libglu1-mesa-dev libxi-dev libxmu-dev libxmu-headers libncurses-dev libtirpc-dev
-        git clone https://github.com/microsoft/vcpkg.git vcpkg
-        cd vcpkg
-        ./bootstrap-vcpkg.sh -disableMetrics
-        ./vcpkg integrate install
+        if [ ! -d "vcpkg" ]; then
+          git clone https://github.com/microsoft/vcpkg.git vcpkg
+          cd vcpkg
+          ./bootstrap-vcpkg.sh -disableMetrics
+          ./vcpkg integrate install
+        fi
 
     - name: Configure CMake
       run: >
