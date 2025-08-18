@@ -11,15 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
-      # Set fail-fast to false to ensure that feedback is delivered for all matrix combinations. Consider changing this to true when your workflow is stable.
       fail-fast: false
-
-      # Set up a matrix to run the following 3 configurations:
-      # 1. <Windows, Release, latest MSVC compiler toolchain on the default runner image, default generator>
-      # 2. <Linux, Release, latest GCC compiler toolchain on the default runner image, default generator>
-      # 3. <Linux, Release, latest Clang compiler toolchain on the default runner image, default generator>
-      #
-      # To add more build types (Release, Debug, RelWithDebInfo, etc.) customize the build_type list.
       matrix:
         os: [ubuntu-latest, windows-latest]
         build_type: [Release]
@@ -45,29 +37,46 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set reusable strings
-      # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
-      id: strings
+    - name: Install PowerShell on Linux
+      if: matrix.os == 'ubuntu-latest'
       shell: bash
       run: |
-        echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+        sudo apt-get update
+        sudo apt-get install -y wget apt-transport-https software-properties-common
+        wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb
+        sudo dpkg -i packages-microsoft-prod.deb
+        sudo apt-get update
+        sudo apt-get install -y powershell
+        rm packages-microsoft-prod.deb
+
+    - name: Set reusable strings
+      id: strings
+      shell: pwsh
+      run: |
+        $buildOutputDir = "${{ github.workspace }}/build"
+        echo "build-output-dir=$buildOutputDir" | Out-File -Encoding utf8 -FilePath $env:GITHUB_OUTPUT
+
+    - name: Cache vcpkg
+      uses: actions/cache@v3
+      with:
+        path: vcpkg
+        key: vcpkg-${{ runner.os }}-${{ github.sha }}
+        restore-keys: |
+          vcpkg-${{ runner.os }}-
 
     - name: Remove existing vcpkg directory if not cached
       if: steps.cache-vcpkg.outputs.cache-hit != 'true'
+      shell: pwsh
       run: |
-        if [ -d "vcpkg" ]; then
-          rm -rf vcpkg
-        fi
+        if (Test-Path -Path "vcpkg") {
+            Remove-Item -Recurse -Force vcpkg
+        }
 
     - name: Bootstrap vcpkg on Windows
-      if: matrix.os == 'windows-latest' && steps.cache-vcpkg.outputs.cache-hit != 'true'
+      if: matrix.os == 'windows-latest'
+      shell: pwsh
       run: |
-        Write-Output "Bootstrapping vcpkg on Windows"
-        rm -rf vcpkg
-        if (Test-Path -Path "vcpkg") {
-            Write-Output "vcpkg directory exists"
-        } else {
-            Write-Output "vcpkg directory does not exist"
+        if (-not (Test-Path -Path "vcpkg")) {
             git clone https://github.com/microsoft/vcpkg.git vcpkg
             cd vcpkg
             .\bootstrap-vcpkg.bat -disableMetrics
@@ -75,23 +84,35 @@ jobs:
         }
 
     - name: Bootstrap vcpkg on Linux
-      if: matrix.os == 'ubuntu-latest' && steps.cache-vcpkg.outputs.cache-hit != 'true'
+      if: matrix.os == 'ubuntu-latest'
+      shell: pwsh
       run: |
-        echo "Bootstrapping vcpkg on Linux"
-        rm -rf vcpkg
-        sudo apt-get update
-        sudo apt-get install -y libx11-dev mesa-common-dev libglu1-mesa-dev libxi-dev libxmu-dev libxmu-headers libncurses-dev libtirpc-dev
-        if [ ! -d "vcpkg" ]; then
+        if (-not (Test-Path -Path "vcpkg")) {
           git clone https://github.com/microsoft/vcpkg.git vcpkg
           cd vcpkg
           ./bootstrap-vcpkg.sh -disableMetrics
           ./vcpkg integrate install
-        fi
+        }
+
+    - name: Set VCPKG_ROOT environment variable
+      shell: pwsh
+      run: |
+        $env:VCPKG_ROOT = "${{ github.workspace }}/vcpkg"
+        echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" | Out-File -Encoding utf8 -FilePath $env:GITHUB_ENV
+        echo "VCPKG_FEATURE_FLAGS=versions" | Out-File -Encoding utf8 -Append -FilePath $env:GITHUB_ENV
+
+    - name: Install dependencies using vcpkg
+      shell: pwsh
+      run: |
+        if (Test-Path -Path "${{ env.VCPKG_ROOT }}/vcpkg.exe") {
+            & "${{ env.VCPKG_ROOT }}/vcpkg.exe" install --binarysource=clear --binarysource="files,${{ github.workspace }}/vcpkg/binary-cache,readwrite"
+        } else {
+            & "${{ env.VCPKG_ROOT }}/vcpkg" install --binarysource=clear --binarysource="files,${{ github.workspace }}/vcpkg/binary-cache,readwrite"
+        }
 
     - name: Configure CMake
+      shell: pwsh
       run: >
-        echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
-        echo "VCPKG_FEATURE_FLAGS=versions" >> $GITHUB_ENV
         cmake -B ${{ steps.strings.outputs.build-output-dir }}
         -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
         -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
@@ -100,10 +121,12 @@ jobs:
         -S ${{ github.workspace }}
 
     - name: Build
+      shell: pwsh
       run: |
         cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
     - name: Test
       working-directory: ${{ steps.strings.outputs.build-output-dir }}
+      shell: pwsh
       run: |
         ctest --build-config ${{ matrix.build_type }}
