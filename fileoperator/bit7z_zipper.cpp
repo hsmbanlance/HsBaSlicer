@@ -25,7 +25,7 @@ namespace HsBa::Slicer
 		}
 		ex.extract(archive, outdir);
 	}
-	void HsBa::Slicer::Bit7zExtract(const std::string& archive,
+	void Bit7zExtract(const std::string& archive,
 		std::map<std::string, std::vector<bit7z::byte_t>>& bufs,
 		const std::string& password, const std::string& dll_path)
 	{

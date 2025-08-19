@@ -100,7 +100,16 @@ namespace HsBa::Slicer::Config
 			T value = ptree.get<T>(key, T{}, tr);
 			return AddOrChangeValue(key, value);
 		}
-		friend AnyConfigMap VariantConfigMap2AnyConfigMap<Args...>(const VariantConfigMap<Args...>& map);
+        template<typename T = AnyConfigMap>
+        auto ToAnyMap() const ->std::enable_if_t<std::is_same_v<T,AnyConfigMap>,AnyConfigMap>
+        {
+            T map;
+		    for (const auto& [key, value] : config_map_)
+		    {
+			    std::visit([&key, &map](auto&& args) {map.AddOrChangeValue(key, args); }, value);
+		    }
+		    return map;
+        }
 	private:
 		std::unordered_map<std::string, std::variant<Args...>> config_map_;
 	};
@@ -167,7 +176,7 @@ namespace HsBa::Slicer::Config
 			return AddOrChangeValue(key, value);
 		}
 		template<typename... Args>
-		inline VariantConfigMap<Args...> ToVariantConfigMap()
+		inline VariantConfigMap<Args...> ToVariantConfigMap() const
 		{
 			VariantConfigMap<Args...> map;
 			for (const auto& [key, value] : config_map_)
@@ -179,17 +188,6 @@ namespace HsBa::Slicer::Config
 	private:
 		std::unordered_map<std::string, std::any> config_map_;
 	};
-
-	template<typename... Args>
-	inline AnyConfigMap VariantConfigMap2AnyConfigMap(const VariantConfigMap<Args...>& variant_map)
-	{
-		AnyConfigMap map;
-		for (const auto& [key, value] : variant_map.config_map_)
-		{
-			std::visit([&key, &map](auto&& args) {map.AddOrChangeValue(key, args); }, value);
-		}
-		return map;
-	}
 
 	template<typename T,typename Translator> requires StrTranslator<T,Translator>
 	inline bool ChangeTranslator(/*ref*/boost::property_tree::ptree& ptree, const std::string& key, Translator tr)
