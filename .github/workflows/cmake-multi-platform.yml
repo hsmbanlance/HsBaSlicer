@@ -44,6 +44,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential libx11-dev mesa-common-dev libglu1-mesa-dev libxi-dev libxmu-dev libxmu-headers
         sudo apt-get install -y libncurses-dev libtirpc-dev
+        sudo apt-get install -y ninja-build ninja
 
     - name: Install PowerShell on Linux
       if: matrix.os == 'ubuntu-latest'
