@@ -119,16 +119,25 @@ jobs:
           ./vcpkg integrate install
         }
 
-    - name: Set VCPKG_ROOT environment variable
+    - name: Set VCPKG_ROOT environment variable on Windows
+      if: matrix.os == 'windows-latest'
       shell: pwsh
       run: |
         $env:VCPKG_ROOT = "${{ github.workspace }}/vcpkg"
         echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" | Out-File -Encoding utf8 -FilePath $env:GITHUB_ENV
         echo "VCPKG_FEATURE_FLAGS=versions" | Out-File -Encoding utf8 -Append -FilePath $env:GITHUB_ENV
 
-    - name: Configure CMake
+    - name: Set VCPKG_ROOT environment variable on Linux
+      if: matrix.os == 'ubuntu-latest'
+      shell: bash
+      run: |
+        echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
+        echo "VCPKG_FEATURE_FLAGS=versions" >> $GITHUB_ENV
+
+    - name: Configure CMake With Vcpkg Toolchain
+      if: matrix.os == 'Windows' -and matrix.c_compiler == 'cl'
       shell: pwsh
-      run: >
+      run: |
         cmake -B ${{ steps.strings.outputs.build-output-dir }}
         -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
         -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
@@ -136,8 +145,26 @@ jobs:
         -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
         -S ${{ github.workspace }} -G Ninja
 
-    - name: Build
+    - name: Configure CMake With Vcpkg Toolchain
+      if: matrix.os == 'ubuntu-latest' -and (matrix.c_compiler == 'gcc' -or matrix.c_compiler == 'clang')
+      shell: bash
+      run: |
+        cmake -B ${{ steps.strings.outputs.build-output-dir }}
+        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
+        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+        -S ${{ github.workspace }} -G Ninja
+
+    - name: Build Windows
+      if: matrix.os == 'windows-latest'
       shell: pwsh
+      run: |
+        cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+
+    - name: Build Linux
+      if: matrix.os == 'ubuntu-latest'
+      shell: bash
       run: |
         cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
