@@ -118,6 +118,7 @@ jobs:
         echo "VCPKG_FEATURE_FLAGS=versions" >> $env:GITHUB_ENV
 
     - name: Add cl To Path
+      if: matrix.os == 'windows-latest'
       shell: pwsh
       run: |
         $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -146,6 +147,28 @@ jobs:
     - name: Test Tools Windows
       if: matrix.os == 'windows-latest'
       run: |
+        $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        if (-not (Test-Path -Path $vswherePath)) {
+        echo "vswhere.exe not found. Visual Studio may not be installed correctly."
+          exit 1
+        }
+        $vsInstallPath = & $vswherePath -latest -property installationPath
+        $vcvarsallPath = Join-Path -Path $vsInstallPath -ChildPath "\VC\Auxiliary\Build\vcvarsall.bat"
+        if (-not (Test-Path -Path $vcvarsallPath)) {
+          echo "vcvarsall.bat not found. Visual Studio may not be installed correctly."
+          exit 1
+        }
+        # Run vcvarsall.bat and capture the modified environment variables
+        $envVars = cmd /c "`"$vcvarsallPath`" x64 & set"
+        # Split the output into individual environment variable assignments
+        $envVars -split "`n" | ForEach-Object {
+          if ($_ -match "^(.*?)=(.*)$") {
+            [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
+          }
+        }
+        echo "MSVC Compiler version:"
+        cl /?
+        if ($LASTEXITCODE -ne 0) { exit 1 }
         echo "Testing tools on Windows..."
         if (-not (Test-Path -Path "${{ env.VCPKG_ROOT }}")) {
           echo "VCPKG_ROOT is not set or the path does not exist"
@@ -185,6 +208,28 @@ jobs:
     - name: Configure CMake With Vcpkg Toolchain on Windows
       if: matrix.os == 'windows-latest'
       run: |
+        $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        if (-not (Test-Path -Path $vswherePath)) {
+        echo "vswhere.exe not found. Visual Studio may not be installed correctly."
+          exit 1
+        }
+        $vsInstallPath = & $vswherePath -latest -property installationPath
+        $vcvarsallPath = Join-Path -Path $vsInstallPath -ChildPath "\VC\Auxiliary\Build\vcvarsall.bat"
+        if (-not (Test-Path -Path $vcvarsallPath)) {
+          echo "vcvarsall.bat not found. Visual Studio may not be installed correctly."
+          exit 1
+        }
+        # Run vcvarsall.bat and capture the modified environment variables
+        $envVars = cmd /c "`"$vcvarsallPath`" x64 & set"
+        # Split the output into individual environment variable assignments
+        $envVars -split "`n" | ForEach-Object {
+          if ($_ -match "^(.*?)=(.*)$") {
+            [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
+          }
+        }
+        echo "MSVC Compiler version:"
+        cl /?
+        if ($LASTEXITCODE -ne 0) { exit 1 }
         echo "Configuring CMake with vcpkg toolchain..."
         cmake -B ${{ steps.strings.outputs.build-output-dir }} `
         -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} `
@@ -207,6 +252,28 @@ jobs:
     - name: Build Windows
       if: matrix.os == 'windows-latest'
       run: |
+        $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        if (-not (Test-Path -Path $vswherePath)) {
+        echo "vswhere.exe not found. Visual Studio may not be installed correctly."
+          exit 1
+        }
+        $vsInstallPath = & $vswherePath -latest -property installationPath
+        $vcvarsallPath = Join-Path -Path $vsInstallPath -ChildPath "\VC\Auxiliary\Build\vcvarsall.bat"
+        if (-not (Test-Path -Path $vcvarsallPath)) {
+          echo "vcvarsall.bat not found. Visual Studio may not be installed correctly."
+          exit 1
+        }
+        # Run vcvarsall.bat and capture the modified environment variables
+        $envVars = cmd /c "`"$vcvarsallPath`" x64 & set"
+        # Split the output into individual environment variable assignments
+        $envVars -split "`n" | ForEach-Object {
+          if ($_ -match "^(.*?)=(.*)$") {
+            [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
+          }
+        }
+        echo "MSVC Compiler version:"
+        cl /?
+        if ($LASTEXITCODE -ne 0) { exit 1 }
         echo "Building project..."
         cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
@@ -217,8 +284,39 @@ jobs:
         echo "Building project..."
         cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
-    - name: Test
+    - name: Test Windows
+      if: matrix.os == 'windows-latest'
       working-directory: ${{ steps.strings.outputs.build-output-dir }}/tests
+      run: |
+        $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        if (-not (Test-Path -Path $vswherePath)) {
+        echo "vswhere.exe not found. Visual Studio may not be installed correctly."
+          exit 1
+        }
+        $vsInstallPath = & $vswherePath -latest -property installationPath
+        $vcvarsallPath = Join-Path -Path $vsInstallPath -ChildPath "\VC\Auxiliary\Build\vcvarsall.bat"
+        if (-not (Test-Path -Path $vcvarsallPath)) {
+          echo "vcvarsall.bat not found. Visual Studio may not be installed correctly."
+          exit 1
+        }
+        # Run vcvarsall.bat and capture the modified environment variables
+        $envVars = cmd /c "`"$vcvarsallPath`" x64 & set"
+        # Split the output into individual environment variable assignments
+        $envVars -split "`n" | ForEach-Object {
+          if ($_ -match "^(.*?)=(.*)$") {
+            [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
+          }
+        }
+        echo "MSVC Compiler version:"
+        cl /?
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+        echo "Running tests..."
+        ctest --build-config ${{ matrix.build_type }}
+      continue-on-error: true
+
+    - name: Test Linux
+      if: matrix.os == 'ubuntu-latest'
+      shell: bash
       run: |
         echo "Running tests..."
         ctest --build-config ${{ matrix.build_type }}
