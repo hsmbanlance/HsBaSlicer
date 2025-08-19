@@ -60,20 +60,58 @@ namespace HsBa::Slicer
 template<>
     struct std::hash<Eigen::MatrixXf>
     {
-        std::size_t operator()(const Eigen::MatrixXf& matrix) const noexcept;
+        std::size_t operator()(const Eigen::MatrixXf& matrix) const noexcept
+        {
+            std::size_t seed = 0;
+
+            std::hash<float> hasher;
+
+            for (Eigen::MatrixXf::Index i = 0; i < matrix.rows(); ++i)
+            {
+                for (Eigen::MatrixXf::Index j = 0; j < matrix.cols(); ++j)
+                {
+                    boost::hash_combine(seed, hasher(matrix(i, j)));
+                }
+            }
+            return seed;
+        }
     };
 
 template<>
     struct ::std::hash<Eigen::MatrixXi>
     {
-        std::size_t operator()(const Eigen::MatrixXi& matrix) const noexcept;
+        std::size_t operator()(const Eigen::MatrixXi& matrix) const noexcept
+        {
+            std::size_t seed = 0;
+
+            std::hash<int> hasher;
+
+            for (Eigen::MatrixXi::Index i = 0; i < matrix.rows(); ++i)
+            {
+                for (Eigen::MatrixXi::Index j = 0; j < matrix.cols(); ++j)
+                {
+                    boost::hash_combine(seed, hasher(matrix(i, j)));
+                }
+            }
+            return seed;
+        }
+        
     };
 #endif//eigen_std_hash
 
 template<>
     struct std::hash<HsBa::Slicer::IglModel>
     {
-        std::size_t operator()(const HsBa::Slicer::IglModel& model) const noexcept;
+        std::size_t operator()(const HsBa::Slicer::IglModel& model) const noexcept
+        {
+            std::size_t seed = 0;
+            std::hash<Eigen::MatrixXf> hasher;
+            boost::hash_combine(seed, hasher(model.vertices_));
+            std::hash<Eigen::MatrixXi> hasherf;
+            boost::hash_combine(seed, hasherf(model.faces_));
+            //ignore normals and filename
+            return seed;
+        }
     };
 
 #endif // HSBA_SLICER_IGLMODEL_HPP

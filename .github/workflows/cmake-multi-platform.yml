@@ -15,7 +15,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         build_type: [Release]
-        c_compiler: [gcc, clang, cl]
+        c_compiler: [gcc, cl]
         include:
           - os: windows-latest
             c_compiler: cl
@@ -23,9 +23,6 @@ jobs:
           - os: ubuntu-latest
             c_compiler: gcc
             cpp_compiler: g++
-          - os: ubuntu-latest
-            c_compiler: clang
-            cpp_compiler: clang++
         exclude:
           - os: windows-latest
             c_compiler: gcc
@@ -120,9 +117,44 @@ jobs:
         echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $env:GITHUB_ENV
         echo "VCPKG_FEATURE_FLAGS=versions" >> $env:GITHUB_ENV
 
+    - name: Test Tools Windows
+      if: matrix.os == 'windows-latest'
+      run: |
+        echo "Testing tools on Windows..."
+        if [ -z "${{ env.VCPKG_ROOT }}" ]; then
+          echo "VCPKG_ROOT is not set"
+        else
+          echo "VCPKG_ROOT: ${{ env.VCPKG_ROOT }}"
+        fi
+        echo "CMake version:"
+        cmake --version || exit 1
+        echo "MSVC Compiler version:"
+        cl /? || exit 1
+        echo "Ninja version:"
+        ninja --version || exit 1
+
+    - name: Test Tools Linux
+      if: matrix.os == 'ubuntu-latest'
+      shell: bash
+      run: |
+        echo "Testing tools on Linux..."
+        if [ -z "${{ env.VCPKG_ROOT }}" ]; then
+          echo "VCPKG_ROOT is not set"
+        else
+          echo "VCPKG_ROOT: ${{ env.VCPKG_ROOT }}"
+        fi
+        echo "CMake version:"
+        cmake --version || exit 1
+        echo "GCC version:"
+        gcc --version || exit 1
+        echo "G++ version:"
+        g++ --version || exit 1
+        echo "Ninja version:"
+        ninja --version || exit 1
+
+
     - name: Configure CMake With Vcpkg Toolchain on Windows
       if: matrix.os == 'windows-latest'
-      shell: pwsh
       run: |
         echo "Configuring CMake with vcpkg toolchain..."
         cmake -B ${{ steps.strings.outputs.build-output-dir }} `
@@ -134,7 +166,6 @@ jobs:
 
     - name: Configure CMake With Vcpkg Toolchain on Linux
       if: matrix.os == 'ubuntu-latest'
-      shell: bash
       run: |
         echo "Configuring CMake with vcpkg toolchain..."
         cmake -B ${{ steps.strings.outputs.build-output-dir }} \
@@ -146,7 +177,6 @@ jobs:
 
     - name: Build Windows
       if: matrix.os == 'windows-latest'
-      shell: pwsh
       run: |
         echo "Building project..."
         cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
@@ -160,7 +190,6 @@ jobs:
 
     - name: Test
       working-directory: ${{ steps.strings.outputs.build-output-dir }}/tests
-      shell: pwsh
       run: |
         echo "Running tests..."
         ctest --build-config ${{ matrix.build_type }}

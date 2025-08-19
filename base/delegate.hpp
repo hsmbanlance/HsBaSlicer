@@ -7,6 +7,7 @@
 #include <functional>
 #include <vector>
 #include <shared_mutex>
+#include <algorithm>
 
 #include "concepts.hpp"
 
@@ -142,7 +143,7 @@ namespace HsBa::Slicer::Utils
 		Event(Event&&) = default;
 		Event& operator=(Event&&) = default;
 		DelegateType delegate_;
-		R Invoke(Args&&... args)
+		R Invoke(Args... args)
 		{
 			return delegate_.Invoke(std::forward<Args>(args)...);
 		}
@@ -178,9 +179,9 @@ namespace HsBa::Slicer::Utils
 		EventSource() = default;
 		~EventSource() = default;
 		Event<R, Args...> event_;
-		R RaiseEvent(auto&&... args)
+		R RaiseEvent(Args... args)
 		{
-			return event_.Invoke(std::forward<Args>(args)...);
+			return event_.Invoke(args...);
 		}
 	};
 }

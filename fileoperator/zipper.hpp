@@ -33,13 +33,13 @@ namespace HsBa::Slicer
 		~Zipper() = default;
 		Zipper(const Zipper&) = delete;
 		Zipper& operator=(const Zipper&) = delete;
-		Zipper(Zipper&&) noexcept = default;
-		Zipper& operator=(Zipper&&) noexcept = default;
+		Zipper(Zipper&&) noexcept = delete;
+		Zipper& operator=(Zipper&&) noexcept = delete;
 		void AddByteFile(std::string_view name, const std::string& data) override;
-		void AddFile(std::string_view name, std::string_view path);
+		void AddFile(std::string_view name, std::string_view path) override;
 		//To add duplicate file, filename add "_duplicate"
 		void AddByteFileIgnoreDuplicate(std::string_view name, const std::string& data) override;
-		void AddFileIgnoreDuplicate(std::string_view name, std::string_view path);
+		void AddFileIgnoreDuplicate(std::string_view name, std::string_view path) override;
 		void Save(std::string_view filePath) override;
 	private:
 		struct Bytes

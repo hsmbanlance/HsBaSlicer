@@ -24,6 +24,9 @@ namespace HsBa::Slicer
 		case MinizCompression::Tight:
 			compression_ = MZ_BEST_COMPRESSION;
 			break;
+		default:
+			throw NotSupportedError("Unknow or Undefine miniz compression");
+			break;
 		}
 	}
 
