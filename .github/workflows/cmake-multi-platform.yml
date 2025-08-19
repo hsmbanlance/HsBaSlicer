@@ -121,17 +121,20 @@ jobs:
       if: matrix.os == 'windows-latest'
       run: |
         echo "Testing tools on Windows..."
-        if [ -z "${{ env.VCPKG_ROOT }}" ]; then
-          echo "VCPKG_ROOT is not set"
-        else
-          echo "VCPKG_ROOT: ${{ env.VCPKG_ROOT }}"
-        fi
+        if (-not (Test-Path -Path "${{ env.VCPKG_ROOT }}")) {
+          echo "VCPKG_ROOT is not set or the path does not exist"
+        } else {
+        echo "VCPKG_ROOT: ${{ env.VCPKG_ROOT }}"
+        }
         echo "CMake version:"
-        cmake --version || exit 1
+        cmake --version
+        if ($LASTEXITCODE -ne 0) { exit 1 }
         echo "MSVC Compiler version:"
-        cl /? || exit 1
+        cl /?
+        if ($LASTEXITCODE -ne 0) { exit 1 }
         echo "Ninja version:"
-        ninja --version || exit 1
+        ninja --version
+        if ($LASTEXITCODE -ne 0) { exit 1 }
 
     - name: Test Tools Linux
       if: matrix.os == 'ubuntu-latest'
