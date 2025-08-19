@@ -118,13 +118,11 @@ jobs:
         echo "VCPKG_FEATURE_FLAGS=versions" >> $env:GITHUB_ENV
 
     - name: Add cl To Path
-      if: matrix.os == 'windows-latest'
       shell: pwsh
       run: |
-        # 设置 Visual Studio 的环境变量
         $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
         if (-not (Test-Path -Path $vswherePath)) {
-          echo "vswhere.exe not found. Visual Studio may not be installed correctly."
+        echo "vswhere.exe not found. Visual Studio may not be installed correctly."
           exit 1
         }
         $vsInstallPath = & $vswherePath -latest -property installationPath
@@ -133,7 +131,14 @@ jobs:
           echo "vcvarsall.bat not found. Visual Studio may not be installed correctly."
           exit 1
         }
-        cmd /c "`"$vcvarsallPath`" x64"
+        # Run vcvarsall.bat and capture the modified environment variables
+        $envVars = cmd /c "`"$vcvarsallPath`" x64 & set"
+        # Split the output into individual environment variable assignments
+        $envVars -split "`n" | ForEach-Object {
+          if ($_ -match "^(.*?)=(.*)$") {
+            [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
+          }
+        }
         echo "MSVC Compiler version:"
         cl /?
         if ($LASTEXITCODE -ne 0) { exit 1 }
