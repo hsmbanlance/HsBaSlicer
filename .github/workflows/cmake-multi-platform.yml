@@ -125,11 +125,11 @@ jobs:
       shell: pwsh
       run: |
         echo "Configuring CMake with vcpkg toolchain..."
-        cmake -B ${{ steps.strings.outputs.build-output-dir }}
-        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
-        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
-        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+        cmake -B ${{ steps.strings.outputs.build-output-dir }} `
+        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} `
+        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} `
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+        -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake `
         -S ${{ github.workspace }} -G Ninja
 
     - name: Configure CMake With Vcpkg Toolchain on Linux
@@ -137,11 +137,11 @@ jobs:
       shell: bash
       run: |
         echo "Configuring CMake with vcpkg toolchain..."
-        cmake -B ${{ steps.strings.outputs.build-output-dir }}
-        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
-        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
-        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+        cmake -B ${{ steps.strings.outputs.build-output-dir }} \
+        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
+        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+        -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake \
         -S ${{ github.workspace }} -G Ninja
 
     - name: Build Windows
