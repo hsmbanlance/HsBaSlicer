@@ -36,7 +36,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-  
+
     - name: Install dependencies on Linux
       if: matrix.os == 'ubuntu-latest'
       shell: bash
@@ -51,19 +51,14 @@ jobs:
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get install -y wget apt-transport-https software-properties-common
-        wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb
-        sudo dpkg -i packages-microsoft-prod.deb
-        sudo apt-get update
         sudo apt-get install -y powershell
-        rm packages-microsoft-prod.deb
 
     - name: Set reusable strings
       id: strings
       shell: pwsh
       run: |
         $buildOutputDir = "${{ github.workspace }}/build"
-        echo "build-output-dir=$buildOutputDir" | Out-File -Encoding utf8 -FilePath $env:GITHUB_OUTPUT
+        echo "build-output-dir=$buildOutputDir" >> $env:GITHUB_OUTPUT
 
     - name: Cache vcpkg
       uses: actions/cache@v3
@@ -119,25 +114,17 @@ jobs:
           ./vcpkg integrate install
         }
 
-    - name: Set VCPKG_ROOT environment variable on Windows
+    - name: Set VCPKG_ROOT environment variable
+      shell: pwsh
+      run: |
+        echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $env:GITHUB_ENV
+        echo "VCPKG_FEATURE_FLAGS=versions" >> $env:GITHUB_ENV
+
+    - name: Configure CMake With Vcpkg Toolchain on Windows
       if: matrix.os == 'windows-latest'
       shell: pwsh
       run: |
-        $env:VCPKG_ROOT = "${{ github.workspace }}/vcpkg"
-        echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" | Out-File -Encoding utf8 -FilePath $env:GITHUB_ENV
-        echo "VCPKG_FEATURE_FLAGS=versions" | Out-File -Encoding utf8 -Append -FilePath $env:GITHUB_ENV
-
-    - name: Set VCPKG_ROOT environment variable on Linux
-      if: matrix.os == 'ubuntu-latest'
-      shell: bash
-      run: |
-        echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
-        echo "VCPKG_FEATURE_FLAGS=versions" >> $GITHUB_ENV
-
-    - name: Configure CMake With Vcpkg Toolchain
-      if: matrix.os == 'Windows'
-      shell: pwsh
-      run: |
+        echo "Configuring CMake with vcpkg toolchain..."
         cmake -B ${{ steps.strings.outputs.build-output-dir }}
         -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
         -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
@@ -145,10 +132,11 @@ jobs:
         -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
         -S ${{ github.workspace }} -G Ninja
 
-    - name: Configure CMake With Vcpkg Toolchain
+    - name: Configure CMake With Vcpkg Toolchain on Linux
       if: matrix.os == 'ubuntu-latest'
       shell: bash
       run: |
+        echo "Configuring CMake with vcpkg toolchain..."
         cmake -B ${{ steps.strings.outputs.build-output-dir }}
         -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
         -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
@@ -160,17 +148,20 @@ jobs:
       if: matrix.os == 'windows-latest'
       shell: pwsh
       run: |
+        echo "Building project..."
         cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
     - name: Build Linux
       if: matrix.os == 'ubuntu-latest'
       shell: bash
       run: |
+        echo "Building project..."
         cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
     - name: Test
       working-directory: ${{ steps.strings.outputs.build-output-dir }}/tests
       shell: pwsh
       run: |
+        echo "Running tests..."
         ctest --build-config ${{ matrix.build_type }}
       continue-on-error: true
