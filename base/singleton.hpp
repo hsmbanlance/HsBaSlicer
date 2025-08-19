@@ -3,6 +3,7 @@
 #define HSBA_SLICER_SINGLETON_HPP
 
 #include <shared_mutex>
+#include <mutex>
 #include <memory>
 
 namespace HsBa::Slicer::Utils

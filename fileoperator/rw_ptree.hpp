@@ -100,7 +100,7 @@ namespace HsBa::Slicer::Config
 			T value = ptree.get<T>(key, T{}, tr);
 			return AddOrChangeValue(key, value);
 		}
-		friend AnyConfigMap VariantConfigMap2AnyConfigMap<Args...>(const VariantConfigMap<Args...>& map);
+		AnyConfigMap ToAnyMap() const;
 	private:
 		std::unordered_map<std::string, std::variant<Args...>> config_map_;
 	};
@@ -167,7 +167,7 @@ namespace HsBa::Slicer::Config
 			return AddOrChangeValue(key, value);
 		}
 		template<typename... Args>
-		inline VariantConfigMap<Args...> ToVariantConfigMap()
+		inline VariantConfigMap<Args...> ToVariantConfigMap() const
 		{
 			VariantConfigMap<Args...> map;
 			for (const auto& [key, value] : config_map_)
@@ -181,10 +181,10 @@ namespace HsBa::Slicer::Config
 	};
 
 	template<typename... Args>
-	inline AnyConfigMap VariantConfigMap2AnyConfigMap(const VariantConfigMap<Args...>& variant_map)
+	AnyConfigMap VariantConfigMap<Args...>::ToAnyMap() const
 	{
 		AnyConfigMap map;
-		for (const auto& [key, value] : variant_map.config_map_)
+		for (const auto& [key, value] : config_map_)
 		{
 			std::visit([&key, &map](auto&& args) {map.AddOrChangeValue(key, args); }, value);
 		}

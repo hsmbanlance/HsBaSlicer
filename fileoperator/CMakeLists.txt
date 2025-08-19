@@ -15,7 +15,6 @@
 find_package(boost_log CONFIG REQUIRED)
 
 target_link_libraries(HsBaSlicerFileOperator PUBLIC HsBaSlicerBase 
-	Boost::log
 	rapidjson
 )
 

@@ -41,6 +41,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential libx11-dev mesa-common-dev libglu1-mesa-dev libxi-dev libxmu-dev libxmu-headers
         sudo apt-get install -y libncurses-dev libtirpc-dev
+        sudo apt-get install -y bison flex
         sudo apt-get install -y ninja-build
 
     - name: Install PowerShell on Linux
@@ -56,38 +57,6 @@ jobs:
       run: |
         $buildOutputDir = "${{ github.workspace }}/build"
         echo "build-output-dir=$buildOutputDir" >> $env:GITHUB_OUTPUT
-
-    - name: Cache vcpkg
-      uses: actions/cache@v3
-      with:
-        path: vcpkg
-        key: vcpkg-${{ runner.os }}-${{ github.sha }}
-        restore-keys: |
-          vcpkg-${{ runner.os }}-
-
-    - name: Cache vcpkg_installed
-      uses: actions/cache@v3
-      with:
-        path: ${{ steps.strings.outputs.build-output-dir }}/vcpkg_installed
-        key: vcpkg_installed-${{ runner.os }}-${{ github.sha }}
-        restore-keys: |
-          vcpkg_installed-${{ runner.os }}-
-
-    - name: Remove existing vcpkg directory if not cached
-      if: steps.cache-vcpkg.outputs.cache-hit != 'true'
-      shell: pwsh
-      run: |
-        if (Test-Path -Path "vcpkg") {
-            Remove-Item -Recurse -Force vcpkg
-        }
-
-    - name: Remove existing vcpkg_installed directory if not cached
-      if: steps.cache-vcpkg_installed.outputs.cache-hit != 'true'
-      shell: pwsh
-      run: |
-        if (Test-Path -Path "${{ steps.strings.outputs.build-output-dir }}/vcpkg_installed") {
-          Remove-Item -Recurse -Force "${{ steps.strings.outputs.build-output-dir }}/vcpkg_installed"
-        }
 
     - name: Bootstrap vcpkg on Windows
       if: matrix.os == 'windows-latest'

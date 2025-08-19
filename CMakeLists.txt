@@ -40,8 +40,12 @@ find_package(PkgConfig REQUIRED)
 #Tripartite library needed
 
 #Boost
+if(WIN32)
 ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
-find_package(Boost REQUIRED)
+find_package(Boost REQUIRED log)
+else()
+find_package(Boost REQUIRED log_setup log)
+endif()
 
 #Clipper2
 pkg_check_modules(Clipper2 REQUIRED IMPORTED_TARGET Clipper2)

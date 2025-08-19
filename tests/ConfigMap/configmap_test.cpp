@@ -76,7 +76,7 @@ BOOST_AUTO_TEST_CASE(test_variantconfig_map_to_anyconfigmap)
 	vmap.AddOrChangeValue("double", 1.0);
 	vmap.AddOrChangeValue("bool", true);
 	vmap.AddOrChangeValue("string", std::string{ "a" });
-	auto map = HsBa::Slicer::Config::VariantConfigMap2AnyConfigMap(vmap);
+	auto map = vmap.ToAnyMap();
 	BOOST_REQUIRE(map.GetOptional<int>("int").value() == 1);
 	BOOST_REQUIRE(map.GetOptional<double>("double").value() == 1.0);
 	BOOST_REQUIRE(map.GetOptional<bool>("bool").value());

@@ -55,6 +55,13 @@ namespace HsBa::Slicer
 		{ *t };
 	};
 
+	template<typename T>
+	concept PointerLike = requires(T t) {
+		{ t.operator->() } -> std::same_as<T*>;
+		{ t.operator*() } -> std::same_as<T&>;
+		{ t.operator bool() } -> std::convertible_to<bool>;
+	};
+
 	/// <summary>
 	/// is c style array
 	/// </summary>

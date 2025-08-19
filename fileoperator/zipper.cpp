@@ -153,11 +153,33 @@ namespace HsBa::Slicer
 				mz_zip_reader_end(&archiver);
 				throw IOError("Failed to get file stat from zip");
 			}
-			std::string output_file_path = (outputDir / file_stat.m_filename).string();
-			if (!mz_zip_reader_extract_to_file(&archiver, i, output_file_path.c_str(), 0))
+			std::string full_output_path = (outputDir / file_stat.m_filename).string();
+			std::filesystem::path full_output_path_obj(full_output_path);
+
+			// Check if the entry is a directory
+			if (file_stat.m_is_directory)
 			{
-				mz_zip_reader_end(&archiver);
-				throw IOError("Failed to extract file from zip");
+				// Create the directory
+				if (!std::filesystem::exists(full_output_path_obj))
+				{
+					std::filesystem::create_directories(full_output_path_obj);
+				}
+			}
+			else
+			{
+				// Create the directory path if it doesn't exist
+				std::filesystem::path output_dir = full_output_path_obj.parent_path();
+				if (!std::filesystem::exists(output_dir))
+				{
+					std::filesystem::create_directories(output_dir);
+				}
+
+				// Extract the file
+				if (!mz_zip_reader_extract_to_file(&archiver, i, full_output_path.c_str(), 0))
+				{
+					mz_zip_reader_end(&archiver);
+					throw IOError("Failed to extract file from zip");
+				}
 			}
 		}
 		mz_zip_reader_end(&archiver);

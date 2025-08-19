@@ -1,21 +1,24 @@
-﻿[![CMake on multiple platforms](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/cmake-multi-platform.yml)
+﻿# HsBaSlicer
+（未完成）
 
-# 如何构建
+## 如何构建
 
-你需要安装CMake工具链和Vcpkg来进行构建。
+[![CMake on multiple platforms](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/cmake-multi-platform.yml)
 
-## Windows
+你需要安装CMake工具链和Vcpkg来进行构建。至少需要CMake 3.12版本，且编译器至少需要支持C++20标准。
 
-建议安装Visual Studio 2020或以上版本，并在安装过程中勾选“使用C++的桌面开发”选项、CMake和Vcpkg。还需要安装Git。
+### Windows
+
+建议安装Visual Studio 2022或以上版本，并在安装过程中勾选“使用C++的桌面开发”选项、CMake和Vcpkg。还需要安装Git。
 
 如果需要复制dll和pdb文件，则需要在首次编译后再次配置并编译。
 如果你安装了Visual Studio 2022但在Visual Studio Code等IDE中调试，把Vcpkg的安装路径添加到环境变量中。
 
-## Linux
+### Linux
 
 建议使用Ubuntu 20.04或Debian 10.0以上版本。
 
-### 安装CMake和git
+#### 安装CMake和git
 
 安装CMake：
 
@@ -23,7 +26,7 @@
 sudo apt install cmake
 ```
 
-如果使用的是Ubuntu 20.04，则使用snap安装CMake：
+如果使用的是Ubuntu，则可以使用snap安装CMake：
 
 ```bash
 sudo snap install cmake --classic
@@ -40,6 +43,10 @@ sudo apt install libx11-dev mesa-common-dev libglu1-mesa-dev libxi-dev libxmu-de
 ```
 sudo apt install libncurses-dev libtirpc-dev
 ```
+编译libpq需要安装
+```
+sudo apt install bison flex
+```
 
 安装git：
 
@@ -47,7 +54,7 @@ sudo apt install libncurses-dev libtirpc-dev
 sudo apt install git
 ```
 
-### 安装Vcpkg
+#### 安装Vcpkg
 
 ```bash
 git clone https://github.com/microsoft/vcpkg.git
@@ -58,19 +65,20 @@ cd vcpkg
 建议把vcpkg的安装路径添加到环境变量中。
 如果添加到环境变量中，则可以使用CMake预设。
 
-### 安装Ninja和编译工具链
+#### 安装Ninja和编译工具链
 
 ```bash
 sudo apt install g++ gdb make ninja-build rsync zip
 ```
 
-### 安装其他依赖
+#### 安装其他依赖
 
 ```bash
 sudo apt-get install pkg-config automake libtool m4 autoconf python3-distutils libx11-dev mesa-common-dev
+sudo apt-get install bison flex
 ```
 
-### 构建
+#### 构建
 
 ```bash
 mkdir build
@@ -86,4 +94,4 @@ cmake .. -DCMAKE_TOOLCHAIN_FILE=/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake 
 cmake --build .
 ```
 
-## macOS(未测试)
+### macOS(未测试)
