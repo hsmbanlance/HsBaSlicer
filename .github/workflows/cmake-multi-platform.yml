@@ -135,7 +135,7 @@ jobs:
         echo "VCPKG_FEATURE_FLAGS=versions" >> $GITHUB_ENV
 
     - name: Configure CMake With Vcpkg Toolchain
-      if: matrix.os == 'Windows' -and matrix.c_compiler == 'cl'
+      if: matrix.os == 'Windows'
       shell: pwsh
       run: |
         cmake -B ${{ steps.strings.outputs.build-output-dir }}
@@ -146,7 +146,7 @@ jobs:
         -S ${{ github.workspace }} -G Ninja
 
     - name: Configure CMake With Vcpkg Toolchain
-      if: matrix.os == 'ubuntu-latest' -and (matrix.c_compiler == 'gcc' -or matrix.c_compiler == 'clang')
+      if: matrix.os == 'ubuntu-latest'
       shell: bash
       run: |
         cmake -B ${{ steps.strings.outputs.build-output-dir }}
