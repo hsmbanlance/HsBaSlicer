@@ -1,4 +1,4 @@
-#define BOOST_TEST_MODULE filename_test
+﻿#define BOOST_TEST_MODULE filename_test
 #include <boost/test/included/unit_test.hpp>
 
 #include <filesystem>
