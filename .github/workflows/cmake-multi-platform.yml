@@ -286,6 +286,7 @@ jobs:
     - name: Test Linux
       if: matrix.os == 'ubuntu-latest'
       shell: bash
+      working-directory: ${{ steps.strings.outputs.build-output-dir }}/tests
       run: |
         echo "Running tests..."
         ctest --build-config ${{ matrix.build_type }}

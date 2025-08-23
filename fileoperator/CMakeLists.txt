@@ -1,15 +1,21 @@
 ﻿add_library(HsBaSlicerFileOperator STATIC
 	IZipper.hpp
+	IUnzipper.hpp
 	rw_ptree.hpp
 	rw_ptree.cpp
 	zipper.hpp
 	zipper.cpp
+	bit7z_def.hpp
 	bit7z_zipper.hpp
 	bit7z_zipper.cpp
 	properties_doc.hpp
 	properties_doc.cpp
 	sql_adapter.hpp
 	sql_adapter.cpp
+	unzipper.hpp
+	unzipper.cpp
+	bit7z_unzipper.hpp
+	bit7z_unzipper.cpp
 )
 
 find_package(boost_log CONFIG REQUIRED)
