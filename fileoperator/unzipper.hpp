@@ -16,10 +16,11 @@ namespace HsBa::Slicer
 		,public std::enable_shared_from_this<Unzipper>,
 		public Utils::EventSource<Unzipper,void,std::string_view,std::string_view>
 	{
+		struct Private {};
 	public:
 		static std::shared_ptr<Unzipper> Create()
 		{
-			return std::shared_ptr<Unzipper>(new Unzipper());
+			return std::make_shared<Unzipper>(Private{});
 		}
 		~Unzipper();
 		friend class IUnzipper<Unzipper>;
@@ -27,8 +28,8 @@ namespace HsBa::Slicer
 		{
 			max_mem_size_ = size;
 		}
+		Unzipper(Private) {}
 	private:
-		Unzipper() = default;
 		void ReadFromFileImpl(std::string_view path,bool reopen);
 		std::shared_ptr<UnzipperStream> GetStreamImpl(std::string_view part_file);
 		Unzipper(const Unzipper&) = delete;

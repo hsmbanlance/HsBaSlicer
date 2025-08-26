@@ -12,10 +12,11 @@ namespace HsBa::Slicer::Utils
 	class Singleton
 	{
 	public:
-		static std::shared_ptr<T> GetInstance()
+		template<typename... Args>
+		static std::shared_ptr<T> GetInstance(Args&& ...args)
 		{
-			std::call_once(instance_flag_, []() {
-				instance_ = std::shared_ptr<T>(new T());
+			std::call_once(instance_flag_, [&]() {
+				instance_ = std::make_shared<T>(Protected{},std::forward<Args>(args)...);
 				});
 			return instance_;
 		}
@@ -24,6 +25,7 @@ namespace HsBa::Slicer::Utils
 		Singleton(Singleton&&) = delete;
 		Singleton& operator=(Singleton&&) = delete;
 	protected:
+		struct Protected{};
 		Singleton() = default;
 		~Singleton() = default;
 		static std::shared_ptr<T> instance_;
