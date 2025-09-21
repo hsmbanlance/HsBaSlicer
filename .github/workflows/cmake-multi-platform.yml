@@ -304,16 +304,13 @@ jobs:
         sudo apt-get install -y openjdk-11-jdk wget unzip
         sudo apt-get install -y ninja-build
 
-    - name: Install Android command line tools and NDK
+    - name: Install Android NDK (r27d)
       run: |
-        mkdir -p $HOME/android-sdk/cmdline-tools
-        cd $HOME/android-sdk/cmdline-tools
-        wget https://dl.google.com/android/repository/commandlinetools-linux-10347916_latest.zip -O cmdline.zip
-        unzip cmdline.zip -d $HOME/android-sdk/cmdline-tools
-        export PATH=$PATH:$HOME/android-sdk/cmdline-tools/cmdline-tools/bin
-        yes | sdkmanager --licenses || true
-        sdkmanager --sdk_root=$HOME/android-sdk "ndk;25.2.9519653" || sdkmanager --sdk_root=$HOME/android-sdk "ndk;25.1.8937393"
-        echo "ANDROID_NDK=$HOME/android-sdk/ndk/"$(ls $HOME/android-sdk/ndk | tail -n1)"" >> $GITHUB_ENV
+        mkdir -p $HOME/android-sdk/ndk
+        cd $HOME/android-sdk
+        wget https://dl.google.com/android/repository/android-ndk-r27d-linux.zip -O ndk.zip
+        unzip ndk.zip -d $HOME/android-sdk/ndk
+        echo "ANDROID_NDK=$HOME/android-sdk/ndk/$(ls $HOME/android-sdk/ndk | tail -n1)" >> $GITHUB_ENV
 
     - name: Bootstrap vcpkg
       shell: bash
