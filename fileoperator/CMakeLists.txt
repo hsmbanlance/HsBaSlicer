@@ -18,13 +18,15 @@
 	bit7z_unzipper.cpp
 )
 
-find_package(boost_log CONFIG REQUIRED)
+if(NOT ANDROID)
+	find_package(boost_log CONFIG REQUIRED)
+endif()
 
 target_link_libraries(HsBaSlicerFileOperator PUBLIC HsBaSlicerBase 
 	rapidjson
 )
 
-if(HSBA_USE_BIT7Z)
+if(HSBA_USE_BIT7Z AND NOT ANDROID)
   find_package(unofficial-bit7z CONFIG REQUIRED)
   target_link_libraries(HsBaSlicerFileOperator PUBLIC unofficial::bit7z::bit7z64)
 endif()
@@ -33,4 +35,8 @@ endif()
 target_link_libraries(HsBaSlicerFileOperator PUBLIC miniz::miniz)
 
 #Link Sqlpp11
-target_link_libraries(HsBaSlicerFileOperator PUBLIC sqlpp11::sqlite3 sqlpp11::mysql sqlpp11::postgresql)
+if(NOT ANDROID AND NOT IOS AND NOT SWITCH)
+	target_link_libraries(HsBaSlicerFileOperator PUBLIC sqlpp11::sqlite3 sqlpp11::mysql sqlpp11::postgresql)
+else()
+	target_link_libraries(HsBaSlicerFileOperator PUBLIC sqlpp11::sqlite3)
+endif()

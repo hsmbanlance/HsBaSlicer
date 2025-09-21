@@ -51,6 +51,8 @@ Slicer过程中的类型和protobuf定义的类型的交换。
 如果需要复制dll和pdb文件，则需要在首次编译后再次配置并编译。
 如果你安装了Visual Studio 2022但在Visual Studio Code等IDE中调试，把Vcpkg的安装路径添加到环境变量中。
 
+不支持MingW/Msys2等。
+
 ### Linux
 
 建议使用Ubuntu 20.04或Debian 10.0以上版本。

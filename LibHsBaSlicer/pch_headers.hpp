@@ -30,7 +30,9 @@
 
 #include "meshmodel/IglModel.hpp"
 #include "meshmodel/CgalModel.hpp"
+#ifdef USE_OCCT
 #include "cadmodel/OcctModel.hpp"
+#endif // USE_OCCT
 #include "meshmodel/FullTopoModel.hpp"
 
 #include "2D/IntPolygon.hpp"

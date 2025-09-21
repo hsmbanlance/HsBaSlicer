@@ -5,9 +5,15 @@
 
 #include <boost/container/vector.hpp>
 
+#ifdef USE_MYSQL
 #include <mysql/mysql.h>
+#endif // USE_MYSQL
+
 #include <sqlite3.h>
+
+#ifdef USE_PGSQL
 #include <libpq-fe.h>
+#endif // USE_PGSQL
 
 #include "base/any_visit.hpp"
 #include <filesystem>
@@ -545,6 +551,7 @@ namespace HsBa::Slicer::SQL
 		RaiseEvent("Table removed", sql);
 	}
 
+#ifdef USE_MYSQL
 	class MySQLAdapter::Impl
 	{
 	public:
@@ -1245,7 +1252,9 @@ namespace HsBa::Slicer::SQL
 
 		RaiseEvent("Table removed", sql.str());
 	}
+#endif // USE_MYSQL
 
+#ifdef USE_PGSQL
 	class PostgreSQLAdapter::Impl
 	{
 	public:
@@ -1692,4 +1701,5 @@ namespace HsBa::Slicer::SQL
 		PQclear(res);
 		RaiseEvent("RemoveTable executed", sql.str());
 	}
+#endif // USE_PGSQL
 }

@@ -11,8 +11,11 @@ namespace HsBa::Slicer::Utils
 	template <typename T>
 	class Singleton
 	{
+	protected:
+		struct Protected {};
 	public:
 		template<typename... Args>
+			requires std::constructible_from<T,Protected,Args...>
 		static std::shared_ptr<T> GetInstance(Args&& ...args)
 		{
 			std::call_once(instance_flag_, [&]() {
@@ -25,7 +28,6 @@ namespace HsBa::Slicer::Utils
 		Singleton(Singleton&&) = delete;
 		Singleton& operator=(Singleton&&) = delete;
 	protected:
-		struct Protected{};
 		Singleton() = default;
 		~Singleton() = default;
 		static std::shared_ptr<T> instance_;

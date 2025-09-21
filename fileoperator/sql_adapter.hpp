@@ -125,8 +125,8 @@ namespace HsBa::Slicer::SQL
 			int64_t offset) override;
 		void CreateTable(
 			const std::string& table,
-			const std::unordered_map<std::string, std::string>& columns);
-		void RemoveTable(const std::string& table);
+			const std::unordered_map<std::string, std::string>& columns) override;
+		void RemoveTable(const std::string& table) override;
 		~SQLiteAdapter() override;
 	private:
 		std::shared_mutex mutex_;
@@ -134,6 +134,7 @@ namespace HsBa::Slicer::SQL
 		std::unique_ptr<Impl> impl_;
 	};
 
+#ifdef USE_MYSQL
 	class MySQLAdapter : public ISQLAdapter, public Utils::EventSource<SQLiteAdapter, void, std::string_view, std::string_view>
 	{
 	public:
@@ -163,7 +164,9 @@ namespace HsBa::Slicer::SQL
 		class Impl;
 		std::unique_ptr<Impl> impl_;
 	};
+#endif // USE_MYSQL
 
+#ifdef USE_PGSQL
 	class PostgreSQLAdapter : public ISQLAdapter, public HsBa::Slicer::Utils::EventSource<SQLiteAdapter, void, std::string_view, std::string_view>
 	{
 	public:
@@ -193,6 +196,7 @@ namespace HsBa::Slicer::SQL
 		class Impl;
 		std::unique_ptr<Impl> impl_;
 	};
+#endif // USE_PGSQL
 
 	inline ISQLAdapter::Rows operator|(ISQLAdapter& db, const std::string& sql)
 	{

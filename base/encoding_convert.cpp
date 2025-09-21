@@ -6,7 +6,9 @@
 #include <QString>
 #include <QStringConverter>
 #else
+#ifndef __ANDROID__
 #include <boost/locale.hpp>
+#endif // !__ANDROID__
 #endif // QT_VERSION 
 
 #if _WIN32
@@ -20,15 +22,22 @@ namespace HsBa::Slicer
 	//boost system locale may error if use qt
 	static std::string SystemLocaleStr()
 	{
+#ifdef __ANDROID__
+		return "utf8";
+#else
 		std::string strCodePage = boost::locale::util::get_system_locale();
 		std::locale loc = boost::locale::generator().generate(strCodePage);
 		return std::use_facet<boost::locale::info>(loc).encoding();
+#endif // __ANDROID__
 	}
 #endif // !USE_QSTRING
 
 	std::string utf8_to_local(const std::string& str)
 	{
 #ifndef USE_QSTRING
+#ifdef __ANDROID__
+		return str;
+#else
 #if _WIN32
 		if (windows_chcp_utf8()) //If chcp is utf-8,return str
 		{
@@ -36,6 +45,7 @@ namespace HsBa::Slicer
 		}
 #endif // _WIN32
 		return boost::locale::conv::between(str, SystemLocaleStr(), "utf-8");
+#endif // __ANDROID__
 #else
 		//If Use qt,code here
 		return QString::fromStdString(str).toStdString();
@@ -44,6 +54,9 @@ namespace HsBa::Slicer
 	std::string local_to_utf8(const std::string& str)
 	{
 #ifndef USE_QSTRING
+#ifdef __ANDROID__
+		return str;
+#else
 #if _WIN32
 		if (windows_chcp_utf8())//If chcp is utf-8,return str
 		{
@@ -51,6 +64,9 @@ namespace HsBa::Slicer
 		}
 #endif // _WIN32
 		return boost::locale::conv::between(str, "utf-8", SystemLocaleStr());
+#endif // __ANDROID__
+
+
 #else
 		//If Use qt,code here
 		return QString::fromStdString(str).toStdString();
@@ -60,11 +76,15 @@ namespace HsBa::Slicer
 #ifndef QT_VERSION
 	std::string encoding_convert(const std::string& str, const std::string& from, const std::string& to)
 	{
+#ifndef __ANDROID__
 		if (from == to)
 		{
 			return str;
 		}
 		return boost::locale::conv::between(str, from, to);
+#else
+		return str;
+#endif // !__ANDROID__
 	}
 #endif // !QT_VERSION
 

@@ -16,6 +16,14 @@ target_link_libraries(HsBaSlicerUtils PUBLIC
 	rapidjson
 	Boost::log
 )
+elseif(ANDROID)
+target_link_libraries(HsBaSlicerUtils PUBLIC
+	Boost::date_time
+	HsBaSlicerBase
+	HsBaSlicerFileOperator
+	rapidjson
+	log
+)
 else()
 target_link_libraries(HsBaSlicerUtils PUBLIC
 	Boost::date_time

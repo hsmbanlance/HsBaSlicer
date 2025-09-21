@@ -5,7 +5,9 @@
 #include <shared_mutex>
 #include <source_location>
 
+#ifndef __ANDROID__
 #include <boost/log/core.hpp>
+#endif
 
 #include "base/singleton.hpp"
 
