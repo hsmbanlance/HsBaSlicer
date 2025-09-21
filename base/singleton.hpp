@@ -11,11 +11,15 @@ namespace HsBa::Slicer::Utils
 	template <typename T>
 	class Singleton
 	{
+	protected:
+		struct Protected {};
 	public:
-		static std::shared_ptr<T> GetInstance()
+		template<typename... Args>
+			requires std::constructible_from<T,Protected,Args...>
+		static std::shared_ptr<T> GetInstance(Args&& ...args)
 		{
-			std::call_once(instance_flag_, []() {
-				instance_ = std::shared_ptr<T>(new T());
+			std::call_once(instance_flag_, [&]() {
+				instance_ = std::make_shared<T>(Protected{},std::forward<Args>(args)...);
 				});
 			return instance_;
 		}

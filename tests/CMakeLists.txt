@@ -243,3 +243,31 @@ add_test(
 add_custom_command(TARGET json_convert_test POST_BUILD
   COMMAND ${CMAKE_CTEST_COMMAND} -V -R json_convert
 )
+
+
+#string utils test
+#test for string utils
+add_executable(string_utils_test
+	"StringUtils/string_utils_test.cpp"
+)
+
+target_link_libraries(string_utils_test
+	HsBaSlicerBase
+	Boost::unit_test_framework
+)
+
+target_compile_definitions(string_utils_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME string_utils_test
+  COMMAND $<TARGET_FILE:string_utils_test>
+  )
+
+
+add_custom_command(TARGET string_utils_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R string_utils_test
+)

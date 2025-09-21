@@ -1,13 +1,25 @@
 {
   "license": "AGPL-3.0-or-later",
   "dependencies": [
-    "bit7z",
+    {
+      "name": "bit7z",
+      "platform": "!android & !ios"
+    },
     "boost-asio",
     "boost-graph",
-    "boost-locale",
-    "boost-log",
+    {
+      "name": "boost-locale",
+      "platform": "!android"
+    },
+    {
+      "name":"boost-log",
+      "platform": "!android"
+    },
     "boost-multiprecision",
-    "boost-nowide",
+    {
+      "name": "boost-nowide",
+      "platform": "!android"
+    },
     "boost-polygon",
     "boost-property-tree",
     "boost-test",
@@ -39,8 +51,19 @@
         "sqlite3",
         "mysql",
         "postgresql"
-      ]
+      ],
+      "platform": "!android"
     },
-    "vcpkg-pkgconfig-get-modules"
+    {
+      "name": "sqlpp11",
+      "features": [
+        "sqlite3"
+      ],
+      "platform": "android"
+    },
+    {
+      "name": "vcpkg-pkgconfig-get-modules",
+      "platform": "!android"
+    }
   ]
 }

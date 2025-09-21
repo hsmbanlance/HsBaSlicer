@@ -62,6 +62,13 @@ namespace HsBa::Slicer
 		{ t.operator bool() } -> std::convertible_to<bool>;
 	};
 
+	template<typename T>
+	concept OptionalLike = requires(T t) {
+		{ t.has_value() } -> std::convertible_to<bool>;
+		{ *t } -> std::same_as<typename T::value_type&>;
+		{ t.value() } -> std::same_as<typename T::value_type&>;
+	};
+
 	/// <summary>
 	/// is c style array
 	/// </summary>

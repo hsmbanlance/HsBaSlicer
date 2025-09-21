@@ -2,6 +2,7 @@
 
 #include <filesystem>
 
+#ifndef __ANDROID__
 #include <boost/log/trivial.hpp>
 #include <boost/log/utility/setup/file.hpp>
 #include <boost/log/utility/setup/console.hpp>
@@ -11,6 +12,9 @@
 #include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/log/sources/severity_logger.hpp>
 #include <boost/log/sources/record_ostream.hpp>
+#else
+#include <android/log.h>
+#endif // !__ANDROID__
 
 #include "fileoperator/rw_ptree.hpp"
 
@@ -18,35 +22,52 @@ namespace HsBa::Slicer::Log
 {
 	namespace
 	{
+		// internal helper: format source location
 		std::string GetSourceLocation(const std::source_location& location)
 		{
 			return "[" + std::string{ location.file_name() } + ":" + std::to_string(location.line()) + "] " + location.function_name() + ": ";
 		}
-	}
-	static boost::log::trivial::severity_level GetLogLevel(int log_level)
-	{
-		switch (log_level)
+
+#ifndef __ANDROID__
+		static boost::log::trivial::severity_level GetLogLevel(int log_level)
 		{
-		case 0:
-			return boost::log::trivial::trace;
-		case 1:
-			return boost::log::trivial::debug;
-		case 2:
-			return boost::log::trivial::info;
-		case 3:
-			return boost::log::trivial::warning;
-		case 4:
-			return boost::log::trivial::error;
-		case 5:
-			return boost::log::trivial::fatal;
-		default:
+			switch (log_level)
+			{
+			case 0: return boost::log::trivial::trace;
+			case 1: return boost::log::trivial::debug;
+			case 2: return boost::log::trivial::info;
+			case 3: return boost::log::trivial::warning;
+			case 4: return boost::log::trivial::error;
+			case 5: return boost::log::trivial::fatal;
+			default:
 #if _DEBUG
-			return boost::log::trivial::debug;
+				return boost::log::trivial::debug;
 #else
-			return boost::log::trivial::warning;
-#endif // _DEBUG
+				return boost::log::trivial::warning;
+#endif
+			}
 		}
-	}
+#else
+		static int GetAndroidLogPriority(int log_level)
+		{
+			switch (log_level)
+			{
+			case 0: return ANDROID_LOG_VERBOSE;
+			case 1: return ANDROID_LOG_DEBUG;
+			case 2: return ANDROID_LOG_INFO;
+			case 3: return ANDROID_LOG_WARN;
+			case 4: return ANDROID_LOG_ERROR;
+			case 5: return ANDROID_LOG_FATAL;
+			default:
+#if _DEBUG
+				return ANDROID_LOG_DEBUG;
+#else
+				return ANDROID_LOG_WARN;
+#endif
+			}
+		}
+#endif // __ANDROID__
+	} // namespace (anonymous)
 
 	LoggerSingletone::LoggerSingletone()
 	{
@@ -79,7 +100,6 @@ namespace HsBa::Slicer::Log
 				use_log_file_ = false;
 				log_datatime_format_ = "%Y-%m-%d %H:%M:%S";
 			}
-
 		}
 		else
 		{
@@ -88,8 +108,11 @@ namespace HsBa::Slicer::Log
 			use_log_file_ = false;
 			log_datatime_format_ = "%Y-%m-%d %H:%M:%S";
 		}
+
+#ifndef __ANDROID__
 		auto log_level = GetLogLevel(log_level_);
-		//than set log
+
+		// configure Boost.Log
 		boost::log::formatter log_format = (
 			boost::log::expressions::stream <<
 			boost::log::expressions::format_date_time< boost::posix_time::ptime >("TimeStamp", log_datatime_format_) <<
@@ -111,12 +134,21 @@ namespace HsBa::Slicer::Log
 		console_log->set_formatter(log_format);
 		boost::log::core::get()->set_filter(boost::log::trivial::severity >= log_level);
 		boost::log::core::get()->add_global_attribute("TimeStamp", boost::log::attributes::local_clock());
+#else
+		// On Android, use the kernel log. Emit a warning that Android logging is used.
+		int log_level = GetAndroidLogPriority(log_level_);
+		__android_log_print(ANDROID_LOG_WARN, "HsBaSlicer", "LoggerSingletone initialized: using Android kernel log");
+#endif
 	}
 
 	bool LoggerSingletone::UseLogFile() const
 	{
 		std::shared_lock lock{ mutex_ };
+#ifdef __ANDROID__
+		return true;
+#else
 		return use_log_file_;
+#endif // __ANDROID__
 	}
 
 	void LoggerSingletone::Log(std::string_view message,const int log_lv, const std::source_location& location)
@@ -128,25 +160,67 @@ namespace HsBa::Slicer::Log
 		switch (log_lv)
 		{
 		case 0:
+		{
+#ifdef __ANDROID__
+			__android_log_print(ANDROID_LOG_VERBOSE, "HsBaSlicer", "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
+#else
 			BOOST_LOG_TRIVIAL(trace) << GetSourceLocation(location)<< message;
+#endif
+		}
 			break;
 		case 1:
+		{
+#ifdef __ANDROID__
+			__android_log_print(ANDROID_LOG_DEBUG, "HsBaSlicer", "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
+#else
 			BOOST_LOG_TRIVIAL(debug) << GetSourceLocation(location) << message;
+#endif
+		}
 			break;
 		case 2:
+		{
+#ifdef __ANDROID__
+			__android_log_print(ANDROID_LOG_INFO, "HsBaSlicer", "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
+#else
 			BOOST_LOG_TRIVIAL(info) << GetSourceLocation(location) << message;
+#endif
+		}
 			break;
 		case 3:
+		{
+#ifdef __ANDROID__
+			__android_log_print(ANDROID_LOG_WARN, "HsBaSlicer", "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
+#else
 			BOOST_LOG_TRIVIAL(warning) << GetSourceLocation(location) << message;
+#endif
+		}
 			break;
 		case 4:
+		{
+#ifdef __ANDROID__
+			__android_log_print(ANDROID_LOG_ERROR, "HsBaSlicer", "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
+#else
 			BOOST_LOG_TRIVIAL(error) << GetSourceLocation(location) << message;
+#endif
+		}
 			break;
 		case 5:
+		{
+#ifdef __ANDROID__
+			__android_log_print(ANDROID_LOG_FATAL, "HsBaSlicer", "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
+#else
 			BOOST_LOG_TRIVIAL(fatal) << GetSourceLocation(location) << message;
+#endif
+		}
 			break;
 		default:
+		{
+#ifdef __ANDROID__
+			__android_log_print(ANDROID_LOG_INFO, "HsBaSlicer", "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
+#else
 			BOOST_LOG_TRIVIAL(info) << GetSourceLocation(location) << message;
+#endif
+		}
 			break;
 		}
 	}
@@ -157,7 +231,7 @@ namespace HsBa::Slicer::Log
 		{
 			GetInstance();
 		}
-		BOOST_LOG_TRIVIAL(debug) << GetSourceLocation(location) << message;
+		Log(message, 1, location);
 	}
 
 	void LoggerSingletone::LogInfo(std::string_view message, const std::source_location& location)
@@ -166,7 +240,7 @@ namespace HsBa::Slicer::Log
 		{
 			GetInstance();
 		}
-		BOOST_LOG_TRIVIAL(info) << GetSourceLocation(location) << message;
+		Log(message, 2, location);
 	}
 
 	void LoggerSingletone::LogWarning(std::string_view message, const std::source_location& location)
@@ -175,7 +249,7 @@ namespace HsBa::Slicer::Log
 		{
 			GetInstance();
 		}
-		BOOST_LOG_TRIVIAL(warning) << GetSourceLocation(location) << message;
+		Log(message, 3, location);
 	}
 
 	void LoggerSingletone::LogError(std::string_view message, const std::source_location& location)
@@ -184,9 +258,9 @@ namespace HsBa::Slicer::Log
 		{
 			GetInstance();
 		}
-		BOOST_LOG_TRIVIAL(error) << GetSourceLocation(location) << message;
+		Log(message, 4, location);
 	}
-	namespace LogLiteral
+	inline namespace LogLiteral
 	{
 		LogState::LogState(const int log_lv, std::string_view message)
 			: log_lv_{ log_lv }, message_{ message }

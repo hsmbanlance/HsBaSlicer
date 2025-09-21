@@ -90,6 +90,46 @@ namespace HsBa::Slicer::Utils
 						{
 							array_json.PushBack(item, allocator);
 						}
+						else if constexpr (OptionalLike<ItemType>)
+						{
+							if (item.has_value())
+							{
+								using ValueType = std::remove_cvref_t<typename ItemType::value_type>;
+								if constexpr (RapidJsonValueConvertible<ValueType>)
+								{
+									rapidjson::Value item_json(rapidjson::kObjectType);
+									item->to_json(item_json, allocator);
+									array_json.PushBack(item_json, allocator);
+								}
+								else if constexpr (Aggregte<ValueType>)
+								{
+									rapidjson::Value item_json(rapidjson::kObjectType);
+									to_json_impl(*item, item_json, allocator);
+									array_json.PushBack(item_json, allocator);
+								}
+								else if constexpr (std::is_same_v<ValueType, std::string>)
+								{
+									array_json.PushBack(rapidjson::Value(item->c_str(), allocator), allocator);
+								}
+								else if constexpr (std::is_arithmetic_v<ValueType>)
+								{
+									array_json.PushBack(*item, allocator);
+								}
+								else if constexpr(std::is_enum_v<ValueType>)
+								{
+									const std::string enum_str{ EnumName(*item).data(),EnumName(*item).size()};
+									array_json.PushBack(rapidjson::Value(enum_str.c_str(), allocator), allocator);
+								}
+								else
+								{
+									throw RuntimeError("Unsupported item type in to_json_impl for range field with optional");
+								}
+							}
+							else
+							{
+								array_json.PushBack(rapidjson::Value(rapidjson::kNullType), allocator);
+							}
+						}	
 						else
 						{
 							throw RuntimeError("Unsupported item type in to_json_impl for range field");
@@ -185,6 +225,58 @@ namespace HsBa::Slicer::Utils
 							else
 							{
 								throw RuntimeError("Unsupported item type in from_json_impl for range field");
+							}
+						}
+					}
+				}
+				else if constexpr (OptionalLike<FieldType>)
+				{
+					using ValueType = std::remove_cvref_t<typename FieldType::value_type>;
+					if (json.HasMember(field_name.data()))
+					{
+						const auto& field_json = json[field_name.data()];
+						if (field_json.IsNull())
+						{
+							field.reset();
+						}
+						else
+						{
+							if constexpr (RapidJsonValueConvertible<ValueType>)
+							{
+								ValueType v;
+								v.from_json(field_json);
+								field = std::move(v);
+							}
+							else if constexpr (Aggregte<ValueType>)
+							{
+								ValueType v;
+								from_json_impl(field_json, v);
+								field = std::move(v);
+							}
+							else if constexpr (std::is_same_v<ValueType, std::string>)
+							{
+								if (field_json.IsString())
+								{
+									field = field_json.GetString();
+								}
+							}
+							else if constexpr (std::is_arithmetic_v<ValueType>)
+							{
+								if (field_json.IsNumber())
+								{
+									field = field_json.Get<ValueType>();
+								}
+							}
+							else if constexpr (std::is_enum_v<ValueType>)
+							{
+								if (field_json.IsString())
+								{
+									field = EnumFromName<ValueType>(field_json.GetString());
+								}
+							}
+							else
+							{
+								throw RuntimeError("Unsupported field type in from_json_impl for optional field");
 							}
 						}
 					}

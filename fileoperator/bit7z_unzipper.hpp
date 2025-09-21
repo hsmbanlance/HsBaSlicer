@@ -21,10 +21,11 @@ namespace HsBa::Slicer
 		,public std::enable_shared_from_this<Bit7ZUnzipper>,
 		public Utils::EventSource<Bit7ZUnzipper,void,std::string_view,std::string_view>
 	{
+		struct Private{};
 	public:
 		static std::shared_ptr<Bit7ZUnzipper> Create(const std::string& dll_path)
 		{
-			return std::shared_ptr<Bit7ZUnzipper>(new Bit7ZUnzipper(dll_path));
+			return std::make_shared<Bit7ZUnzipper>(Private{}, dll_path);
 		}
 		void SetPassword(std::string_view password) 
 		{
@@ -40,10 +41,10 @@ namespace HsBa::Slicer
 		}
 		~Bit7ZUnzipper();
 		friend class IUnzipper<Bit7ZUnzipper>;
-	private:
-		Bit7ZUnzipper(const std::string& dll_path = HSBA_7Z_DLL) :
+		Bit7ZUnzipper(Private,const std::string& dll_path = HSBA_7Z_DLL) :
 			dll_path_{ dll_path } {
 		}
+	private:
 		void ReadFromFileImpl(std::string_view path, bool reopen);
 		std::shared_ptr<UnzipperStream> GetStreamImpl(std::string_view part_file);
 		Bit7ZUnzipper(const Bit7ZUnzipper&) = delete;

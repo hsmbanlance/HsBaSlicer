@@ -5,7 +5,9 @@
 #include <shared_mutex>
 #include <source_location>
 
+#ifndef __ANDROID__
 #include <boost/log/core.hpp>
+#endif
 
 #include "base/singleton.hpp"
 
@@ -21,7 +23,7 @@ namespace HsBa::Slicer::Log
         static void LogInfo(std::string_view message,const std::source_location& location = std::source_location::current());
         static void LogWarning(std::string_view message,const std::source_location& location = std::source_location::current());
         static void LogError(std::string_view message,const std::source_location& location = std::source_location::current());
-
+        LoggerSingletone(Protected p):LoggerSingletone(){}
     private:
         LoggerSingletone();        
         LoggerSingletone(const LoggerSingletone&) = delete;

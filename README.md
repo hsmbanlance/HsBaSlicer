@@ -1,5 +1,42 @@
 ﻿# HsBaSlicer
+
 （未完成）
+
+以下为计划的项目结构。
+
+## 项目结构
+
+### 文件夹base
+
+一些基本类型、基础支持和接口定义。
+
+### 文件夹utils
+
+相对于base扩展的工具。
+
+### 文件夹fileoperator
+
+文件和属性配置树的操作，数据库等也被视为文件。 
+
+### 名称类似为xxxmodel的文件夹
+
+模型和定义和支持。
+
+### 文件夹convert
+
+Slicer过程中的类型和protobuf定义的类型的交换。 
+
+### 文件夹LibHsBaSiler
+
+导出出口的C++静态库。
+
+### 文件夹DllHsBaSlicer
+
+最终导出的系统API导出的动态库。
+
+### 文件夹HsBaSlicer
+
+导出的应用程序。
 
 ## 如何构建
 
@@ -13,6 +50,8 @@
 
 如果需要复制dll和pdb文件，则需要在首次编译后再次配置并编译。
 如果你安装了Visual Studio 2022但在Visual Studio Code等IDE中调试，把Vcpkg的安装路径添加到环境变量中。
+
+不支持MingW/Msys2等。
 
 ### Linux
 
@@ -36,15 +75,20 @@ CMake版本过低，构建时会发出警告。和Boost的构建有关。
 
 因为使用Openscade,需要安装X11开发包。
 如果使用的是Ubuntu 20.04或Debian 10.0以上版本，则可以直接安装X11开发包：
+
 ```bash
 sudo apt install libx11-dev mesa-common-dev libglu1-mesa-dev libxi-dev libxmu-dev libxmu-headers
 ```
+
 编译libmysql需要安装
-```
+
+```bash
 sudo apt install libncurses-dev libtirpc-dev
 ```
+
 编译libpq需要安装
-```
+
+```bash
 sudo apt install bison flex
 ```
 
@@ -95,3 +139,5 @@ cmake --build .
 ```
 
 ### macOS(未测试)
+
+### 编译安卓版本(未测试)

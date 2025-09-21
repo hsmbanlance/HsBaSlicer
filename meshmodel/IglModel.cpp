@@ -1,8 +1,5 @@
 ﻿#include "IglModel.hpp"
 
-#include <boost/nowide/filesystem.hpp>
-#include <boost/nowide/fstream.hpp>
-
 #include <igl/read_triangle_mesh.h>
 #include <igl/writePLY.h>
 #include <igl/writeOBJ.h>

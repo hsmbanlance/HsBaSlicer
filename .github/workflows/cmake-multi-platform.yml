@@ -291,3 +291,59 @@ jobs:
         echo "Running tests..."
         ctest --build-config ${{ matrix.build_type }}
       continue-on-error: true
+
+  build-android:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Java (for sdkmanager)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y openjdk-11-jdk wget unzip
+        sudo apt-get install -y ninja-build
+
+    - name: Install Android NDK (r27d)
+      run: |
+        mkdir -p $HOME/android-sdk/ndk
+        cd $HOME/android-sdk
+        wget https://dl.google.com/android/repository/android-ndk-r27d-linux.zip -O ndk.zip
+        unzip ndk.zip -d $HOME/android-sdk/ndk
+        echo "ANDROID_NDK=$HOME/android-sdk/ndk/$(ls $HOME/android-sdk/ndk | tail -n1)" >> $GITHUB_ENV
+
+    - name: Bootstrap vcpkg
+      shell: bash
+      run: |
+        if [ ! -d "vcpkg" ]; then
+          git clone https://github.com/microsoft/vcpkg.git vcpkg
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          ./vcpkg/vcpkg integrate install
+        fi
+
+    - name: Set VCPKG_ROOT and Android env
+      shell: bash
+      run: |
+        echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
+        echo "VCPKG_FEATURE_FLAGS=versions" >> $GITHUB_ENV
+        echo "ANDROID_NDK=$HOME/android-sdk/ndk/$(ls $HOME/android-sdk/ndk | tail -n1)" >> $GITHUB_ENV
+
+    - name: Configure CMake for Android (vcpkg chainload)
+      shell: bash
+      run: |
+        echo "Configuring CMake for Android (arm64)"
+        cmake -B build-android \
+          -S . \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+          -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
+          -DVCPKG_TARGET_TRIPLET=arm64-android \
+          -DANDROID_NDK=$ANDROID_NDK \
+          -DANDROID_ABI=arm64-v8a \
+          -DANDROID_PLATFORM=android-21
+
+    - name: Build Android
+      shell: bash
+      run: |
+        cmake --build build-android --config Release

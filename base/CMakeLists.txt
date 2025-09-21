@@ -22,8 +22,13 @@
     units.hpp
 )
 
-find_package(boost_locale REQUIRED CONFIG)
-find_package(boost_nowide REQUIRED CONFIG)
+if(NOT ANDROID)
+    find_package(boost_locale REQUIRED CONFIG)
+    find_package(boost_nowide REQUIRED CONFIG)
+endif()
 
-target_link_libraries(HsBaSlicerBase PUBLIC Eigen3::Eigen Boost::boost Boost::locale Boost::nowide)
-
+if(NOT ANDROID)
+    target_link_libraries(HsBaSlicerBase PUBLIC Eigen3::Eigen Boost::boost Boost::locale Boost::nowide)
+else()
+    target_link_libraries(HsBaSlicerBase PUBLIC Eigen3::Eigen Boost::boost)
+endif()

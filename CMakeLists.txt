@@ -3,13 +3,7 @@
 #
 cmake_minimum_required (VERSION 3.21)
 
-# 如果支持，请为 MSVC 编译器启用热重载。
-if (POLICY CMP0141)
-  cmake_policy(SET CMP0141 NEW)
-  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
-endif()
-
-# 6f1ddd6b6878e7e66fcc35c65ba1d8feec2e01f8
+# b1e15efef6758eaa0beb0a8732cfa66f6a68a81d
 
 #force utf-8
 if(MSVC)
@@ -43,6 +37,8 @@ find_package(PkgConfig REQUIRED)
 if(WIN32)
 ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
 find_package(Boost REQUIRED log)
+elseif(ANDROID)
+  #no log on android, use __android_log_print
 else()
 find_package(Boost REQUIRED log_setup log)
 endif()
@@ -56,7 +52,7 @@ find_package(miniz CONFIG REQUIRED)
 #use bit7z operator zipper
 option(HSBA_USE_BIT7Z "use bit7z" ON)
 
-if (HSBA_USE_BIT7Z)
+if (HSBA_USE_BIT7Z AND NOT ANDROID)
 	add_compile_definitions(USE_BIT7Z)
 	find_package(unofficial-bit7z CONFIG REQUIRED)
 endif()
@@ -96,7 +92,13 @@ if(NOT ANDROID AND NOT IOS AND NOT SWITCH)
 endif()
 
 #sqlpp11 with SQLite3 MySQL PostgreSQL
-find_package(Sqlpp11 CONFIG REQUIRED COMPONENTS SQLite3 MySQL PostgreSQL)
+if(NOT ANDROID AND NOT IOS AND NOT SWITCH)
+	find_package(Sqlpp11 CONFIG REQUIRED COMPONENTS SQLite3 MySQL PostgreSQL)
+	add_compile_definitions(USE_MYSQL)
+	add_compile_definitions(USE_PGSQL)
+else()
+	find_package(Sqlpp11 CONFIG REQUIRED COMPONENTS SQLite3)
+endif()
 
 #protobuf out
 option(HSBA_PROTOBUF_OUT "protobuf out source" ON)
@@ -124,6 +126,11 @@ add_subdirectory ("HsBaSlicer")
 
 #test
 option(HSBA_SLICER_USE_TESTS "use tests" ON)
+
+if(ANDROID OR IOS)
+  set(HSBA_SLICER_USE_TESTS OFF)
+  message("Disable tests on Android or IOS.")
+endif()
 
 if(HSBA_SLICER_USE_TESTS)
 	add_subdirectory("tests")
