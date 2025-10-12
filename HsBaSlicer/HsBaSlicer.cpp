@@ -3,7 +3,7 @@
 
 #include "HsBaSlicer.h"
 
-#include "utils/logger.hpp"
+#include "logger/logger.hpp"
 #include "DllHsBaSlicer/initialize.h"
 
 using namespace std;

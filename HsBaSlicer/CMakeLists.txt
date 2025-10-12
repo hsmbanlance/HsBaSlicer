@@ -13,6 +13,7 @@ add_executable (HsBaSlicer "HsBaSlicer.cpp" "HsBaSlicer.h")
 
 target_link_libraries(HsBaSlicer PRIVATE
 	HsBaSlicerUtils
+	HsBaSlicerLog
 	DllHsBaSlicer
 )
 

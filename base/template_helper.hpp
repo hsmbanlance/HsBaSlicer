@@ -439,4 +439,43 @@ namespace HsBa::Slicer::Utils
 	};
 }// namespace HsBa::Slicer::Utils
 
+#include <format>
+#include <iomanip>
+#include <sstream>
+
+template<typename C,size_t N>
+struct std::formatter<HsBa::Slicer::Utils::TemplateString<C, N>, C>
+{
+	bool quoted = false;
+
+	template<typename ParseContext>
+	constexpr ParseContext::iterator parse(ParseContext& ctx)
+	{
+		auto it = ctx.begin();
+		if (it == ctx.end())
+			return it;
+
+		if (*it == '#')
+		{
+			quoted = true;
+			++it;
+		}
+		if (it != ctx.end() && *it != '}')
+			throw std::format_error("Invalid format args for QuotableString.");
+
+		return it;
+	}
+
+	template<typename FmtContext>
+	FmtContext::iterator format(HsBa::Slicer::Utils::TemplateString<C, N> s, FmtContext& ctx) const
+	{
+		std::basic_stringstream<C> out;
+		if (quoted)
+			out << std::quoted(s.ToStringView());
+		else
+			out << s;
+
+		return std::ranges::copy(std::move(out).str(), ctx.out()).out;
+	}
+};
 #endif // !HSBA_SLICER_TEMPLATE_HELPHER_HPP
