@@ -17,3 +17,5 @@ How to use:
 3. Open the `android` folder in Android Studio and run or build the APK.
 
 Note: This is a minimal skeleton. You may want to add a Gradle wrapper, signing configs, and a small Java/Kotlin Activity that loads the native library via System.loadLibrary("HsBaSlicer").
+
+CI trigger: 2025-10-18T00:00:00Z
