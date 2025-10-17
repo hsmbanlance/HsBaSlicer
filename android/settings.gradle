@@ -1,0 +1,13 @@
+pluginManagement {
+	repositories {
+		gradlePluginPortal()
+		google()
+		mavenCentral()
+	}
+	plugins {
+		id 'com.android.application' version '7.4.2'
+	}
+}
+
+rootProject.name = 'HsBaSlicerExample'
+include ':app'
