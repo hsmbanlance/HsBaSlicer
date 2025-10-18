@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #ifndef HSBA_SLICER_STRUCT_JSON_HPP
 #define HSBA_SLICER_STRUCT_JSON_HPP
 

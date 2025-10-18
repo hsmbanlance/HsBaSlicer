@@ -43,6 +43,8 @@ else()
 find_package(Boost REQUIRED log_setup log)
 endif()
 
+include_directories(${Boost_INCLUDE_DIRS})
+
 #Clipper2
 pkg_check_modules(Clipper2 REQUIRED IMPORTED_TARGET Clipper2)
 
@@ -113,6 +115,7 @@ add_subdirectory("third_parts_without_vcpkg")
 add_subdirectory("proto")
 add_subdirectory("base")
 add_subdirectory("utils")
+add_subdirectory("logger")
 add_subdirectory("2D")
 add_subdirectory("fileoperator")
 add_subdirectory("meshmodel")

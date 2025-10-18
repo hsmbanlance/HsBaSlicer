@@ -75,7 +75,7 @@ namespace HsBa::Slicer::Utils
 	}
 
 	template<typename StringViewT, template<typename> typename Container = std::vector>
-	Container<StringViewT> split(StringViewT str, StringViewT delimiter)
+	constexpr Container<StringViewT> split(StringViewT str, StringViewT delimiter)
 	{
 		auto range = str | std::views::split(delimiter);
 		Container<StringViewT> result;
