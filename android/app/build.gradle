@@ -11,6 +11,7 @@ buildscript {
 apply plugin: 'com.android.application'
 
 android {
+    namespace "com.hsmbanlance.hsbaslicer.example"
     compileSdk 31
 
     defaultConfig {
