@@ -369,3 +369,15 @@ FodyWeavers.xsd
 /CMakeUserPresets.json
 
 build_*
+
+# Android / Gradle
+/android/.gradle/
+/android/app/build/
+/android/local.properties
+/android/.idea/
+
+# Don't ignore Gradle wrapper files
+!android/gradlew
+!android/gradlew.bat
+!android/gradle/wrapper/gradle-wrapper.properties
+!android/gradle/wrapper/gradle-wrapper.jar
