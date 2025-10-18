@@ -314,6 +314,9 @@ jobs:
         export PATH=$PATH:$HOME/android-sdk/cmdline-tools/cmdline-tools/bin
         yes | sdkmanager --licenses || true
         sdkmanager --sdk_root=$HOME/android-sdk "platform-tools" "platforms;android-31" "build-tools;31.0.0"
+        # Ensure consistent SDK env vars to avoid Gradle confusion
+        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
 
     - name: Install Android NDK (r27d)
       shell: bash
@@ -324,6 +327,7 @@ jobs:
         unzip ndk.zip -d $HOME/android-sdk/ndk
         echo "ANDROID_NDK=$HOME/android-sdk/ndk/$(ls $HOME/android-sdk/ndk | tail -n1)" >> $GITHUB_ENV
         echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
 
     - name: Bootstrap vcpkg
       shell: bash
