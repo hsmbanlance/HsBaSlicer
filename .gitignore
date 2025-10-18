@@ -381,3 +381,15 @@ build_*
 !android/gradlew.bat
 !android/gradle/wrapper/gradle-wrapper.properties
 !android/gradle/wrapper/gradle-wrapper.jar
+
+# libs and exes
+*.dll
+*.exe
+*.lib
+*.obj
+*.pdb
+*.so
+*.o
+*.a
+
+# Add testing obj 3D models as necessary
