@@ -367,16 +367,26 @@ jobs:
         mkdir -p android/app/src/main/jniLibs/arm64-v8a
         cp build-android/android_libs/arm64-v8a/*.so android/app/src/main/jniLibs/arm64-v8a/ || true
 
-    - name: Install Gradle, generate Gradle wrapper and build APK
+    - name: Install Gradle 7.5.1, generate Gradle wrapper and build APK
       shell: bash
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         sudo apt-get update
-        sudo apt-get install -y gradle git
-        # Generate Gradle wrapper using system gradle so we can commit it for future runs
+        sudo apt-get install -y wget unzip git
+        # Ensure a compatible Gradle is available (AGP 7.4.2 needs Gradle 7.5+)
+        GRADLE_VERSION=7.5.1
+        GRADLE_DIR=/opt/gradle/gradle-${GRADLE_VERSION}
+        if [ ! -d "$GRADLE_DIR" ]; then
+          sudo mkdir -p /opt/gradle
+          wget https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip -O /tmp/gradle-${GRADLE_VERSION}.zip
+          sudo unzip -q /tmp/gradle-${GRADLE_VERSION}.zip -d /opt/gradle
+        fi
+        export PATH=$GRADLE_DIR/bin:$PATH
+
+        # Generate Gradle wrapper using the downloaded Gradle so we can commit it for future runs
         cd android
-        gradle wrapper --gradle-version 7.5.1 || true
+        gradle wrapper --gradle-version ${GRADLE_VERSION} || true
         chmod +x gradlew || true
 
         # If wrapper files were created or changed, commit them back to the repo
