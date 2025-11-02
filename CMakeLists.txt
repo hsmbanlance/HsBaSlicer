@@ -102,6 +102,9 @@ else()
 	find_package(Sqlpp11 CONFIG REQUIRED COMPONENTS SQLite3)
 endif()
 
+#Lua
+find_package(Lua REQUIRED)
+
 #protobuf out
 option(HSBA_PROTOBUF_OUT "protobuf out source" ON)
 
@@ -117,6 +120,7 @@ add_subdirectory("base")
 add_subdirectory("utils")
 add_subdirectory("logger")
 add_subdirectory("2D")
+add_subdirectory("paths")
 add_subdirectory("fileoperator")
 add_subdirectory("meshmodel")
 if(NOT ANDROID AND NOT IOS AND NOT SWITCH)
