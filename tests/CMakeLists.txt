@@ -271,3 +271,31 @@ add_test(
 add_custom_command(TARGET string_utils_test POST_BUILD
   COMMAND ${CMAKE_CTEST_COMMAND} -V -R string_utils_test
 )
+
+#points path test
+#test for points path
+add_executable(points_path_test
+	"PathsOut/points_path_test.cpp"
+)
+
+target_link_libraries(points_path_test
+	HsBaSlicerBase
+	HsBaPaths
+	Boost::unit_test_framework
+)
+
+target_compile_definitions(points_path_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME points_path_test
+  COMMAND $<TARGET_FILE:points_path_test>
+  )
+
+
+add_custom_command(TARGET points_path_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R points_path_test
+)
