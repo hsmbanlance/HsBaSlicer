@@ -33,9 +33,23 @@ return "hex"
 
 BOOST_AUTO_TEST_CASE(test_save_creates_file)
 {
-    // This test that triggers Zipper/bit7z was removed as it caused allocator
-    // behaviour in third-party libraries to be reported as leaks under
-    // the test runner. Keep images formatting test only.
+    ImagesPath ip("cfgfile", "{}", [](double, std::string_view){});
+    std::string img = "eA=="; // base64 of 'x'
+    ip.AddImage("one.png", img);
+
+    auto tmp = std::filesystem::temp_directory_path() / "images_out_test.zip";
+    std::error_code ec; std::filesystem::remove(tmp, ec);
+
+    // script that requests Zip
+    std::string script = R"lua(
+return "Zip"
+)lua";
+
+    ip.Save(tmp, script);
+    BOOST_CHECK(std::filesystem::exists(tmp));
+
+    // cleanup
+    std::filesystem::remove(tmp, ec);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
