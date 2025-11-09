@@ -8,6 +8,8 @@
 #include <iomanip>
 #include <string>
 
+#include "base/error.hpp"
+
 namespace HsBa::Slicer
 {
 	namespace {
@@ -95,7 +97,8 @@ namespace HsBa::Slicer
 	{
 		std::string result;
 		lua_State* L = luaL_newstate();
-		if (!L) return std::string("Lua init failed");
+		if (!L)
+			throw RuntimeError("Lua init failed");
 		luaL_openlibs(L);
 
 		// push points table

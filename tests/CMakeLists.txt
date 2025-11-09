@@ -133,7 +133,7 @@ add_test(
 
 add_custom_target(RunAllTests
   COMMAND ${CMAKE_CTEST_COMMAND} -V
-  DEPENDS anyvisit_test coroutines_test filename_check_test configmap_test boost_std_convert_test enum_simple_convert_test
+  DEPENDS anyvisit_test coroutines_test filename_check_test configmap_test boost_std_convert_test enum_simple_convert_test cipher_test
 )
 
 add_custom_command(TARGET anyvisit_test POST_BUILD
@@ -244,6 +244,31 @@ add_custom_command(TARGET json_convert_test POST_BUILD
   COMMAND ${CMAKE_CTEST_COMMAND} -V -R json_convert
 )
 
+# cipher tests
+add_executable(cipher_test
+    Cipher/cipher_test.cpp
+)
+
+target_link_libraries(cipher_test
+    HsBaCipher
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(cipher_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME cipher_test
+  COMMAND $<TARGET_FILE:cipher_test>
+  )
+
+add_custom_command(TARGET cipher_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R cipher_test
+)
+
 
 #string utils test
 #test for string utils
@@ -298,4 +323,57 @@ add_test(
 
 add_custom_command(TARGET points_path_test POST_BUILD
   COMMAND ${CMAKE_CTEST_COMMAND} -V -R points_path_test
+)
+
+# layers path test
+add_executable(layers_path_test
+    "PathsOut/layers_path_test.cpp"
+)
+
+target_link_libraries(layers_path_test
+    HsBaSlicerBase
+    HsBaPaths
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(layers_path_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME layers_path_test
+  COMMAND $<TARGET_FILE:layers_path_test>
+)
+
+add_custom_command(TARGET layers_path_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R layers_path_test
+)
+
+# images path test
+add_executable(images_path_test
+    "PathsOut/images_path_test.cpp"
+)
+
+target_link_libraries(images_path_test
+    HsBaSlicerBase
+    HsBaPaths
+    HsBaCipher
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(images_path_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME images_path_test
+  COMMAND $<TARGET_FILE:images_path_test>
+)
+
+add_custom_command(TARGET images_path_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R images_path_test
 )

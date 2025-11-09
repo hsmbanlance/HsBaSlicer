@@ -74,6 +74,9 @@ find_package(RapidJSON CONFIG REQUIRED)
 #Eigen3
 find_package(Eigen3 CONFIG REQUIRED)
 
+#OpenSSL
+find_package(OpenSSL REQUIRED)
+
 #Option for kernel
 
 #Mesh_kernel
@@ -117,6 +120,7 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/utils/logcfg.ini DESTINATION ${CMAKE_CURRE
 add_subdirectory("third_parts_without_vcpkg")
 add_subdirectory("proto")
 add_subdirectory("base")
+add_subdirectory("cipher")
 add_subdirectory("utils")
 add_subdirectory("logger")
 add_subdirectory("2D")
