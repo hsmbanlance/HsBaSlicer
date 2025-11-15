@@ -47,6 +47,13 @@ namespace HsBa::Slicer
         friend IglModel Difference(const IglModel& left, const IglModel& right);
         friend IglModel Xor(const IglModel& left, const IglModel& right);
 
+		static IglModel CreateBox(const Eigen::Vector3f& size);
+		static IglModel CreateSphere(const float radius, const int subdivisions = 3);
+		static IglModel CreateCylinder(const float radius, const float height, const int segments = 32);
+		static IglModel CreateCone(const float radius, const float height, const int segments = 32);
+		static IglModel CreateTorus(const float majorRadius, const float minorRadius, const int majorSegments = 32, const int minorSegments = 16);
+
+
     private:
         Eigen::MatrixXf vertices_ = Eigen::MatrixXf{};
         Eigen::MatrixXi faces_ = Eigen::MatrixXi{};

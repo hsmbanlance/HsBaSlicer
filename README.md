@@ -92,6 +92,11 @@ sudo apt install libncurses-dev libtirpc-dev
 sudo apt install bison flex
 ```
 
+如果需要使用OpenCASCADE，需要安装以下依赖：
+```bash
+sudo apt install -y libfontconfig1-dev
+```
+
 安装git：
 
 ```bash

@@ -47,12 +47,6 @@ namespace HsBa::Slicer
 
         bool UnionAll();
 
-        static OcctModel MakeBox(const Eigen::Vector3f& p1, const Eigen::Vector3f& p2);
-        static OcctModel MakeBox(const Eigen::Vector3f& p1, float x, float y, float z);
-        static OcctModel MakeSphere(const Eigen::Vector3f& o, float r);
-        static OcctModel MakeCone(float r1, float r2, float h);
-        static OcctModel MakeTorus(float r1, float r2, float angle);
-
         friend OcctModel Union(const OcctModel& left, const OcctModel& right);
         friend OcctModel Intersection(const OcctModel& left, const OcctModel& right);
         friend OcctModel Difference(const OcctModel& left, const OcctModel& right);
@@ -60,6 +54,12 @@ namespace HsBa::Slicer
 
         friend OcctModel ThickSolid(const OcctModel& model, float thickness);
         friend OcctModel ThickSolid(const OcctModel& model, const std::vector<std::vector<Eigen::Vector3f>>& faces, float thickness);
+
+		static OcctModel CreateBox(const Eigen::Vector3f& size);
+		static OcctModel CreateSphere(const float radius, const int subdivisions = 3);
+		static OcctModel CreateCylinder(const float radius, const float height, const int segments = 32);
+		static OcctModel CreateCone(const float radius, const float height, const int segments = 32);
+		static OcctModel CreateTorus(const float majorRadius, const float minorRadius, const int majorSegments = 32, const int minorSegments = 16);
 
         friend struct std::hash<OcctModel>;
 
