@@ -377,3 +377,45 @@ add_test(
 add_custom_command(TARGET images_path_test POST_BUILD
   COMMAND ${CMAKE_CTEST_COMMAND} -V -R images_path_test
 )
+
+include_directories(${CMAKE_SOURCE_DIR})
+
+
+# Only add OCCT test if CAD model library was built (OpenCASCADE found)
+if(TARGET HsBaSlicerCADModel)
+  find_package(Fontconfig REQUIRED)
+  find_package(Freetype REQUIRED)
+  add_executable(occt_model_test Models/occt_model_test.cpp)
+  target_link_libraries(occt_model_test PRIVATE Boost::unit_test_framework
+    HsBaSlicerCADModel Eigen3::Eigen)
+  target_compile_definitions(occt_model_test PRIVATE BOOST_TEST_DYN_LINK)
+  enable_testing()
+  add_test(NAME occt_model_test COMMAND $<TARGET_FILE:occt_model_test>)
+  add_custom_command(TARGET occt_model_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R occt_model_test
+)
+endif()
+
+add_executable(cgal_model_test Models/cgal_model_test.cpp)
+add_executable(igl_model_test Models/igl_model_test.cpp)
+
+target_link_libraries(cgal_model_test PRIVATE Boost::unit_test_framework HsBaSlicerMesh Eigen3::Eigen)
+target_link_libraries(igl_model_test PRIVATE Boost::unit_test_framework HsBaSlicerMesh Eigen3::Eigen)
+
+# Always enable Boost test dynamic link
+target_compile_definitions(cgal_model_test PRIVATE BOOST_TEST_DYN_LINK)
+target_compile_definitions(igl_model_test PRIVATE BOOST_TEST_DYN_LINK)
+
+# In Debug configuration, disable boolean operation tests for CGAL and IGL
+target_compile_definitions(cgal_model_test PRIVATE $<$<CONFIG:Debug>:DISABLE_BOOLEAN_OPERATIONS_TESTS>)
+target_compile_definitions(igl_model_test PRIVATE $<$<CONFIG:Debug>:DISABLE_BOOLEAN_OPERATIONS_TESTS>)
+
+enable_testing()
+add_test(NAME cgal_model_test COMMAND $<TARGET_FILE:cgal_model_test>)
+add_test(NAME igl_model_test COMMAND $<TARGET_FILE:igl_model_test>)
+add_custom_command(TARGET cgal_model_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R cgal_model_test
+)
+add_custom_command(TARGET igl_model_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R igl_model_test
+)

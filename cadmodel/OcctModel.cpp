@@ -51,14 +51,15 @@ namespace HsBa::Slicer
 {
 	OcctModel::OcctModel(const TopoDS_Shape& shape)
 	{
-		BRep_Builder builder;
-		builder.Add(shape_, shape);
+		// Directly store the incoming shape. Avoid using BRep_Builder::Add on an
+		// uninitialized `shape_` which can lead to memory access violations.
+		shape_ = shape;
 	}
 
 	OcctModel::OcctModel(TopoDS_Shape&& shape)
 	{
-		BRep_Builder builder;
-		builder.Add(shape_, std::move(shape));
+		// Move the provided shape into the member.
+		shape_ = std::move(shape);
 	}
 
 	void OcctModel::ReadStep(const std::string& path)
@@ -332,33 +333,31 @@ namespace HsBa::Slicer
 		return !shape_.IsNull();
 	}
 
-	OcctModel OcctModel::MakeBox(const Eigen::Vector3f& p1, const Eigen::Vector3f& p2)
+	OcctModel OcctModel::CreateBox(const Eigen::Vector3f& size)
 	{
-		gp_Pnt o1{ p1.x(),p1.y(),p1.z() };
-		gp_Pnt o2{ p2.x(),p2.y(),p2.z() };
-		BRepPrimAPI_MakeBox maker{ o1,o2 };
+		gp_Pnt o1{ 0,0,0 };
+		BRepPrimAPI_MakeBox maker{ o1, size.x(),size.y(),size.z() };
 		return OcctModel(maker.Shape());
 	}
-	OcctModel OcctModel::MakeBox(const Eigen::Vector3f& p1, float x, float y, float z)
+	OcctModel OcctModel::CreateSphere(const float radius, const int subdivisions)
 	{
-		gp_Pnt o1{ p1.x(),p1.y(),p1.z() };
-		BRepPrimAPI_MakeBox maker{ o1,x,y,z };
+		gp_Pnt center{ 0,0,0 };
+		BRepPrimAPI_MakeSphere maker{ center, radius };
 		return OcctModel(maker.Shape());
 	}
-	OcctModel OcctModel::MakeSphere(const Eigen::Vector3f& o, float r)
+	OcctModel OcctModel::CreateCylinder(const float radius, const float height, const int segments)
 	{
-		gp_Pnt center{ o.x(),o.y(),o.z() };
-		BRepPrimAPI_MakeSphere maker{ center,r };
+		BRepPrimAPI_MakeCylinder maker{ radius, height };
 		return OcctModel(maker.Shape());
 	}
-	OcctModel OcctModel::MakeCone(float r1, float r2, float h)
+	OcctModel OcctModel::CreateCone(const float radius, const float height, const int segments)
 	{
-		BRepPrimAPI_MakeCone maker{ r1,r2,h };
+		BRepPrimAPI_MakeCone maker{ radius, 0.0f, height };
 		return OcctModel(maker.Shape());
 	}
-	OcctModel OcctModel::MakeTorus(float r1, float r2, float angle)
+	OcctModel OcctModel::CreateTorus(const float majorRadius, const float minorRadius, const int majorSegments, const int minorSegments)
 	{
-		BRepPrimAPI_MakeTorus maker{ r1,r2,angle };
+		BRepPrimAPI_MakeTorus maker{ majorRadius, minorRadius };
 		return OcctModel(maker.Shape());
 	}
 

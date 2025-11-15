@@ -57,6 +57,12 @@ namespace HsBa::Slicer
         friend CgalModel Difference(const CgalModel& left, const CgalModel& right);
         friend CgalModel Xor(const CgalModel& left, const CgalModel& right);
 
+		static CgalModel CreateBox(const Eigen::Vector3f& size);
+		static CgalModel CreateSphere(const float radius, const int subdivisions = 3);
+		static CgalModel CreateCylinder(const float radius, const float height, const int segments = 32);
+		static CgalModel CreateCone(const float radius, const float height, const int segments = 32);
+		static CgalModel CreateTorus(const float majorRadius, const float minorRadius, const int majorSegments = 32, const int minorSegments = 16);
+
     private:
         CGAL::Polyhedron_3<EpicKernel> mesh_;
         std::string filename_;

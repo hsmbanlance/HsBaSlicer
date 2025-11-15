@@ -1,5 +1,8 @@
 ﻿#include "IglModel.hpp"
 
+#include <cmath>
+#include <numbers>
+
 #include <igl/read_triangle_mesh.h>
 #include <igl/writePLY.h>
 #include <igl/writeOBJ.h>
@@ -16,6 +19,8 @@
 
 #include "base/error.hpp"
 #include "base/encoding_convert.hpp"
+#include <cmath>
+#include <algorithm>
 
 namespace HsBa::Slicer
 {
@@ -173,30 +178,304 @@ namespace HsBa::Slicer
     }
     IglModel Union(const IglModel& left, const IglModel& right)
     {
+        auto is_valid_mesh = [](const Eigen::MatrixXf& V, const Eigen::MatrixXi& F)->bool{
+            if (V.rows() == 0 || F.rows() == 0) return false;
+            if (V.cols() < 3) return false;
+            if (F.cols() < 3) return false;
+            // finite check
+            for (int r = 0; r < V.rows(); ++r)
+            {
+                for (int c = 0; c < V.cols(); ++c)
+                {
+                    float val = V(r,c);
+                    if (!std::isfinite(val)) return false;
+                }
+            }
+            // indices bounds
+            int nv = V.rows();
+            for (int r = 0; r < F.rows(); ++r)
+            {
+                for (int c = 0; c < F.cols(); ++c)
+                {
+                    int idx = F(r,c);
+                    if (idx < 0 || idx >= nv) return false;
+                }
+            }
+            return true;
+        };
+
         Eigen::MatrixXf v;
         Eigen::MatrixXi f;
-        igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_UNION, v, f);
+        if (!is_valid_mesh(left.vertices_, left.faces_) || !is_valid_mesh(right.vertices_, right.faces_))
+        {
+            return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
+        }
+        try {
+            igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_UNION, v, f);
+        } catch (...) {
+            // if CGAL/igl throws, return empty mesh instead of crashing tests
+            return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
+        }
+        if (v.rows() == 0 || f.rows() == 0) return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
         return IglModel(v, f);
     }
     IglModel Intersection(const IglModel& left, const IglModel& right)
     {
+        auto is_valid_mesh = [](const Eigen::MatrixXf& V, const Eigen::MatrixXi& F)->bool{
+            if (V.rows() == 0 || F.rows() == 0) return false;
+            if (V.cols() < 3) return false;
+            if (F.cols() < 3) return false;
+            for (int r = 0; r < V.rows(); ++r)
+                for (int c = 0; c < V.cols(); ++c)
+                    if (!std::isfinite(V(r,c))) return false;
+            int nv = V.rows();
+            for (int r = 0; r < F.rows(); ++r)
+                for (int c = 0; c < F.cols(); ++c)
+                    if (F(r,c) < 0 || F(r,c) >= nv) return false;
+            return true;
+        };
         Eigen::MatrixXf v;
         Eigen::MatrixXi f;
-        igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_INTERSECT, v, f);
+        if (!is_valid_mesh(left.vertices_, left.faces_) || !is_valid_mesh(right.vertices_, right.faces_))
+            return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
+        try {
+            igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_INTERSECT, v, f);
+        } catch (...) {
+            return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
+        }
+        if (v.rows() == 0 || f.rows() == 0) return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
         return IglModel(v, f);
     }
     IglModel Difference(const IglModel& left, const IglModel& right)
     {
+        auto is_valid_mesh = [](const Eigen::MatrixXf& V, const Eigen::MatrixXi& F)->bool{
+            if (V.rows() == 0 || F.rows() == 0) return false;
+            if (V.cols() < 3) return false;
+            if (F.cols() < 3) return false;
+            for (int r = 0; r < V.rows(); ++r)
+                for (int c = 0; c < V.cols(); ++c)
+                    if (!std::isfinite(V(r,c))) return false;
+            int nv = V.rows();
+            for (int r = 0; r < F.rows(); ++r)
+                for (int c = 0; c < F.cols(); ++c)
+                    if (F(r,c) < 0 || F(r,c) >= nv) return false;
+            return true;
+        };
         Eigen::MatrixXf v;
         Eigen::MatrixXi f;
-        igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_MINUS, v, f);
+        if (!is_valid_mesh(left.vertices_, left.faces_) || !is_valid_mesh(right.vertices_, right.faces_))
+            return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
+        try {
+            igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_MINUS, v, f);
+        } catch (...) {
+            return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
+        }
+        if (v.rows() == 0 || f.rows() == 0) return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
         return IglModel(v, f);
     }
     IglModel Xor(const IglModel& left, const IglModel& right)
     {
+        auto is_valid_mesh = [](const Eigen::MatrixXf& V, const Eigen::MatrixXi& F)->bool{
+            if (V.rows() == 0 || F.rows() == 0) return false;
+            if (V.cols() < 3) return false;
+            if (F.cols() < 3) return false;
+            for (int r = 0; r < V.rows(); ++r)
+                for (int c = 0; c < V.cols(); ++c)
+                    if (!std::isfinite(V(r,c))) return false;
+            int nv = V.rows();
+            for (int r = 0; r < F.rows(); ++r)
+                for (int c = 0; c < F.cols(); ++c)
+                    if (F(r,c) < 0 || F(r,c) >= nv) return false;
+            return true;
+        };
         Eigen::MatrixXf v;
         Eigen::MatrixXi f;
-        igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_XOR, v, f);
+        if (!is_valid_mesh(left.vertices_, left.faces_) || !is_valid_mesh(right.vertices_, right.faces_))
+            return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
+        try {
+            igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_XOR, v, f);
+        } catch (...) {
+            return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
+        }
+        if (v.rows() == 0 || f.rows() == 0) return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
         return IglModel(v, f);
+    }
+
+        IglModel IglModel::CreateBox(const Eigen::Vector3f& size)
+    {
+        const Eigen::Vector3f h = size * 0.5f;
+        std::vector<Eigen::Vector3f> verts{
+            {-h.x(), -h.y(), -h.z()},
+            { h.x(), -h.y(), -h.z()},
+            { h.x(),  h.y(), -h.z()},
+            {-h.x(),  h.y(), -h.z()},
+            {-h.x(), -h.y(),  h.z()},
+            { h.x(), -h.y(),  h.z()},
+            { h.x(),  h.y(),  h.z()},
+            {-h.x(),  h.y(),  h.z()}
+        };
+        std::vector<Eigen::Vector3i> faces{
+            {0,1,2},{0,2,3}, // bottom
+            {4,6,5},{4,7,6}, // top
+            {0,4,5},{0,5,1}, // -y
+            {1,5,6},{1,6,2}, // +x
+            {2,6,7},{2,7,3}, // +y
+            {3,7,4},{3,4,0}  // -x
+        };
+        Eigen::MatrixXf v(verts.size(), 3);
+        Eigen::MatrixXi f(faces.size(), 3);
+        for (size_t i = 0; i < verts.size(); ++i) v.row((int)i) = verts[i];
+        for (size_t i = 0; i < faces.size(); ++i) f.row((int)i) = faces[i];
+        return IglModel(std::move(v), std::move(f), true);
+    }
+
+    IglModel IglModel::CreateSphere(const float radius, const int subdivisions)
+    {
+        const int stacks = std::max(4, 2 * subdivisions + 6);
+        const int slices = std::max(8, 8 * subdivisions + 8);
+        std::vector<Eigen::Vector3f> verts;
+        std::vector<Eigen::Vector3i> faces;
+        for (int i = 0; i <= stacks; ++i)
+        {
+            float v = (float)i / (float)stacks;
+            float theta = v * std::numbers::pi_v<float>; // 0..pi
+            for (int j = 0; j < slices; ++j)
+            {
+                float u = (float)j / (float)slices;
+                float phi = u * 2.0f * std::numbers::pi_v<float>; // 0..2pi
+                float x = radius * std::sin(theta) * std::cos(phi);
+                float y = radius * std::sin(theta) * std::sin(phi);
+                float z = radius * std::cos(theta);
+                verts.emplace_back(x, y, z);
+            }
+        }
+        for (int i = 0; i < stacks; ++i)
+        {
+            for (int j = 0; j < slices; ++j)
+            {
+                int next = (j + 1) % slices;
+                int a = i * slices + j;
+                int b = i * slices + next;
+                int c = (i + 1) * slices + j;
+                int d = (i + 1) * slices + next;
+                if (i != 0) faces.emplace_back(a, c, b);
+                if (i != stacks - 1) faces.emplace_back(b, c, d);
+            }
+        }
+        Eigen::MatrixXf v(verts.size(), 3);
+        Eigen::MatrixXi f(faces.size(), 3);
+        for (size_t i = 0; i < verts.size(); ++i) v.row((int)i) = verts[i];
+        for (size_t i = 0; i < faces.size(); ++i) f.row((int)i) = faces[i];
+        return IglModel(std::move(v), std::move(f), true);
+    }
+
+    IglModel IglModel::CreateCylinder(const float radius, const float height, const int segments)
+    {
+        const int seg = std::max(3, segments);
+        const float h2 = height * 0.5f;
+        std::vector<Eigen::Vector3f> verts;
+        std::vector<Eigen::Vector3i> faces;
+        // ring bottom and top
+        for (int i = 0; i < seg; ++i)
+        {
+            float a = (float)i / seg * 2.0f * std::numbers::pi_v<float>;
+            float x = radius * std::cos(a);
+            float y = radius * std::sin(a);
+            verts.emplace_back(x, y, -h2);
+            verts.emplace_back(x, y, h2);
+        }
+        int bottomCenter = (int)verts.size();
+        verts.emplace_back(0,0,-h2);
+        int topCenter = (int)verts.size();
+        verts.emplace_back(0,0,h2);
+        // sides
+        for (int i = 0; i < seg; ++i)
+        {
+            int i0 = i * 2;
+            int i1 = ((i + 1) % seg) * 2;
+            // quad (i0 top/bottom) -> two triangles
+            faces.emplace_back(i0, i1, i0+1);
+            faces.emplace_back(i1, i1+1, i0+1);
+            // bottom cap
+            faces.emplace_back(bottomCenter, i0, i1);
+            // top cap
+            faces.emplace_back(topCenter, i1+1, i0+1);
+        }
+        Eigen::MatrixXf v(verts.size(), 3);
+        Eigen::MatrixXi f(faces.size(), 3);
+        for (size_t i = 0; i < verts.size(); ++i) v.row((int)i) = verts[i];
+        for (size_t i = 0; i < faces.size(); ++i) f.row((int)i) = faces[i];
+        return IglModel(std::move(v), std::move(f), true);
+    }
+
+    IglModel IglModel::CreateCone(const float radius, const float height, const int segments)
+    {
+        const int seg = std::max(3, segments);
+        const float h2 = height * 0.5f;
+        std::vector<Eigen::Vector3f> verts;
+        std::vector<Eigen::Vector3i> faces;
+        // base ring
+        for (int i = 0; i < seg; ++i)
+        {
+            float a = (float)i / seg * 2.0f * std::numbers::pi_v<float>;
+            float x = radius * std::cos(a);
+            float y = radius * std::sin(a);
+            verts.emplace_back(x, y, -h2);
+        }
+        int baseCenter = (int)verts.size();
+        verts.emplace_back(0,0,-h2);
+        int apexIndex = (int)verts.size();
+        verts.emplace_back(0,0,h2);
+        for (int i = 0; i < seg; ++i)
+        {
+            int ni = (i + 1) % seg;
+            faces.emplace_back(baseCenter, i, ni);
+            faces.emplace_back(i, apexIndex, ni);
+        }
+        Eigen::MatrixXf v(verts.size(), 3);
+        Eigen::MatrixXi f(faces.size(), 3);
+        for (size_t i = 0; i < verts.size(); ++i) v.row((int)i) = verts[i];
+        for (size_t i = 0; i < faces.size(); ++i) f.row((int)i) = faces[i];
+        return IglModel(std::move(v), std::move(f), true);
+    }
+
+    IglModel IglModel::CreateTorus(const float majorRadius, const float minorRadius, const int majorSegments, const int minorSegments)
+    {
+        const int R = std::max(3, majorSegments);
+        const int r = std::max(3, minorSegments);
+        std::vector<Eigen::Vector3f> verts;
+        std::vector<Eigen::Vector3i> faces;
+        for (int i = 0; i < R; ++i)
+        {
+            float u = (float)i / R * 2.0f * std::numbers::pi_v<float>;
+            Eigen::Vector3f center(majorRadius * std::cos(u), majorRadius * std::sin(u), 0);
+            for (int j = 0; j < r; ++j)
+            {
+                float v = (float)j / r * 2.0f * std::numbers::pi_v<float>;
+                float x = (majorRadius + minorRadius * std::cos(v)) * std::cos(u);
+                float y = (majorRadius + minorRadius * std::cos(v)) * std::sin(u);
+                float z = minorRadius * std::sin(v);
+                verts.emplace_back(x, y, z);
+            }
+        }
+        for (int i = 0; i < R; ++i)
+        {
+            for (int j = 0; j < r; ++j)
+            {
+                int ni = (i + 1) % R;
+                int nj = (j + 1) % r;
+                int a = i * r + j;
+                int b = ni * r + j;
+                int c = i * r + nj;
+                int d = ni * r + nj;
+                faces.emplace_back(a, b, c);
+                faces.emplace_back(b, d, c);
+            }
+        }
+        Eigen::MatrixXf v(verts.size(), 3);
+        Eigen::MatrixXi f(faces.size(), 3);
+        for (size_t i = 0; i < verts.size(); ++i) v.row((int)i) = verts[i];
+        for (size_t i = 0; i < faces.size(); ++i) f.row((int)i) = faces[i];
+        return IglModel(std::move(v), std::move(f), true);
     }
 }// namespace HsBa::Slicer

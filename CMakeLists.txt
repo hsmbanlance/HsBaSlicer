@@ -85,6 +85,12 @@ find_package(CGAL CONFIG REQUIRED)
 add_compile_definitions(USE_IGL)
 message("Use igl as mesh kernel.")
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  add_compile_definitions(DISABLE_BOOLEAN_OPERATIONS)
+  message("Disable boolean operations in Debug configuration for CGAL and IGL.")
+  message("Boolean operations may be slow and cause high memory usage in Debug mode.")
+endif()
+
 #CAD_kernel
 #OpenCascade
 #disable if andoird and IOS
