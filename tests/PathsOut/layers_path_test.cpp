@@ -45,11 +45,14 @@ return table.concat(lines, "\n")
     std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
     std::cout << "Formatter output file content:\n" << content << "\n";
     BOOST_CHECK_NE(content.find("config,x,y"), std::string::npos);
+    std::filesystem::remove(tmp, ec);
 }
 
 BOOST_AUTO_TEST_CASE(test_save_with_db_rows)
 {
-    LayersPath lp([](std::string_view, std::string_view){});
+    LayersPath lp([](std::string_view type, std::string_view sql){
+      std::cout << "Callback: " << type << ", " << sql << "\n";
+    });
     PolygonsD poly;
     poly.emplace_back(); poly[0].push_back({3.0,4.0});
     lp.push_back("cfg_db", poly);
@@ -65,12 +68,13 @@ rows = {
 return true
 )lua";
 
-    auto tmpdb = std::filesystem::temp_directory_path() / "layers_out.db";
-    std::error_code ec; std::filesystem::remove(tmpdb, ec);
+  auto tmpdb = std::filesystem::temp_directory_path() / "layers_out.db";
+  std::error_code ec; std::filesystem::remove(tmpdb, ec);
 
   // Save: do not inject Windows path into Lua source (avoid escape issues)
   lp.Save(tmpdb, script);
-    BOOST_CHECK(std::filesystem::exists(tmpdb));
+  BOOST_CHECK(std::filesystem::exists(tmpdb));
+  std::filesystem::remove(tmpdb, ec);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

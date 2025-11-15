@@ -33,7 +33,9 @@ return "hex"
 
 BOOST_AUTO_TEST_CASE(test_save_creates_file)
 {
-    ImagesPath ip("cfgfile", "{}", [](double, std::string_view){});
+    ImagesPath ip("cfgfile", "{}", [](double rate, std::string_view path){
+        std::cout << "Callback: " << rate << "%, " << path << "\n";
+    });
     std::string img = "eA=="; // base64 of 'x'
     ip.AddImage("one.png", img);
 
