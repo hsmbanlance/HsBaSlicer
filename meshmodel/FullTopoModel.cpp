@@ -1,8 +1,17 @@
 ﻿#include "FullTopoModel.hpp"
 
 #include <set>
+#include <vector>
+#include <unordered_map>
+#include <unordered_set>
+#include <cmath>
+#include <climits>
+#include <boost/container_hash/hash.hpp>
+#include <lua.hpp>
 
 #include <igl/per_face_normals.h>
+
+#include "base/error.hpp"
 
 namespace HsBa::Slicer
 {
@@ -17,7 +26,7 @@ namespace HsBa::Slicer
 			vertex.vertex = Eigen::Vector3f{ v(i,0),v(i,1),v(i,2) };
 			vertices_.emplace_back(vertex);
 		}
-		const auto same_edge = [](const Edge& l, const int index0,const int index1)
+		const auto same_edge = [](const Edge& l, const int index0, const int index1)
 			{
 				return (l.vertices[0] == index0 && l.vertices[1] == index1) ||
 					(l.vertices[0] == index1 && l.vertices[1] == index0);
@@ -113,7 +122,6 @@ namespace HsBa::Slicer
 			//添加点与面的关系
 			for (int i = 0; i != f.rows(); ++i)
 			{
-
 				vertices_[v0].faces.push_back(i);
 				vertices_[v1].faces.push_back(i);
 				vertices_[v2].faces.push_back(i);
@@ -217,7 +225,7 @@ namespace HsBa::Slicer
 		return static_cast<int>(vertices_.size()) - static_cast<int>(edges_.size()) + static_cast<int>(faces_.size());
 	}
 
-	bool FullTopoModel::Intersetion(const Eigen::Vector3f& v1,const Eigen::Vector3f& v2,const float height,Eigen::Vector3f& intersection)
+	bool FullTopoModel::Intersetion(const Eigen::Vector3f& v1, const Eigen::Vector3f& v2, const float height, Eigen::Vector3f& intersection)
 	{
 		//不相交的情况
 		if (v1.z() > height && v2.z() > height)
@@ -246,15 +254,393 @@ namespace HsBa::Slicer
 
 	Polygons FullTopoModel::Slice(const float height) const
 	{
-		Polygons res;
-		//Todo:拓扑重建的切片算法
-		size_t slow_face = 0, fast_face = 0;
-		std::set<size_t> face_set;
-		while (face_set.size() != faces_.size())
-		{
+		// Collect intersection segments (as integerized 2D points)
+		using Key = std::pair<long long, long long>;
+		auto make_key = [&](const Eigen::Vector3f& p) -> Key {
+			long long xi = std::llround(p.x() * integerization);
+			long long yi = std::llround(p.y() * integerization);
+			return { xi, yi };
+			};
 
+		std::unordered_map<Key, std::vector<Key>, boost::hash<Key>> adj;
+		adj.reserve(faces_.size() * 2);
+
+		for (const auto& f : faces_)
+		{
+			const Eigen::Vector3f& v0 = vertices_[f.triangle[0]].vertex;
+			const Eigen::Vector3f& v1 = vertices_[f.triangle[1]].vertex;
+			const Eigen::Vector3f& v2 = vertices_[f.triangle[2]].vertex;
+
+			std::vector<Eigen::Vector3f> inters;
+			Eigen::Vector3f p;
+			if (Intersetion(v0, v1, height, p)) inters.push_back(p);
+			if (Intersetion(v1, v2, height, p)) inters.push_back(p);
+			if (Intersetion(v2, v0, height, p)) inters.push_back(p);
+
+			// keep unique points (by integerized key)
+			std::vector<Key> keys;
+			for (const auto& ip : inters)
+			{
+				Key k = make_key(ip);
+				if (keys.end() == std::find(keys.begin(), keys.end(), k))
+				{
+					keys.push_back(k);
+				}
+			}
+			if (keys.size() == 2)
+			{
+				adj[keys[0]].push_back(keys[1]);
+				adj[keys[1]].push_back(keys[0]);
+			}
 		}
-		return res;
+
+		// traverse adjacency to build closed loops only
+		Polygons result;
+		std::unordered_set<Key, boost::hash<Key>> visited;
+
+		for (const auto& kv : adj)
+		{
+			const Key& start = kv.first;
+			if (visited.find(start) != visited.end()) continue;
+
+			// follow path
+			std::vector<Key> path;
+			Key cur = start;
+			Key prev = { LLONG_MIN, LLONG_MIN };
+			while (true)
+			{
+				visited.insert(cur);
+				path.push_back(cur);
+				auto& neis = adj[cur];
+				Key next = prev;
+				for (const auto& n : neis)
+				{
+					if (n == prev) continue;
+					next = n; break;
+				}
+				if (next.first == LLONG_MIN) break; // dead end
+				if (next == start)
+				{
+					// closed loop
+					// form polygon
+					Polygon poly;
+					for (const auto& k : path)
+					{
+						poly.emplace_back(Point2{ k.first, k.second });
+					}
+					if (poly.size() >= 3) result.emplace_back(std::move(poly));
+					break;
+				}
+				prev = cur;
+				cur = next;
+				if (visited.find(cur) != visited.end()) break; // prevent infinite loop
+			}
+		}
+
+		return result;
 	}
 
+	UnSafePolygons FullTopoModel::UnSafeSlice(const float height) const
+	{
+		using Key = std::pair<long long, long long>;
+		auto make_key = [&](const Eigen::Vector3f& p) -> Key {
+			long long xi = std::llround(p.x() * integerization);
+			long long yi = std::llround(p.y() * integerization);
+			return { xi, yi };
+			};
+
+		std::unordered_map<Key, std::vector<Key>, boost::hash<Key>> adj;
+		adj.reserve(faces_.size() * 2);
+
+		for (const auto& f : faces_)
+		{
+			const Eigen::Vector3f& v0 = vertices_[f.triangle[0]].vertex;
+			const Eigen::Vector3f& v1 = vertices_[f.triangle[1]].vertex;
+			const Eigen::Vector3f& v2 = vertices_[f.triangle[2]].vertex;
+
+			std::vector<Eigen::Vector3f> inters;
+			Eigen::Vector3f p;
+			if (Intersetion(v0, v1, height, p)) inters.push_back(p);
+			if (Intersetion(v1, v2, height, p)) inters.push_back(p);
+			if (Intersetion(v2, v0, height, p)) inters.push_back(p);
+
+			std::vector<Key> keys;
+			for (const auto& ip : inters)
+			{
+				Key k = make_key(ip);
+				if (keys.end() == std::find(keys.begin(), keys.end(), k))
+				{
+					keys.push_back(k);
+				}
+			}
+			if (keys.size() == 2)
+			{
+				adj[keys[0]].push_back(keys[1]);
+				adj[keys[1]].push_back(keys[0]);
+			}
+		}
+
+		UnSafePolygons result;
+		std::unordered_set<Key, boost::hash<Key>> visited;
+
+		for (const auto& kv : adj)
+		{
+			const Key& start = kv.first;
+			if (visited.find(start) != visited.end()) continue;
+
+			std::vector<Key> path;
+			Key cur = start;
+			Key prev = { LLONG_MIN, LLONG_MIN };
+			bool closed = false;
+			while (true)
+			{
+				visited.insert(cur);
+				path.push_back(cur);
+				auto& neis = adj[cur];
+				Key next = prev;
+				for (const auto& n : neis)
+				{
+					if (n == prev) continue;
+					next = n; break;
+				}
+				if (next.first == LLONG_MIN) break; // dead end
+				if (next == start)
+				{
+					closed = true;
+					break;
+				}
+				prev = cur;
+				cur = next;
+				if (visited.find(cur) != visited.end()) break;
+			}
+			Polygon poly;
+			for (const auto& k : path)
+			{
+				poly.emplace_back(Point2{ k.first, k.second });
+			}
+			if (poly.size() >= 2)
+			{
+				UnSafePolygon up;
+				up.path = std::move(poly);
+				up.closed = closed;
+				result.emplace_back(std::move(up));
+			}
+		}
+
+		return result;
+	}
+
+	Polygons FullTopoModel::SliceLua(const std::string& script, const float height) const
+	{
+		lua_State* L = luaL_newstate();
+		if (!L) 
+			throw RuntimeError("Lua init failed");
+		luaL_openlibs(L);
+
+		// push V (1-based)
+		lua_newtable(L);
+		for (int i = 0; i < static_cast<int>(vertices_.size()); ++i)
+		{
+			lua_newtable(L);
+			lua_pushnumber(L, vertices_[i].vertex.x()); lua_setfield(L, -2, "x");
+			lua_pushnumber(L, vertices_[i].vertex.y()); lua_setfield(L, -2, "y");
+			lua_pushnumber(L, vertices_[i].vertex.z()); lua_setfield(L, -2, "z");
+			lua_rawseti(L, -2, i + 1);
+		}
+		lua_setglobal(L, "V");
+
+		// push E (edges)
+		lua_newtable(L);
+		for (int i = 0; i < static_cast<int>(edges_.size()); ++i)
+		{
+			lua_newtable(L);
+			lua_pushinteger(L, edges_[i].vertices[0] + 1); lua_rawseti(L, -2, 1);
+			lua_pushinteger(L, edges_[i].vertices[1] + 1); lua_rawseti(L, -2, 2);
+			lua_rawseti(L, -2, i + 1);
+		}
+		lua_setglobal(L, "E");
+
+		// push F (faces)
+		lua_newtable(L);
+		for (int i = 0; i < static_cast<int>(faces_.size()); ++i)
+		{
+			lua_newtable(L);
+			lua_pushinteger(L, faces_[i].triangle[0] + 1); lua_rawseti(L, -2, 1);
+			lua_pushinteger(L, faces_[i].triangle[1] + 1); lua_rawseti(L, -2, 2);
+			lua_pushinteger(L, faces_[i].triangle[2] + 1); lua_rawseti(L, -2, 3);
+			lua_rawseti(L, -2, i + 1);
+		}
+		lua_setglobal(L, "F");
+
+		lua_pushnumber(L, height);
+		lua_setglobal(L, "height");
+
+		int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "FullTopoModelSliceScript");
+		if (loadStatus != LUA_OK)
+		{
+			std::string err = lua_tostring(L, -1);
+			lua_close(L);
+			throw RuntimeError("Lua load error: " + err);
+		}
+
+		int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		if (callStatus != LUA_OK)
+		{
+			std::string err = lua_tostring(L, -1);
+			lua_close(L);
+			throw RuntimeError("Lua runtime error: " + err);
+		}
+
+		// get returned table (top of stack) or global 'polys'
+		Polygons result;
+		int top = lua_gettop(L);
+		if (top == 0 || !lua_istable(L, -1))
+		{
+			lua_getglobal(L, "polys");
+			if (!lua_istable(L, -1))
+			{
+				lua_close(L);
+				return result;
+			}
+		}
+
+		// Iterate polygons
+		int nPolys = (int)lua_rawlen(L, -1);
+		for (int i = 1; i <= nPolys; ++i)
+		{
+			lua_rawgeti(L, -1, i); // push polygon table
+			if (!lua_istable(L, -1)) { lua_pop(L, 1); continue; }
+			Polygon poly;
+			int nPts = (int)lua_rawlen(L, -1);
+			for (int j = 1; j <= nPts; ++j)
+			{
+				lua_rawgeti(L, -1, j); // push point
+				if (lua_istable(L, -1))
+				{
+					lua_getfield(L, -1, "x");
+					lua_getfield(L, -2, "y");
+					double x = lua_tonumber(L, -2);
+					double y = lua_tonumber(L, -1);
+					lua_pop(L, 2);
+					long long xi = std::llround(x * integerization);
+					long long yi = std::llround(y * integerization);
+					poly.emplace_back(Point2{ xi, yi });
+				}
+				lua_pop(L, 1); // pop point
+			}
+			lua_pop(L, 1); // pop polygon
+			if (poly.size() >= 3) result.emplace_back(std::move(poly));
+		}
+
+		lua_close(L);
+		return result;
+	}
+
+	UnSafePolygons FullTopoModel::UnSafeSliceLua(const std::string& script, const float height) const
+	{
+		// reuse SliceLua to get polygons, but also accept open polylines returned via 'polys' where points may be 2 or more
+		lua_State* L = luaL_newstate();
+		if (!L) 
+			throw RuntimeError("Lua init failed");
+		luaL_openlibs(L);
+
+		// push V, E, F and height (same as above)
+		lua_newtable(L);
+		for (int i = 0; i < static_cast<int>(vertices_.size()); ++i)
+		{
+			lua_newtable(L);
+			lua_pushnumber(L, vertices_[i].vertex.x()); lua_setfield(L, -2, "x");
+			lua_pushnumber(L, vertices_[i].vertex.y()); lua_setfield(L, -2, "y");
+			lua_pushnumber(L, vertices_[i].vertex.z()); lua_setfield(L, -2, "z");
+			lua_rawseti(L, -2, i + 1);
+		}
+		lua_setglobal(L, "V");
+
+		lua_newtable(L);
+		for (int i = 0; i < static_cast<int>(edges_.size()); ++i)
+		{
+			lua_newtable(L);
+			lua_pushinteger(L, edges_[i].vertices[0] + 1); lua_rawseti(L, -2, 1);
+			lua_pushinteger(L, edges_[i].vertices[1] + 1); lua_rawseti(L, -2, 2);
+			lua_rawseti(L, -2, i + 1);
+		}
+		lua_setglobal(L, "E");
+
+		lua_newtable(L);
+		for (int i = 0; i < static_cast<int>(faces_.size()); ++i)
+		{
+			lua_newtable(L);
+			lua_pushinteger(L, faces_[i].triangle[0] + 1); lua_rawseti(L, -2, 1);
+			lua_pushinteger(L, faces_[i].triangle[1] + 1); lua_rawseti(L, -2, 2);
+			lua_pushinteger(L, faces_[i].triangle[2] + 1); lua_rawseti(L, -2, 3);
+			lua_rawseti(L, -2, i + 1);
+		}
+		lua_setglobal(L, "F");
+
+		lua_pushnumber(L, height);
+		lua_setglobal(L, "height");
+
+		int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "FullTopoModelSliceScript");
+		if (loadStatus != LUA_OK)
+		{
+			std::string err = lua_tostring(L, -1);
+			lua_close(L);
+			throw RuntimeError("Lua load error: " + err);
+		}
+		int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		if (callStatus != LUA_OK)
+		{
+			std::string err = lua_tostring(L, -1);
+			lua_close(L);
+			throw RuntimeError("Lua runtime error: " + err);
+		}
+
+		UnSafePolygons result;
+		int top = lua_gettop(L);
+		if (top == 0 || !lua_istable(L, -1))
+		{
+			lua_getglobal(L, "polys");
+			if (!lua_istable(L, -1))
+			{
+				lua_close(L);
+				return result;
+			}
+		}
+
+		int nPolys = (int)lua_rawlen(L, -1);
+		for (int i = 1; i <= nPolys; ++i)
+		{
+			lua_rawgeti(L, -1, i); // polygon
+			if (!lua_istable(L, -1)) { lua_pop(L, 1); continue; }
+			Polygon poly;
+			int nPts = (int)lua_rawlen(L, -1);
+			for (int j = 1; j <= nPts; ++j)
+			{
+				lua_rawgeti(L, -1, j);
+				if (lua_istable(L, -1))
+				{
+					lua_getfield(L, -1, "x");
+					lua_getfield(L, -2, "y");
+					double x = lua_tonumber(L, -2);
+					double y = lua_tonumber(L, -1);
+					lua_pop(L, 2);
+					long long xi = std::llround(x * integerization);
+					long long yi = std::llround(y * integerization);
+					poly.emplace_back(Point2{ xi, yi });
+				}
+				lua_pop(L, 1);
+			}
+			lua_pop(L, 1);
+			if (poly.size() >= 2)
+			{
+				UnSafePolygon up;
+				up.path = std::move(poly);
+				up.closed = (up.path.size() >= 3);
+				result.emplace_back(std::move(up));
+			}
+		}
+
+		lua_close(L);
+		return result;
+	}
 }// namespace HsBa::Slicer

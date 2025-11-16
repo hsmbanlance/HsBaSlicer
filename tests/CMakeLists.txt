@@ -419,3 +419,27 @@ add_custom_command(TARGET cgal_model_test POST_BUILD
 add_custom_command(TARGET igl_model_test POST_BUILD
   COMMAND ${CMAKE_CTEST_COMMAND} -V -R igl_model_test
 )
+
+add_executable(full_topo_model_test Models/full_topo_model_test.cpp)
+
+target_compile_definitions(full_topo_model_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+target_link_libraries(full_topo_model_test
+	PRIVATE
+	HsBaSlicerMesh
+	Boost::unit_test_framework
+)
+
+enable_testing()
+add_test(
+  NAME full_topo_model_test
+  COMMAND $<TARGET_FILE:full_topo_model_test>
+  -t full_topo_model_test
+  )
+
+add_custom_command(TARGET full_topo_model_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R full_topo_model_test
+)
