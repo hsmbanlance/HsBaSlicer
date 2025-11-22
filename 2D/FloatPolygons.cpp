@@ -99,7 +99,7 @@ namespace HsBa::Slicer
 
 }// namespace HsBa::Slicer
 
-std::size_t std::hash<HsBa::Slicer::PolygonD>::operator()(const HsBa::Slicer::PolygonD& p)
+std::size_t std::hash<HsBa::Slicer::PolygonD>::operator()(const HsBa::Slicer::PolygonD& p) const
 {
 	size_t seed = 0;
 	for (const auto& point : p)
@@ -110,7 +110,7 @@ std::size_t std::hash<HsBa::Slicer::PolygonD>::operator()(const HsBa::Slicer::Po
 	return seed;
 }
 
-std::size_t std::hash<HsBa::Slicer::PolygonsD>::operator()(const HsBa::Slicer::PolygonsD& p)
+std::size_t std::hash<HsBa::Slicer::PolygonsD>::operator()(const HsBa::Slicer::PolygonsD& p) const
 {
 	size_t seed = 0;
 	for (const auto& poly : p)

@@ -60,11 +60,11 @@ namespace HsBa::Slicer
 template<>
 struct std::hash<HsBa::Slicer::Polygon>
 {
-	std::size_t operator()(const HsBa::Slicer::Polygon& p);
+	std::size_t operator() (const HsBa::Slicer::Polygon& p) const;
 };
 
 template<>
 struct std::hash<HsBa::Slicer::Polygons>
 {
-	std::size_t operator()(const HsBa::Slicer::Polygons& p);
+	std::size_t operator()(const HsBa::Slicer::Polygons& p) const;
 };
