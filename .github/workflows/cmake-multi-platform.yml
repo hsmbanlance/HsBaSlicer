@@ -120,7 +120,6 @@ jobs:
       if: runner.os != 'Windows'
       shell: bash
       run: |
-        cd "$GITHUB_WORKSPACE/HsBaSlicer/HsBaSlicer"
         ctest --build-config ${{ matrix.build_type }} --output-on-failure --parallel 2
       continue-on-error: true
 
