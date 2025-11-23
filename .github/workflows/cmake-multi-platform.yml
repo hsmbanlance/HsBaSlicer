@@ -89,7 +89,7 @@ jobs:
         -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
         -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 
-      - name: Build (Linux)
+    - name: Build (Linux)
       if: runner.os != 'Windows'
       shell: bash
       run: cmake --build build --config ${{ matrix.build_type }}
