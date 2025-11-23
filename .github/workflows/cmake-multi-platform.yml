@@ -107,18 +107,15 @@ jobs:
       if: runner.os == 'Windows'
       shell: cmd
       run: |
-        :: 1. 进入 dev 环境
         call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
         set /p VSPATH=<vspath.txt
         call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
 
-        :: 2. 验证 ninja 已装（GitHub 托管镜像自带，若缺失去 choco 装）
         where ninja >nul 2>nul || (echo Ninja not found! && exit 1)
 
-        :: 3. 用引号包裹含空格的路径
         cmake -B build -S . -G Ninja ^
           -DCMAKE_BUILD_TYPE=Release ^
-        - DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake"
+          -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake"
 
     - name: Build (Windows)
       if: runner.os == 'Windows'
