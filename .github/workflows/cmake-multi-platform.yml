@@ -120,7 +120,8 @@ jobs:
       if: runner.os != 'Windows'
       shell: bash
       run: |
-        ctest --build-config ${{ matrix.build_type }} --output-on-failure --parallel 2
+        cd build
+        ctest --build-config Release --output-on-failure --parallel 2
       continue-on-error: true
 
     - name: Configure CMake (Windows)
@@ -143,7 +144,7 @@ jobs:
         call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
         set /p VSPATH=<vspath.txt
         call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
-        ctest -C Release --output-on-failure --parallel 2
+        cmake --build build --config ${{ matrix.build_type }}
 
     - name: Test (Windows)
       if: runner.os == 'Windows'
@@ -153,6 +154,7 @@ jobs:
         call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
         set /p VSPATH=<vspath.txt
         call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
+        cd build
         ctest -C Release --output-on-failure --parallel 2
       continue-on-error: true
 
