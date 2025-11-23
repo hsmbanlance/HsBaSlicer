@@ -1,5 +1,5 @@
 #define BOOST_TEST_MODULE polygon_fill_test
-#include <boost/test/unit_test.hpp>
+#include <boost/test/included/unit_test.hpp>
 
 #include <filesystem>
 
@@ -17,7 +17,7 @@ BOOST_AUTO_TEST_CASE(line_and_zigzag_fill_basic)
     polyd.emplace_back(Point2{10000,10000});
     polyd.emplace_back(Point2{0,10000});
 
-    auto poly = Integerization(polyd);
+    auto poly = Polygons{ Integerization(polyd) };
 
     // LineFill: expect at least one piece has positive area
     auto lines = LineFill(poly, 1000.0, 0.0, 200.0);
@@ -37,7 +37,7 @@ BOOST_AUTO_TEST_CASE(line_and_zigzag_fill_basic)
         for (const auto &pt : pz)
         {
             Clipper2Lib::Point64 pv{ pt.x, pt.y };
-            auto res = Clipper2Lib::PointInPolygon(pv, poly);
+            auto res = PointInPolygons(pv, poly);
             BOOST_CHECK(res != Clipper2Lib::PointInPolygonResult::IsOutside);
         }
     }
@@ -50,7 +50,7 @@ BOOST_AUTO_TEST_CASE(line_and_zigzag_fill_basic)
         for (const auto &pt : pz)
         {
             Clipper2Lib::Point64 pv{ pt.x, pt.y };
-            auto res = Clipper2Lib::PointInPolygon(pv, poly);
+            auto res = PointInPolygons(pv, poly);
             BOOST_CHECK(res != Clipper2Lib::PointInPolygonResult::IsOutside);
         }
     }
@@ -65,7 +65,7 @@ BOOST_AUTO_TEST_CASE(composite_and_lua_custom)
     polyd.emplace_back(Point2{10000,10000});
     polyd.emplace_back(Point2{0,10000});
 
-    auto poly = Integerization(polyd);
+    auto poly = Polygons{ Integerization(polyd) };
 
     // CompositeOffsetFill: 2 outward, 2 inward using Line mode
     auto comp = CompositeOffsetFill(poly, 1000.0, 500.0, 2, 2, FillMode::Line, 45.0, 150.0);
