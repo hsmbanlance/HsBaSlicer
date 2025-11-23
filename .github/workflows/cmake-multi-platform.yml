@@ -167,31 +167,37 @@ jobs:
     - name: Install Java (for sdkmanager)
       run: |
         sudo apt-get update
-        sudo apt-get install -y openjdk-11-jdk wget unzip git
+        sudo apt-get install -y openjdk-11-jdk wget unzip
+        sudo apt-get install -y ninja-build
 
-    - name: Install Android SDK command-line tools
+    - name: Install Android command line tools and SDK packages
+      shell: bash
       run: |
         mkdir -p $HOME/android-sdk/cmdline-tools
         cd $HOME/android-sdk
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline.zip
-        unzip -q cmdline.zip -d cmdline-tools
-        mv cmdline-tools/cmdline-tools/* cmdline-tools/latest
-        rm -f cmdline.zip
-        export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin
+        # Command-line tools (provides sdkmanager)
+        wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline.zip
+        unzip cmdline.zip -d $HOME/android-sdk/cmdline-tools
+        export PATH=$PATH:$HOME/android-sdk/cmdline-tools/cmdline-tools/bin
         yes | sdkmanager --licenses || true
-        sdkmanager --sdk_root=$HOME/android-sdk "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+        sdkmanager --sdk_root=$HOME/android-sdk "platform-tools" "platforms;android-31" "build-tools;31.0.0"
+        # Ensure consistent SDK env vars to avoid Gradle confusion
+        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
 
-    - name: Install Android NDK r27d
-      if: steps.cache-ndk.outputs.cache-hit != 'true'
+    - name: Install Android NDK (r27d)
+      shell: bash
       run: |
         mkdir -p $HOME/android-sdk/ndk
         cd $HOME/android-sdk
-        wget -q https://dl.google.com/android/repository/android-ndk-r27d-linux.zip -O ndk.zip
-        unzip -q ndk.zip -d ndk
-        mv ndk/android-ndk-r27d ndk/r27d
-        rm -f ndk.zip
+        wget https://dl.google.com/android/repository/android-ndk-r27d-linux.zip -O ndk.zip
+        unzip ndk.zip -d $HOME/android-sdk/ndk
+        echo "ANDROID_NDK=$HOME/android-sdk/ndk/$(ls $HOME/android-sdk/ndk | tail -n1)" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
 
     - name: Bootstrap vcpkg
+      shell: bash
       run: |
         if [ ! -d "vcpkg" ]; then
           git clone https://github.com/microsoft/vcpkg.git vcpkg
@@ -199,16 +205,21 @@ jobs:
           ./vcpkg/vcpkg integrate install
         fi
 
-    - name: Export environment
+    - name: Set VCPKG_ROOT and Android env
+      shell: bash
       run: |
-        echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
-        echo "ANDROID_NDK=$HOME/android-sdk/ndk/r27d" >> $GITHUB_ENV
-        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "VCPKG_BINARY_SOURCES=clear;files,$HOME/vcpkg-cache,readwrite" >> $GITHUB_ENV
+        echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
+        echo "VCPKG_FEATURE_FLAGS=versions" >> $GITHUB_ENV
+        echo "ANDROID_NDK=$ANDROID_NDK" >> $GITHUB_ENV
 
-    - name: Configure CMake for Android
+    - name: Configure CMake for Android (vcpkg chainload)
+      shell: bash
       run: |
-        cmake -B build-android -S . -G Ninja -DCMAKE_BUILD_TYPE=Release \
+        echo "Configuring CMake for Android (arm64)"
+        cmake -B build-android \
+          -S . \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
           -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
           -DVCPKG_TARGET_TRIPLET=arm64-android \
@@ -216,35 +227,55 @@ jobs:
           -DANDROID_ABI=arm64-v8a \
           -DANDROID_PLATFORM=android-28
 
-    - name: Build native
-      run: cmake --build build-android --config Release
+    - name: Build native libraries
+      shell: bash
+      run: |
+        cmake --build build-android --config Release
 
-    - name: Copy libs
+    - name: Copy native libraries into Android app jniLibs
+      shell: bash
       run: |
         mkdir -p android/app/src/main/jniLibs/arm64-v8a
-        cp build-android/android_libs/arm64-v8a/*.so android/app/src/main/jniLibs/arm64-v8a/ 2>/dev/null || true
+        cp build-android/android_libs/arm64-v8a/*.so android/app/src/main/jniLibs/arm64-v8a/ || true
 
-    - name: Setup Gradle & Wrapper
+    - name: Install Gradle 7.5.1, generate Gradle wrapper and build APK
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        sudo apt-get install -y wget unzip
+        sudo apt-get update
+        sudo apt-get install -y wget unzip git
+        # Ensure a compatible Gradle is available (AGP 7.4.2 needs Gradle 7.5+)
         GRADLE_VERSION=7.5.1
-        GRADLE_DIR=/opt/gradle-$GRADLE_VERSION
+        GRADLE_DIR=/opt/gradle/gradle-${GRADLE_VERSION}
         if [ ! -d "$GRADLE_DIR" ]; then
           sudo mkdir -p /opt/gradle
-          wget -q https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip -O /tmp/gradle.zip
-          sudo unzip -q /tmp/gradle.zip -d /opt/gradle
+          wget https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip -O /tmp/gradle-${GRADLE_VERSION}.zip
+          sudo unzip -q /tmp/gradle-${GRADLE_VERSION}.zip -d /opt/gradle
         fi
         export PATH=$GRADLE_DIR/bin:$PATH
-        cd android
-        gradle wrapper --gradle-version $GRADLE_VERSION
-        chmod +x gradlew
 
-    - name: Build APK
-      run: |
+        # Generate Gradle wrapper using the downloaded Gradle so we can commit it for future runs
         cd android
+        gradle wrapper --gradle-version ${GRADLE_VERSION} || true
+        chmod +x gradlew || true
+
+        # If wrapper files were created or changed, commit them back to the repo
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add gradlew gradlew.bat gradle/wrapper/gradle-wrapper.properties gradle/wrapper/gradle-wrapper.jar || true
+        if ! git diff --staged --quiet; then
+          git commit -m "chore(android): add Gradle wrapper (generated in CI)" || true
+          # Push to the current branch
+          git push origin HEAD:${{ github.ref_name }} || true
+        else
+          echo "Gradle wrapper unchanged"
+        fi
+
+        # Build debug APK with the wrapper (deterministic Gradle version)
         ./gradlew assembleDebug --no-daemon
 
-    - name: Upload APK
+    - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
         name: app-debug-apk
