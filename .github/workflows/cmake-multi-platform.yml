@@ -32,8 +32,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        path: .
 
     - name: Maximize build disk space
       if: runner.os == 'Linux'
@@ -81,10 +79,25 @@ jobs:
           }
         }
 
+    - name: Locate source
+      if: runner.os != 'Windows'
+      run: |
+        find "$GITHUB_WORKSPACE" -name CMakeLists.txt -type f
+
+
+    - name: Locate CMakeLists.txt (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $src = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Name CMakeLists.txt -Recurse -File | Select-Object -First 1
+        $dir = Split-Path -Parent "$env:GITHUB_WORKSPACE\$src"
+        echo "SRC_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
     - name: Configure CMake (Linux)
       if: runner.os != 'Windows'
       shell: bash
       run: |
+        cd "$GITHUB_WORKSPACE/HsBaSlicer/HsBaSlicer"
         cmake -B build -S . -G Ninja \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
           -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
@@ -94,13 +107,16 @@ jobs:
     - name: Build (Linux)
       if: runner.os != 'Windows'
       shell: bash
-      run: cmake --build build --config ${{ matrix.build_type }}
+      run: |
+        cd "$GITHUB_WORKSPACE/HsBaSlicer/HsBaSlicer"
+        cmake --build build --config ${{ matrix.build_type }}
 
     - name: Test (Linux)
       if: runner.os != 'Windows'
       shell: bash
-      working-directory: build
-      run: ctest --build-config ${{ matrix.build_type }} --output-on-failure --parallel 2
+      run: |
+        cd "$GITHUB_WORKSPACE/HsBaSlicer/HsBaSlicer"
+        ctest --build-config ${{ matrix.build_type }} --output-on-failure --parallel 2
       continue-on-error: true
 
     - name: Configure CMake (Windows)
@@ -112,7 +128,7 @@ jobs:
         call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
 
         where ninja >nul 2>nul || (echo Ninja not found! && exit 1)
-
+        cd /d "%GITHUB_WORKSPACE%\HsBaSlicer\HsBaSlicer"
         cmake -B build -S . -G Ninja ^
           -DCMAKE_BUILD_TYPE=Release ^
           -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake"
@@ -124,7 +140,8 @@ jobs:
         call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
         set /p VSPATH=<vspath.txt
         call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
-        cmake --build build --config Release
+        cd /d "%GITHUB_WORKSPACE%\HsBaSlicer\HsBaSlicer"
+        ctest -C Release --output-on-failure --parallel 2
 
     - name: Test (Windows)
       if: runner.os == 'Windows'
