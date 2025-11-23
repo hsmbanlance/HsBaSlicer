@@ -35,6 +35,7 @@ jobs:
 
     - name: Maximize build disk space
       uses: easimon/maximize-build-space@v10
+      if: runner.os == "Linux"
       with:
         root-reserve-mb: 512
         swap-size-mb: 1024
