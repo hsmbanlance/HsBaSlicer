@@ -79,28 +79,57 @@ jobs:
           }
         }
 
-    - name: Set VCPKG_ROOT & binary cache
-      shell: pwsh
+    - name: Configure CMake (Linux)
+      if: runner.os != 'Windows'
+      shell: bash
       run: |
-        echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $env:GITHUB_ENV
-        echo "VCPKG_BINARY_SOURCES=clear;files,$HOME/vcpkg-cache,readwrite" >> $env:GITHUB_ENV
+        cmake -B build -S . -G Ninja \
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
+        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
+        -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 
-    - name: Configure CMake
-      shell: pwsh                      # pwsh 在 Ubuntu 也可用
+      - name: Build (Linux)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: cmake --build build --config ${{ matrix.build_type }}
+
+    - name: Test (Linux)
+      if: runner.os != 'Windows'
+      shell: bash
+      working-directory: build
+      run: ctest --build-config ${{ matrix.build_type }} --output-on-failure --parallel 2
+      continue-on-error: true
+
+    - name: Configure CMake (Windows)
+      if: runner.os == 'Windows'
+      shell: cmd
       run: |
-        if ('${{ runner.os }}' -eq 'Windows') {
-          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-          cmd /c "`"$vsPath\VC\Auxiliary\Build\vcvarsall.bat`" x64 && cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake"
-        } else {
-          cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
-        }
+        call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
+        set /p VSPATH=<vspath.txt
+        call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
+        cmake -B build -S . -G Ninja ^
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ^
+          -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake
 
-    - name: Build
-      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+    - name: Build (Windows)
+      if: runner.os == 'Windows'
+      shell: cmd
+      run: |
+        call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
+        set /p VSPATH=<vspath.txt
+        call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
+        cmake --build build --config ${{ matrix.build_type }}
 
-    - name: Test
-      working-directory: ${{ steps.strings.outputs.build-output-dir }}
-      run: ctest --build-config ${{ matrix.build_type }} --output-on-failure
+    - name: Test (Windows)
+      if: runner.os == 'Windows'
+      shell: cmd
+      working-directory: build
+      run: |
+        call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
+        set /p VSPATH=<vspath.txt
+        call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
+        ctest --build-config ${{ matrix.build_type }} --output-on-failure --parallel 2
       continue-on-error: true
 
 
