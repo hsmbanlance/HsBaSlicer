@@ -67,17 +67,28 @@ jobs:
         $buildOutputDir = "${{ github.workspace }}/build"
         echo "build-output-dir=$buildOutputDir" >> $env:GITHUB_OUTPUT
 
-    - name: Bootstrap vcpkg
+    - name: Clone vcpkg, bootstrap and set VCPKG_ROOT (Windows)
+      if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        if (-not (Test-Path -Path "vcpkg")) {
-          git clone https://github.com/microsoft/vcpkg.git vcpkg
-          if ('${{ matrix.os }}' -eq 'windows-latest') {
-            cd vcpkg; .\bootstrap-vcpkg.bat -disableMetrics; .\vcpkg integrate install
-          } else {
-            cd vcpkg; ./bootstrap-vcpkg.sh -disableMetrics; ./vcpkg integrate install
-          }
+        if (!(Test-Path vcpkg)) {
+          git clone https://github.com/microsoft/vcpkg.git
+          & vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          & vcpkg\vcpkg integrate install
         }
+        Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg"
+
+    - name: Clone vcpkg, bootstrap and set VCPKG_ROOT (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        if [ ! -d vcpkg ]; then
+          git clone https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          ./vcpkg/vcpkg integrate install
+        fi
+        echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
+        sudo ln -sf /usr/bin/ninja-build /usr/local/bin/ninja
 
 
     - name: Re-checkout source after accidental deletion
