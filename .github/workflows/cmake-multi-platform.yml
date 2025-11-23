@@ -78,6 +78,11 @@ jobs:
         }
         Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg"
 
+
+    - name: Re-checkout source after accidental deletion
+      if : runner.os != 'Windows'
+      uses: actions/checkout@v4
+
     - name: Clone vcpkg, bootstrap and set VCPKG_ROOT (Linux)
       if: runner.os == 'Linux'
       shell: bash
@@ -88,12 +93,7 @@ jobs:
           ./vcpkg/vcpkg integrate install
         fi
         echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
-        sudo ln -sf /usr/bin/ninja-build /usr/local/bin/ninja
-
-
-    - name: Re-checkout source after accidental deletion
-      if : runner.os != 'Windows'
-      uses: actions/checkout@v4
+        # sudo ln -sf /usr/bin/ninja-build /usr/local/bin/ninja
 
     - name: Locate source
       if: runner.os != 'Windows'
