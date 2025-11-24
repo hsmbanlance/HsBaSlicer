@@ -77,6 +77,9 @@ find_package(Eigen3 CONFIG REQUIRED)
 #OpenSSL
 find_package(OpenSSL REQUIRED)
 
+#OpenCV
+find_package(OpenCV REQUIRED)
+
 #Option for kernel
 
 #Mesh_kernel

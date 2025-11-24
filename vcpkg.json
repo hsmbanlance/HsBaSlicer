@@ -28,6 +28,7 @@
     "boost-pfr",
     "cgal",
     "clipper2",
+    "opencv",
     "eigen3",
     {
       "name": "libigl",

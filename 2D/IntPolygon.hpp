@@ -16,6 +16,8 @@ namespace HsBa::Slicer
 	Polygons MakeSimple(const Polygon& p, double epsilon = 1e-3);
 	Polygons MakeSimple(const Polygons& ps, double epsilon = 1e-3);
 
+	std::vector<Polygons> MakeSimpleAndSplit(const Polygon& p, double epsilon = 1e-3);
+
 	Polygons Union(const Polygon& left, const Polygon& right,
 		Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd
 	);
@@ -51,6 +53,8 @@ namespace HsBa::Slicer
 		Clipper2Lib::EndType end_type = Clipper2Lib::EndType::Polygon
 	);
 
+	Clipper2Lib::PointInPolygonResult PointInPolygons(const Clipper2Lib::Point64& point, const Polygons& polys, bool isEvenOdd = true);
+
 	double Area(const Polygon& p);
 	double Area(const Polygons& ps);
 
@@ -60,11 +64,11 @@ namespace HsBa::Slicer
 template<>
 struct std::hash<HsBa::Slicer::Polygon>
 {
-	std::size_t operator()(const HsBa::Slicer::Polygon& p);
+	std::size_t operator() (const HsBa::Slicer::Polygon& p) const;
 };
 
 template<>
 struct std::hash<HsBa::Slicer::Polygons>
 {
-	std::size_t operator()(const HsBa::Slicer::Polygons& p);
+	std::size_t operator()(const HsBa::Slicer::Polygons& p) const;
 };

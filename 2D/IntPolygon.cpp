@@ -2,9 +2,11 @@
 
 #include <boost/container_hash/hash.hpp>
 
+#include <clipper2/clipper.engine.h>
+
 namespace HsBa::Slicer
 {
-	Polygons MakeSimple(const Polygon& p,double epsilon)
+	Polygons MakeSimple(const Polygon& p, double epsilon)
 	{
 		return Clipper2Lib::SimplifyPaths(Polygons{ p }, epsilon);
 	}
@@ -65,6 +67,47 @@ namespace HsBa::Slicer
 		return res;
 	}
 
+	Clipper2Lib::PointInPolygonResult PointInPolygons(const Clipper2Lib::Point64& point, const Polygons& polys, bool isEvenOdd)
+	{
+		const auto even_odd_inside = [](const Clipper2Lib::Point64& pt, const Polygons& ps) -> Clipper2Lib::PointInPolygonResult {
+			for (const auto& pl : ps)
+			{
+				auto r = Clipper2Lib::PointInPolygon(pt, pl);
+				switch (r)
+				{
+				case Clipper2Lib::PointInPolygonResult::IsOn:
+					return Clipper2Lib::PointInPolygonResult::IsOn;
+				case Clipper2Lib::PointInPolygonResult::IsInside:
+					if (Area(pl) < 0)
+					{
+						return Clipper2Lib::PointInPolygonResult::IsOutside;
+					}
+					break;
+				case Clipper2Lib::PointInPolygonResult::IsOutside:
+					if (Area(pl) > 0)
+					{
+						return Clipper2Lib::PointInPolygonResult::IsOutside;
+					}
+					break;
+				}
+			}
+			return Clipper2Lib::PointInPolygonResult::IsInside;
+			};
+		if (!isEvenOdd)
+		{
+			// polygon isn't even-odd, make it is even-odd
+			Polygons odd_polys;
+			Clipper2Lib::Clipper64 clipper;
+			clipper.AddSubject(polys);
+			clipper.Execute(Clipper2Lib::ClipType::Union, Clipper2Lib::FillRule::EvenOdd, odd_polys);
+			return even_odd_inside(point, odd_polys);
+		}
+		else
+		{
+			return even_odd_inside(point, polys);
+		}
+	}
+
 	double Area(const Polygon& p)
 	{
 		return Clipper2Lib::Area(p);
@@ -73,9 +116,58 @@ namespace HsBa::Slicer
 	{
 		return Clipper2Lib::Area(ps);
 	}
+
+	namespace
+	{
+
+		void ExtractPolygonsFromPolyTree(const Clipper2Lib::PolyTree64& node,
+			std::vector<Polygons>& out)
+		{
+			if (node.Polygon().empty())
+			{
+				for (const auto& child : node)
+					ExtractPolygonsFromPolyTree(*child, out);
+				return;
+			}
+
+			Polygons current;
+			current.emplace_back(node.Polygon());
+
+			for (const auto& hole : node)
+				current.emplace_back(hole->Polygon());
+
+			out.emplace_back(std::move(current));
+
+			for (const auto& hole : node)
+				for (const auto& island : *hole)
+					ExtractPolygonsFromPolyTree(*island, out);
+		}
+
+		std::vector<Polygons> PolyTreeSplit(const Clipper2Lib::PolyTree64& tree)
+		{
+			std::vector<Polygons> result;
+			ExtractPolygonsFromPolyTree(tree, result);
+			return result;
+		}
+	}
+
+	std::vector<Polygons> MakeSimpleAndSplit(const Polygon& p, double epsilon)
+	{
+		Clipper2Lib::PolyTree64 polyTree;
+		Clipper2Lib::Clipper64 clipper;
+		clipper.AddSubject(Polygons{ p });
+		clipper.Execute(Clipper2Lib::ClipType::Union, Clipper2Lib::FillRule::EvenOdd, polyTree);
+		std::vector<Polygons> result;
+		auto res = PolyTreeSplit(polyTree);
+		for (auto& ps : res)
+		{
+			ps = MakeSimple(ps, epsilon);
+		}
+		return res;
+	}
 }// namespace HsBa::Slicer
 
-std::size_t std::hash<HsBa::Slicer::Polygon>::operator()(const HsBa::Slicer::Polygon& p)
+std::size_t std::hash<HsBa::Slicer::Polygon>::operator()(const HsBa::Slicer::Polygon& p) const
 {
 	size_t seed = 0;
 	for (const auto& point : p)
@@ -86,7 +178,7 @@ std::size_t std::hash<HsBa::Slicer::Polygon>::operator()(const HsBa::Slicer::Pol
 	return seed;
 }
 
-std::size_t std::hash<HsBa::Slicer::Polygons>::operator()(const HsBa::Slicer::Polygons& p)
+std::size_t std::hash<HsBa::Slicer::Polygons>::operator()(const HsBa::Slicer::Polygons& p) const
 {
 	size_t seed = 0;
 	for (const auto& poly : p)

@@ -9,7 +9,6 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-
     strategy:
       fail-fast: false
       matrix:
@@ -34,23 +33,32 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Maximize build disk space
+      if: runner.os == 'Linux'
+      uses: easimon/maximize-build-space@v10
+      with:
+        root-reserve-mb: 512
+        swap-size-mb: 1024
+        overprovision-lvm: true
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+        remove-codeql: 'true'
+        remove-docker-images: 'true'
+
+    - name: Cache vcpkg binary cache
+      uses: actions/cache@v4
+      with:
+        path: ~/vcpkg-cache
+        key: vcpkg-bin-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+
     - name: Install dependencies on Linux
       if: matrix.os == 'ubuntu-latest'
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential libx11-dev mesa-common-dev libglu1-mesa-dev libxi-dev libxmu-dev libxmu-headers
-        sudo apt-get install -y libncurses-dev libtirpc-dev
-        sudo apt install -y libfontconfig1-dev
-        sudo apt-get install -y bison flex
-        sudo apt-get install -y ninja-build
-
-    - name: Install PowerShell on Linux
-      if: matrix.os == 'ubuntu-latest'
-      shell: bash
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y powershell
+        sudo apt-get install -y git curl zip unzip tar at libxt-dev gperf libxaw7-dev cifs-utils build-essential g++ gfortran libx11-dev libxkbcommon-x11-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev mesa-common-dev libxinerama-dev libxxf86vm-dev libxcursor-dev yasm libnuma1 libnuma-dev libtool-bin libltdl-dev flex bison libbison-dev autoconf libudev-dev libncurses5-dev libtool libxrandr-dev xutils-dev dh-autoreconf autoconf-archive libgles2-mesa-dev ruby-full pkg-config meson nasm cmake ninja-build libxext-dev libxfixes-dev libxrender-dev libxcb1-dev libx11-xcb-dev libxcb-dri3-dev libxcb-present-dev libxcb-glx0-dev libxcb-util0-dev libxkbcommon-dev libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev libxcb-icccm4-dev libxcb-sync-dev libxcb-xfixes0-dev libxcb-shape0-dev libxcb-randr0-dev libxcb-render-util0-dev libxcb-xinerama0-dev libxcb-xkb-dev libxcb-xinput-dev libxcb-cursor-dev libkrb5-dev libxcb-res0-dev libxcb-keysyms1-dev libxcb-xkb-dev libxcb-record0-dev python3-setuptools python3-mako python3-pip python3-venv python3-jinja2 nodejs libwayland-dev python-is-python3 guile-2.2-dev libxdamage-dev libdbus-1-dev libxtst-dev haskell-stack golang-go wayland-protocols libbluetooth-dev
+        sudo apt-get install -y libncurses-dev libtirpc-dev libfontconfig1-dev bison flex libxrender-dev libxtst-dev libxrandr-dev ninja-build
 
     - name: Set reusable strings
       id: strings
@@ -59,239 +67,97 @@ jobs:
         $buildOutputDir = "${{ github.workspace }}/build"
         echo "build-output-dir=$buildOutputDir" >> $env:GITHUB_OUTPUT
 
-    - name: Bootstrap vcpkg on Windows
-      if: matrix.os == 'windows-latest'
+    - name: Clone vcpkg, bootstrap and set VCPKG_ROOT (Windows)
+      if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        if (-not (Test-Path -Path "vcpkg")) {
-            git clone https://github.com/microsoft/vcpkg.git vcpkg
-            cd vcpkg
-            .\bootstrap-vcpkg.bat -disableMetrics
-            .\vcpkg integrate install
+        if (!(Test-Path vcpkg)) {
+          git clone https://github.com/microsoft/vcpkg.git
+          & vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          & vcpkg\vcpkg integrate install
         }
+        Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg"
 
-    - name: Bootstrap vcpkg on Linux
-      if: matrix.os == 'ubuntu-latest'
-      shell: pwsh
-      run: |
-        if (-not (Test-Path -Path "vcpkg")) {
-          git clone https://github.com/microsoft/vcpkg.git vcpkg
-          cd vcpkg
-          ./bootstrap-vcpkg.sh -disableMetrics
-          ./vcpkg integrate install
-        }
 
-    - name: Set VCPKG_ROOT environment variable
-      shell: pwsh
-      run: |
-        echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $env:GITHUB_ENV
-        echo "VCPKG_FEATURE_FLAGS=versions" >> $env:GITHUB_ENV
+    - name: Re-checkout source after accidental deletion
+      if : runner.os != 'Windows'
+      uses: actions/checkout@v4
 
-    - name: Add cl To Path
-      if: matrix.os == 'windows-latest'
-      shell: pwsh
-      run: |
-        $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-        if (-not (Test-Path -Path $vswherePath)) {
-        echo "vswhere.exe not found. Visual Studio may not be installed correctly."
-          exit 1
-        }
-        $vsInstallPath = & $vswherePath -latest -property installationPath
-        $vcvarsallPath = Join-Path -Path $vsInstallPath -ChildPath "\VC\Auxiliary\Build\vcvarsall.bat"
-        if (-not (Test-Path -Path $vcvarsallPath)) {
-          echo "vcvarsall.bat not found. Visual Studio may not be installed correctly."
-          exit 1
-        }
-        # Run vcvarsall.bat and capture the modified environment variables
-        $envVars = cmd /c "`"$vcvarsallPath`" x64 & set"
-        # Split the output into individual environment variable assignments
-        $envVars -split "`n" | ForEach-Object {
-          if ($_ -match "^(.*?)=(.*)$") {
-            [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
-          }
-        }
-        echo "MSVC Compiler version:"
-        cl /?
-        if ($LASTEXITCODE -ne 0) { exit 1 }
-
-    - name: Test Tools Windows
-      if: matrix.os == 'windows-latest'
-      run: |
-        $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-        if (-not (Test-Path -Path $vswherePath)) {
-        echo "vswhere.exe not found. Visual Studio may not be installed correctly."
-          exit 1
-        }
-        $vsInstallPath = & $vswherePath -latest -property installationPath
-        $vcvarsallPath = Join-Path -Path $vsInstallPath -ChildPath "\VC\Auxiliary\Build\vcvarsall.bat"
-        if (-not (Test-Path -Path $vcvarsallPath)) {
-          echo "vcvarsall.bat not found. Visual Studio may not be installed correctly."
-          exit 1
-        }
-        # Run vcvarsall.bat and capture the modified environment variables
-        $envVars = cmd /c "`"$vcvarsallPath`" x64 & set"
-        # Split the output into individual environment variable assignments
-        $envVars -split "`n" | ForEach-Object {
-          if ($_ -match "^(.*?)=(.*)$") {
-            [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
-          }
-        }
-        echo "MSVC Compiler version:"
-        cl /?
-        if ($LASTEXITCODE -ne 0) { exit 1 }
-        echo "Testing tools on Windows..."
-        if (-not (Test-Path -Path "${{ env.VCPKG_ROOT }}")) {
-          echo "VCPKG_ROOT is not set or the path does not exist"
-        } else {
-        echo "VCPKG_ROOT: ${{ env.VCPKG_ROOT }}"
-        }
-        echo "CMake version:"
-        cmake --version
-        if ($LASTEXITCODE -ne 0) { exit 1 }
-        echo "MSVC Compiler version:"
-        cl /?
-        if ($LASTEXITCODE -ne 0) { exit 1 }
-        echo "Ninja version:"
-        ninja --version
-        if ($LASTEXITCODE -ne 0) { exit 1 }
-
-    - name: Test Tools Linux
-      if: matrix.os == 'ubuntu-latest'
+    - name: Clone vcpkg, bootstrap and set VCPKG_ROOT (Linux)
+      if: runner.os == 'Linux'
       shell: bash
       run: |
-        echo "Testing tools on Linux..."
-        if [ -z "${{ env.VCPKG_ROOT }}" ]; then
-          echo "VCPKG_ROOT is not set"
-        else
-          echo "VCPKG_ROOT: ${{ env.VCPKG_ROOT }}"
+        if [ ! -d vcpkg ]; then
+          git clone https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          ./vcpkg/vcpkg integrate install
         fi
-        echo "CMake version:"
-        cmake --version || exit 1
-        echo "GCC version:"
-        gcc --version || exit 1
-        echo "G++ version:"
-        g++ --version || exit 1
-        echo "Ninja version:"
-        ninja --version || exit 1
+        echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
+        # sudo ln -sf /usr/bin/ninja-build /usr/local/bin/ninja
 
-
-    - name: Configure CMake With Vcpkg Toolchain on Windows
-      if: matrix.os == 'windows-latest'
+    - name: Locate source
+      if: runner.os != 'Windows'
       run: |
-        $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-        if (-not (Test-Path -Path $vswherePath)) {
-        echo "vswhere.exe not found. Visual Studio may not be installed correctly."
-          exit 1
-        }
-        $vsInstallPath = & $vswherePath -latest -property installationPath
-        $vcvarsallPath = Join-Path -Path $vsInstallPath -ChildPath "\VC\Auxiliary\Build\vcvarsall.bat"
-        if (-not (Test-Path -Path $vcvarsallPath)) {
-          echo "vcvarsall.bat not found. Visual Studio may not be installed correctly."
-          exit 1
-        }
-        # Run vcvarsall.bat and capture the modified environment variables
-        $envVars = cmd /c "`"$vcvarsallPath`" x64 & set"
-        # Split the output into individual environment variable assignments
-        $envVars -split "`n" | ForEach-Object {
-          if ($_ -match "^(.*?)=(.*)$") {
-            [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
-          }
-        }
-        echo "MSVC Compiler version:"
-        cl /?
-        if ($LASTEXITCODE -ne 0) { exit 1 }
-        echo "Configuring CMake with vcpkg toolchain..."
-        cmake -B ${{ steps.strings.outputs.build-output-dir }} `
-        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} `
-        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} `
-        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
-        -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake `
-        -S ${{ github.workspace }} -G Ninja
+        find "$GITHUB_WORKSPACE" -name CMakeLists.txt -type f
 
-    - name: Configure CMake With Vcpkg Toolchain on Linux
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        echo "Configuring CMake with vcpkg toolchain..."
-        cmake -B ${{ steps.strings.outputs.build-output-dir }} \
-        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
-        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
-        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-        -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake \
-        -S ${{ github.workspace }} -G Ninja
-
-    - name: Build Windows
-      if: matrix.os == 'windows-latest'
-      run: |
-        $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-        if (-not (Test-Path -Path $vswherePath)) {
-        echo "vswhere.exe not found. Visual Studio may not be installed correctly."
-          exit 1
-        }
-        $vsInstallPath = & $vswherePath -latest -property installationPath
-        $vcvarsallPath = Join-Path -Path $vsInstallPath -ChildPath "\VC\Auxiliary\Build\vcvarsall.bat"
-        if (-not (Test-Path -Path $vcvarsallPath)) {
-          echo "vcvarsall.bat not found. Visual Studio may not be installed correctly."
-          exit 1
-        }
-        # Run vcvarsall.bat and capture the modified environment variables
-        $envVars = cmd /c "`"$vcvarsallPath`" x64 & set"
-        # Split the output into individual environment variable assignments
-        $envVars -split "`n" | ForEach-Object {
-          if ($_ -match "^(.*?)=(.*)$") {
-            [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
-          }
-        }
-        echo "MSVC Compiler version:"
-        cl /?
-        if ($LASTEXITCODE -ne 0) { exit 1 }
-        echo "Building project..."
-        cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
-
-    - name: Build Linux
-      if: matrix.os == 'ubuntu-latest'
+    - name: Configure CMake (Linux)
+      if: runner.os != 'Windows'
       shell: bash
       run: |
-        echo "Building project..."
-        cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+        cmake -B build -S . -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
+          -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 
-    - name: Test Windows
-      if: matrix.os == 'windows-latest'
-      working-directory: ${{ steps.strings.outputs.build-output-dir }}/tests
-      run: |
-        $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-        if (-not (Test-Path -Path $vswherePath)) {
-        echo "vswhere.exe not found. Visual Studio may not be installed correctly."
-          exit 1
-        }
-        $vsInstallPath = & $vswherePath -latest -property installationPath
-        $vcvarsallPath = Join-Path -Path $vsInstallPath -ChildPath "\VC\Auxiliary\Build\vcvarsall.bat"
-        if (-not (Test-Path -Path $vcvarsallPath)) {
-          echo "vcvarsall.bat not found. Visual Studio may not be installed correctly."
-          exit 1
-        }
-        # Run vcvarsall.bat and capture the modified environment variables
-        $envVars = cmd /c "`"$vcvarsallPath`" x64 & set"
-        # Split the output into individual environment variable assignments
-        $envVars -split "`n" | ForEach-Object {
-          if ($_ -match "^(.*?)=(.*)$") {
-            [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
-          }
-        }
-        echo "MSVC Compiler version:"
-        cl /?
-        if ($LASTEXITCODE -ne 0) { exit 1 }
-        echo "Running tests..."
-        ctest --build-config ${{ matrix.build_type }}
-      continue-on-error: true
-
-    - name: Test Linux
-      if: matrix.os == 'ubuntu-latest'
+    - name: Build (Linux)
+      if: runner.os != 'Windows'
       shell: bash
-      working-directory: ${{ steps.strings.outputs.build-output-dir }}/tests
       run: |
-        echo "Running tests..."
-        ctest --build-config ${{ matrix.build_type }}
+        cmake --build build --config ${{ matrix.build_type }}
+
+    - name: Test (Linux)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        cd build
+        ctest --build-config Release --output-on-failure --parallel 2
       continue-on-error: true
+
+    - name: Configure CMake (Windows)
+      if: runner.os == 'Windows'
+      shell: cmd
+      run: |
+        call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
+        set /p VSPATH=<vspath.txt
+        call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
+
+        where ninja >nul 2>nul || (echo Ninja not found! && exit 1)
+        cmake -B build -S . -G Ninja ^
+          -DCMAKE_BUILD_TYPE=Release ^
+          -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake"
+
+    - name: Build (Windows)
+      if: runner.os == 'Windows'
+      shell: cmd
+      run: |
+        call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
+        set /p VSPATH=<vspath.txt
+        call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
+        cmake --build build --config ${{ matrix.build_type }}
+
+    - name: Test (Windows)
+      if: runner.os == 'Windows'
+      shell: cmd
+      working-directory: build
+      run: |
+        call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
+        set /p VSPATH=<vspath.txt
+        call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
+        cd build
+        ctest -C Release --output-on-failure --parallel 2
+      continue-on-error: true
+
 
   build-android:
     runs-on: ubuntu-latest
@@ -359,7 +225,7 @@ jobs:
           -DVCPKG_TARGET_TRIPLET=arm64-android \
           -DANDROID_NDK=$ANDROID_NDK \
           -DANDROID_ABI=arm64-v8a \
-          -DANDROID_PLATFORM=android-21
+          -DANDROID_PLATFORM=android-28
 
     - name: Build native libraries
       shell: bash

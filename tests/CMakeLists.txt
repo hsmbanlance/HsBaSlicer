@@ -443,3 +443,54 @@ add_test(
 add_custom_command(TARGET full_topo_model_test POST_BUILD
   COMMAND ${CMAKE_CTEST_COMMAND} -V -R full_topo_model_test
 )
+
+
+## PolygonFill tests
+add_executable(polygon_fill_test
+    "PolygonFill/polygon_fill_test.cpp"
+)
+
+target_link_libraries(polygon_fill_test
+    HsBaSlicer2D
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(polygon_fill_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME polygon_fill_test
+  COMMAND $<TARGET_FILE:polygon_fill_test>
+)
+
+add_custom_command(TARGET polygon_fill_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R polygon_fill_test
+)
+
+## ImagePolygons tests
+add_executable(image_polygons_test
+    "PolygonFill/image_polygons_test.cpp"
+)
+
+target_link_libraries(image_polygons_test
+    HsBaSlicer2D
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(image_polygons_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME image_polygons_test
+  COMMAND $<TARGET_FILE:image_polygons_test>
+)
+
+add_custom_command(TARGET polygon_fill_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R polygon_fill_test
+)

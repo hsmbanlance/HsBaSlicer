@@ -6,6 +6,7 @@
 #include <clipper2/clipper.offset.h>
 
 #include "IntPolygon.hpp"
+#include <string>
 
 namespace HsBa::Slicer
 {
@@ -45,6 +46,8 @@ namespace HsBa::Slicer
 	double Area(const PolygonD& p);
 	double Area(const PolygonsD& ps);
 
+	// Image IO functions are declared in ImageToPolygons.hpp
+
 	Polygon Integerization(const PolygonD& poly);
 	Polygons Integerization(const PolygonsD& polys);
 
@@ -56,13 +59,13 @@ namespace HsBa::Slicer
 template<>
 struct std::hash<HsBa::Slicer::PolygonD>
 {
-	std::size_t operator()(const HsBa::Slicer::PolygonD& p);
+	std::size_t operator()(const HsBa::Slicer::PolygonD& p) const;
 };
 
 template<>
 struct std::hash<HsBa::Slicer::PolygonsD>
 {
-	std::size_t operator()(const HsBa::Slicer::PolygonsD& p);
+	std::size_t operator()(const HsBa::Slicer::PolygonsD& p) const;
 };
 
 
