@@ -7,8 +7,10 @@
 	FloatPolygons.cpp
 	PolygonFill.hpp
 	PolygonFill.cpp
+	ImageToPolygons.hpp
 	ImageToPolygons.cpp
-	)
+	LuaAdapter.hpp
+	LuaAdapter.cpp)
 
 find_package(PNG REQUIRED)
 find_package(JPEG REQUIRED)

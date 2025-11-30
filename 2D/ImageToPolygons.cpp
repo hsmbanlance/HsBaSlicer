@@ -203,7 +203,7 @@ namespace HsBa::Slicer
             std::vector<uint8_t> bin(w*h);
             for (int i = 0; i < w*h; ++i) bin[i] = (img[i] > thr) ? 255 : 0;
             PolygonsD layer = ExtractContoursFromBinary(bin, w, h, pixelSize);
-            res.push_back(std::move(layer));
+            res.emplace_back(std::move(layer));
         }
         return res;
     }
