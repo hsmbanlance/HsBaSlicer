@@ -4,8 +4,10 @@
 #include <lua.hpp>
 #include <sstream>
 #include <numbers>
+#include <cstring>
 
 #include "base/error.hpp"
+#include "LuaAdapter.hpp"
 
 namespace HsBa::Slicer
 {
@@ -17,31 +19,6 @@ namespace HsBa::Slicer
 			Polygon res = p;
 			res.push_back(res.front());
 			return res;
-		}
-
-		// Helper: convert Polygon to Lua table (array of {x=.., y=..}) pushing it on stack
-		void PushPolygonToLua(lua_State* L, const PolygonD& poly)
-		{
-			lua_newtable(L);
-			int idx = 1;
-			for (const auto& p : poly)
-			{
-				lua_newtable(L); // point
-				lua_pushnumber(L, p.x); lua_setfield(L, -2, "x");
-				lua_pushnumber(L, p.y); lua_setfield(L, -2, "y");
-				lua_rawseti(L, -2, idx++);
-			}
-		}
-
-		void PushPolygonsToLua(lua_State* L, const PolygonsD& poly)
-		{
-			lua_createtable(L, static_cast<int>(poly.size()), 0);
-			int idx = 1;
-			for (const auto& pt : poly)
-			{
-				PushPolygonToLua(L, pt);
-				lua_rawseti(L, -2, idx++);
-			}
 		}
 
 		std::vector<std::vector<std::pair<Point2D, Point2D>>> LineFilling(const Polygons& poly, double spacing, double angle_deg, double lineThickness, double& ux, double& uy, PolygonsD& polyD)
@@ -133,7 +110,286 @@ namespace HsBa::Slicer
 			}
 			return rows;
 		}
-	}
+
+		Polygons OffsetOnly(const Polygons poly, double delta, size_t inner,
+			size_t outer, Clipper2Lib::JoinType join_type, std::pair<Polygons, Polygons>& out_inner_outer)
+		{
+			Polygons res;
+			if (delta == 0 || (poly.empty() && inner == 0 && outer == 0)) 
+				return res;
+			int step = 0;
+			bool inner_done = (inner == 0);
+			bool outer_done = (outer == 0);
+			while (true)
+			{
+				double cur_delta = delta + step * delta;
+				if (inner_done && outer_done) 
+					break;
+				Polygons offs_inner, offs_outer;
+				if(!inner_done)
+					offs_inner = Offset(poly, -cur_delta, join_type, Clipper2Lib::EndType::Polygon);
+				if(!outer_done)
+					offs_outer = Offset(poly, cur_delta, join_type, Clipper2Lib::EndType::Polygon);
+				if (offs_inner.empty() && offs_outer.empty()) 
+					break;
+				if (step < inner)
+				{
+					for (const auto& p : offs_inner) res.emplace_back(p);
+				}
+				else
+				{
+					out_inner_outer.first = offs_inner;
+					inner_done = true;
+				}
+				if (step < outer)
+				{
+					for (const auto& p : offs_outer) res.emplace_back(p);
+				}
+				else
+				{
+					out_inner_outer.second = offs_outer;
+					outer_done = true;
+				}
+				++step;
+			}
+			return res;
+		}
+
+		// registered function: generate_fill(poly_table)
+		int l_report(lua_State* L,const char* fname, const char* msg)
+		{
+			std::ostringstream oss;
+			oss << "Error in Lua function '" << fname << "': " << msg;
+			return luaL_error(L, "%s", oss.str().c_str());
+		}
+
+		int l_offsetFill(lua_State* L)
+		{
+			PolygonsD polyD = LuaTableToPolygonsD(L, 1);
+			Polygons poly = Integerization(polyD);
+			double spacing = lua_tonumber(L, 2);
+			Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square;
+			if (lua_getfield(L, 3, "join_type") == LUA_TSTRING)
+			{
+				const char* jt_str = lua_tostring(L, -1);
+				if (strcmp(jt_str, "Square") == 0)
+					join_type = Clipper2Lib::JoinType::Square;
+				else if (strcmp(jt_str, "Bevel") == 0)
+					join_type = Clipper2Lib::JoinType::Bevel;
+				else if (strcmp(jt_str, "Round") == 0)
+					join_type = Clipper2Lib::JoinType::Round;
+				else if (strcmp(jt_str, "Miter") == 0)
+					join_type = Clipper2Lib::JoinType::Miter;
+			}
+			Polygons res = OffsetFill(poly, spacing, join_type);
+			PolygonsD resD;
+			for (const auto& p : res)
+			{
+				resD.emplace_back(UnIntegerization(p));
+			}
+			PushPolygonsDToLua(L, resD);
+			return 1;
+		}
+
+		int l_lineFill(lua_State* L)
+		{
+			PolygonsD polyD = LuaTableToPolygonsD(L, 1);
+			Polygons poly = Integerization(polyD);
+			double spacing = lua_tonumber(L, 2);
+			double angle_deg = lua_tonumber(L, 3);
+			double lineThickness = lua_tonumber(L, 4);
+			Polygons res = LineFill(poly, spacing, angle_deg, lineThickness);
+			PolygonsD resD;
+			for (const auto& p : res)
+			{
+				resD.emplace_back(UnIntegerization(p));
+			}
+			PushPolygonsDToLua(L, resD);
+			return 1;
+		}
+
+		int l_simpleZigzagFill(lua_State* L)
+		{
+			PolygonsD polyD = LuaTableToPolygonsD(L, 1);
+			Polygons poly = Integerization(polyD);
+			double spacing = lua_tonumber(L, 2);
+			double angle_deg = lua_tonumber(L, 3);
+			double lineThickness = lua_tonumber(L, 4);
+			Polygons res = SimpleZigzagFill(poly, spacing, angle_deg, lineThickness);
+			PolygonsD resD;
+			for (const auto& p : res)
+			{
+				resD.emplace_back(UnIntegerization(p));
+			}
+			PushPolygonsDToLua(L, resD);
+			return 1;
+		}
+
+		int l_zigzagFill(lua_State* L)
+		{
+			PolygonsD polyD = LuaTableToPolygonsD(L, 1);
+			Polygons poly = Integerization(polyD);
+			double spacing = lua_tonumber(L, 2);
+			double angle_deg = lua_tonumber(L, 3);
+			double lineThickness = lua_tonumber(L, 4);
+			Polygons res = ZigzagFill(poly, spacing, angle_deg, lineThickness);
+			PolygonsD resD;
+			for (const auto& p : res)
+			{
+				resD.emplace_back(UnIntegerization(p));
+			}
+			PushPolygonsDToLua(L, resD);
+			return 1;
+		}
+
+		int l_compositeOffsetFill(lua_State* L)
+		{
+			PolygonsD polyD = LuaTableToPolygonsD(L, 1);
+			Polygons poly = Integerization(polyD);
+			double spacing = lua_tonumber(L, 2);
+			double offsetStep = lua_tonumber(L, 3);
+			int outwardCount = static_cast<int>(lua_tointeger(L, 4));
+			int inwardCount = static_cast<int>(lua_tointeger(L, 5));
+			FillMode mode = FillMode::Line;
+			const char* mode_str = lua_tostring(L, 6);
+			if (strcmp(mode_str, "Line") == 0)
+				mode = FillMode::Line;
+			else if (strcmp(mode_str, "SimpleZigzag") == 0)
+				mode = FillMode::SimpleZigzag;
+			else if (strcmp(mode_str, "Zigzag") == 0)
+				mode = FillMode::Zigzag;
+			double angle_deg = lua_tonumber(L, 7);
+			double lineThickness = lua_tonumber(L, 8);
+			Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square;
+			if (lua_getfield(L, 9, "join_type") == LUA_TSTRING)
+			{
+				const char* jt_str = lua_tostring(L, -1);
+				if (strcmp(jt_str, "Square") == 0)
+					join_type = Clipper2Lib::JoinType::Square;
+				else if (strcmp(jt_str, "Bevel") == 0)
+					join_type = Clipper2Lib::JoinType::Bevel;
+				else if (strcmp(jt_str, "Round") == 0)
+					join_type = Clipper2Lib::JoinType::Round;
+				else if (strcmp(jt_str, "Miter") == 0)
+					join_type = Clipper2Lib::JoinType::Miter;
+			}
+			Polygons res;
+			res = CompositeOffsetFill(poly, spacing, offsetStep, outwardCount,
+				inwardCount, mode, angle_deg, lineThickness, join_type);
+			PolygonsD resD;
+			for (const auto& p : res)
+			{
+				resD.emplace_back(UnIntegerization(p));
+			}
+			PushPolygonsDToLua(L, resD);
+			return 1;
+		}
+
+		int l_hybridFill(lua_State* L)
+		{
+			PolygonsD polyD = LuaTableToPolygonsD(L, 1);
+			Polygons poly = Integerization(polyD);
+			double spacing = lua_tonumber(L, 2);
+			double offsetStep = lua_tonumber(L, 3);
+			int outwardCount = static_cast<int>(lua_tointeger(L, 4));
+			int inwardCount = static_cast<int>(lua_tointeger(L, 5));
+			FillMode mode = FillMode::Line;
+			const char* mode_str = lua_tostring(L, 6);
+			if (strcmp(mode_str, "Line") == 0)
+				mode = FillMode::Line;
+			else if (strcmp(mode_str, "SimpleZigzag") == 0)
+				mode = FillMode::SimpleZigzag;
+			else if (strcmp(mode_str, "Zigzag") == 0)
+				mode = FillMode::Zigzag;
+			double angle_deg = lua_tonumber(L, 7);
+			double lineThickness = lua_tonumber(L, 8);
+			Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square;
+			if (lua_getfield(L, 9, "join_type") == LUA_TSTRING)
+			{
+				const char* jt_str = lua_tostring(L, -1);
+				if (strcmp(jt_str, "Square") == 0)
+					join_type = Clipper2Lib::JoinType::Square;
+				else if (strcmp(jt_str, "Bevel") == 0)
+					join_type = Clipper2Lib::JoinType::Bevel;
+				else if (strcmp(jt_str, "Round") == 0)
+					join_type = Clipper2Lib::JoinType::Round;
+				else if (strcmp(jt_str, "Miter") == 0)
+					join_type = Clipper2Lib::JoinType::Miter;
+			}
+			Polygons res;
+			res = HybridFill(poly, spacing, offsetStep, outwardCount,
+				inwardCount, mode, angle_deg, lineThickness, join_type);
+			PolygonsD resD;
+			for (const auto& p : res)
+			{
+				resD.emplace_back(UnIntegerization(p));
+			}
+			PushPolygonsDToLua(L, resD);
+			return 1;
+		}
+
+		int l_offsetOnly(lua_State* L)
+		{
+			PolygonsD polyD = LuaTableToPolygonsD(L, 1);
+			Polygons poly = Integerization(polyD);
+			double delta = lua_tonumber(L, 2);
+			size_t inner = static_cast<size_t>(lua_tointeger(L, 3));
+			size_t outer = static_cast<size_t>(lua_tointeger(L, 4));
+			Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square;
+			if (lua_getfield(L, 5, "join_type") == LUA_TSTRING)
+			{
+				const char* jt_str = lua_tostring(L, -1);
+				if (strcmp(jt_str, "Square") == 0)
+					join_type = Clipper2Lib::JoinType::Square;
+				else if (strcmp(jt_str, "Bevel") == 0)
+					join_type = Clipper2Lib::JoinType::Bevel;
+				else if (strcmp(jt_str, "Round") == 0)
+					join_type = Clipper2Lib::JoinType::Round;
+				else if (strcmp(jt_str, "Miter") == 0)
+					join_type = Clipper2Lib::JoinType::Miter;
+			}
+			std::pair<Polygons, Polygons> out_inner_outer;
+			Polygons res = OffsetOnly(poly, delta, inner, outer, join_type, out_inner_outer);
+			PolygonsD resD;
+			for (const auto& p : res)
+			{
+				resD.emplace_back(UnIntegerization(p));
+			}
+			PushPolygonsDToLua(L, resD);
+			// push inner
+			PolygonsD innerD;
+			for (const auto& p : out_inner_outer.first)
+			{
+				innerD.emplace_back(UnIntegerization(p));
+			}
+			PushPolygonsDToLua(L, innerD);
+			// push outer
+			PolygonsD outerD;
+			for (const auto& p : out_inner_outer.second)
+			{
+				outerD.emplace_back(UnIntegerization(p));
+			}
+			PushPolygonsDToLua(L, outerD);
+			return 3;
+		}
+		
+		const luaL_Reg polygonFillLib[] = {
+			{"offsetFill", l_offsetFill},
+			{"lineFill", l_lineFill},
+			{"simpleZigzagFill", l_simpleZigzagFill},
+			{"zigzagFill", l_zigzagFill},
+			{"compositeOffsetFill", l_compositeOffsetFill},
+			{"hybridFill", l_hybridFill},
+			{"offsetOnly", l_offsetOnly},
+			{NULL, nullptr}
+		};
+
+		void RegisterLuaPolygonFillFunctions(lua_State* L)
+		{
+			luaL_newlib(L, polygonFillLib);
+			lua_setglobal(L, "PolygonFill");
+		}
+	} // namespace
 
 	Polygons OffsetFill(const Polygons& poly, double spacing, Clipper2Lib::JoinType join_type)
 	{
@@ -834,6 +1090,10 @@ namespace HsBa::Slicer
 			throw RuntimeError("Failed to create Lua state");
 		luaL_openlibs(L);
 
+		// load register functions
+		RegisterLuaPolygonOperations(L);
+		RegisterLuaPolygonFillFunctions(L);
+
 		// load script
 		if (luaL_loadfile(L, scriptPath.c_str()) || lua_pcall(L, 0, 0, 0))
 		{
@@ -849,7 +1109,7 @@ namespace HsBa::Slicer
 		}
 
 		// push polygon argument
-		PushPolygonsToLua(L, polyD);
+		PushPolygonsDToLua(L, polyD);
 
 		// call function with 1 arg, 1 result
 		if (lua_pcall(L, 1, 1, 0) != LUA_OK)
