@@ -31,7 +31,6 @@ jobs:
             c_compiler: cl
 
     steps:
-    - uses: actions/checkout@v4
 
     - name: Maximize build disk space
       if: runner.os == 'Linux'
@@ -57,6 +56,8 @@ jobs:
       shell: bash
       run: |
         sudo apt-get update
+        python --version || sudo apt-get install -y python3 python3-pip python-is-python3
+        sudo apt-get install -y python3-venv
         sudo apt-get install -y git curl zip unzip tar at libxt-dev gperf libxaw7-dev cifs-utils build-essential g++ gfortran libx11-dev libxkbcommon-x11-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev mesa-common-dev libxinerama-dev libxxf86vm-dev libxcursor-dev yasm libnuma1 libnuma-dev libtool-bin libltdl-dev flex bison libbison-dev autoconf libudev-dev libncurses5-dev libtool libxrandr-dev xutils-dev dh-autoreconf autoconf-archive libgles2-mesa-dev ruby-full pkg-config meson nasm cmake ninja-build libxext-dev libxfixes-dev libxrender-dev libxcb1-dev libx11-xcb-dev libxcb-dri3-dev libxcb-present-dev libxcb-glx0-dev libxcb-util0-dev libxkbcommon-dev libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev libxcb-icccm4-dev libxcb-sync-dev libxcb-xfixes0-dev libxcb-shape0-dev libxcb-randr0-dev libxcb-render-util0-dev libxcb-xinerama0-dev libxcb-xkb-dev libxcb-xinput-dev libxcb-cursor-dev libkrb5-dev libxcb-res0-dev libxcb-keysyms1-dev libxcb-xkb-dev libxcb-record0-dev python3-setuptools python3-mako python3-pip python3-venv python3-jinja2 nodejs libwayland-dev python-is-python3 guile-2.2-dev libxdamage-dev libdbus-1-dev libxtst-dev haskell-stack golang-go wayland-protocols libbluetooth-dev autoconf-archive
         sudo apt-get install -y libncurses-dev libtirpc-dev libfontconfig1-dev bison flex libxrender-dev libxtst-dev libxrandr-dev ninja-build
 
@@ -79,9 +80,7 @@ jobs:
         Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg"
 
 
-    - name: Re-checkout source after accidental deletion
-      if : runner.os != 'Windows'
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
     - name: Clone vcpkg, bootstrap and set VCPKG_ROOT (Linux)
       if: runner.os == 'Linux'
@@ -147,16 +146,31 @@ jobs:
         cmake --build build --config ${{ matrix.build_type }}
 
     - name: Test (Windows)
-      if: runner.os == 'Windows'
-      shell: cmd
+      shell: pwsh
       working-directory: build
       run: |
-        call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
-        set /p VSPATH=<vspath.txt
-        call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
-        cd build\tests
+        $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+                  -latest -property installationPath
+        if (-not $vsPath) { throw "Cannot locate Visual Studio installation" }
+
+        $vcvarsall = Join-Path $vsPath "VC\Auxiliary\Build\vcvarsall.bat"
+        if (-not (Test-Path $vcvarsall)) { throw "vcvarsall.bat not found" }
+        cmd.exe /c "call `"$vcvarsall`" x64 >nul && set" |
+          ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$') {
+              [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process')
+           }
+        }
+        $exe = Get-ChildItem -Path "tests" -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if (-not $exe) {
+          Write-Error "No test executable (*.exe) found under build\tests"
+          exit 1
+        }
+
+        Write-Host "Found test exe: $($exe.FullName)"
+        Set-Location $exe.DirectoryName
         ctest -C Release --output-on-failure --parallel 2
-      continue-on-error: true
 
 
   build-android:
