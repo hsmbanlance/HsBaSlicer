@@ -5,6 +5,8 @@
 
 #include "fileoperator/zipper.hpp"
 #include "fileoperator/unzipper.hpp"
+#include "fileoperator/LuaAdapter.hpp"
+#include <lua.hpp>
 
 #if _WIN32
 #include <Windows.h>
@@ -96,6 +98,47 @@ BOOST_AUTO_TEST_CASE(test_unzipper)
 	// Clean up
 	std::filesystem::remove(zip_path);
 	BOOST_TEST_MESSAGE("UnZipper test completed successfully");
+}
+
+BOOST_AUTO_TEST_CASE(test_zipper_lua_integration)
+{
+	BOOST_TEST_MESSAGE("Running Zipper Lua Integration test");
+#if _WIN32
+	SetConsoleOutputCP(CP_UTF8);
+	SetConsoleCP(CP_UTF8);
+#endif // _WIN32
+	if (std::filesystem::exists("lua_test.zip")) {
+		std::filesystem::remove("lua_test.zip");
+	}
+	// Create Lua state
+	lua_State* L = luaL_newstate();
+	luaL_openlibs(L);
+	
+	// Register Zipper to Lua
+	HsBa::Slicer::RegisterLuaZipper(L);
+	
+	// Execute Lua script to test Zipper
+	const char* lua_code = R"(
+		local zipper = Zipper.new()
+		Zipper.AddByteFile(zipper, "lua_test1.txt", "Lua test file 1")
+		Zipper.AddByteFile(zipper, "lua_test2.txt", "Lua test file 2")
+		Zipper.Save(zipper, "lua_test.zip")
+	)";
+	
+	int ret = luaL_dostring(L, lua_code);
+	BOOST_REQUIRE_MESSAGE(ret == 0, lua_tostring(L, -1));
+	
+	// Verify the zip file was created and has correct content
+	BOOST_REQUIRE(std::filesystem::exists("lua_test.zip"));
+	auto extracted_files = HsBa::Slicer::MiniZExtractFileToBuffer("lua_test.zip");
+	BOOST_REQUIRE_EQUAL(extracted_files.size(), 2);
+	BOOST_REQUIRE_EQUAL(extracted_files["lua_test1.txt"], "Lua test file 1");
+	BOOST_REQUIRE_EQUAL(extracted_files["lua_test2.txt"], "Lua test file 2");
+	
+	// Clean up
+	lua_close(L);
+	std::filesystem::remove("lua_test.zip");
+	BOOST_TEST_MESSAGE("Zipper Lua Integration test completed successfully");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

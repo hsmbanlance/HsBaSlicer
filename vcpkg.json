@@ -12,7 +12,7 @@
       "platform": "!android"
     },
     {
-      "name":"boost-log",
+      "name": "boost-log",
       "platform": "!android"
     },
     "boost-multiprecision",

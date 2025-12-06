@@ -16,7 +16,8 @@
 	unzipper.cpp
 	bit7z_unzipper.hpp
 	bit7z_unzipper.cpp
-)
+	LuaAdapter.hpp
+	LuaAdapter.cpp)
 
 if(NOT ANDROID)
 	find_package(boost_log CONFIG REQUIRED)
@@ -31,8 +32,14 @@ if(HSBA_USE_BIT7Z AND NOT ANDROID)
   target_link_libraries(HsBaSlicerFileOperator PUBLIC unofficial::bit7z::bit7z64)
 endif()
 
+find_package(Lua REQUIRED)
 
-target_link_libraries(HsBaSlicerFileOperator PUBLIC miniz::miniz)
+target_include_directories(HsBaSlicerFileOperator PRIVATE ${LUA_INCLUDE_DIR})
+
+target_link_libraries(HsBaSlicerFileOperator PUBLIC 
+	miniz::miniz
+	${LUA_LIBRARIES}
+)
 
 #Link Sqlpp11
 if(NOT ANDROID AND NOT IOS AND NOT SWITCH)
