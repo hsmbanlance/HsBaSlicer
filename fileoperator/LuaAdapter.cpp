@@ -41,9 +41,7 @@ namespace HsBa::Slicer
 		// ============= Zipper Wrapper =============
 		int lua_zipper_new(lua_State* L)
 		{
-			auto* zipper = new Zipper();
-			lua_pushlightuserdata(L, zipper);
-			luaL_setmetatable(L, "Zipper");
+			NewLuaObject<Zipper>(L, "Zipper");
 			return 1;
 		}
 
@@ -117,8 +115,7 @@ namespace HsBa::Slicer
 
 		int lua_zipper_gc(lua_State* L)
 		{
-			auto* zipper = (Zipper*)lua_topointer(L, 1);
-			if (zipper) delete zipper;
+			LuaGC<Zipper>(L);
 			return 0;
 		}
 
@@ -166,6 +163,7 @@ namespace HsBa::Slicer
 			}
 			auto* zipper = new Bit7zZipper(dll_path, zipper_format, password);
 			lua_pushlightuserdata(L, zipper);
+			NewLuaObject<Bit7zZipper>(L, "Bit7zZipper", dll_path, zipper_format, password);
 			return 0;
 		}
 
@@ -240,9 +238,7 @@ namespace HsBa::Slicer
 
 		int lua_bit7z_zipper_gc(lua_State* L)
 		{
-			auto* zipper = (Bit7zZipper*)lua_topointer(L, 1);
-			if (zipper)
-				delete zipper;
+			LuaGC<Bit7zZipper>(L);
 			return 0;
 		}
 
@@ -261,9 +257,7 @@ namespace HsBa::Slicer
 		// ============= SQLiteAdapter Wrapper =============
 		int lua_sqlite_new(lua_State* L)
 		{
-			auto* db = new SQL::SQLiteAdapter();
-			lua_pushlightuserdata(L, db);
-			luaL_setmetatable(L, "SQLiteAdapter");
+			NewLuaObject<SQL::SQLiteAdapter>(L, "SQLiteAdapter");
 			return 1;
 		}
 
@@ -493,11 +487,7 @@ namespace HsBa::Slicer
 
 		int lua_sqlite_gc(lua_State* L)
 		{
-			auto* db = (SQL::SQLiteAdapter*)lua_topointer(L, 1);
-			if (db)
-			{
-				delete db;
-			}
+			LuaGC<SQL::SQLiteAdapter>(L);
 			return 0;
 		}
 
@@ -519,9 +509,7 @@ namespace HsBa::Slicer
 		// ============= MySQLAdapter Wrapper =============
 		int lua_mysql_new(lua_State* L)
 		{
-			auto* db = new SQL::MySQLAdapter();
-			lua_pushlightuserdata(L, db);
-			luaL_setmetatable(L, "MySQLAdapter");
+			NewLuaObject<SQL::MySQLAdapter>(L, "MySQLAdapter");
 			return 1;
 		}
 		int lua_mysql_connect(lua_State* L)
@@ -756,11 +744,7 @@ namespace HsBa::Slicer
 		}
 		int lua_mysql_gc(lua_State* L)
 		{
-			auto* db = (SQL::MySQLAdapter*)lua_topointer(L, 1);
-			if (db)
-			{
-				delete db;
-			}
+			LuaGC<SQL::MySQLAdapter>(L);
 			return 0;
 		}
 		static const luaL_Reg mysql_adapter_methods[] =
@@ -782,9 +766,7 @@ namespace HsBa::Slicer
 		// Similar implementation as MySQLAdapter can be done here
 		int lua_pgsql_new(lua_State* L)
 		{
-			auto* db = new SQL::PostgreSQLAdapter();
-			lua_pushlightuserdata(L, db);
-			luaL_setmetatable(L, "PostgreSQLAdapter");
+			NewLuaObject<SQL::PostgreSQLAdapter>(L, "PostgreSQLAdapter");
 			return 1;
 		}
 		int lua_pgsql_connect(lua_State* L)
@@ -1019,11 +1001,7 @@ namespace HsBa::Slicer
 		}
 		int lua_pgsql_gc(lua_State* L)
 		{
-			auto* db = (SQL::PostgreSQLAdapter*)lua_topointer(L, 1);
-			if (db)
-			{
-				delete db;
-			}
+			LuaGC<SQL::PostgreSQLAdapter>(L);
 			return 0;
 		}
 		static const luaL_Reg pgsql_adapter_methods[] =
@@ -1040,6 +1018,7 @@ namespace HsBa::Slicer
 			{nullptr, nullptr}
 		};
 #endif // USE_PGSQL
+
 	}// namespace
 
 	void RegisterLuaZipper(lua_State* L)
@@ -1154,6 +1133,38 @@ namespace HsBa::Slicer
 		lua_setglobal(L, "MySQLAdapter");
 	}
 #endif // USE_MYSQL
+
+#ifdef USE_PGSQL
+	void RegisterLuaPostgreSQLAdapter(lua_State* L)
+	{
+		luaL_newmetatable(L, "PostgreSQLAdapter");
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
+		lua_pushcfunction(L, lua_pgsql_gc);
+		lua_setfield(L, -2, "__gc");
+		lua_pushcfunction(L, lua_pgsql_connect);
+		lua_setfield(L, -2, "Connect");
+		lua_pushcfunction(L, lua_pgsql_execute);
+		lua_setfield(L, -2, "Execute");
+		lua_pushcfunction(L, lua_pgsql_query);
+		lua_setfield(L, -2, "Query");
+		lua_pushcfunction(L, lua_pgsql_insert);
+		lua_setfield(L, -2, "Insert");
+		lua_pushcfunction(L, lua_pgsql_update);
+		lua_setfield(L, -2, "Update");
+		lua_pushcfunction(L, lua_pgsql_delete);
+		lua_setfield(L, -2, "Delete");
+		lua_pushcfunction(L, lua_pgsql_create_table);
+		lua_setfield(L, -2, "CreateTable");
+		lua_pushcfunction(L, lua_pgsql_close);
+		lua_setfield(L, -2, "Close");
+		lua_pop(L, 1);
+		lua_newtable(L);
+		lua_pushcfunction(L, lua_pgsql_new);
+		lua_setfield(L, -2, "new");
+		lua_setglobal(L, "PostgreSQLAdapter");
+	}
+#endif // USE_PGSQL
 
 
 } // namespace HsBa::Slicer
