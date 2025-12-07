@@ -73,11 +73,17 @@ sudo snap install cmake --classic
 
 CMake版本过低，构建时会发出警告。和Boost的构建有关。
 
+安装python和python虚拟环境：
+
+```bash
+sudo apt install python3 python3-venv
+```
+
 因为使用Openscade,需要安装X11开发包。
 如果使用的是Ubuntu 20.04或Debian 10.0以上版本，则可以直接安装X11开发包：
 
 ```bash
-sudo apt install libx11-dev mesa-common-dev libglu1-mesa-dev libxi-dev libxmu-dev libxmu-headers libxrender-dev libxtst-dev
+sudo apt install libx11-dev mesa-common-dev libglu1-mesa-dev libxi-dev libxmu-dev libxmu-headers libxrender-dev libxtst-dev autoconf-archive
 ```
 
 编译libmysql需要安装
