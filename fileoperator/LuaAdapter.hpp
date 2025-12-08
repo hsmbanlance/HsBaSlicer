@@ -15,9 +15,9 @@ namespace HsBa::Slicer
 	template<typename T, typename... Args>
 	inline T* NewLuaObject(lua_State* L, const char* mt, Args&&... args)
 	{
-		void* ud = lua_newuserdata(L, sizeof(T));          // 1. 分配
-		T* obj = new (ud) T(std::forward<Args>(args)...);// 2. 构造
-		luaL_getmetatable(L, mt);                          // 3. 绑定元表
+		void* ud = lua_newuserdata(L, sizeof(T));         
+		T* obj = new (ud) T(std::forward<Args>(args)...);
+		luaL_getmetatable(L, mt);                          
 		lua_setmetatable(L, -2);
 		return obj;
 	}
@@ -26,7 +26,7 @@ namespace HsBa::Slicer
 	int LuaGC(lua_State* L) noexcept
 	{
 		void* ud = luaL_checkudata(L, 1, typeid(T).name());
-		if (ud) static_cast<T*>(ud)->~T();   // 显式析构
+		if (ud) static_cast<T*>(ud)->~T();
 		return 0;
 	}
 	void PushAnyToLua(lua_State* L, const std::any& value);

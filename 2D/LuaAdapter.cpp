@@ -121,6 +121,16 @@ namespace HsBa::Slicer
 			return 1; // return the result table
 		}
 
+		int l_area(lua_State* L)
+		{
+			if (lua_gettop(L) != 1 || !lua_istable(L, 1))
+				l_booleanError(L, "area", "Expected a polygon table");
+			PolygonD poly = LuaTableToPolygonD(L, 1);
+			double area = Clipper2Lib::Area(poly);
+			lua_pushnumber(L, area);
+			return 1; // return the area
+		}
+
 		const luaL_Reg booleanLib[] = {
 			{"booleanOperation", l_booleanOperation},
 			{"union", l_union},
@@ -130,6 +140,7 @@ namespace HsBa::Slicer
 			{"offsetOperation", l_offsetOperation},
 			{"convexHullOperation", l_convexHullOperation},
 			{"concaveHullOperation", l_concaveHullOperation},
+			{"area", l_area},
 			{NULL, NULL}
 		};
 

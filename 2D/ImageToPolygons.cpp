@@ -7,8 +7,13 @@
 #include <cstdint>
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
 // use OpenCV for image IO and simple raster operations
 #include <opencv2/opencv.hpp>
+#include <lua.hpp>
+
+#include "base/error.hpp"
+#include "LuaAdapter.hpp"
 
 namespace HsBa::Slicer
 {
@@ -206,6 +211,70 @@ namespace HsBa::Slicer
             res.emplace_back(std::move(layer));
         }
         return res;
+    }
+
+    bool LuaToImage(const PolygonsD& poly, const std::string& scriptPath, const std::string& outPath, const std::string& functionName)
+    {
+        lua_State *L = luaL_newstate();
+        if (!L)
+            throw RuntimeError("Failed to create Lua state");
+        luaL_openlibs(L);
+        RegisterLuaPolygonOperations(L);
+        // load script
+        if (luaL_loadfile(L, scriptPath.c_str()) || lua_pcall(L, 0, 0, 0))
+        {
+            lua_close(L);
+            throw RuntimeError("Failed to load Lua script: " + std::string(lua_tostring(L, -1)));
+        }
+        // get function
+        lua_getglobal(L, functionName.c_str());
+        if (!lua_isfunction(L, -1)) 
+        {
+            lua_close(L);
+            throw RuntimeError("Lua function not found: " + functionName);
+        }
+        // push polygon argument
+        PushPolygonsDToLua(L, poly);
+        // call function with 1 arg, 1 result
+        if (lua_pcall(L, 1, 1, 0) != LUA_OK)
+        {
+            lua_close(L);
+            throw RuntimeError("Error calling Lua function: " + std::string(lua_tostring(L, -1)));
+        }
+        // expect table of grayscale image
+        if (!lua_istable(L, -1))
+        {
+            lua_close(L);
+            throw RuntimeError("Lua function did not return a table");
+        }
+        std::vector<uint8_t> img;
+        size_t len = lua_rawlen(L, -1);
+        for (size_t i = 1; i <= len; ++i)
+        {
+            lua_rawgeti(L, -1, static_cast<int>(i));
+            if (lua_isinteger(L, -1))
+            {
+                int val = static_cast<int>(lua_tointeger(L, -1));
+                img.push_back(static_cast<uint8_t>(std::clamp(val, 0, 255)));
+            }
+            else
+            {
+                lua_close(L);
+                throw RuntimeError("Lua image table contains non-integer value");
+            }
+            lua_pop(L, 1); // pop value
+        }
+        lua_close(L);
+        // save image, use filesystem
+        if(outPath.empty())
+        {
+            return false;
+        }
+        std::filesystem::path outPathFs(outPath);
+        std::ofstream ofs(outPathFs);
+        ofs.write(reinterpret_cast<const char*>(img.data()), img.size());
+        ofs.close();
+        return true;
     }
 
 } // namespace HsBa::Slicer

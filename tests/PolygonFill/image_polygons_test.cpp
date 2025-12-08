@@ -50,3 +50,29 @@ BOOST_AUTO_TEST_CASE(fromimage_and_toimage_roundtrip)
     std::filesystem::remove(tmpPath, ec);
     std::filesystem::remove(outPng, ec);
 }
+
+BOOST_AUTO_TEST_CASE(lua_to_image)
+{
+    // create a simple polygon
+    PolygonsD poly;
+    PolygonD p;
+    p.emplace_back(Point2D{10.0, 10.0});
+    p.emplace_back(Point2D{30.0, 10.0});
+    p.emplace_back(Point2D{30.0, 30.0});
+    p.emplace_back(Point2D{10.0, 30.0});
+    poly.push_back(p);
+
+    // path to Lua script that generates an image from polygons
+    std::filesystem::path script_path = std::filesystem::path(__FILE__).parent_path() / "image_from_polygons.lua";
+    std::string scriptPath = script_path.string();
+    auto outPath = std::filesystem::temp_directory_path() / "hsbaslicer_lua_out.png";
+
+    // call LuaToImage
+    bool ok = LuaToImage(poly, scriptPath, outPath.string());
+    BOOST_CHECK(ok);
+    BOOST_CHECK(std::filesystem::exists(outPath));
+
+    // cleanup
+    std::error_code ec;
+    std::filesystem::remove(outPath, ec);
+}
