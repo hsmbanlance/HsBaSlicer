@@ -99,7 +99,7 @@ namespace HsBa::Slicer::Utils
 			}
 			return String{ str, N };
 		}
-		inline explicit constexpr operator T*() const
+		inline explicit constexpr operator const T*() const
 		{
 			return str;
 		}

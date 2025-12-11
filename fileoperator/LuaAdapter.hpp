@@ -9,26 +9,11 @@
 #include "bit7z_zipper.hpp"
 #include "bit7z_unzipper.hpp"
 #include "sql_adapter.hpp"
+#include "base/template_helper.hpp"
+#include "utils/LuaNewObject.hpp"
 
 namespace HsBa::Slicer
 {
-	template<typename T, typename... Args>
-	inline T* NewLuaObject(lua_State* L, const char* mt, Args&&... args)
-	{
-		void* ud = lua_newuserdata(L, sizeof(T));         
-		T* obj = new (ud) T(std::forward<Args>(args)...);
-		luaL_getmetatable(L, mt);                          
-		lua_setmetatable(L, -2);
-		return obj;
-	}
-
-	template<typename T>
-	int LuaGC(lua_State* L) noexcept
-	{
-		void* ud = luaL_checkudata(L, 1, typeid(T).name());
-		if (ud) static_cast<T*>(ud)->~T();
-		return 0;
-	}
 	void PushAnyToLua(lua_State* L, const std::any& value);
 	void RegisterLuaZipper(lua_State* L);
 	void RegisterLuaSQLiteAdapter(lua_State* L);

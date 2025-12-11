@@ -39,9 +39,10 @@ namespace HsBa::Slicer
 	namespace
 	{
 		// ============= Zipper Wrapper =============
+		constexpr Utils::TemplateString ZipperTypeName = "Zipper";
 		int lua_zipper_new(lua_State* L)
 		{
-			NewLuaObject<Zipper>(L, "Zipper");
+			NewLuaObject<Zipper, ZipperTypeName>(L);
 			return 1;
 		}
 
@@ -52,7 +53,7 @@ namespace HsBa::Slicer
 			std::string path = luaL_checkstring(L, 3);
 			if (!zipper)
 			{
-				lua_pushstring(L, "Invalid Zipper object");
+				lua_pushstring(L, std::format("Invalid {} object", ZipperTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -75,7 +76,7 @@ namespace HsBa::Slicer
 			std::string data = luaL_checkstring(L, 3);
 			if (!zipper)
 			{
-				lua_pushstring(L, "Invalid Zipper object");
+				lua_pushstring(L, std::format("Invalid {} object", ZipperTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -97,7 +98,7 @@ namespace HsBa::Slicer
 			std::string path = luaL_checkstring(L, 2);
 			if (!zipper)
 			{
-				lua_pushstring(L, "Invalid Zipper object");
+				lua_pushstring(L, std::format("Invalid {} object", ZipperTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -115,7 +116,7 @@ namespace HsBa::Slicer
 
 		int lua_zipper_gc(lua_State* L)
 		{
-			LuaGC<Zipper>(L);
+			LuaGC<Zipper, ZipperTypeName>(L);
 			return 0;
 		}
 
@@ -132,6 +133,7 @@ namespace HsBa::Slicer
 
 #ifdef USE_BIT7Z
 		// ============= Bit7zZipper Wrapper =============
+		constexpr Utils::TemplateString Bit7zZipperTypeName = "Bit7zZipper";
 		int lua_bit7z_zipper_new(lua_State* L)
 		{
 			//first arg: format
@@ -163,7 +165,7 @@ namespace HsBa::Slicer
 			}
 			auto* zipper = new Bit7zZipper(dll_path, zipper_format, password);
 			lua_pushlightuserdata(L, zipper);
-			NewLuaObject<Bit7zZipper>(L, "Bit7zZipper", dll_path, zipper_format, password);
+			NewLuaObject<Bit7zZipper, Bit7zZipperTypeName>(L, dll_path, zipper_format, password);
 			return 0;
 		}
 
@@ -174,7 +176,7 @@ namespace HsBa::Slicer
 			std::string path = luaL_checkstring(L, 3);
 			if (!zipper)
 			{
-				lua_pushstring(L, "Invalid Bit7zZipper object");
+				lua_pushstring(L, std::format("Invalid {} object", Bit7zZipperTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -198,7 +200,7 @@ namespace HsBa::Slicer
 			const char* data = luaL_checklstring(L, 3, &len);
 			if (!zipper)
 			{
-				lua_pushstring(L, "Invalid Bit7zZipper object");
+				lua_pushstring(L, std::format("Invalid {} object", Bit7zZipperTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -220,7 +222,7 @@ namespace HsBa::Slicer
 			std::string path = luaL_checkstring(L, 2);
 			if (!zipper)
 			{
-				lua_pushstring(L, "Invalid Bit7zZipper object");
+				lua_pushstring(L, std::format("Invalid {} object", Bit7zZipperTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -238,7 +240,7 @@ namespace HsBa::Slicer
 
 		int lua_bit7z_zipper_gc(lua_State* L)
 		{
-			LuaGC<Bit7zZipper>(L);
+			LuaGC<Bit7zZipper, Bit7zZipperTypeName>(L);
 			return 0;
 		}
 
@@ -255,9 +257,10 @@ namespace HsBa::Slicer
 #endif // USE_BIT7Z
 
 		// ============= SQLiteAdapter Wrapper =============
+		constexpr Utils::TemplateString SQLiteAdapterTypeName = "SQLiteAdapter";
 		int lua_sqlite_new(lua_State* L)
 		{
-			NewLuaObject<SQL::SQLiteAdapter>(L, "SQLiteAdapter");
+			NewLuaObject<SQL::SQLiteAdapter, SQLiteAdapterTypeName>(L);
 			return 1;
 		}
 
@@ -267,7 +270,7 @@ namespace HsBa::Slicer
 			std::string path = luaL_checkstring(L, 2);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid SQLiteAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", SQLiteAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -289,7 +292,7 @@ namespace HsBa::Slicer
 			std::string query = luaL_checkstring(L, 2);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid SQLiteAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", SQLiteAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -311,7 +314,7 @@ namespace HsBa::Slicer
 			std::string query = luaL_checkstring(L, 2);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid SQLiteAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", SQLiteAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try {
@@ -343,7 +346,7 @@ namespace HsBa::Slicer
 			luaL_checktype(L, 3, LUA_TTABLE);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid SQLiteAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", SQLiteAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -379,7 +382,7 @@ namespace HsBa::Slicer
 			luaL_checktype(L, 4, LUA_TTABLE);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid SQLiteAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", SQLiteAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -418,7 +421,7 @@ namespace HsBa::Slicer
 			luaL_checktype(L, 3, LUA_TTABLE);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid SQLiteAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", SQLiteAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -452,7 +455,7 @@ namespace HsBa::Slicer
 			luaL_checktype(L, 3, LUA_TTABLE);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid SQLiteAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", SQLiteAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -477,17 +480,9 @@ namespace HsBa::Slicer
 			}
 		}
 
-		int lua_sqlite_close(lua_State* L)
-		{
-			auto* db = static_cast<SQL::SQLiteAdapter*>(
-				luaL_checkudata(L, 1, "SQLiteAdapter"));
-			db->~SQLiteAdapter();
-			return 0;
-		}
-
 		int lua_sqlite_gc(lua_State* L)
 		{
-			LuaGC<SQL::SQLiteAdapter>(L);
+			LuaGC<SQL::SQLiteAdapter, SQLiteAdapterTypeName>(L);
 			return 0;
 		}
 
@@ -500,16 +495,16 @@ namespace HsBa::Slicer
 			{"Update", lua_sqlite_update},
 			{"Delete", lua_sqlite_delete},
 			{"CreateTable", lua_sqlite_create_table},
-			{"Close", lua_sqlite_close},
 			{"__gc", lua_sqlite_gc},
 			{nullptr, nullptr}
 		};
 
 #ifdef USE_MYSQL
 		// ============= MySQLAdapter Wrapper =============
+		constexpr Utils::TemplateString MySQLAdapterTypeName = "MySQLAdapter";
 		int lua_mysql_new(lua_State* L)
 		{
-			NewLuaObject<SQL::MySQLAdapter>(L, "MySQLAdapter");
+			NewLuaObject<SQL::MySQLAdapter, MySQLAdapterTypeName>(L);
 			return 1;
 		}
 		int lua_mysql_connect(lua_State* L)
@@ -531,7 +526,7 @@ namespace HsBa::Slicer
 			}
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid MySQLAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", MySQLAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -553,7 +548,7 @@ namespace HsBa::Slicer
 			std::string query = luaL_checkstring(L, 2);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid MySQLAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", MySQLAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -574,7 +569,7 @@ namespace HsBa::Slicer
 			std::string query = luaL_checkstring(L, 2);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid MySQLAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", MySQLAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try {
@@ -605,7 +600,7 @@ namespace HsBa::Slicer
 			luaL_checktype(L, 3, LUA_TTABLE);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid MySQLAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", MySQLAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -640,7 +635,7 @@ namespace HsBa::Slicer
 			luaL_checktype(L, 4, LUA_TTABLE);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid MySQLAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", MySQLAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -678,7 +673,7 @@ namespace HsBa::Slicer
 			luaL_checktype(L, 3, LUA_TTABLE);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid MySQLAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", MySQLAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -711,7 +706,7 @@ namespace HsBa::Slicer
 			luaL_checktype(L, 3, LUA_TTABLE);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid MySQLAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", MySQLAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -735,16 +730,9 @@ namespace HsBa::Slicer
 				return lua_error(L);
 			}
 		}
-		int lua_mysql_close(lua_State* L)
-		{
-			auto* db = static_cast<SQL::MySQLAdapter*>(
-				luaL_checkudata(L, 1, "MySQLAdapter"));
-			db->~MySQLAdapter();
-			return 0;
-		}
 		int lua_mysql_gc(lua_State* L)
 		{
-			LuaGC<SQL::MySQLAdapter>(L);
+			LuaGC<SQL::MySQLAdapter, MySQLAdapterTypeName>(L);
 			return 0;
 		}
 		static const luaL_Reg mysql_adapter_methods[] =
@@ -756,7 +744,6 @@ namespace HsBa::Slicer
 			{"Update", lua_mysql_update},
 			{"Delete", lua_mysql_delete},
 			{"CreateTable", lua_mysql_create_table},
-			{"Close", lua_mysql_close},
 			{"__gc", lua_mysql_gc},
 			{nullptr, nullptr}
 		};
@@ -764,9 +751,10 @@ namespace HsBa::Slicer
 #ifdef USE_PGSQL
 		// ============= PostgreSQLAdapter Wrapper =============
 		// Similar implementation as MySQLAdapter can be done here
+		constexpr Utils::TemplateString PostgreSQLAdapterTypeName = "PostgreSQLAdapter";
 		int lua_pgsql_new(lua_State* L)
 		{
-			NewLuaObject<SQL::PostgreSQLAdapter>(L, "PostgreSQLAdapter");
+			NewLuaObject<SQL::PostgreSQLAdapter, PostgreSQLAdapterTypeName>(L);
 			return 1;
 		}
 		int lua_pgsql_connect(lua_State* L)
@@ -788,7 +776,7 @@ namespace HsBa::Slicer
 			}
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid PostgreSQLAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", PostgreSQLAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -810,7 +798,7 @@ namespace HsBa::Slicer
 			std::string query = luaL_checkstring(L, 2);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid PostgreSQLAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", PostgreSQLAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -831,7 +819,7 @@ namespace HsBa::Slicer
 			std::string query = luaL_checkstring(L, 2);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid PostgreSQLAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", PostgreSQLAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try {
@@ -862,7 +850,7 @@ namespace HsBa::Slicer
 			luaL_checktype(L, 3, LUA_TTABLE);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid PostgreSQLAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", PostgreSQLAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -897,7 +885,7 @@ namespace HsBa::Slicer
 			luaL_checktype(L, 4, LUA_TTABLE);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid PostgreSQLAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", PostgreSQLAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -935,7 +923,7 @@ namespace HsBa::Slicer
 			luaL_checktype(L, 3, LUA_TTABLE);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid PostgreSQLAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", PostgreSQLAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -968,7 +956,7 @@ namespace HsBa::Slicer
 			luaL_checktype(L, 3, LUA_TTABLE);
 			if (!db)
 			{
-				lua_pushstring(L, "Invalid PostgreSQLAdapter object");
+				lua_pushstring(L, std::format("Invalid {} object", PostgreSQLAdapterTypeName).c_str());
 				return lua_error(L);
 			}
 			try
@@ -992,16 +980,9 @@ namespace HsBa::Slicer
 				return lua_error(L);
 			}
 		}
-		int lua_pgsql_close(lua_State* L)
-		{
-			auto* db = static_cast<SQL::PostgreSQLAdapter*>(
-				luaL_checkudata(L, 1, "PostgreSQLAdapter"));
-			db->~PostgreSQLAdapter();
-			return 0;
-		}
 		int lua_pgsql_gc(lua_State* L)
 		{
-			LuaGC<SQL::PostgreSQLAdapter>(L);
+			LuaGC<SQL::PostgreSQLAdapter, PostgreSQLAdapterTypeName>(L);
 			return 0;
 		}
 		static const luaL_Reg pgsql_adapter_methods[] =
@@ -1013,7 +994,6 @@ namespace HsBa::Slicer
 			{"Update", lua_pgsql_update},
 			{"Delete", lua_pgsql_delete},
 			{"CreateTable", lua_pgsql_create_table},
-			{"Close", lua_pgsql_close},
 			{"__gc", lua_pgsql_gc},
 			{nullptr, nullptr}
 		};
@@ -1023,7 +1003,7 @@ namespace HsBa::Slicer
 
 	void RegisterLuaZipper(lua_State* L)
 	{
-		luaL_newmetatable(L, "Zipper");
+		luaL_newmetatable(L, static_cast<const char*>(ZipperTypeName));
 		lua_pushcfunction(L, lua_zipper_gc);
 		lua_setfield(L, -2, "__gc");
 		lua_pop(L, 1);
@@ -1047,7 +1027,7 @@ namespace HsBa::Slicer
 #ifdef USE_BIT7Z
 	void RegisterLuaBit7zZipper(lua_State* L)
 	{
-		luaL_newmetatable(L, "Bit7zZipper");
+		luaL_newmetatable(L, static_cast<const char*>(Bit7zZipperTypeName));
 		lua_pushcfunction(L, lua_bit7z_zipper_gc);
 		lua_setfield(L, -2, "__gc");
 		lua_pop(L, 1);
@@ -1070,7 +1050,7 @@ namespace HsBa::Slicer
 
 	void RegisterLuaSQLiteAdapter(lua_State* L)
 	{
-		luaL_newmetatable(L, "SQLiteAdapter");
+		luaL_newmetatable(L, static_cast<const char*>(SQLiteAdapterTypeName));
 
 		lua_pushvalue(L, -1);
 		lua_setfield(L, -2, "__index");
@@ -1091,8 +1071,6 @@ namespace HsBa::Slicer
 		lua_setfield(L, -2, "Delete");
 		lua_pushcfunction(L, lua_sqlite_create_table);
 		lua_setfield(L, -2, "CreateTable");
-		lua_pushcfunction(L, lua_sqlite_close);
-		lua_setfield(L, -2, "Close");
 
 		lua_pop(L, 1);
 
@@ -1105,7 +1083,7 @@ namespace HsBa::Slicer
 #ifdef USE_MYSQL
 	void RegisterLuaMySQLAdapter(lua_State* L)
 	{
-		luaL_newmetatable(L, "MySQLAdapter");
+		luaL_newmetatable(L, static_cast<const char*>(MySQLAdapterTypeName));
 		lua_pushvalue(L, -1);
 		lua_setfield(L, -2, "__index");
 		lua_pushcfunction(L, lua_mysql_gc);
@@ -1124,8 +1102,6 @@ namespace HsBa::Slicer
 		lua_setfield(L, -2, "Delete");
 		lua_pushcfunction(L, lua_mysql_create_table);
 		lua_setfield(L, -2, "CreateTable");
-		lua_pushcfunction(L, lua_mysql_close);
-		lua_setfield(L, -2, "Close");
 		lua_pop(L, 1);
 		lua_newtable(L);
 		lua_pushcfunction(L, lua_mysql_new);
@@ -1137,7 +1113,7 @@ namespace HsBa::Slicer
 #ifdef USE_PGSQL
 	void RegisterLuaPostgreSQLAdapter(lua_State* L)
 	{
-		luaL_newmetatable(L, "PostgreSQLAdapter");
+		luaL_newmetatable(L, static_cast<const char*>(PostgreSQLAdapterTypeName));
 		lua_pushvalue(L, -1);
 		lua_setfield(L, -2, "__index");
 		lua_pushcfunction(L, lua_pgsql_gc);
@@ -1156,8 +1132,6 @@ namespace HsBa::Slicer
 		lua_setfield(L, -2, "Delete");
 		lua_pushcfunction(L, lua_pgsql_create_table);
 		lua_setfield(L, -2, "CreateTable");
-		lua_pushcfunction(L, lua_pgsql_close);
-		lua_setfield(L, -2, "Close");
 		lua_pop(L, 1);
 		lua_newtable(L);
 		lua_pushcfunction(L, lua_pgsql_new);

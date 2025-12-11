@@ -88,7 +88,6 @@ BOOST_AUTO_TEST_CASE(test_sqlite_adapter_lua_integration)
 		assert(#rows == 2,            "Expected 2 rows")
 		assert(rows[1].name == "Alice", "Expected Alice")
 		assert(rows[2].name == "Bob",   "Expected Bob")
-		db:Close()
 	)";
 
 	

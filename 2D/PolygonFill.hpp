@@ -37,6 +37,9 @@ namespace HsBa::Slicer
 
     Polygons LuaCustomFill(const Polygons& poly, const std::string& scriptPath, const std::string& functionName = "generate_fill",
         double lineThickness = 0.5);
+
+    Polygons LuaCustomFillString(const Polygons& poly, const std::string& script, const std::string& functionName = "generate_fill",
+        double lineThickness = 0.5);
 }
 
 #endif // !HSBA_SLICER_POLYGONFILL_HPP

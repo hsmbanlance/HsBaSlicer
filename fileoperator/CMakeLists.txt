@@ -38,6 +38,7 @@ target_include_directories(HsBaSlicerFileOperator PRIVATE ${LUA_INCLUDE_DIR})
 
 target_link_libraries(HsBaSlicerFileOperator PUBLIC 
 	miniz::miniz
+	HsBaSlicerUtils
 	${LUA_LIBRARIES}
 )
 

@@ -75,4 +75,28 @@ BOOST_AUTO_TEST_CASE(lua_to_image)
     // cleanup
     std::error_code ec;
     std::filesystem::remove(outPath, ec);
+
+    const char* kLuaCode = R"(
+function rasterize(poly)
+    local W, H = 128, 128
+    local img = {}
+    -- 简化的“全黑正方形”
+    for y = 0, H - 1 do
+        for x = 0, W - 1 do
+            if x >= 32 and x < 96 and y >= 32 and y < 96 then
+                table.insert(img, 0)
+            else
+                table.insert(img, 255)
+            end
+        end
+    end
+    return img
+end
+)";
+    ok = LuaToImageString(poly, kLuaCode, outPath.string(), "rasterize");
+    BOOST_CHECK(ok);
+    BOOST_CHECK(std::filesystem::exists(outPath));
+
+    // cleanup
+    std::filesystem::remove(outPath, ec);
 }

@@ -403,7 +403,7 @@ namespace HsBa::Slicer
 			Polygons offs = Offset(poly, delta, join_type, Clipper2Lib::EndType::Polygon);
 			if (offs.empty()) break;
 			// Add first point to close 
-			auto offset_path = offs;
+			Polygons offset_path = offs;
 			for (auto& p : offset_path) {
 				if (!p.empty()) {
 					p = ClosePath(p);
@@ -501,7 +501,7 @@ namespace HsBa::Slicer
 			{
 				for (size_t i = 0; i < segs.size(); ++i)
 				{
-					auto [a,b] = segs[i];
+					const auto& [a,b] = segs[i];
 					double dx = b.x - a.x, dy = b.y - a.y;
 					double len = std::hypot(dx, dy);
 					if (len <= 1e-12) 
@@ -554,7 +554,7 @@ namespace HsBa::Slicer
 				for (size_t ii = 0; ii < segs.size(); ++ii)
 				{
 					size_t i = segs.size() - 1 - ii;
-					auto [a,b] = segs[i];
+					const auto& [a,b] = segs[i];
 					double dx = b.x - a.x, dy = b.y - a.y;
 					double len = std::hypot(dx, dy);
 					if (len <= 1e-12) continue;
@@ -634,7 +634,7 @@ namespace HsBa::Slicer
 		{
 			for (size_t i = 0; i < rows[r].size(); ++i)
 			{
-				auto [a, b] = rows[r][i];
+				const auto& [a, b] = rows[r][i];
 				double smin = a.x * ux + a.y * uy;
 				double smax = b.x * ux + b.y * uy;
 				segList.push_back(SegInfo{ r, i, a, b, smin, smax });
@@ -739,7 +739,7 @@ namespace HsBa::Slicer
 				if (!ok2 && point_inside(p)) { p2 = p; ok2 = true; }
 			}
 			if (!ok1 || !ok2) return {};
-			auto outer = polyD[0];
+			PolygonD outer = polyD[0];
 			if (Clipper2Lib::Area(Integerization(outer)) < 0) std::reverse(outer.begin(), outer.end());
 			auto distOnRing = [&](size_t i, size_t j)->double {
 				double d = 0;
@@ -826,7 +826,7 @@ namespace HsBa::Slicer
 			{
 				for (size_t i = 0; i < segs.size(); ++i)
 				{
-					auto [a, b] = segs[i];
+					const auto& [a, b] = segs[i];
 					size_t idxSeg = segIndex[r][i];
 					int cid = compId[idxSeg];
 					Point2D aa, bb;
@@ -895,7 +895,7 @@ namespace HsBa::Slicer
 				for (size_t ii = 0; ii < segs.size(); ++ii)
 				{
 					size_t i = segs.size() - 1 - ii;
-					auto [a, b] = segs[i];
+					const auto& [a, b] = segs[i];
 					size_t idxSeg = segIndex[r][i];
 					int cid = compId[idxSeg];
 					Point2D aa, bb;
@@ -973,7 +973,8 @@ namespace HsBa::Slicer
 		double angle_deg, double lineThickness, Clipper2Lib::JoinType join_type)
 	{
 		Polygons res;
-		auto fillOne = [&](const Polygons& p)->Polygons {
+		auto fillOne = [&](const Polygons& p)->Polygons 
+			{
 			switch (mode)
 			{
 			case FillMode::Line:
@@ -1035,7 +1036,7 @@ namespace HsBa::Slicer
 		}
 
 		const auto minAreaInt64 = static_cast<int64_t>(std::pow(lineThickness, 2));
-		int       done = 0;
+		int done = 0;
 		for (int i = 1; i <= inwardCount - 1; ++i)
 		{
 			auto offs = Offset(poly, -offsetStep * i, join_type,
@@ -1103,7 +1104,8 @@ namespace HsBa::Slicer
 
 		// get function
 		lua_getglobal(L, functionName.c_str());
-		if (!lua_isfunction(L, -1)) {
+		if (!lua_isfunction(L, -1)) 
+		{
 			lua_close(L);
 			throw RuntimeError("Lua function not found: " + functionName);
 		}
@@ -1165,6 +1167,87 @@ namespace HsBa::Slicer
 
 		lua_close(L);
 		return res;
+	}
+
+	Polygons LuaCustomFillString(const Polygons& poly,
+		const std::string& luaScript,
+		const std::string& functionName,
+		double lineThickness)
+	{
+		auto polyD = UnIntegerization(poly);
+
+		lua_State* L = luaL_newstate();
+		if (!L) 
+			throw RuntimeError("Failed to create Lua state");
+		luaL_openlibs(L);
+
+		RegisterLuaPolygonOperations(L);
+		RegisterLuaPolygonFillFunctions(L);
+
+		if (luaL_loadstring(L, luaScript.c_str()) != LUA_OK) 
+		{
+			std::string err = lua_tostring(L, -1);
+			lua_close(L);
+			throw RuntimeError("Failed to load Lua string: " + err);
+		}
+		if (lua_pcall(L, 0, 0, 0) != LUA_OK) 
+		{          
+			std::string err = lua_tostring(L, -1);
+			lua_close(L);
+			throw RuntimeError("Exec Lua string failed: " + err);
+		}
+
+		lua_getglobal(L, functionName.c_str());
+		if (!lua_isfunction(L, -1)) 
+		{
+			lua_close(L);
+			throw RuntimeError("Lua function not found: " + functionName);
+		}
+
+		PushPolygonsDToLua(L, polyD);
+		if (lua_pcall(L, 1, 1, 0) != LUA_OK) 
+		{
+			std::string err = lua_tostring(L, -1);
+			lua_close(L);
+			throw RuntimeError("Error calling Lua function: " + err);
+		}
+
+		if (!lua_istable(L, -1)) 
+		{
+			lua_close(L);
+			throw RuntimeError("Lua function did not return a table");
+		}
+
+		Polygons allPieces;
+		lua_pushnil(L);
+		while (lua_next(L, -2)) 
+		{
+			if (lua_istable(L, -1)) 
+			{
+				PolygonD outpoly;
+				int n = (int)lua_rawlen(L, -1);
+				for (int i = 1; i <= n; ++i) {
+					lua_rawgeti(L, -1, i);
+					if (lua_istable(L, -1)) {
+						lua_getfield(L, -1, "x");
+						lua_getfield(L, -2, "y");
+						double x = lua_isnumber(L, -2) ? lua_tonumber(L, -2) : 0.0;
+						double y = lua_isnumber(L, -1) ? lua_tonumber(L, -1) : 0.0;
+						outpoly.emplace_back(Point2D{ x, y });
+						lua_pop(L, 2);
+					}
+					lua_pop(L, 1);
+				}
+				if (!outpoly.empty()) {
+					Polygon ip = Integerization(outpoly);
+					allPieces.push_back(ip);
+				}
+			}
+			lua_pop(L, 1);
+		}
+
+		lua_close(L);
+		return allPieces;
 	}
 
 } // namespace HsBa::Slicer
