@@ -14,9 +14,9 @@
 namespace HsBa::Slicer::Utils
 {
     #if __cpp_lib_coroutine && __cpp_impl_coroutine
-	/// <summary>
-	/// coroutine executor interface
-	/// </summary>
+	/**
+	 * @brief coroutine executor interface
+	 */
 	class IExecutor
 	{
 	public:
@@ -24,9 +24,9 @@ namespace HsBa::Slicer::Utils
 		virtual ~IExecutor() = default;
 		virtual void execute(std::function<void()>&& func) = 0;
 	};
-	/// <summary>
-	/// coroutine executor noop, do nothing
-	/// </summary>
+	/**
+	 * @brief coroutine executor noop, do nothing
+	 */
 	class NoopExecutor : public IExecutor
 	{
 	public:
@@ -35,9 +35,9 @@ namespace HsBa::Slicer::Utils
 			func();
 		}
 	};
-	/// <summary>
-	/// coroutine executor new thread
-	/// </summary>
+	/**
+	 * @brief coroutine executor new thread
+	 */
 	class NewThreadExecutor : public IExecutor
 	{
 	public:
@@ -54,9 +54,9 @@ namespace HsBa::Slicer::Utils
 			}
 		}
 	};
-	/// <summary>
-	/// coroutine executor async
-	/// </summary>
+	/**
+	 * @brief coroutine executor async
+	 */
 	class AsyncExecutor : public IExecutor
 	{
 	public:
@@ -71,11 +71,11 @@ namespace HsBa::Slicer::Utils
 		class Task;
 	template<typename Executor>
 	class Task<void, Executor>;
-	/// <summary>
-	/// coroutine taskawaiter
-	/// </summary>
-	/// <typeparam name="T">coroutine return type</typeparam>
-	/// <typeparam name="Executor">coroutine executor</typeparam>
+	/**
+	 * @brief 	coroutine taskawaiter
+	 * @tparam T coroutine return type
+	 * @tparam Executor coroutine executor
+	 */
 	template<typename T, typename Executor>
 		requires (std::movable<T> || std::is_void_v<T>) && std::derived_from<Executor, IExecutor>
 	class TaskAwaiter
@@ -116,12 +116,13 @@ namespace HsBa::Slicer::Utils
 	template<typename T, typename Executor = AsyncExecutor, typename Allocator = std::allocator<T>>
 		requires std::default_initializable<T>&& std::movable<T>&& std::derived_from<Executor, IExecutor>&& TAllocator<T, Allocator>
 	class CustomAllocatorTask;
-	/// <summary>
-	/// coroutine task awaiter with custom allocator
-	/// </summary>
-	/// <typeparam name="T">coroutine return type</typeparam>
-	/// <typeparam name="Executor">coroutine executor</typeparam>
-	/// <typeparam name="Allocator">coroutine allocator</typeparam>
+	
+	/**
+	 * @brief coroutine task awaiter with custom allocator
+	 * @tparam T coroutine return type
+	 * @tparam Executor coroutine executor
+	 * @tparam Allocator coroutine allocator
+	 */
 	template<typename T, typename Executor, typename Allocator>
 		requires std::movable<T>&& std::derived_from<Executor, IExecutor>&& TAllocator<T, Allocator>
 	class CustomAllocatorTaskAwaiter
@@ -159,9 +160,10 @@ namespace HsBa::Slicer::Utils
 		CustomAllocatorTask<T, Executor, Allocator> task_;
 		IExecutor* executor_;
 	};
-	/// <summary>
-	/// coroutine dispatchawaiter
-	/// </summary>
+	
+	/**
+	 * @brief coroutine dispatchawaiter
+	 */
 	class DispatchAwaiter
 	{
 	public:
@@ -179,12 +181,12 @@ namespace HsBa::Slicer::Utils
 	private:
 		IExecutor* executor_;
 	};
-
-	/// <summary>
-	/// coroutine task
-	/// </summary>
-	/// <typeparam name="T">task return type</typeparam>
-	/// <typeparam name="Executor">coroutine task executor</typeparam>
+	 
+	/**
+	 * @brief coroutine task
+	 * @tparam T task return type
+	 * @tparam Executor coroutine task executor
+	 */
 	template<typename T, typename Executor>
 		requires ((std::movable<T>&& std::default_initializable<T>) || std::is_void_v<T>)
 	&& std::derived_from<Executor, IExecutor>
@@ -192,9 +194,9 @@ namespace HsBa::Slicer::Utils
 	{
 		friend class TaskAwaiter<T, Executor>;
 	public:
-		/// <summary>
-		/// coroutines task result
-		/// </summary>
+		/**
+		 * @brief coroutines task result
+		 */
 		class Result
 		{
 		public:
@@ -351,18 +353,18 @@ namespace HsBa::Slicer::Utils
 		Handle handle_;
 	};
 
-	/// <summary>
-	/// coroutine task with return void
-	/// </summary>
-	/// <typeparam name="Executor">coroutine executor</typeparam>
+	/**
+	 * @brief coroutine task with return void
+	 * @tparam Executor coroutine executor
+	 */
 	template<typename Executor>
 	class Task<void, Executor>
 	{
 		friend class TaskAwaiter<void, Executor>;
 	public:
-		/// <summary>
-		/// task result
-		/// </summary>
+		/**
+		 * @brief task result
+		 */
 		class Result
 		{
 		public:
@@ -509,12 +511,13 @@ namespace HsBa::Slicer::Utils
 	private:
 		Handle handle_;
 	};
-	/// <summary>
-	/// coroutines task with custom allocator
-	/// </summary>
-	/// <typeparam name="T">task result type</typeparam>
-	/// <typeparam name="Executor">executor type</typeparam>
-	/// <typeparam name="Allocator">custom allocator type</typeparam>
+	
+	/**
+	 * @brief coroutines task with custom allocator
+	 * @tparam T task result type
+	 * @tparam Executor executor type
+	 * @tparam Allocator custom allocator type
+	 */
 	template<typename T, typename Executor, typename Allocator>
 		requires std::default_initializable<T>&& std::movable<T>&& std::derived_from<Executor, IExecutor>&& TAllocator<T, Allocator>
 	class CustomAllocatorTask
@@ -522,9 +525,9 @@ namespace HsBa::Slicer::Utils
 		friend class CustomAllocatorTaskAwaiter<T, Executor, Allocator>;
 	public:
 		using allocator_type = Allocator;
-		/// <summary>
-		/// coroutines task result
-		/// </summary>
+		/**
+		 * @brief coroutines task result
+		 */
 		class Result
 		{
 		public:
@@ -702,11 +705,11 @@ namespace HsBa::Slicer::Utils
 
 	// personal couroutine Generator
 	// see it in https://zh.cppreference.com/w/cpp/coroutine/coroutine_handle
-
-	/// <summary>
-	/// personal coroutine Generator
-	/// </summary>
-	/// <typeparam name="T">yield type</typeparam>
+	
+	/**
+	 * @brief personal coroutine Generator
+	 * @tparam T yield type
+	 */
 	template<std::movable T>
 	class Generator
 	{
@@ -796,9 +799,9 @@ namespace HsBa::Slicer::Utils
 			}
 			return *this;
 		}
-		/// <summary>
-		/// generator iterator
-		/// </summary>
+		/**
+		 * @brief generator iterator
+		 */
 		class iterator
 		{
 		public:
@@ -844,13 +847,13 @@ namespace HsBa::Slicer::Utils
 		inline static std::function<void()> onCancel = []() {};
 
 	};
-
-	/// <summary>
-	/// personal coroutine Generator with custom allocator, allocator is static member in promise_type
-	/// promise_type new and delete use allocator, so allocator must be static
-	/// </summary>
-	/// <typeparam name="Allocator">allocator type, default is std::allocator</typeparam>
-	/// <typeparam name="T">yield type</typeparam>
+	
+	/**
+	 * @brief personal coroutine Generator with custom allocator, allocator is static member in promise_type
+	 * promise_type new and delete use allocator, so allocator must be static
+	 * @tparam Allocator allocator type, default is std::allocator
+	 * @tparam T yield type
+	 */
 	template<std::movable T, typename Allocator = std::allocator<T>>
 		requires TAllocator<T, Allocator>
 	class CustomAllocatorGenerator
@@ -957,9 +960,9 @@ namespace HsBa::Slicer::Utils
 		{
 			promise_type::alloc = allocator;
 		}
-		/// <summary>
-		/// generator iterator
-		/// </summary>
+		/**
+		 * @brief generator iterator
+		 */
 		class iterator
 		{
 		public:
