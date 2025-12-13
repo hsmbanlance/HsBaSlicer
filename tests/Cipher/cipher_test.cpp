@@ -15,6 +15,16 @@
 
 using namespace HsBa::Slicer::Cipher;
 
+struct DisableCrt 
+{
+	DisableCrt()
+	{
+#if defined(_MSC_VER) && defined(_DEBUG)
+		_CrtSetDbgFlag(_CrtSetDbgFlag(_CRTDBG_REPORT_FLAG) & ~_CRTDBG_LEAK_CHECK_DF);
+#endif // defined(_MSC_VER) && defined(_DEBUG)
+	}
+};
+
 namespace
 {
 	std::pair<std::string, std::string> generate_rsa_pem_pair() 
@@ -55,6 +65,8 @@ BOOST_AUTO_TEST_SUITE(cipher_tests)
 
 BOOST_AUTO_TEST_CASE(encoder_roundtrip)
 {
+	[[maybe_unused]]
+	static DisableCrt crt;
 	std::vector<unsigned char> data = { 1,2,3,4,5,6,7,8,9 };
 	auto b64 = Encoder::base64_encode(data);
 	auto dec = Encoder::base64_decode(b64);

@@ -9,47 +9,47 @@
 
 namespace HsBa::Slicer
 {
-	/// <summary>
-	/// streamable type,which can be used in stream operator,include input and output stream
-	/// </summary>
+	/**
+	 * @brief streamable type,which can be used in stream operator,include input and output streamstreamable type,which can be used in stream operator,include input and output stream
+	 */
 	template<typename T>
 	concept CharStream = requires(T t, std::ostream & os, std::istream & is) {
 		{ os << t };
 		{ is >> t };
 	};
 
-	/// <summary>
-	/// wstreamable type,which can be used in stream operator,include input and output stream
-	/// </summary>
+	/**
+	 * @brief wstreamable type,which can be used in stream operator,include input and output stream
+	 */
 	template<typename T>
 	concept WCharStream = requires(T t, std::wostream & os, std::wistream & is) {
 		{ os << t };
 		{ is >> t };
 	};
 
-	/// <summary>
-	/// put_value and get_value member function,for boost::ptree
-	/// </summary>
+	/**
+	 * @brief put_value and get_value member function,for boost::ptree
+	 */
 	template<typename T, typename Tran>
 	concept StrTranslator = requires(T t, std::string str, Tran tr) {
 		{ tr.put_value(t) }->std::convertible_to<std::string>;
 		{ tr.get_value(str) }->std::same_as<T>;
 	};
 
-	/// <summary>
-	/// is enumeration type
-	/// </summary>
+	/**
+	 * @brief is enumeration type
+	 */
 	template<typename T>
 	concept Enum = std::is_enum_v<T>;
 
-	/// <summary>
-	/// is c style pointer
-	/// </summary>
+	/**
+	 * @brief is c style pointer
+	 */
 	template<typename T>
 	concept CStylePointer = std::is_pointer_v<T>;
-	/// <summary>
-	/// can be dereferenced
-	/// </summary>
+	/**
+	 * @brief can be dereferenced
+	 */
 	template<typename T>
 	concept PointerOrIt = requires(T t) {
 		{ *t };
@@ -69,98 +69,98 @@ namespace HsBa::Slicer
 		{ t.value() } -> std::same_as<typename T::value_type&>;
 	};
 
-	/// <summary>
-	/// is c style array
-	/// </summary>
+	/**
+	 * @brief is c style array
+	 */
 	template<typename T>
 	concept CStyleArray = std::is_array_v<T>;
 
-	/// <summary>
-	/// left value reference
-	/// </summary>
+	/**
+	 * @brief left value reference
+	 */
 	template<typename T>
 	concept LvalueRef = std::is_lvalue_reference_v<T>;
-	/// <summary>
-	/// right value reference
-	/// </summary>
+	/**
+	 * @brief right value reference
+	 */
 	template<typename T>
 	concept RvalueRef = std::is_rvalue_reference_v<T>;
-	/// <summary>
-	/// is reference
-	/// </summary>
+	/**
+	 * @brief is reference
+	 */
 	template<typename T>
 	concept Ref = std::is_reference_v<T>;
 
-	/// <summary>
-	/// is standard arithmetic type
-	/// </summary>
+	/**
+	 * @brief is standard arithmetic type
+	 */
 	template<typename T>
 	concept StandardArithmetic = std::is_arithmetic_v<T>;
 
-	/// <summary>
-	/// is c style union
-	/// </summary>
+	/**
+	 * @brief is c style union
+	 */
 	template<typename T>
 	concept CStypleUnion = std::is_union_v<T>;
 
-	/// <summary>
-	/// has std::hash
-	/// </summary>
+	/**
+	 * @brief has std::hash
+	 */
 	template<typename T>
 	concept StdHash = requires(T t, std::hash<T> hasher)
 	{
 		{ hasher(t) }->std::convertible_to<size_t>;
 	};
-	/// <summary>
-	/// Hasher is T hasher, like std::hash
-	/// </summary>
+	/**
+	 * @brief Hasher is T hasher, like std::hash
+	 */
 	template<typename T, typename Hasher>
 	concept Hash = requires(T t, Hasher hasher)
 	{
 		{ hasher(t) }->std::convertible_to<size_t>;
 	};
-	/// <summary>
-	/// has std::hash and operator==
-	/// </summary>
+	/**
+	 * @brief has std::hash and operator==
+	 */
 	template<typename T>
 	concept EqualAndStdHash = std::equality_comparable<T> && StdHash<T>;
-	/// <summary>
-	/// T has operator== and Hasher is T hasher, like std::hash
-	/// </summary>
+	/**
+	 * @brief T has operator== and Hasher is T hasher, like std::hash
+	 */
 	template<typename T, typename Hasher>
 	concept EqualAndHash = std::equality_comparable<T> && Hash<T, Hasher>;
 
-	/// <summary>
-	/// std string cotainer
-	/// </summary>
+	/**
+	 * @brief std string cotainer
+	 */
 	template<typename T>
 	concept StdString = std::same_as<T, std::string> || std::same_as<T, std::wstring>
 		|| std::same_as<T, std::u16string> || std::same_as<T, std::u32string> ||
 		std::same_as<T, std::u8string>;
-	/// <summary>
-	/// const char* or const wchar_t* or const char16_t* or const char32_t* or const char8_t*
-	/// </summary>
+	/**
+	 * @brief const char* or const wchar_t* or const char16_t* or const char32_t* or const char8_t*
+	 */
 	template<typename T>
 	concept CStyleString = std::same_as<T, const char*> || std::same_as<T, const wchar_t*>
 		|| std::same_as<T, const char16_t*> || std::same_as<T, const char32_t*> ||
 		std::same_as<T, const char8_t*>;
-	/// <summary>
-	/// std string container or c style string
-	/// </summary>
+	/**
+	 * @brief std string container or c style string
+	 */
 	template<typename T>
 	concept String = StdString<T> || CStyleString<T>;
 
-	/// <summary>
-	/// std string view
-	/// </summary>
+	/**
+	 * @brief std string view
+	 */
 	template<typename T>
 	concept StringView = std::same_as<T, std::string_view> || std::same_as<T, std::wstring_view> ||
 		std::same_as<T, std::u16string_view> || std::same_as<T, std::u32string_view> ||
 		std::same_as<T, std::u8string_view>;
 
-	/// <summary>
-	/// allocator for T
-	/// </summary>
+	/**
+	 * @brief allocator for T
+	 */
 	template<typename T, typename Allocator>
 	concept TAllocator = requires(Allocator alloc, std::size_t n, T * p) {
 		{ alloc.allocate(n) } -> std::same_as<T*>;

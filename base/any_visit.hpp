@@ -16,16 +16,16 @@ namespace HsBa::Slicer::Utils
     // visit any
     // ref: https://codereview.stackexchange.com/questions/275440/visit-for-stdany
 
-    /// <summary>
-    /// visit std::any
-    /// </summary>
-    /// <typeparam name="...Ts">visited types</typeparam>
-    /// <typeparam name="Callback">callback function</typeparam>
-    /// <typeparam name="...Args">other arguments</typeparam>
-    /// <param name="callback">callback function</param>
-    /// <param name="any">any</param>
-    /// <param name="...args">other arguments</param>
-    /// <returns>return value of callback function, void if callback function returns void</returns>
+    /**
+     * @brief  visit std::any 
+     * @tparam ...Ts visited types
+     * @tparam Callback 
+     * @tparam ...Args callback function
+     * @param callback other arguments
+     * @param any any
+     * @param ...args ther arguments
+     * @return return value of callback function, void if callback function returns void
+     */
     template <typename... Ts, typename Callback, typename... Args>
     inline auto Visit(Callback&& callback, const std::any& any, Args&&... args)
     {
@@ -67,16 +67,16 @@ namespace HsBa::Slicer::Utils
         }
     }
 
-    /// <summary>
-    /// visit std::any
-    /// </summary>
-    /// <typeparam name="...Ts">visited types</typeparam>
-    /// <typeparam name="Callback">callback function</typeparam>
-    /// <typeparam name="...Args">other arguments</typeparam>
-    /// <param name="callback">callback function</param>
-    /// <param name="any">any</param>
-    /// <param name="...args">other arguments</param>
-    /// <returns>return value of callback function, void if callback function returns void</returns>
+    /**
+     * @brief  visit boost::any
+     * @tparam ...Ts visited types
+     * @tparam Callback
+     * @tparam ...Args callback function
+     * @param callback other arguments
+     * @param any any
+     * @param ...args ther arguments
+     * @return return value of callback function, void if callback function returns void
+     */
     template <typename... Ts, typename Callback, typename... Args>
     inline auto Visit(Callback&& callback, const boost::any& any, Args&&... args)
     {

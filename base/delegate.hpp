@@ -12,12 +12,12 @@
 #include "concepts.hpp"
 
 namespace HsBa::Slicer::Utils
-{
-	/// <summary>
-	/// A delegate is a type that represents references to methods with a specific parameter list and return type.
-	/// </summary>
-	/// <typeparam name="R">return type of the delegate</typeparam>
-	/// <typeparam name="...Args">parameter types of the delegate</typeparam>
+{	
+	/**
+	 * @brief A delegate is a type that represents references to methods with a specific parameter list and return type.
+	 * @tparam R return type of the delegate
+	 * @tparam ...Args parameter types of the delegate
+	 */
 	template<typename R, typename ...Args>
 	class Delegate
 	{

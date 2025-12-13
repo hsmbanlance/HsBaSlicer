@@ -6,9 +6,9 @@
 
 namespace HsBa::Slicer 
 { 
-    /// <summary>
-    /// Runtime Error
-    /// </summary>
+    /**
+     * @brief Runtime Error
+     */
     class RuntimeError : public std::runtime_error
     {
     public:
@@ -17,117 +17,117 @@ namespace HsBa::Slicer
         RuntimeError(const char* msg) : std::runtime_error(msg) {}
         using std::runtime_error::what;
     };
-    /// <summary>
-    /// Out Of Range Error
-    /// </summary>
+    /**
+     * @brief Out Of Range Error
+     */
     class OutOfRangeError : public RuntimeError
     {
     public:
         using RuntimeError::RuntimeError;
         using RuntimeError::what;
     };
-    /// <summary>
-    /// Invalid Argument Error
-    /// </summary>
+    /**
+     * @brief Invalid Argument Error
+     */
     class InvalidArgumentError : public RuntimeError
     {
     public:
         using RuntimeError::RuntimeError;
         using RuntimeError::what;
     };
-    /// <summary>
-    /// IO Error
-    /// </summary>
+    /**
+     * @brief Invalid Argument Error
+     */
     class IOError : public RuntimeError
     {
     public:
         using RuntimeError::RuntimeError;
         using RuntimeError::what;
     };
-    /// <summary>
-    /// Not Implemented Error
-    /// </summary>
+    /**
+     * @brief Not Implemented Error
+     */
     class NotImplementedError : public RuntimeError
     {
     public:
         using RuntimeError::RuntimeError;
         using RuntimeError::what;
     };
-    /// <summary>
-    /// Null Value Error
-    /// </summary>
+    /**
+     * @brief Null Value Error
+     */
     class NullValueError : public RuntimeError
     {
     public:
         using RuntimeError::RuntimeError;
         using RuntimeError::what;
     };
-    /// <summary>
-    /// Not Supported Error
-    /// </summary>
+    /**
+     * @brief Not Supported Error
+     */
     class NotSupportedError : public RuntimeError
     {
     public:
         using RuntimeError::RuntimeError;
         using RuntimeError::what;
     };
-    /// <summary>
-    /// Not Found Error
-    /// </summary>
+    /**
+     * @brief Not Supported Error
+     */
     class NotFoundError : public RuntimeError
     {
     public:
         using RuntimeError::RuntimeError;
         using RuntimeError::what;
     };
-    /// <summary>
-    /// Already Exists Error
-    /// </summary>
+    /**
+     * @brief Already Exists Error
+     */
     class AlreadyExistsError : public RuntimeError
     {
     public:
         using RuntimeError::RuntimeError;
         using RuntimeError::what;
     };
-    /// <summary>
-    /// Permission Denied Error
-    /// </summary>
+    /**
+     * @brief Permission Denied Error
+     */
     class PermissionDeniedError : public RuntimeError
     {
     public:
         using RuntimeError::RuntimeError;
         using RuntimeError::what;
     };
-    /// <summary>
-    /// Timeout Error
-    /// </summary>
+    /**
+     * @brief Timeout Error
+     */
     class TimeoutError : public RuntimeError
     {
     public:
         using RuntimeError::RuntimeError;
         using RuntimeError::what;
     };
-    /// <summary>
-    /// Interrupted Error
-    /// </summary>
+    /**
+     * @brief Interrupted Error
+     */
     class InterruptedError : public RuntimeError
     {
     public:
         using RuntimeError::RuntimeError;
         using RuntimeError::what;
     };
-    /// <summary>
-    /// Cancelled Error
-    /// </summary>
+    /**
+     * @brief Cancelled Error
+     */
     class CancelledError : public RuntimeError
     {
     public:
         using RuntimeError::RuntimeError;
         using RuntimeError::what;
     };
-    /// <summary>
-    /// Out Of Memory Error
-    /// </summary>
+    /**
+     * @brief Out Of Memory Error
+     */
     class OutOfMemoryError : public RuntimeError
     {
     public:

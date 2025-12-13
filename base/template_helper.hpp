@@ -99,7 +99,7 @@ namespace HsBa::Slicer::Utils
 			}
 			return String{ str, N };
 		}
-		inline explicit constexpr operator T*() const
+		inline explicit constexpr operator const T*() const
 		{
 			return str;
 		}
@@ -181,46 +181,46 @@ namespace HsBa::Slicer::Utils
 	{
 		return os << static_cast<std::basic_string_view<T>>(ts);
 	}
-
-	/// <summary>
-	/// template call
-	/// </summary>
-	/// <typeparam name="Callback">callback function</typeparam>
-	/// <typeparam name="...Args">function arguments</typeparam>
-	/// <typeparam name="th">template helper</typeparam>
-	/// <param name="callback">callback function</param>
-	/// <param name="...args">arguments</param>
-	/// <returns>callback return</returns>
+	
+	/**
+	 * @brief template call
+	 * @tparam Callback callback function
+	 * @tparam ...Args function arguments
+	 * @tparam th template helper
+	 * @param callback callback function
+	 * @param ...args arguments
+	 * @return callback return
+	 */
 	template<TemplateString th, typename Callback, typename... Args>
 		requires std::invocable<Callback, typename decltype(th)::StringView, Args...>
 	inline auto template_call(Callback&& callback, Args&&... args)
 	{
 		return std::forward<Callback>(callback)(th.ToStringView(), std::forward<Args>(args)...);
 	}
-
-	/// <summary>
-	/// invoke function
-	/// </summary>
-	/// <typeparam name="Callback">callback function</typeparam>
-	/// <typeparam name="...Args">function arguments</typeparam>
-	/// <param name="callback">callback function</param>
-	/// <param name="...args">callback arguments</param>
-	/// <returns>callback return</returns>
+	
+	/**
+	 * @brief invoke function
+	 * @tparam Callback callback function
+	 * @tparam ...Args function arguments
+	 * @param callback callback function
+	 * @param ...args callback arguments
+	 * @return callback return
+	 */
 	template<typename Callback, typename... Args>
 		requires std::invocable<Callback, Args...>
 	inline constexpr auto Invoke(Callback&& callback, Args&&... args)
 	{
 		return std::forward<Callback>(callback)(std::forward<Args>(args)...);
 	}
-
-	/// <summary>
-	/// async invoke function
-	/// </summary>
-	/// <typeparam name="Callback">callback function</typeparam>
-	/// <typeparam name="...Args">function arguments</typeparam>
-	/// <param name="callback">callback function</param>
-	/// <param name="...args">callback arguments</param>
-	/// <returns>future</returns>
+	
+	/**
+	 * @brief async invoke function
+	 * @tparam Callback callback function
+	 * @tparam ...Args function arguments
+	 * @param callback callback function
+	 * @param ...args callback arguments
+	 * @return future
+	 */
 	template<typename Callback, typename... Args>
 		requires std::invocable<Callback, Args...>
 	inline auto AsyncInvoke(Callback&& callback, Args&&... args)
@@ -236,11 +236,11 @@ namespace HsBa::Slicer::Utils
 
 	template<typename... Ts> Overloaded(Ts...) -> Overloaded<Ts...>;
 	
-	/// <summary>
-	/// enum to string name with template, only support enum with continuous value
-	/// </summary>
-	/// <typeparam name="T">enum value</typeparam>
-	/// <returns>enum name</returns>
+	/**
+	 * @brief enum to string name with template, only support enum with continuous value
+	 * @tparam T enum value
+	 * @return enum name
+	 */
 	template<auto T>
 	constexpr auto EnumName()
 	{
@@ -261,13 +261,13 @@ namespace HsBa::Slicer::Utils
 		return start == std::string::npos ? name : std::string_view{
 			name.data() + start + 2, name.size() - start - 2 };
 	}
-
-	/// <summary>
-	/// enum max value, only support enum with continuous value, negative value will be ignored
-	/// </summary>
-	/// <typeparam name="T">enum class</typeparam>
-	/// <typeparam name="N">ingore</typeparam>
-	/// <returns>enum max value</returns>
+	
+	/**
+	 * @brief enum max value, only support enum with continuous value, negative value will be ignored
+	 * @tparam T enum class
+	 * @tparam N ingore
+	 * @return enum max value
+	 */
 	template<Enum T, size_t N = 0>
 	constexpr auto EnumMax()
 	{
@@ -282,12 +282,12 @@ namespace HsBa::Slicer::Utils
 		}
 	}
 
-	/// <summary>
-	/// enum to string name in function argument, only support enum with continuous value, negative value will be ignored
-	/// </summary>
-	/// <typeparam name="T">enum class</typeparam>
-	/// <param name="value">enum value</param>
-	/// <returns>enum name</returns>
+	/**
+	 * @brief enum to string name in function argument, only support enum with continuous value, negative value will be ignored
+	 * @tparam T enum class
+	 * @param value enum value
+	 * @return enum name
+	 */
 	template<Enum T>
 	constexpr auto EnumName(T value)
 	{
@@ -298,13 +298,13 @@ namespace HsBa::Slicer::Utils
 		}(std::make_index_sequence<num>{});
 		return names[static_cast<size_t>(value)];
 	}
-
-	/// <summary>
-	/// enum from string name, only support enum with continuous value, negative value will be ignored
-	/// </summary>
-	/// <typeparam name="T">enum class</typeparam>
-	/// <param name="name">enum name</param>
-	/// <returns>enum value, if not found or negative value, return default value</returns>
+	
+	/**
+	 * @brief enum from string name, only support enum with continuous value, negative value will be ignored
+	 * @tparam T enum class
+	 * @param name enum name
+	 * @return enum value, if not found or negative value, return default value
+	 */
 	template<Enum T>
 	constexpr auto EnumFromName(std::string_view name)
 	{

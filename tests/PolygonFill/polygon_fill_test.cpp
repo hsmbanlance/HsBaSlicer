@@ -98,4 +98,19 @@ BOOST_AUTO_TEST_CASE(composite_and_lua_custom)
     anyLine = false;
     for (const auto &p : luares) if (p.size() == 2) { anyLine = true; break; }
     BOOST_CHECK(anyLine);
+    const char* luaSrc = R"(
+local w = 10000
+local margin = 1000
+function customFill(poly, thickness)
+    return {
+        { { x = margin, y = margin }, { x = w - margin, y = w - margin } },
+        { { x = margin, y = w - margin }, { x = w - margin, y = margin } }
+    }
+end
+)";
+    luares = LuaCustomFillString(poly, luaSrc, "customFill", 0.1);
+    BOOST_CHECK(!luares.empty());
+    anyLine = false;
+    for (const auto &p : luares) if (p.size() == 2) { anyLine = true; break; }
+    BOOST_CHECK(anyLine);
 }

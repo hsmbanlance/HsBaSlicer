@@ -26,7 +26,12 @@ namespace HsBa::Slicer::Cipher
 	{
 		BIO* bio = BIO_new(BIO_s_mem());
 		BIO* b64 = BIO_new(BIO_f_base64());
-		if (!bio || !b64) throw std::runtime_error("Failed to create BIO");
+		if (!bio || !b64)
+		{
+			BIO_free(bio);
+			BIO_free(b64);
+			throw RuntimeError("Failed to create BIO");
+		}
 		// Do not use newlines
 		BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
 		bio = BIO_push(b64, bio);
@@ -55,7 +60,12 @@ namespace HsBa::Slicer::Cipher
 	{
 		BIO* bio = BIO_new_mem_buf(b64.data(), static_cast<int>(b64.size()));
 		BIO* b64f = BIO_new(BIO_f_base64());
-		if (!bio || !b64f) throw std::runtime_error("Failed to create BIO");
+		if (!bio || !b64f)
+		{
+			BIO_free(bio);
+			BIO_free(b64f);
+			throw RuntimeError("Failed to create BIO");
+		}
 		BIO_set_flags(b64f, BIO_FLAGS_BASE64_NO_NL);
 		bio = BIO_push(b64f, bio);
 

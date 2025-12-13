@@ -14,6 +14,12 @@ namespace HsBa::Slicer
 
     bool ToImage(const PolygonsD& polys, int width, int height, double pixelSize, const std::string& outPath,
         uint8_t foreground = 255, uint8_t background = 0);
+
+    bool LuaToImage(const PolygonsD& poly, const std::string& scriptPath,
+     const std::string& outPath = "output.png", const std::string& functionName = "generate_image");
+
+    bool LuaToImageString(const PolygonsD& poly, const std::string& script,
+        const std::string& outPath = "output.png", const std::string& functionName = "generate_image");
 }
 
 #endif // HSBA_SLICER_IMAGETOPOLYGONS_HPP

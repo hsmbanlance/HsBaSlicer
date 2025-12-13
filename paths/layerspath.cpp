@@ -1,14 +1,14 @@
 ﻿#include "layerspath.hpp"
 
 #include <format>
-
-#include <lua.hpp>
 #include <fstream>
 #include <sstream>
-#include "base/error.hpp"
+
+#include <lua.hpp>
 
 #include "base/error.hpp"
 #include "fileoperator/sql_adapter.hpp"
+#include "fileoperator/LuaAdapter.hpp"
 
 
 namespace HsBa::Slicer
@@ -24,7 +24,7 @@ namespace HsBa::Slicer
         layers_.emplace_back(LayersData{layerConfig, layer});
     }
 
-    void LayersPath::Save(const std::filesystem::path& path)
+    void LayersPath::Save(const std::filesystem::path& path) const
     {
         SQL::SQLiteAdapter db;
         db.Connect(path.string());
@@ -64,36 +64,41 @@ namespace HsBa::Slicer
         }
     }
 
-    void LayersPath::Save(const std::filesystem::path& path, std::string_view script)
+    void LayersPath::Save(const std::filesystem::path& path, std::string_view script) const
     {
-        // Expose layers to Lua and allow script to decide saving strategy.
-        // Script may return a string (db_path) or set global 'db_path'.
-        // If script returns boolean true or sets 'custom_saved' true, we assume script handled saving.
-
-        if (script.empty())
-        {
-            // fallback to default
-            Save(path);
-            return;
-        }
-
+        // create lua state and register adapters
         lua_State* L = luaL_newstate();
         if (!L) throw RuntimeError("Lua init failed");
+        // ensure lua state is closed on scope exit
+        std::unique_ptr<lua_State, void(*)(lua_State*)> lua_guard(L, [](lua_State* p){ if(p) lua_close(p); });
         luaL_openlibs(L);
+        HsBa::Slicer::RegisterLuaSQLiteAdapter(L);
+    #ifdef USE_MYSQL
+        HsBa::Slicer::RegisterLuaMySQLAdapter(L);
+    #endif
+    #ifdef USE_PGSQL
+        HsBa::Slicer::RegisterLuaPostgreSQLAdapter(L);
+    #endif
 
-        // push layers as Lua table
+        // create SQLiteAdapter as a Lua userdata and expose as global 'db'
+        SQL::SQLiteAdapter* db = HsBa::Slicer::NewLuaObject<SQL::SQLiteAdapter>(L, "SQLiteAdapter");
+        db->Connect(path.string());
+        *db += callback_;
+        lua_setglobal(L, "db");
+
+
+        // push layers as global similar to ToString
         lua_newtable(L);
         int idx = 1;
         for (const auto& layerData : layers_)
         {
             lua_newtable(L); // layerData
             lua_pushstring(L, layerData.layerConfig.c_str()); lua_setfield(L, -2, "config");
-            // data as simple nested array of points
             lua_newtable(L);
             int poly_idx = 1;
             for (const auto& poly : layerData.layer)
             {
-                lua_newtable(L); // polygon
+                lua_newtable(L);
                 int pt_idx = 1;
                 for (const auto& pt : poly)
                 {
@@ -112,15 +117,19 @@ namespace HsBa::Slicer
         }
         lua_setglobal(L, "layers");
 
-        // push output path
+        if (script.empty())
+        {
+            return;
+        }
+
+        // push path as global
         lua_pushstring(L, path.string().c_str());
         lua_setglobal(L, "output_path");
 
-        int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "LayersPathScript");
+        int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "LayersPathSaveScript");
         if (loadStatus != LUA_OK)
         {
             std::string err = lua_tostring(L, -1);
-            lua_close(L);
             throw RuntimeError(std::format("-- Lua load error: {}", err));
         }
 
@@ -128,183 +137,132 @@ namespace HsBa::Slicer
         if (callStatus != LUA_OK)
         {
             std::string err = lua_tostring(L, -1);
-            lua_close(L);
             throw RuntimeError(std::format("-- Lua runtime error: {}", err));
         }
-
-    // Check Lua-provided flags
-    bool custom_saved = false;
-        bool use_db = false;
-        std::string db_path;
-        std::string table_name = "layers";
-        std::string col_layer_config = "layer_config";
-        std::string col_layer_data = "layer_data";
-        std::string returned_string;
-
-        int nret = lua_gettop(L);
-        if (nret > 0)
+        // If Lua returned a string, write it to the given path
         {
-            if (lua_isboolean(L, -1))
-            {
-                // If script returns a boolean, treat true as custom_saved
-                custom_saved = lua_toboolean(L, -1);
-            }
-            else if (lua_isstring(L, -1))
-            {
-                // capture returned string (could be formatted content or a db path)
-                size_t len = 0;
-                const char* s = lua_tolstring(L, -1, &len);
-                returned_string.assign(s, len);
-            }
-        }
-
-        // globals
-        lua_getglobal(L, "use_db");
-        if (lua_isboolean(L, -1)) use_db = lua_toboolean(L, -1);
-
-        lua_getglobal(L, "db_path");
-        if (lua_isstring(L, -1))
-        {
-            size_t len = 0;
-            const char* s = lua_tolstring(L, -1, &len);
-            db_path.assign(s, len);
-        }
-
-        lua_getglobal(L, "table_name");
-        if (lua_isstring(L, -1))
-        {
-            size_t len = 0;
-            const char* s = lua_tolstring(L, -1, &len);
-            table_name.assign(s, len);
-        }
-
-        lua_getglobal(L, "col_layer_config");
-        if (lua_isstring(L, -1))
-        {
-            size_t len = 0;
-            const char* s = lua_tolstring(L, -1, &len);
-            col_layer_config.assign(s, len);
-        }
-
-        lua_getglobal(L, "col_layer_data");
-        if (lua_isstring(L, -1))
-        {
-            size_t len = 0;
-            const char* s = lua_tolstring(L, -1, &len);
-            col_layer_data.assign(s, len);
-        }
-
-        // if script signaled custom save, just return
-        if (custom_saved)
-        {
-            Save(path);
-            lua_close(L);
-            return;
-        }
-
-        // Optional: rows table provided by script
-        lua_getglobal(L, "rows");
-        bool has_rows = lua_istable(L, -1);
-
-        if (use_db || !db_path.empty())
-        {
-            if (db_path.empty()) db_path = path.string();
-            SQL::SQLiteAdapter db;
-            db.Connect(db_path);
-            db += callback_;
-            if (!db.IsConnected())
-            {
-                lua_close(L);
-                throw RuntimeError("Failed to connect to database: " + db_path);
-            }
-
-            // create table with user-specified column names
-            db | SQL::SQLCreateTable(
-                table_name,
-                {
-                    {"id", "INTEGER PRIMARY KEY AUTOINCREMENT"},
-                    {col_layer_config, "TEXT NOT NULL"},
-                    {col_layer_data, "BLOB NOT NULL"}
-                });
-
-            if (has_rows)
-            {
-                // iterate rows table: expected array of {config=..., data=...}
-                size_t len = lua_rawlen(L, -1);
-                for (size_t i = 1; i <= len; ++i)
-                {
-                    lua_rawgeti(L, -1, static_cast<int>(i)); // push rows[i]
-                    if (lua_istable(L, -1))
-                    {
-                        lua_getfield(L, -1, "config");
-                        std::string cfg;
-                        if (lua_isstring(L, -1)) { size_t l=0; const char* s = lua_tolstring(L, -1, &l); cfg.assign(s,l); }
-                        lua_pop(L,1);
-                        lua_getfield(L, -1, "data");
-                        std::string data;
-                        if (lua_isstring(L, -1)) { size_t l=0; const char* s = lua_tolstring(L, -1, &l); data.assign(s,l); }
-                        lua_pop(L,1);
-
-                        db | SQL::SQLInsert(table_name, {{col_layer_config, cfg}, {col_layer_data, data}});
-                    }
-                    lua_pop(L,1); // pop rows[i]
-                }
-            }
-            else
-            {
-                // fallback: insert serialized layers
-                for (const auto& layerData : layers_)
-                {
-                    std::ostringstream ss;
-                    ss << "{";
-                    for (const auto& polygon : layerData.layer)
-                    {
-                        ss << "[";
-                        for (const auto& point : polygon)
-                        {
-                            ss << std::format("({},{}),", point.x, point.y);
-                        }
-                        ss.seekp(-1, ss.cur);
-                        ss << "],";
-                    }
-                    ss << "}";
-                    db | SQL::SQLInsert(table_name, {{col_layer_config, layerData.layerConfig}, {col_layer_data, ss.str()}});
-                }
-            }
-
-            lua_close(L);
-            return;
-        }
-
-        // use_db is false and no db_path specified: treat script as formatter and write its output
-        std::string out;
-        if (!returned_string.empty())
-        {
-            out = returned_string;
-        }
-        else
-        {
-            lua_getglobal(L, "result");
-            if (lua_isstring(L, -1))
+            int nret = lua_gettop(L);
+            if (nret > 0 && lua_isstring(L, -1))
             {
                 size_t len = 0;
                 const char* s = lua_tolstring(L, -1, &len);
-                out.assign(s, len);
+                std::ofstream ofs(path, std::ios::binary);
+                if (!ofs)
+                {
+                    throw RuntimeError("Failed to open output file: " + path.string());
+                }
+                ofs.write(s, static_cast<std::streamsize>(len));
+                ofs.close();
+                return;
             }
         }
-
-        // write to file
-        try
-        {
-            std::ofstream ofs(path, std::ios::binary);
-            ofs << out;
-        }
-        catch (...) {}
-
-        lua_close(L);
+        // lua_guard will close L when going out of scope
     }
 
-    std::string LayersPath::ToString()
+    void LayersPath::Save(const std::filesystem::path& path, std::string_view script, std::string_view funcName) const
+    {
+        lua_State* L = luaL_newstate();
+        if (!L) throw RuntimeError("Lua init failed");
+        std::unique_ptr<lua_State, void(*)(lua_State*)> lua_guard(L, [](lua_State* p){ if(p) lua_close(p); });
+        luaL_openlibs(L);
+        HsBa::Slicer::RegisterLuaSQLiteAdapter(L);
+    #ifdef USE_MYSQL
+        HsBa::Slicer::RegisterLuaMySQLAdapter(L);
+    #endif
+    #ifdef USE_PGSQL
+        HsBa::Slicer::RegisterLuaPostgreSQLAdapter(L);
+    #endif
+
+        // create SQLiteAdapter as a Lua userdata and expose as global 'db'
+        SQL::SQLiteAdapter* db = HsBa::Slicer::NewLuaObject<SQL::SQLiteAdapter>(L, "SQLiteAdapter");
+        db->Connect(path.string());
+        *db += callback_;
+        lua_setglobal(L, "db");
+
+        // push layers
+        lua_newtable(L);
+        int idx = 1;
+        for (const auto& layerData : layers_)
+        {
+            lua_newtable(L); // layerData
+            lua_pushstring(L, layerData.layerConfig.c_str()); lua_setfield(L, -2, "config");
+            lua_newtable(L);
+            int poly_idx = 1;
+            for (const auto& poly : layerData.layer)
+            {
+                lua_newtable(L);
+                int pt_idx = 1;
+                for (const auto& pt : poly)
+                {
+                    lua_newtable(L);
+                    lua_pushnumber(L, pt.x); lua_setfield(L, -2, "x");
+                    lua_pushnumber(L, pt.y); lua_setfield(L, -2, "y");
+                    lua_rawseti(L, -2, pt_idx);
+                    ++pt_idx;
+                }
+                lua_rawseti(L, -2, poly_idx);
+                ++poly_idx;
+            }
+            lua_setfield(L, -2, "data");
+            lua_rawseti(L, -2, idx);
+            ++idx;
+        }
+        lua_setglobal(L, "layers");
+
+        // push path
+        lua_pushstring(L, path.string().c_str());
+        lua_setglobal(L, "output_path");
+
+        // push function name
+        lua_pushstring(L, funcName.data());
+        lua_setglobal(L, "funcName");
+
+        int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "LayersPathSaveScriptWithFunc");
+        if (loadStatus != LUA_OK)
+        {
+            std::string err = lua_tostring(L, -1);
+            throw RuntimeError(std::format("-- Lua load error: {}", err));
+        }
+        int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+        if (callStatus != LUA_OK)
+        {
+            std::string err = lua_tostring(L, -1);
+            throw RuntimeError(std::format("-- Lua runtime error: {}", err));
+        }
+        // If Lua returned a string, write it to the given path
+        {
+            int nret = lua_gettop(L);
+            if (nret > 0 && lua_isstring(L, -1))
+            {
+                size_t len = 0;
+                const char* s = lua_tolstring(L, -1, &len);
+                std::ofstream ofs(path, std::ios::binary);
+                if (!ofs)
+                {
+                    throw RuntimeError("Failed to open output file: " + path.string());
+                }
+                ofs.write(s, static_cast<std::streamsize>(len));
+                ofs.close();
+                return;
+            }
+        }
+        // lua_guard will close L
+    }
+
+    void LayersPath::Save(const std::filesystem::path& path, const std::filesystem::path& script_file, std::string_view funcName) const
+    {
+        std::ifstream ifs(script_file, std::ios::binary);
+        if (!ifs)
+        {
+            throw RuntimeError("Failed to open Lua script file: " + script_file.string());
+        }
+        std::ostringstream oss;
+        oss << ifs.rdbuf();
+        std::string script = oss.str();
+        Save(path, std::string_view{script}, funcName);
+    }
+
+    std::string LayersPath::ToString() const
     {
         std::ostringstream ss;
         ss << "{";
@@ -328,7 +286,7 @@ namespace HsBa::Slicer
         return ss.str();
     }
 
-    std::string LayersPath::ToString(const std::string_view script)
+    std::string LayersPath::ToString(const std::string_view script) const
     {
         if (script.empty()) return ToString();
 
@@ -409,4 +367,97 @@ namespace HsBa::Slicer
         lua_close(L);
         return body;
     }
+
+    std::string LayersPath::ToString(const std::string_view script, const std::string_view funcName) const
+    {
+        lua_State* L = luaL_newstate();
+        if (!L) throw RuntimeError("Lua init failed");
+        luaL_openlibs(L);
+        // like without funcName, push layers
+        lua_newtable(L);
+        int idx = 1;
+        for (const auto& layerData : layers_)
+        {
+            lua_newtable(L); // layerData
+            lua_pushstring(L, layerData.layerConfig.c_str()); lua_setfield(L, -2, "config");
+            lua_newtable(L);
+            int poly_idx = 1;
+            for (const auto& poly : layerData.layer)
+            {
+                lua_newtable(L);
+                int pt_idx = 1;
+                for (const auto& pt : poly)
+                {
+                    lua_newtable(L);
+                    lua_pushnumber(L, pt.x); lua_setfield(L, -2, "x");
+                    lua_pushnumber(L, pt.y); lua_setfield(L, -2, "y");
+                    lua_rawseti(L, -2, pt_idx);
+                    ++pt_idx;
+                }
+                lua_rawseti(L, -2, poly_idx);
+                ++poly_idx;
+            }
+            lua_setfield(L, -2, "data");
+            lua_rawseti(L, -2, idx);
+            ++idx;
+        }
+        lua_setglobal(L, "layers");
+        // push function name
+        lua_pushstring(L, funcName.data());
+        lua_setglobal(L, "funcName");
+        int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "LayersPathToStringScriptWithFunc");
+        if (loadStatus != LUA_OK)
+        {
+            std::string err = lua_tostring(L, -1);
+            lua_close(L);
+            throw RuntimeError(std::format("-- Lua load error: {}", err));
+        }
+        int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+        if (callStatus != LUA_OK)
+        {
+            std::string err = lua_tostring(L, -1);
+            lua_close(L);
+            throw RuntimeError(std::format("-- Lua runtime error: {}", err));
+        }
+        // Prefer returned string
+        std::string result;
+        int nret = lua_gettop(L);
+        if (nret > 0 && lua_isstring(L, -1))
+        {
+            size_t len = 0;
+            const char* s = lua_tolstring(L, -1, &len);
+            result.assign(s, len);
+            lua_close(L);
+            return result;
+        }
+        lua_getglobal(L, "result");
+        if (lua_isstring(L, -1))
+        {
+            size_t len = 0;
+            const char* s = lua_tolstring(L, -1, &len);
+            result.assign(s, len);
+        }
+        else
+        {
+            result = "";
+        }
+        lua_close(L);
+        return result;
+    }
+
+    std::string LayersPath::ToString(const std::filesystem::path& script_file, const std::string_view funcName) const
+    {
+        // load script from file
+        std::ifstream ifs(script_file, std::ios::binary);
+        if (!ifs)
+        {
+            throw RuntimeError("Failed to open Lua script file: " + script_file.string());
+        }
+        std::ostringstream oss;
+        oss << ifs.rdbuf();
+        std::string script = oss.str();
+        return ToString(std::string_view{script}, funcName);
+    }
+
+
 } // namespace HsBa::Slicer

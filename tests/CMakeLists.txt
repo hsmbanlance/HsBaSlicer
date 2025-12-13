@@ -491,6 +491,6 @@ add_test(
   COMMAND $<TARGET_FILE:image_polygons_test>
 )
 
-add_custom_command(TARGET polygon_fill_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R polygon_fill_test
+add_custom_command(TARGET image_polygons_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R image_polygons_test
 )

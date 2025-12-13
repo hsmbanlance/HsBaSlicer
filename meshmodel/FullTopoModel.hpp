@@ -5,6 +5,7 @@
 #include <vector>
 #include <array>
 #include <algorithm>
+#include <filesystem>
 
 #include <Eigen/Core>
 
@@ -98,6 +99,10 @@ namespace HsBa::Slicer
 		// E (1-based array of {v1,v2}), F (1-based array of {v1,v2,v3}), and 'height'.
 		// The script should return a table of polygons: polys = { { {x=..,y=..}, ... }, ... }
 		Polygons SliceLua(const std::string& script, const float height) const;
+
+		Polygons SliceLua(const std::string& script, const std::string& funcName, const float height) const;
+
+		Polygons SliceLua(const std::filesystem::path& script_file, const std::string& funcName, const float height) const;
 
 		// Same but returns potentially open polylines with closed flag
 		UnSafePolygons UnSafeSliceLua(const std::string& script, const float height) const;
