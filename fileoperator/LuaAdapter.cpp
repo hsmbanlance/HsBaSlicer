@@ -163,10 +163,8 @@ namespace HsBa::Slicer
 			{
 				password = luaL_checkstring(L, 3);
 			}
-			auto* zipper = new Bit7zZipper(dll_path, zipper_format, password);
-			lua_pushlightuserdata(L, zipper);
 			NewLuaObject<Bit7zZipper, Bit7zZipperTypeName>(L, dll_path, zipper_format, password);
-			return 0;
+			return 1;
 		}
 
 		int lua_bit7z_zipper_add_file(lua_State* L)

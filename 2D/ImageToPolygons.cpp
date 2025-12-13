@@ -284,24 +284,18 @@ namespace HsBa::Slicer
             throw RuntimeError("Failed to create Lua state");
         luaL_openlibs(L);
         RegisterLuaPolygonOperations(L);
-        // load script
+        // load script and execute it (define function in global)
         if (luaL_loadstring(L, script.c_str()) != LUA_OK) {
             std::string err = lua_tostring(L, -1);
             lua_close(L);
             throw RuntimeError("Load string failed: " + err);
-        }
-        // get function
-        lua_getglobal(L, functionName.c_str());
-        if (!lua_isfunction(L, -1))
-        {
-            lua_close(L);
-            throw RuntimeError("Lua function not found: " + functionName);
         }
         if (lua_pcall(L, 0, LUA_MULTRET, 0) != LUA_OK) {
             std::string err = lua_tostring(L, -1);
             lua_close(L);
             throw RuntimeError("Exec chunk failed: " + err);
         }
+        // get function
         lua_getglobal(L, functionName.c_str());
         if (!lua_isfunction(L, -1)) {
             lua_close(L);

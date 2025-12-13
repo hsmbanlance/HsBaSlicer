@@ -7,8 +7,20 @@
 
 using namespace HsBa::Slicer;
 
+struct DisableCrt
+{
+    DisableCrt()
+    {
+#if defined(_MSC_VER) && defined(_DEBUG)
+        _CrtSetDbgFlag(_CrtSetDbgFlag(_CRTDBG_REPORT_FLAG) & ~_CRTDBG_LEAK_CHECK_DF);
+#endif // defined(_MSC_VER) && defined(_DEBUG)
+    }
+};
+
 BOOST_AUTO_TEST_CASE(fromimage_and_toimage_roundtrip)
 {
+    [[may_unused]]
+    static DisableCrt crt_;
     // create a simple synthetic image (two rectangles with different intensities)
     int w = 80, h = 60;
     cv::Mat img(h, w, CV_8UC1, cv::Scalar(0));
