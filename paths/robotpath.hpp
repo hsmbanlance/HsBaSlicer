@@ -47,10 +47,14 @@ namespace HsBa::Slicer
 			void push_back(const RLPoint& point);
 			virtual ~RobotPath() = default;
 			RLType getRobotType() const;
-			virtual void Save(const std::filesystem::path&) override;
-			virtual void Save(const std::filesystem::path&, std::string_view script) override;
-			virtual std::string ToString() override;
-			virtual std::string ToString(std::string_view script) override;
+			virtual void Save(const std::filesystem::path&) const override;
+			virtual void Save(const std::filesystem::path&, std::string_view script) const override;
+			virtual std::string ToString() const override;
+			virtual std::string ToString(std::string_view script) const override;
+			virtual void Save(const std::filesystem::path& path, std::string_view script, std::string_view funcName) const override;
+			virtual void Save(const std::filesystem::path& path, const std::filesystem::path& script_file, std::string_view funcName) const override;
+			virtual std::string ToString(const std::string_view script, const std::string_view funcName) const override;
+			virtual std::string ToString(const std::filesystem::path& script_file, const std::string_view funcName) const override;
 			inline virtual RLPoint operator[](size_t i)
 			{
 				return points_[i];
@@ -61,9 +65,9 @@ namespace HsBa::Slicer
 			std::vector<RLPoint> points_;
 			std::string startProgramFunc_;
 			std::string endProgramFunc_;
-			std::string GenerateAbbCode();
-			std::string GenerateKukaCode();
-			std::string GenerateFanucCode();
+			std::string GenerateAbbCode() const;
+			std::string GenerateKukaCode() const;
+			std::string GenerateFanucCode() const;
 	};
 } // namespace HsBa::Slicer
 

@@ -48,21 +48,21 @@ namespace HsBa::Slicer
 		return robotType_;
 	}
 
-	void RobotPath::Save(const std::filesystem::path& p)
+	void RobotPath::Save(const std::filesystem::path& p) const
 	{
 		auto txt = ToString();
 		std::ofstream ofs(p, std::ios::binary);
 		ofs << txt;
 	}
 
-	void RobotPath::Save(const std::filesystem::path& p, std::string_view script)
+	void RobotPath::Save(const std::filesystem::path& p, std::string_view script) const
 	{
 		auto txt = ToString(script);
 		std::ofstream ofs(p, std::ios::binary);
 		ofs << txt;
 	}
 
-	std::string RobotPath::ToString()
+	std::string RobotPath::ToString() const
 	{
 		std::ostringstream ss;
 		ss << "# RobotPath default export\n";
@@ -86,7 +86,7 @@ namespace HsBa::Slicer
 		return ss.str();
 	}
 
-	std::string RobotPath::ToString(std::string_view script)
+	std::string RobotPath::ToString(std::string_view script) const
 	{
 		// When script provided: prepend header that declares script is user-provided and robot type is ignored
 		const std::string header = "// Script provided by user - robot type ignored, remove this line when using real robots\n";
@@ -185,7 +185,7 @@ namespace HsBa::Slicer
 		return body;
 	}
 
-	std::string RobotPath::GenerateAbbCode()
+	std::string RobotPath::GenerateAbbCode() const
 	{
 		// simple ABB-like textual representation
 		std::ostringstream ss;
@@ -261,7 +261,7 @@ namespace HsBa::Slicer
 		return ss.str();
 	}
 
-	std::string RobotPath::GenerateKukaCode()
+	std::string RobotPath::GenerateKukaCode() const
 	{
 		std::ostringstream ss;
 		ss << "; KUKA simple export\n";
@@ -308,7 +308,7 @@ namespace HsBa::Slicer
 		return ss.str();
 	}
 
-	std::string RobotPath::GenerateFanucCode()
+	std::string RobotPath::GenerateFanucCode() const
 	{
 		std::ostringstream ss;
 		ss << "; FANUC simple export\n";
@@ -350,5 +350,106 @@ namespace HsBa::Slicer
 			}
 		}
 		return ss.str();
+	}
+
+	std::string RobotPath::ToString(std::string_view script, std::string_view funcName) const
+	{
+		lua_State* L = luaL_newstate();
+		if (!L)
+			throw RuntimeError("Lua init failed");
+		luaL_openlibs(L);
+		// push function name
+		lua_pushstring(L, funcName.data());
+		lua_setglobal(L, "funcName");
+		// push points
+		lua_newtable(L);
+		int idx = 1;
+		for (const auto& pt : points_)
+		{
+			lua_newtable(L); // point
+			// end
+			lua_newtable(L);
+			lua_pushnumber(L, pt.end.x); lua_setfield(L, -2, "x");
+			lua_pushnumber(L, pt.end.y); lua_setfield(L, -2, "y");
+			lua_pushnumber(L, pt.end.z); lua_setfield(L, -2, "z");
+			lua_setfield(L, -2, "end");
+			// middle
+			lua_newtable(L);
+			lua_pushnumber(L, pt.middle.x); lua_setfield(L, -2, "x");
+			lua_pushnumber(L, pt.middle.y); lua_setfield(L, -2, "y");
+			lua_pushnumber(L, pt.middle.z); lua_setfield(L, -2, "z");
+			lua_setfield(L, -2, "middle");
+			// velocity and type
+			lua_pushnumber(L, pt.velocity); lua_setfield(L, -2, "velocity");
+			lua_pushstring(L, RLPointTypeToString(pt.type)); lua_setfield(L, -2, "type");
+			// set into points
+			lua_rawseti(L, -2, idx);
+			++idx;
+		}
+		lua_setglobal(L, "points");
+		// execute script
+		int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "RobotPathScriptWithFunc");
+		if (loadStatus != LUA_OK)
+		{
+			std::string err = lua_tostring(L, -1);
+			lua_close(L);
+			throw RuntimeError(std::format("-- Lua load error: {}", err));
+		}
+		int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		if (callStatus != LUA_OK)
+		{
+			std::string err = lua_tostring(L, -1);
+			lua_close(L);
+			throw RuntimeError(std::format("-- Lua runtime error: {}", err));
+		}
+		// if returned a string, take it
+		int nret = lua_gettop(L);
+		std::string result;
+		if (nret > 0 && lua_isstring(L, -1))
+		{
+			size_t len = 0;
+			const char* s = lua_tolstring(L, -1, &len);
+			result.assign(s, len);
+			lua_close(L);
+			return result;
+		}
+		lua_getglobal(L, "result");
+		if (lua_isstring(L, -1))
+		{
+			size_t len = 0;
+			const char* s = lua_tolstring(L, -1, &len);
+			result.assign(s, len);
+		}
+		else
+		{
+			result = "";
+		}
+		lua_close(L);
+		return result;
+	}
+
+	std::string RobotPath::ToString(const std::filesystem::path& script_file,const std::string_view funcName) const
+	{
+		std::ifstream ifs(script_file, std::ios::binary);
+		if (!ifs)
+			throw RuntimeError("Failed to open Lua script file: " + script_file.string());
+		std::stringstream buffer;
+		buffer << ifs.rdbuf();
+		auto script = buffer.str();
+		return ToString(std::string_view{script}, funcName);
+	}
+
+	void RobotPath::Save(const std::filesystem::path& path, std::string_view script, std::string_view funcName) const
+	{
+		auto txt = ToString(script, funcName);
+		std::ofstream ofs(path, std::ios::binary);
+		ofs << txt;
+	}
+
+	void RobotPath::Save(const std::filesystem::path& path, const std::filesystem::path& script_file, std::string_view funcName) const
+	{
+		auto txt = ToString(script_file, funcName);
+		std::ofstream ofs(path, std::ios::binary);
+		ofs << txt;
 	}
 } // namespace HsBa::Slicer
