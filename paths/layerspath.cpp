@@ -9,7 +9,7 @@
 #include "base/error.hpp"
 #include "fileoperator/sql_adapter.hpp"
 #include "fileoperator/LuaAdapter.hpp"
-
+#include "utils/LuaNewObject.hpp"
 
 namespace HsBa::Slicer
 {
@@ -67,55 +67,53 @@ namespace HsBa::Slicer
     void LayersPath::Save(const std::filesystem::path& path, std::string_view script) const
     {
         // create lua state and register adapters
-        lua_State* L = luaL_newstate();
+        auto L = MakeUniqueLuaState();
         if (!L) throw RuntimeError("Lua init failed");
-        // ensure lua state is closed on scope exit
-        std::unique_ptr<lua_State, void(*)(lua_State*)> lua_guard(L, [](lua_State* p){ if(p) lua_close(p); });
-        luaL_openlibs(L);
-        HsBa::Slicer::RegisterLuaSQLiteAdapter(L);
+        luaL_openlibs(L.get());
+        RegisterLuaSQLiteAdapter(L.get());
     #ifdef USE_MYSQL
-        HsBa::Slicer::RegisterLuaMySQLAdapter(L);
+        RegisterLuaMySQLAdapter(L.get());
     #endif
     #ifdef USE_PGSQL
-        HsBa::Slicer::RegisterLuaPostgreSQLAdapter(L);
+        RegisterLuaPostgreSQLAdapter(L.get());
     #endif
 
         // create SQLiteAdapter as a Lua userdata and expose as global 'db'
-        SQL::SQLiteAdapter* db = HsBa::Slicer::NewLuaObject<SQL::SQLiteAdapter>(L, "SQLiteAdapter");
+        SQL::SQLiteAdapter* db = NewLuaObject<SQL::SQLiteAdapter>(L.get(), "SQLiteAdapter");
         db->Connect(path.string());
         *db += callback_;
-        lua_setglobal(L, "db");
+        lua_setglobal(L.get(), "db");
 
 
         // push layers as global similar to ToString
-        lua_newtable(L);
+        lua_newtable(L.get());
         int idx = 1;
         for (const auto& layerData : layers_)
         {
-            lua_newtable(L); // layerData
-            lua_pushstring(L, layerData.layerConfig.c_str()); lua_setfield(L, -2, "config");
-            lua_newtable(L);
+            lua_newtable(L.get()); // layerData
+            lua_pushstring(L.get(), layerData.layerConfig.c_str()); lua_setfield(L.get(), -2, "config");
+            lua_newtable(L.get());
             int poly_idx = 1;
             for (const auto& poly : layerData.layer)
             {
-                lua_newtable(L);
+                lua_newtable(L.get());
                 int pt_idx = 1;
                 for (const auto& pt : poly)
                 {
-                    lua_newtable(L);
-                    lua_pushnumber(L, pt.x); lua_setfield(L, -2, "x");
-                    lua_pushnumber(L, pt.y); lua_setfield(L, -2, "y");
-                    lua_rawseti(L, -2, pt_idx);
+                    lua_newtable(L.get());
+                    lua_pushnumber(L.get(), pt.x); lua_setfield(L.get(), -2, "x");
+                    lua_pushnumber(L.get(), pt.y); lua_setfield(L.get(), -2, "y");
+                    lua_rawseti(L.get(), -2, pt_idx);
                     ++pt_idx;
                 }
-                lua_rawseti(L, -2, poly_idx);
+                lua_rawseti(L.get(), -2, poly_idx);
                 ++poly_idx;
             }
-            lua_setfield(L, -2, "data");
-            lua_rawseti(L, -2, idx);
+            lua_setfield(L.get(), -2, "data");
+            lua_rawseti(L.get(), -2, idx);
             ++idx;
         }
-        lua_setglobal(L, "layers");
+        lua_setglobal(L.get(), "layers");
 
         if (script.empty())
         {
@@ -123,29 +121,29 @@ namespace HsBa::Slicer
         }
 
         // push path as global
-        lua_pushstring(L, path.string().c_str());
-        lua_setglobal(L, "output_path");
+        lua_pushstring(L.get(), path.string().c_str());
+        lua_setglobal(L.get(), "output_path");
 
-        int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "LayersPathSaveScript");
+        int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "LayersPathSaveScript");
         if (loadStatus != LUA_OK)
         {
-            std::string err = lua_tostring(L, -1);
+            std::string err = lua_tostring(L.get(), -1);
             throw RuntimeError(std::format("-- Lua load error: {}", err));
         }
 
-        int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+        int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
         if (callStatus != LUA_OK)
         {
-            std::string err = lua_tostring(L, -1);
+            std::string err = lua_tostring(L.get(), -1);
             throw RuntimeError(std::format("-- Lua runtime error: {}", err));
         }
         // If Lua returned a string, write it to the given path
         {
-            int nret = lua_gettop(L);
-            if (nret > 0 && lua_isstring(L, -1))
+            int nret = lua_gettop(L.get());
+            if (nret > 0 && lua_isstring(L.get(), -1))
             {
                 size_t len = 0;
-                const char* s = lua_tolstring(L, -1, &len);
+                const char* s = lua_tolstring(L.get(), -1, &len);
                 std::ofstream ofs(path, std::ios::binary);
                 if (!ofs)
                 {
@@ -161,81 +159,80 @@ namespace HsBa::Slicer
 
     void LayersPath::Save(const std::filesystem::path& path, std::string_view script, std::string_view funcName) const
     {
-        lua_State* L = luaL_newstate();
+        auto L = MakeUniqueLuaState();
         if (!L) throw RuntimeError("Lua init failed");
-        std::unique_ptr<lua_State, void(*)(lua_State*)> lua_guard(L, [](lua_State* p){ if(p) lua_close(p); });
-        luaL_openlibs(L);
-        HsBa::Slicer::RegisterLuaSQLiteAdapter(L);
+        luaL_openlibs(L.get());
+        RegisterLuaSQLiteAdapter(L.get());
     #ifdef USE_MYSQL
-        HsBa::Slicer::RegisterLuaMySQLAdapter(L);
+        RegisterLuaMySQLAdapter(L.get());
     #endif
     #ifdef USE_PGSQL
-        HsBa::Slicer::RegisterLuaPostgreSQLAdapter(L);
+        RegisterLuaPostgreSQLAdapter(L.get());
     #endif
 
         // create SQLiteAdapter as a Lua userdata and expose as global 'db'
-        SQL::SQLiteAdapter* db = HsBa::Slicer::NewLuaObject<SQL::SQLiteAdapter>(L, "SQLiteAdapter");
+        SQL::SQLiteAdapter* db = NewLuaObject<SQL::SQLiteAdapter>(L.get(), "SQLiteAdapter");
         db->Connect(path.string());
         *db += callback_;
-        lua_setglobal(L, "db");
+        lua_setglobal(L.get(), "db");
 
         // push layers
-        lua_newtable(L);
+        lua_newtable(L.get());
         int idx = 1;
         for (const auto& layerData : layers_)
         {
-            lua_newtable(L); // layerData
-            lua_pushstring(L, layerData.layerConfig.c_str()); lua_setfield(L, -2, "config");
-            lua_newtable(L);
+            lua_newtable(L.get()); // layerData
+            lua_pushstring(L.get(), layerData.layerConfig.c_str()); lua_setfield(L.get(), -2, "config");
+            lua_newtable(L.get());
             int poly_idx = 1;
             for (const auto& poly : layerData.layer)
             {
-                lua_newtable(L);
+                lua_newtable(L.get());
                 int pt_idx = 1;
                 for (const auto& pt : poly)
                 {
-                    lua_newtable(L);
-                    lua_pushnumber(L, pt.x); lua_setfield(L, -2, "x");
-                    lua_pushnumber(L, pt.y); lua_setfield(L, -2, "y");
-                    lua_rawseti(L, -2, pt_idx);
+                    lua_newtable(L.get());
+                    lua_pushnumber(L.get(), pt.x); lua_setfield(L.get(), -2, "x");
+                    lua_pushnumber(L.get(), pt.y); lua_setfield(L.get(), -2, "y");
+                    lua_rawseti(L.get(), -2, pt_idx);
                     ++pt_idx;
                 }
-                lua_rawseti(L, -2, poly_idx);
+                lua_rawseti(L.get(), -2, poly_idx);
                 ++poly_idx;
             }
-            lua_setfield(L, -2, "data");
-            lua_rawseti(L, -2, idx);
+            lua_setfield(L.get(), -2, "data");
+            lua_rawseti(L.get(), -2, idx);
             ++idx;
         }
-        lua_setglobal(L, "layers");
+        lua_setglobal(L.get(), "layers");
 
         // push path
-        lua_pushstring(L, path.string().c_str());
-        lua_setglobal(L, "output_path");
+        lua_pushstring(L.get(), path.string().c_str());
+        lua_setglobal(L.get(), "output_path");
 
         // push function name
-        lua_pushstring(L, funcName.data());
-        lua_setglobal(L, "funcName");
+        lua_pushstring(L.get(), funcName.data());
+        lua_setglobal(L.get(), "funcName");
 
-        int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "LayersPathSaveScriptWithFunc");
+        int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "LayersPathSaveScriptWithFunc");
         if (loadStatus != LUA_OK)
         {
-            std::string err = lua_tostring(L, -1);
+            std::string err = lua_tostring(L.get(), -1);
             throw RuntimeError(std::format("-- Lua load error: {}", err));
         }
-        int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+        int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
         if (callStatus != LUA_OK)
         {
-            std::string err = lua_tostring(L, -1);
+            std::string err = lua_tostring(L.get(), -1);
             throw RuntimeError(std::format("-- Lua runtime error: {}", err));
         }
         // If Lua returned a string, write it to the given path
         {
-            int nret = lua_gettop(L);
-            if (nret > 0 && lua_isstring(L, -1))
+            int nret = lua_gettop(L.get());
+            if (nret > 0 && lua_isstring(L.get(), -1))
             {
                 size_t len = 0;
-                const char* s = lua_tolstring(L, -1, &len);
+                const char* s = lua_tolstring(L.get(), -1, &len);
                 std::ofstream ofs(path, std::ios::binary);
                 if (!ofs)
                 {
@@ -290,73 +287,70 @@ namespace HsBa::Slicer
     {
         if (script.empty()) return ToString();
 
-        lua_State* L = luaL_newstate();
+        auto L = MakeUniqueLuaState();
         if (!L) throw RuntimeError("Lua init failed");
-        luaL_openlibs(L);
+        luaL_openlibs(L.get());
 
         // push layers as global like Save
-        lua_newtable(L);
+        lua_newtable(L.get());
         int idx = 1;
         for (const auto& layerData : layers_)
         {
-            lua_newtable(L); // layerData
-            lua_pushstring(L, layerData.layerConfig.c_str()); lua_setfield(L, -2, "config");
-            lua_newtable(L);
+            lua_newtable(L.get()); // layerData
+            lua_pushstring(L.get(), layerData.layerConfig.c_str()); lua_setfield(L.get(), -2, "config");
+            lua_newtable(L.get());
             int poly_idx = 1;
             for (const auto& poly : layerData.layer)
             {
-                lua_newtable(L);
+                lua_newtable(L.get());
                 int pt_idx = 1;
                 for (const auto& pt : poly)
                 {
-                    lua_newtable(L);
-                    lua_pushnumber(L, pt.x); lua_setfield(L, -2, "x");
-                    lua_pushnumber(L, pt.y); lua_setfield(L, -2, "y");
-                    lua_rawseti(L, -2, pt_idx);
+                    lua_newtable(L.get());
+                    lua_pushnumber(L.get(), pt.x); lua_setfield(L.get(), -2, "x");
+                    lua_pushnumber(L.get(), pt.y); lua_setfield(L.get(), -2, "y");
+                    lua_rawseti(L.get(), -2, pt_idx);
                     ++pt_idx;
                 }
-                lua_rawseti(L, -2, poly_idx);
+                lua_rawseti(L.get(), -2, poly_idx);
                 ++poly_idx;
             }
-            lua_setfield(L, -2, "data");
-            lua_rawseti(L, -2, idx);
+            lua_setfield(L.get(), -2, "data");
+            lua_rawseti(L.get(), -2, idx);
             ++idx;
         }
-        lua_setglobal(L, "layers");
+        lua_setglobal(L.get(), "layers");
 
-        int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "LayersPathToStringScript");
+        int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "LayersPathToStringScript");
         if (loadStatus != LUA_OK)
         {
-            std::string err = lua_tostring(L, -1);
-            lua_close(L);
+            std::string err = lua_tostring(L.get(), -1);
             throw RuntimeError(std::format("-- Lua load error: {}", err));
         }
 
-        int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+        int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
         if (callStatus != LUA_OK)
         {
-            std::string err = lua_tostring(L, -1);
-            lua_close(L);
+            std::string err = lua_tostring(L.get(), -1);
             throw RuntimeError(std::format("-- Lua runtime error: {}", err));
         }
 
         // Prefer returned string
         std::string body;
-        int nret = lua_gettop(L);
-        if (nret > 0 && lua_isstring(L, -1))
+        int nret = lua_gettop(L.get());
+        if (nret > 0 && lua_isstring(L.get(), -1))
         {
             size_t len = 0;
-            const char* s = lua_tolstring(L, -1, &len);
+            const char* s = lua_tolstring(L.get(), -1, &len);
             body.assign(s, len);
-            lua_close(L);
             return body;
         }
 
-        lua_getglobal(L, "result");
-        if (lua_isstring(L, -1))
+        lua_getglobal(L.get(), "result");
+        if (lua_isstring(L.get(), -1))
         {
             size_t len = 0;
-            const char* s = lua_tolstring(L, -1, &len);
+            const char* s = lua_tolstring(L.get(), -1, &len);
             body.assign(s, len);
         }
         else
@@ -364,84 +358,81 @@ namespace HsBa::Slicer
             body = "";
         }
 
-        lua_close(L);
         return body;
     }
 
     std::string LayersPath::ToString(const std::string_view script, const std::string_view funcName) const
     {
-        lua_State* L = luaL_newstate();
+        auto L = MakeUniqueLuaState();
         if (!L) throw RuntimeError("Lua init failed");
-        luaL_openlibs(L);
+        luaL_openlibs(L.get());
         // like without funcName, push layers
-        lua_newtable(L);
+        lua_newtable(L.get());
         int idx = 1;
         for (const auto& layerData : layers_)
         {
-            lua_newtable(L); // layerData
-            lua_pushstring(L, layerData.layerConfig.c_str()); lua_setfield(L, -2, "config");
-            lua_newtable(L);
+            lua_newtable(L.get()); // layerData
+            lua_pushstring(L.get(), layerData.layerConfig.c_str()); lua_setfield(L.get(), -2, "config");
+            lua_newtable(L.get());
             int poly_idx = 1;
             for (const auto& poly : layerData.layer)
             {
-                lua_newtable(L);
+                lua_newtable(L.get());
                 int pt_idx = 1;
                 for (const auto& pt : poly)
                 {
-                    lua_newtable(L);
-                    lua_pushnumber(L, pt.x); lua_setfield(L, -2, "x");
-                    lua_pushnumber(L, pt.y); lua_setfield(L, -2, "y");
-                    lua_rawseti(L, -2, pt_idx);
+                    lua_newtable(L.get());
+                    lua_pushnumber(L.get(), pt.x); lua_setfield(L.get(), -2, "x");
+                    lua_pushnumber(L.get(), pt.y); lua_setfield(L.get(), -2, "y");
+                    lua_rawseti(L.get(), -2, pt_idx);
                     ++pt_idx;
                 }
-                lua_rawseti(L, -2, poly_idx);
+                lua_rawseti(L.get(), -2, poly_idx);
                 ++poly_idx;
             }
-            lua_setfield(L, -2, "data");
-            lua_rawseti(L, -2, idx);
+            lua_setfield(L.get(), -2, "data");
+            lua_rawseti(L.get(), -2, idx);
             ++idx;
         }
-        lua_setglobal(L, "layers");
+        lua_setglobal(L.get(), "layers");
         // push function name
-        lua_pushstring(L, funcName.data());
-        lua_setglobal(L, "funcName");
-        int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "LayersPathToStringScriptWithFunc");
+        lua_pushstring(L.get(), funcName.data());
+        lua_setglobal(L.get(), "funcName");
+        int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "LayersPathToStringScriptWithFunc");
         if (loadStatus != LUA_OK)
         {
-            std::string err = lua_tostring(L, -1);
-            lua_close(L);
+            std::string err = lua_tostring(L.get(), -1);
             throw RuntimeError(std::format("-- Lua load error: {}", err));
         }
-        int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+        int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
         if (callStatus != LUA_OK)
         {
-            std::string err = lua_tostring(L, -1);
-            lua_close(L);
+            std::string err = lua_tostring(L.get(), -1);
             throw RuntimeError(std::format("-- Lua runtime error: {}", err));
         }
         // Prefer returned string
         std::string result;
-        int nret = lua_gettop(L);
-        if (nret > 0 && lua_isstring(L, -1))
+        int nret = lua_gettop(L.get());
+        if (nret > 0 && lua_isstring(L.get(), -1))
         {
             size_t len = 0;
-            const char* s = lua_tolstring(L, -1, &len);
+            const char* s = lua_tolstring(L.get(), -1, &len);
             result.assign(s, len);
-            lua_close(L);
+            // L will be closed by UniqueLua deleter
             return result;
         }
-        lua_getglobal(L, "result");
-        if (lua_isstring(L, -1))
+        lua_getglobal(L.get(), "result");
+        if (lua_isstring(L.get(), -1))
         {
             size_t len = 0;
-            const char* s = lua_tolstring(L, -1, &len);
+            const char* s = lua_tolstring(L.get(), -1, &len);
             result.assign(s, len);
         }
         else
         {
             result = "";
         }
-        lua_close(L);
+        // L will be closed by UniqueLua deleter
         return result;
     }
 

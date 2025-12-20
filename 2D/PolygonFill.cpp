@@ -8,6 +8,7 @@
 
 #include "base/error.hpp"
 #include "LuaAdapter.hpp"
+#include "utils/LuaNewObject.hpp"
 
 namespace HsBa::Slicer
 {
@@ -1086,71 +1087,68 @@ namespace HsBa::Slicer
 		// Convert integer polygon to float polygon for Lua
 		auto polyD = UnIntegerization(poly);
 
-		lua_State* L = luaL_newstate();
+		auto L = MakeUniqueLuaState();
 		if (!L)
 			throw RuntimeError("Failed to create Lua state");
-		luaL_openlibs(L);
+		luaL_openlibs(L.get());
 
 		// load register functions
-		RegisterLuaPolygonOperations(L);
-		RegisterLuaPolygonFillFunctions(L);
+		RegisterLuaPolygonOperations(L.get());
+		RegisterLuaPolygonFillFunctions(L.get());
 
 		// load script
-		if (luaL_loadfile(L, scriptPath.c_str()) || lua_pcall(L, 0, 0, 0))
+		if (luaL_loadfile(L.get(), scriptPath.c_str()) || lua_pcall(L.get(), 0, 0, 0))
 		{
-			lua_close(L);
-			throw RuntimeError("Failed to load Lua script: " + std::string(lua_tostring(L, -1)));
+			throw RuntimeError("Failed to load Lua script: " + std::string(lua_tostring(L.get(), -1)));
 		}
 
 		// get function
-		lua_getglobal(L, functionName.c_str());
-		if (!lua_isfunction(L, -1)) 
+		lua_getglobal(L.get(), functionName.c_str());
+		if (!lua_isfunction(L.get(), -1)) 
 		{
-			lua_close(L);
 			throw RuntimeError("Lua function not found: " + functionName);
 		}
 
 		// push polygon argument
-		PushPolygonsDToLua(L, polyD);
+		PushPolygonsDToLua(L.get(), polyD);
 
 		// call function with 1 arg, 1 result
-		if (lua_pcall(L, 1, 1, 0) != LUA_OK)
+		if (lua_pcall(L.get(), 1, 1, 0) != LUA_OK)
 		{
-			lua_close(L);
-			throw RuntimeError("Error calling Lua function: " + std::string(lua_tostring(L, -1)));
+			lua_close(L.get());
+			throw RuntimeError("Error calling Lua function: " + std::string(lua_tostring(L.get(), -1)));
 		}
 
 		// expect table of polylines / polygons
-		if (!lua_istable(L, -1))
+		if (!lua_istable(L.get(), -1))
 		{
-			lua_close(L);
 			throw RuntimeError("Lua function did not return a table");
 		}
 
 		Polygons allPieces;
 
 		// iterate array
-		lua_pushnil(L);
-		while (lua_next(L, -2))
+		lua_pushnil(L.get());
+		while (lua_next(L.get(), -2))
 		{
 			// key at -2, value at -1
-			if (lua_istable(L, -1))
+			if (lua_istable(L.get(), -1))
 			{
 				PolygonD outpoly;
-				int n = (int)lua_rawlen(L, -1);
+				int n = (int)lua_rawlen(L.get(), -1);
 				for (int i = 1; i <= n; ++i)
 				{
-					lua_rawgeti(L, -1, i);
-					if (lua_istable(L, -1))
+					lua_rawgeti(L.get(), -1, i);
+					if (lua_istable(L.get(), -1))
 					{
-						lua_getfield(L, -1, "x");
-						lua_getfield(L, -2, "y");
-						double x = lua_isnumber(L, -2) ? lua_tonumber(L, -2) : 0.0;
-						double y = lua_isnumber(L, -1) ? lua_tonumber(L, -1) : 0.0;
+						lua_getfield(L.get(), -1, "x");
+						lua_getfield(L.get(), -2, "y");
+						double x = lua_isnumber(L.get(), -2) ? lua_tonumber(L.get(), -2) : 0.0;
+						double y = lua_isnumber(L.get(), -1) ? lua_tonumber(L.get(), -1) : 0.0;
 						outpoly.emplace_back(Point2D{ x, y });
-						lua_pop(L, 2);
+						lua_pop(L.get(), 2);
 					}
-					lua_pop(L, 1);
+					lua_pop(L.get(), 1);
 				}
 				if (!outpoly.empty())
 				{
@@ -1159,13 +1157,11 @@ namespace HsBa::Slicer
 					allPieces.push_back(ip);
 				}
 			}
-			lua_pop(L, 1); // pop value, keep key for next
+			lua_pop(L.get(), 1); // pop value, keep key for next
 		}
 
 		// return collected pieces (do not union/merge; caller expects paths)
 		for (auto& p : allPieces) res.push_back(p);
-
-		lua_close(L);
 		return res;
 	}
 
@@ -1176,77 +1172,70 @@ namespace HsBa::Slicer
 	{
 		auto polyD = UnIntegerization(poly);
 
-		lua_State* L = luaL_newstate();
+		auto L = MakeUniqueLuaState();
 		if (!L) 
 			throw RuntimeError("Failed to create Lua state");
-		luaL_openlibs(L);
+		luaL_openlibs(L.get());
 
-		RegisterLuaPolygonOperations(L);
-		RegisterLuaPolygonFillFunctions(L);
+		RegisterLuaPolygonOperations(L.get());
+		RegisterLuaPolygonFillFunctions(L.get());
 
-		if (luaL_loadstring(L, luaScript.c_str()) != LUA_OK) 
+		if (luaL_loadstring(L.get(), luaScript.c_str()) != LUA_OK) 
 		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			std::string err = lua_tostring(L.get(), -1);
 			throw RuntimeError("Failed to load Lua string: " + err);
 		}
-		if (lua_pcall(L, 0, 0, 0) != LUA_OK) 
+		if (lua_pcall(L.get(), 0, 0, 0) != LUA_OK) 
 		{          
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			std::string err = lua_tostring(L.get(), -1);
 			throw RuntimeError("Exec Lua string failed: " + err);
 		}
 
-		lua_getglobal(L, functionName.c_str());
-		if (!lua_isfunction(L, -1)) 
+		lua_getglobal(L.get(), functionName.c_str());
+		if (!lua_isfunction(L.get(), -1)) 
 		{
-			lua_close(L);
 			throw RuntimeError("Lua function not found: " + functionName);
 		}
 
-		PushPolygonsDToLua(L, polyD);
-		if (lua_pcall(L, 1, 1, 0) != LUA_OK) 
+		PushPolygonsDToLua(L.get(), polyD);
+		if (lua_pcall(L.get(), 1, 1, 0) != LUA_OK) 
 		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			std::string err = lua_tostring(L.get(), -1);
 			throw RuntimeError("Error calling Lua function: " + err);
 		}
 
-		if (!lua_istable(L, -1)) 
+		if (!lua_istable(L.get(), -1)) 
 		{
-			lua_close(L);
 			throw RuntimeError("Lua function did not return a table");
 		}
 
 		Polygons allPieces;
-		lua_pushnil(L);
-		while (lua_next(L, -2)) 
+		lua_pushnil(L.get());
+		while (lua_next(L.get(), -2)) 
 		{
-			if (lua_istable(L, -1)) 
+			if (lua_istable(L.get(), -1)) 
 			{
 				PolygonD outpoly;
-				int n = (int)lua_rawlen(L, -1);
+				int n = (int)lua_rawlen(L.get(), -1);
 				for (int i = 1; i <= n; ++i) {
-					lua_rawgeti(L, -1, i);
-					if (lua_istable(L, -1)) {
-						lua_getfield(L, -1, "x");
-						lua_getfield(L, -2, "y");
-						double x = lua_isnumber(L, -2) ? lua_tonumber(L, -2) : 0.0;
-						double y = lua_isnumber(L, -1) ? lua_tonumber(L, -1) : 0.0;
+					lua_rawgeti(L.get(), -1, i);
+					if (lua_istable(L.get(), -1)) {
+						lua_getfield(L.get(), -1, "x");
+						lua_getfield(L.get(), -2, "y");
+						double x = lua_isnumber(L.get(), -2) ? lua_tonumber(L.get(), -2) : 0.0;
+						double y = lua_isnumber(L.get(), -1) ? lua_tonumber(L.get(), -1) : 0.0;
 						outpoly.emplace_back(Point2D{ x, y });
-						lua_pop(L, 2);
+						lua_pop(L.get(), 2);
 					}
-					lua_pop(L, 1);
+					lua_pop(L.get(), 1);
 				}
 				if (!outpoly.empty()) {
 					Polygon ip = Integerization(outpoly);
 					allPieces.push_back(ip);
 				}
 			}
-			lua_pop(L, 1);
+			lua_pop(L.get(), 1);
 		}
-
-		lua_close(L);
 		return allPieces;
 	}
 

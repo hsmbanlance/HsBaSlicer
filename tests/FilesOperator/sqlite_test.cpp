@@ -67,11 +67,11 @@ BOOST_AUTO_TEST_CASE(test_sqlite_adapter_lua_integration)
 		std::filesystem::remove("lua_test.db");
 	}
 	// Create Lua state
-	lua_State* L = luaL_newstate();
-	luaL_openlibs(L);
+	auto L = HsBa::Slicer::MakeUniqueLuaState();
+	luaL_openlibs(L.get());
 	
 	// Register SQLiteAdapter to Lua
-	HsBa::Slicer::RegisterLuaSQLiteAdapter(L);
+	HsBa::Slicer::RegisterLuaSQLiteAdapter(L.get());
 	
 	// Execute Lua script to test SQLiteAdapter
 	const char* lua_code = R"(
@@ -91,13 +91,11 @@ BOOST_AUTO_TEST_CASE(test_sqlite_adapter_lua_integration)
 	)";
 
 	
-	int ret = luaL_dostring(L, lua_code);
-	BOOST_REQUIRE_MESSAGE(ret == 0, lua_tostring(L, -1));
-	
-	// Clean up
-	lua_close(L);
-	
-	// Add small delay to ensure file is fully released
+	int ret = luaL_dostring(L.get(), lua_code);
+	BOOST_REQUIRE_MESSAGE(ret == 0, lua_tostring(L.get(), -1));
+
+    // Explicitly destroy Lua state so SQLite DB is closed before deletion
+    L.reset();
 
 	auto safe_remove = [](const std::filesystem::path& p) {
     	for (int i = 0; i < 50; ++i) {          // 最多 5 s

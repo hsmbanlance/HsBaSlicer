@@ -111,11 +111,11 @@ BOOST_AUTO_TEST_CASE(test_zipper_lua_integration)
 		std::filesystem::remove("lua_test.zip");
 	}
 	// Create Lua state
-	lua_State* L = luaL_newstate();
-	luaL_openlibs(L);
+	auto L = HsBa::Slicer::MakeUniqueLuaState();
+	luaL_openlibs(L.get());
 	
 	// Register Zipper to Lua
-	HsBa::Slicer::RegisterLuaZipper(L);
+	HsBa::Slicer::RegisterLuaZipper(L.get());
 	
 	// Execute Lua script to test Zipper
 	const char* lua_code = R"(
@@ -125,8 +125,8 @@ BOOST_AUTO_TEST_CASE(test_zipper_lua_integration)
 		Zipper.Save(zipper, "lua_test.zip")
 	)";
 	
-	int ret = luaL_dostring(L, lua_code);
-	BOOST_REQUIRE_MESSAGE(ret == 0, lua_tostring(L, -1));
+	int ret = luaL_dostring(L.get(), lua_code);
+	BOOST_REQUIRE_MESSAGE(ret == 0, lua_tostring(L.get(), -1));
 	
 	// Verify the zip file was created and has correct content
 	BOOST_REQUIRE(std::filesystem::exists("lua_test.zip"));
@@ -136,7 +136,6 @@ BOOST_AUTO_TEST_CASE(test_zipper_lua_integration)
 	BOOST_REQUIRE_EQUAL(extracted_files["lua_test2.txt"], "Lua test file 2");
 	
 	// Clean up
-	lua_close(L);
 	std::filesystem::remove("lua_test.zip");
 	BOOST_TEST_MESSAGE("Zipper Lua Integration test completed successfully");
 }

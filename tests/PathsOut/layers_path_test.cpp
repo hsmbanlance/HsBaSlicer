@@ -64,11 +64,10 @@ BOOST_AUTO_TEST_CASE(test_save_with_db_rows)
   std::error_code ec; std::filesystem::remove(tmpdb, ec);
 
   // register Lua SQLite adapter in a transient lua_State (optional but ensures metatable setup)
-  lua_State* Lreg = luaL_newstate();
+  auto Lreg = HsBa::Slicer::MakeUniqueLuaState();
   if (!Lreg) throw std::runtime_error("Lua init failed in test");
-  luaL_openlibs(Lreg);
-  HsBa::Slicer::RegisterLuaSQLiteAdapter(Lreg);
-  lua_close(Lreg);
+  luaL_openlibs(Lreg.get());
+  HsBa::Slicer::RegisterLuaSQLiteAdapter(Lreg.get());
 
   // Lua script: use provided global `db` (already connected to tmpdb)
   std::string script = R"lua(
