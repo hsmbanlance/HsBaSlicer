@@ -7,6 +7,7 @@
 #include <format>
 
 #include <lua.hpp>
+#include "utils/LuaNewObject.hpp"
 
 #include "base/error.hpp"
 
@@ -91,102 +92,97 @@ namespace HsBa::Slicer
 		// When script provided: prepend header that declares script is user-provided and robot type is ignored
 		const std::string header = "// Script provided by user - robot type ignored, remove this line when using real robots\n";
 
-		lua_State* L = luaL_newstate();
-		if (!L)
-			throw RuntimeError("Lua init failed");
-		luaL_openlibs(L);
+        auto L = MakeUniqueLuaState();
+        if (!L) throw RuntimeError("Lua init failed");
+        luaL_openlibs(L.get());
 
-		// push header
-		lua_pushstring(L, header.c_str());
-		lua_setglobal(L, "header");
+        // push header
+        lua_pushstring(L.get(), header.c_str());
+        lua_setglobal(L.get(), "header");
 
-		// push program function names
-		lua_pushstring(L, startProgramFunc_.c_str());
-		lua_setglobal(L, "startProgramFunc");
-		lua_pushstring(L, endProgramFunc_.c_str());
-		lua_setglobal(L, "endProgramFunc");
+        // push program function names
+        lua_pushstring(L.get(), startProgramFunc_.c_str());
+        lua_setglobal(L.get(), "startProgramFunc");
+        lua_pushstring(L.get(), endProgramFunc_.c_str());
+        lua_setglobal(L.get(), "endProgramFunc");
 
-		// push points
-		lua_newtable(L);
-		int idx = 1;
-		for (const auto& pt : points_)
-		{
-			lua_newtable(L); // point
-			// end
-			lua_newtable(L);
-			lua_pushnumber(L, pt.end.x); lua_setfield(L, -2, "x");
-			lua_pushnumber(L, pt.end.y); lua_setfield(L, -2, "y");
-			lua_pushnumber(L, pt.end.z); lua_setfield(L, -2, "z");
-			lua_setfield(L, -2, "end");
-			// middle
-			lua_newtable(L);
-			lua_pushnumber(L, pt.middle.x); lua_setfield(L, -2, "x");
-			lua_pushnumber(L, pt.middle.y); lua_setfield(L, -2, "y");
-			lua_pushnumber(L, pt.middle.z); lua_setfield(L, -2, "z");
-			lua_setfield(L, -2, "middle");
-			// velocity and type
-			lua_pushnumber(L, pt.velocity); lua_setfield(L, -2, "velocity");
-			lua_pushstring(L, RLPointTypeToString(pt.type)); lua_setfield(L, -2, "type");
-			// set into points
-			lua_rawseti(L, -2, idx);
-			++idx;
-		}
-		lua_setglobal(L, "points");
+        // push points
+        lua_newtable(L.get());
+        int idx = 1;
+        for (const auto& pt : points_)
+        {
+            lua_newtable(L.get()); // point
+            // end
+            lua_newtable(L.get());
+            lua_pushnumber(L.get(), pt.end.x); lua_setfield(L.get(), -2, "x");
+            lua_pushnumber(L.get(), pt.end.y); lua_setfield(L.get(), -2, "y");
+            lua_pushnumber(L.get(), pt.end.z); lua_setfield(L.get(), -2, "z");
+            lua_setfield(L.get(), -2, "end");
+            // middle
+            lua_newtable(L.get());
+            lua_pushnumber(L.get(), pt.middle.x); lua_setfield(L.get(), -2, "x");
+            lua_pushnumber(L.get(), pt.middle.y); lua_setfield(L.get(), -2, "y");
+            lua_pushnumber(L.get(), pt.middle.z); lua_setfield(L.get(), -2, "z");
+            lua_setfield(L.get(), -2, "middle");
+            // velocity and type
+            lua_pushnumber(L.get(), pt.velocity); lua_setfield(L.get(), -2, "velocity");
+            lua_pushstring(L.get(), RLPointTypeToString(pt.type)); lua_setfield(L.get(), -2, "type");
+            // set into points
+            lua_rawseti(L.get(), -2, idx);
+            ++idx;
+        }
+        lua_setglobal(L.get(), "points");
 
-		// push startPoint
-		lua_newtable(L);
-		lua_pushnumber(L, startPoint_.x); lua_setfield(L, -2, "x");
-		lua_pushnumber(L, startPoint_.y); lua_setfield(L, -2, "y");
-		lua_pushnumber(L, startPoint_.z); lua_setfield(L, -2, "z");
-		lua_setglobal(L, "startPoint");
+        // push startPoint
+        lua_newtable(L.get());
+        lua_pushnumber(L.get(), startPoint_.x); lua_setfield(L.get(), -2, "x");
+        lua_pushnumber(L.get(), startPoint_.y); lua_setfield(L.get(), -2, "y");
+        lua_pushnumber(L.get(), startPoint_.z); lua_setfield(L.get(), -2, "z");
+        lua_setglobal(L.get(), "startPoint");
 
-		// execute script
-		int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "RobotPathScript");
-		if (loadStatus != LUA_OK)
-		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
-			throw RuntimeError(std::format("-- Lua load error: {}", err));
-		}
+        // execute script
+        int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "RobotPathScript");
+        if (loadStatus != LUA_OK)
+        {
+            std::string err = lua_tostring(L.get(), -1);
+            throw RuntimeError(std::format("-- Lua load error: {}", err));
+        }
 
-		int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
-		if (callStatus != LUA_OK)
-		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
-			throw RuntimeError(std::format("-- Lua runtime error: {}" , err));
-		}
+        int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
+        if (callStatus != LUA_OK)
+        {
+            std::string err = lua_tostring(L.get(), -1);
+            throw RuntimeError(std::format("-- Lua runtime error: {}" , err));
+        }
 
-		// if returned a string, take it
-		int nret = lua_gettop(L);
-		std::string body;
-		if (nret > 0 && lua_isstring(L, -1))
-		{
-			size_t len = 0;
-			const char* s = lua_tolstring(L, -1, &len);
-			body.assign(s, len);
-			lua_close(L);
-			return body;
-		}
+        // if returned a string, take it
+        int nret = lua_gettop(L.get());
+        std::string body;
+        if (nret > 0 && lua_isstring(L.get(), -1))
+        {
+            size_t len = 0;
+            const char* s = lua_tolstring(L.get(), -1, &len);
+            body.assign(s, len);
+            return body;
+        }
 
-		lua_getglobal(L, "result");
-		if (lua_isstring(L, -1))
-		{
-			size_t len = 0;
-			const char* s = lua_tolstring(L, -1, &len);
-			body.assign(s, len);
-		}
-		else
-		{
-			body = "";
-		}
-
-		lua_close(L);
+        lua_getglobal(L.get(), "result");
+        if (lua_isstring(L.get(), -1))
+        {
+            size_t len = 0;
+            const char* s = lua_tolstring(L.get(), -1, &len);
+            body.assign(s, len);
+        }
+        else
+        {
+            body = "";
+        }
 		return body;
 	}
 
 	std::string RobotPath::GenerateAbbCode() const
 	{
+
 		// simple ABB-like textual representation
 		std::ostringstream ss;
 		ss << "! default z10 for not in program and fine for programing\n";
@@ -354,77 +350,75 @@ namespace HsBa::Slicer
 
 	std::string RobotPath::ToString(std::string_view script, std::string_view funcName) const
 	{
-		lua_State* L = luaL_newstate();
+		auto L = MakeUniqueLuaState();
 		if (!L)
 			throw RuntimeError("Lua init failed");
-		luaL_openlibs(L);
+		luaL_openlibs(L.get());
 		// push function name
-		lua_pushstring(L, funcName.data());
-		lua_setglobal(L, "funcName");
+		lua_pushstring(L.get(), funcName.data());
+		lua_setglobal(L.get(), "funcName");
 		// push points
-		lua_newtable(L);
+		lua_newtable(L.get());
 		int idx = 1;
 		for (const auto& pt : points_)
 		{
-			lua_newtable(L); // point
+			lua_newtable(L.get()); // point
 			// end
-			lua_newtable(L);
-			lua_pushnumber(L, pt.end.x); lua_setfield(L, -2, "x");
-			lua_pushnumber(L, pt.end.y); lua_setfield(L, -2, "y");
-			lua_pushnumber(L, pt.end.z); lua_setfield(L, -2, "z");
-			lua_setfield(L, -2, "end");
+			lua_newtable(L.get());
+			lua_pushnumber(L.get(), pt.end.x); lua_setfield(L.get(), -2, "x");
+			lua_pushnumber(L.get(), pt.end.y); lua_setfield(L.get(), -2, "y");
+			lua_pushnumber(L.get(), pt.end.z); lua_setfield(L.get(), -2, "z");
+			lua_setfield(L.get(), -2, "end");
 			// middle
-			lua_newtable(L);
-			lua_pushnumber(L, pt.middle.x); lua_setfield(L, -2, "x");
-			lua_pushnumber(L, pt.middle.y); lua_setfield(L, -2, "y");
-			lua_pushnumber(L, pt.middle.z); lua_setfield(L, -2, "z");
-			lua_setfield(L, -2, "middle");
+			lua_newtable(L.get());
+			lua_pushnumber(L.get(), pt.middle.x); lua_setfield(L.get(), -2, "x");
+			lua_pushnumber(L.get(), pt.middle.y); lua_setfield(L.get(), -2, "y");
+			lua_pushnumber(L.get(), pt.middle.z); lua_setfield(L.get(), -2, "z");
+			lua_setfield(L.get(), -2, "middle");
 			// velocity and type
-			lua_pushnumber(L, pt.velocity); lua_setfield(L, -2, "velocity");
-			lua_pushstring(L, RLPointTypeToString(pt.type)); lua_setfield(L, -2, "type");
+			lua_pushnumber(L.get(), pt.velocity); lua_setfield(L.get(), -2, "velocity");
+			lua_pushstring(L.get(), RLPointTypeToString(pt.type)); lua_setfield(L.get(), -2, "type");
 			// set into points
-			lua_rawseti(L, -2, idx);
+			lua_rawseti(L.get(), -2, idx);
 			++idx;
 		}
-		lua_setglobal(L, "points");
+		lua_setglobal(L.get(), "points");
 		// execute script
-		int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "RobotPathScriptWithFunc");
+		int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "RobotPathScriptWithFunc");
 		if (loadStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			std::string err = lua_tostring(L.get(), -1);
 			throw RuntimeError(std::format("-- Lua load error: {}", err));
 		}
-		int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
 		if (callStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			std::string err = lua_tostring(L.get(), -1);
 			throw RuntimeError(std::format("-- Lua runtime error: {}", err));
 		}
 		// if returned a string, take it
-		int nret = lua_gettop(L);
+		int nret = lua_gettop(L.get());
 		std::string result;
-		if (nret > 0 && lua_isstring(L, -1))
+		if (nret > 0 && lua_isstring(L.get(), -1))
 		{
 			size_t len = 0;
-			const char* s = lua_tolstring(L, -1, &len);
+			const char* s = lua_tolstring(L.get(), -1, &len);
 			result.assign(s, len);
-			lua_close(L);
+			// L will be closed by UniqueLua deleter
 			return result;
 		}
-		lua_getglobal(L, "result");
-		if (lua_isstring(L, -1))
+		lua_getglobal(L.get(), "result");
+		if (lua_isstring(L.get(), -1))
 		{
 			size_t len = 0;
-			const char* s = lua_tolstring(L, -1, &len);
+			const char* s = lua_tolstring(L.get(), -1, &len);
 			result.assign(s, len);
 		}
 		else
 		{
 			result = "";
 		}
-		lua_close(L);
+		// L will be closed by UniqueLua deleter
 		return result;
 	}
 

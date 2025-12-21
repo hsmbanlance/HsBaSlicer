@@ -14,6 +14,7 @@
 
 #include "base/error.hpp"
 #include "LuaAdapter.hpp"
+#include "utils/LuaNewObject.hpp"
 
 namespace HsBa::Slicer
 {
@@ -215,56 +216,51 @@ namespace HsBa::Slicer
 
     bool LuaToImage(const PolygonsD& poly, const std::string& scriptPath, const std::string& outPath, const std::string& functionName)
     {
-        lua_State *L = luaL_newstate();
-        if (!L)
-            throw RuntimeError("Failed to create Lua state");
-        luaL_openlibs(L);
-        RegisterLuaPolygonOperations(L);
+        auto L = MakeUniqueLuaState();
+        if (!L) throw RuntimeError("Failed to create Lua state");
+        luaL_openlibs(L.get());
+        RegisterLuaPolygonOperations(L.get());
         // load script
-        if (luaL_loadfile(L, scriptPath.c_str()) || lua_pcall(L, 0, 0, 0))
+        if (luaL_loadfile(L.get(), scriptPath.c_str()) || lua_pcall(L.get(), 0, 0, 0))
         {
-            lua_close(L);
-            throw RuntimeError("Failed to load Lua script: " + std::string(lua_tostring(L, -1)));
+            std::string err = lua_tostring(L.get(), -1);
+            throw RuntimeError("Failed to load Lua script: " + err);
         }
         // get function
-        lua_getglobal(L, functionName.c_str());
-        if (!lua_isfunction(L, -1)) 
+        lua_getglobal(L.get(), functionName.c_str());
+        if (!lua_isfunction(L.get(), -1)) 
         {
-            lua_close(L);
             throw RuntimeError("Lua function not found: " + functionName);
         }
         // push polygon argument
-        PushPolygonsDToLua(L, poly);
+        PushPolygonsDToLua(L.get(), poly);
         // call function with 1 arg, 1 result
-        if (lua_pcall(L, 1, 1, 0) != LUA_OK)
+        if (lua_pcall(L.get(), 1, 1, 0) != LUA_OK)
         {
-            lua_close(L);
-            throw RuntimeError("Error calling Lua function: " + std::string(lua_tostring(L, -1)));
+            std::string err = lua_tostring(L.get(), -1);
+            throw RuntimeError("Error calling Lua function: " + err);
         }
         // expect table of grayscale image
-        if (!lua_istable(L, -1))
+        if (!lua_istable(L.get(), -1))
         {
-            lua_close(L);
             throw RuntimeError("Lua function did not return a table");
         }
         std::vector<uint8_t> img;
-        size_t len = lua_rawlen(L, -1);
+        size_t len = lua_rawlen(L.get(), -1);
         for (size_t i = 1; i <= len; ++i)
         {
-            lua_rawgeti(L, -1, static_cast<int>(i));
-            if (lua_isinteger(L, -1))
+            lua_rawgeti(L.get(), -1, static_cast<int>(i));
+            if (lua_isinteger(L.get(), -1))
             {
-                int val = static_cast<int>(lua_tointeger(L, -1));
+                int val = static_cast<int>(lua_tointeger(L.get(), -1));
                 img.push_back(static_cast<uint8_t>(std::clamp(val, 0, 255)));
             }
             else
             {
-                lua_close(L);
                 throw RuntimeError("Lua image table contains non-integer value");
             }
-            lua_pop(L, 1); // pop value
+            lua_pop(L.get(), 1); // pop value
         }
-        lua_close(L);
         // save image, use filesystem
         if(outPath.empty())
         {
@@ -279,60 +275,53 @@ namespace HsBa::Slicer
 
     bool LuaToImageString(const PolygonsD& poly, const std::string& script, const std::string& outPath, const std::string& functionName)
     {
-        lua_State* L = luaL_newstate();
-        if (!L)
-            throw RuntimeError("Failed to create Lua state");
-        luaL_openlibs(L);
-        RegisterLuaPolygonOperations(L);
+        auto L = MakeUniqueLuaState();
+        if (!L) throw RuntimeError("Failed to create Lua state");
+        luaL_openlibs(L.get());
+        RegisterLuaPolygonOperations(L.get());
         // load script and execute it (define function in global)
-        if (luaL_loadstring(L, script.c_str()) != LUA_OK) {
-            std::string err = lua_tostring(L, -1);
-            lua_close(L);
+        if (luaL_loadstring(L.get(), script.c_str()) != LUA_OK) {
+            std::string err = lua_tostring(L.get(), -1);
             throw RuntimeError("Load string failed: " + err);
         }
-        if (lua_pcall(L, 0, LUA_MULTRET, 0) != LUA_OK) {
-            std::string err = lua_tostring(L, -1);
-            lua_close(L);
+        if (lua_pcall(L.get(), 0, LUA_MULTRET, 0) != LUA_OK) {
+            std::string err = lua_tostring(L.get(), -1);
             throw RuntimeError("Exec chunk failed: " + err);
         }
         // get function
-        lua_getglobal(L, functionName.c_str());
-        if (!lua_isfunction(L, -1)) {
-            lua_close(L);
+        lua_getglobal(L.get(), functionName.c_str());
+        if (!lua_isfunction(L.get(), -1)) {
             throw RuntimeError("Function '" + functionName + "' not found");
         }
         // push polygon argument
-        PushPolygonsDToLua(L, poly);
+        PushPolygonsDToLua(L.get(), poly);
         // call function with 1 arg, 1 result
-        if (lua_pcall(L, 1, 1, 0) != LUA_OK)
+        if (lua_pcall(L.get(), 1, 1, 0) != LUA_OK)
         {
-            lua_close(L);
-            throw RuntimeError("Error calling Lua function: " + std::string(lua_tostring(L, -1)));
+            std::string err = lua_tostring(L.get(), -1);
+            throw RuntimeError("Error calling Lua function: " + err);
         }
         // expect table of grayscale image
-        if (!lua_istable(L, -1))
+        if (!lua_istable(L.get(), -1))
         {
-            lua_close(L);
             throw RuntimeError("Lua function did not return a table");
         }
         std::vector<uint8_t> img;
-        size_t len = lua_rawlen(L, -1);
+        size_t len = lua_rawlen(L.get(), -1);
         for (size_t i = 1; i <= len; ++i)
         {
-            lua_rawgeti(L, -1, static_cast<int>(i));
-            if (lua_isinteger(L, -1))
+            lua_rawgeti(L.get(), -1, static_cast<int>(i));
+            if (lua_isinteger(L.get(), -1))
             {
-                int val = static_cast<int>(lua_tointeger(L, -1));
+                int val = static_cast<int>(lua_tointeger(L.get(), -1));
                 img.push_back(static_cast<uint8_t>(std::clamp(val, 0, 255)));
             }
             else
             {
-                lua_close(L);
                 throw RuntimeError("Lua image table contains non-integer value");
             }
-            lua_pop(L, 1); // pop value
+            lua_pop(L.get(), 1); // pop value
         }
-        lua_close(L);
         // save image, use filesystem
         if (outPath.empty())
         {

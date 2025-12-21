@@ -5,6 +5,7 @@
 #include <format>
 
 #include <lua.hpp>
+#include "utils/LuaNewObject.hpp"
 
 #include "base/error.hpp"
 #include "cipher/encoder.hpp"
@@ -40,60 +41,59 @@ namespace HsBa::Slicer
 
 	void ImagesPath::Save(const std::filesystem::path& path, std::string_view script) const
 	{
-		lua_State* L = luaL_newstate();
+		auto L = MakeUniqueLuaState();
 		if (!L) throw RuntimeError("Lua init failed");
-		std::unique_ptr<lua_State, void(*)(lua_State*)> lua_guard(L, [](lua_State* p){ if(p) lua_close(p); });
-		luaL_openlibs(L);
+		luaL_openlibs(L.get());
 		// register helpers
-		HsBa::Slicer::RegisterLuaZipper(L);
-		HsBa::Slicer::Cipher::RegisterLuaCipher(L);
+		RegisterLuaZipper(L.get());
+		Cipher::RegisterLuaCipher(L.get());
 #ifdef USE_BIT7Z
-		HsBa::Slicer::RegisterLuaBit7zZipper(L);
+		RegisterLuaBit7zZipper(L.get());
 #endif
 
 		// push config global
-		lua_newtable(L);
-		lua_pushstring(L, config_.path.c_str()); lua_setfield(L, -2, "path");
-		lua_pushstring(L, config_.configStr.c_str()); lua_setfield(L, -2, "configStr");
-		lua_setglobal(L, "config");
+		lua_newtable(L.get());
+		lua_pushstring(L.get(), config_.path.c_str()); lua_setfield(L.get(), -2, "path");
+		lua_pushstring(L.get(), config_.configStr.c_str()); lua_setfield(L.get(), -2, "configStr");
+		lua_setglobal(L.get(), "config");
 
 		// push images table
-		lua_newtable(L);
+		lua_newtable(L.get());
 		int idx = 1;
 		for (const auto& [p, img] : images_)
 		{
-			lua_newtable(L);
-			lua_pushstring(L, p.c_str()); lua_setfield(L, -2, "path");
-			lua_pushlstring(L, img.data(), img.size()); lua_setfield(L, -2, "data");
-			lua_rawseti(L, -2, idx);
+			lua_newtable(L.get());
+			lua_pushstring(L.get(), p.c_str()); lua_setfield(L.get(), -2, "path");
+			lua_pushlstring(L.get(), img.data(), img.size()); lua_setfield(L.get(), -2, "data");
+			lua_rawseti(L.get(), -2, idx);
 			++idx;
 		}
-		lua_setglobal(L, "images");
+		lua_setglobal(L.get(), "images");
 
 		// push output path
-		lua_pushstring(L, path.string().c_str());
-		lua_setglobal(L, "output_path");
+		lua_pushstring(L.get(), path.string().c_str());
+		lua_setglobal(L.get(), "output_path");
 
 		if (script.empty()) return;
 
-		int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "ImagesPathSaveScript");
+		int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "ImagesPathSaveScript");
 		if (loadStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
+			std::string err = lua_tostring(L.get(), -1);
 			throw RuntimeError(std::format("-- Lua load error: {}", err));
 		}
-		int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
 		if (callStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
+			std::string err = lua_tostring(L.get(), -1);
 			throw RuntimeError(std::format("-- Lua runtime error: {}", err));
 		}
 		// if returned string, write to output_path
-		int nret = lua_gettop(L);
-		if (nret > 0 && lua_isstring(L, -1))
+		int nret = lua_gettop(L.get());
+		if (nret > 0 && lua_isstring(L.get(), -1))
 		{
 			size_t len = 0;
-			const char* s = lua_tolstring(L, -1, &len);
+			const char* s = lua_tolstring(L.get(), -1, &len);
 			std::ofstream ofs(path, std::ios::binary);
 			if (!ofs) throw RuntimeError("Failed to open output file: " + path.string());
 			ofs.write(s, static_cast<std::streamsize>(len));
@@ -104,54 +104,53 @@ namespace HsBa::Slicer
 	{
 		std::string script_copy(script);
 		// set funcName global and call same
-		lua_State* L = luaL_newstate();
+		auto L = MakeUniqueLuaState();
 		if (!L) throw RuntimeError("Lua init failed");
-		std::unique_ptr<lua_State, void(*)(lua_State*)> lua_guard(L, [](lua_State* p){ if(p) lua_close(p); });
-		luaL_openlibs(L);
-		HsBa::Slicer::RegisterLuaZipper(L);
-		HsBa::Slicer::Cipher::RegisterLuaCipher(L);
+		luaL_openlibs(L.get());
+		RegisterLuaZipper(L.get());
+		Cipher::RegisterLuaCipher(L.get());
 #ifdef USE_BIT7Z
-		HsBa::Slicer::RegisterLuaBit7zZipper(L);
+		RegisterLuaBit7zZipper(L.get());
 #endif
 
 		// push config
-		lua_newtable(L);
-		lua_pushstring(L, config_.path.c_str()); lua_setfield(L, -2, "path");
-		lua_pushstring(L, config_.configStr.c_str()); lua_setfield(L, -2, "configStr");
-		lua_setglobal(L, "config");
+		lua_newtable(L.get());
+		lua_pushstring(L.get(), config_.path.c_str()); lua_setfield(L.get(), -2, "path");
+		lua_pushstring(L.get(), config_.configStr.c_str()); lua_setfield(L.get(), -2, "configStr");
+		lua_setglobal(L.get(), "config");
 		// push images
-		lua_newtable(L);
+		lua_newtable(L.get());
 		int idx = 1;
 		for (const auto& [p, img] : images_)
 		{
-			lua_newtable(L);
-			lua_pushstring(L, p.c_str()); lua_setfield(L, -2, "path");
-			lua_pushlstring(L, img.data(), img.size()); lua_setfield(L, -2, "data");
-			lua_rawseti(L, -2, idx);
+			lua_newtable(L.get());
+			lua_pushstring(L.get(), p.c_str()); lua_setfield(L.get(), -2, "path");
+			lua_pushlstring(L.get(), img.data(), img.size()); lua_setfield(L.get(), -2, "data");
+			lua_rawseti(L.get(), -2, idx);
 			++idx;
 		}
-		lua_setglobal(L, "images");
+		lua_setglobal(L.get(), "images");
 		// push path and funcName
-		lua_pushstring(L, path.string().c_str());
-		lua_setglobal(L, "output_path");
+		lua_pushstring(L.get(), path.string().c_str());
+		lua_setglobal(L.get(), "output_path");
 
-		int loadStatus = luaL_loadbuffer(L, script_copy.data(), script_copy.size(), "ImagesPathSaveScriptWithFunc");
+		int loadStatus = luaL_loadbuffer(L.get(), script_copy.data(), script_copy.size(), "ImagesPathSaveScriptWithFunc");
 		if (loadStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
+			std::string err = lua_tostring(L.get(), -1);
 			throw RuntimeError(std::format("-- Lua load error: {}", err));
 		}
-		int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
 		if (callStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
+			std::string err = lua_tostring(L.get(), -1);
 			throw RuntimeError(std::format("-- Lua runtime error: {}", err));
 		}
-		int nret = lua_gettop(L);
-		if (nret > 0 && lua_isstring(L, -1))
+		int nret = lua_gettop(L.get());
+		if (nret > 0 && lua_isstring(L.get(), -1))
 		{
 			size_t len = 0;
-			const char* s = lua_tolstring(L, -1, &len);
+			const char* s = lua_tolstring(L.get(), -1, &len);
 			std::ofstream ofs(path, std::ios::binary);
 			if (!ofs) throw RuntimeError("Failed to open output file: " + path.string());
 			ofs.write(s, static_cast<std::streamsize>(len));
@@ -170,49 +169,48 @@ namespace HsBa::Slicer
 	{
 		if (script.empty()) return ToString();
 
-		lua_State* L = luaL_newstate();
+		auto L = MakeUniqueLuaState();
 		if (!L) throw RuntimeError("Lua init failed");
-		std::unique_ptr<lua_State, void(*)(lua_State*)> lua_guard(L, [](lua_State* p){ if(p) lua_close(p); });
-		luaL_openlibs(L);
+		luaL_openlibs(L.get());
 		// register helpers
-		HsBa::Slicer::Cipher::RegisterLuaCipher(L);
+		Cipher::RegisterLuaCipher(L.get());
 
 		// push config global
-		lua_newtable(L);
-		lua_pushstring(L, config_.path.c_str()); lua_setfield(L, -2, "path");
-		lua_pushstring(L, config_.configStr.c_str()); lua_setfield(L, -2, "configStr");
-		lua_setglobal(L, "config");
+		lua_newtable(L.get());
+		lua_pushstring(L.get(), config_.path.c_str()); lua_setfield(L.get(), -2, "path");
+		lua_pushstring(L.get(), config_.configStr.c_str()); lua_setfield(L.get(), -2, "configStr");
+		lua_setglobal(L.get(), "config");
 
 		// push images table
-		lua_newtable(L);
+		lua_newtable(L.get());
 		int idx = 1;
 		for (const auto& [p, img] : images_)
 		{
-			lua_newtable(L);
-			lua_pushstring(L, p.c_str()); lua_setfield(L, -2, "path");
-			lua_pushlstring(L, img.data(), img.size()); lua_setfield(L, -2, "data");
-			lua_rawseti(L, -2, idx);
+			lua_newtable(L.get());
+			lua_pushstring(L.get(), p.c_str()); lua_setfield(L.get(), -2, "path");
+			lua_pushlstring(L.get(), img.data(), img.size()); lua_setfield(L.get(), -2, "data");
+			lua_rawseti(L.get(), -2, idx);
 			++idx;
 		}
-		lua_setglobal(L, "images");
+		lua_setglobal(L.get(), "images");
 
-		int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "ImagesPathToStringScript");
+		int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "ImagesPathToStringScript");
 		if (loadStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
+			std::string err = lua_tostring(L.get(), -1);
 			throw RuntimeError(std::format("-- Lua load error: {}", err));
 		}
-		int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
 		if (callStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
+			std::string err = lua_tostring(L.get(), -1);
 			throw RuntimeError(std::format("-- Lua runtime error: {}", err));
 		}
-		int nret = lua_gettop(L);
-		if (nret > 0 && lua_isstring(L, -1))
+		int nret = lua_gettop(L.get());
+		if (nret > 0 && lua_isstring(L.get(), -1))
 		{
 			size_t len = 0;
-			const char* s = lua_tolstring(L, -1, &len);
+			const char* s = lua_tolstring(L.get(), -1, &len);
 			return std::string(s, len);
 		}
 		return ToString();
@@ -223,48 +221,47 @@ namespace HsBa::Slicer
 		std::string script_copy(script);
 		if (script_copy.empty()) return ToString();
 
-		lua_State* L = luaL_newstate();
+		auto L = MakeUniqueLuaState();
 		if (!L) throw RuntimeError("Lua init failed");
-		std::unique_ptr<lua_State, void(*)(lua_State*)> lua_guard(L, [](lua_State* p){ if(p) lua_close(p); });
-		luaL_openlibs(L);
-		HsBa::Slicer::Cipher::RegisterLuaCipher(L);
+		luaL_openlibs(L.get());
+		Cipher::RegisterLuaCipher(L.get());
 		// push config
-		lua_newtable(L);
-		lua_pushstring(L, config_.path.c_str()); lua_setfield(L, -2, "path");
-		lua_pushstring(L, config_.configStr.c_str()); lua_setfield(L, -2, "configStr");
-		lua_setglobal(L, "config");
+		lua_newtable(L.get());
+		lua_pushstring(L.get(), config_.path.c_str()); lua_setfield(L.get(), -2, "path");
+		lua_pushstring(L.get(), config_.configStr.c_str()); lua_setfield(L.get(), -2, "configStr");
+		lua_setglobal(L.get(), "config");
 		// push images
-		lua_newtable(L);
+		lua_newtable(L.get());
 		int idx = 1;
 		for (const auto& [p, img] : images_)
 		{
-			lua_newtable(L);
-			lua_pushstring(L, p.c_str()); lua_setfield(L, -2, "path");
-			lua_pushlstring(L, img.data(), img.size()); lua_setfield(L, -2, "data");
-			lua_rawseti(L, -2, idx);
+			lua_newtable(L.get());
+			lua_pushstring(L.get(), p.c_str()); lua_setfield(L.get(), -2, "path");
+			lua_pushlstring(L.get(), img.data(), img.size()); lua_setfield(L.get(), -2, "data");
+			lua_rawseti(L.get(), -2, idx);
 			++idx;
 		}
-		lua_setglobal(L, "images");
+		lua_setglobal(L.get(), "images");
 		// push funcName
-		lua_pushstring(L, funcName.data()); lua_setglobal(L, "funcName");
+		lua_pushstring(L.get(), funcName.data()); lua_setglobal(L.get(), "funcName");
 
-		int loadStatus = luaL_loadbuffer(L, script_copy.data(), script_copy.size(), "ImagesPathToStringScriptWithFunc");
+		int loadStatus = luaL_loadbuffer(L.get(), script_copy.data(), script_copy.size(), "ImagesPathToStringScriptWithFunc");
 		if (loadStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
+			std::string err = lua_tostring(L.get(), -1);
 			throw RuntimeError(std::format("-- Lua load error: {}", err));
 		}
-		int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
 		if (callStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
+			std::string err = lua_tostring(L.get(), -1);
 			throw RuntimeError(std::format("-- Lua runtime error: {}", err));
 		}
-		int nret = lua_gettop(L);
-		if (nret > 0 && lua_isstring(L, -1))
+		int nret = lua_gettop(L.get());
+		if (nret > 0 && lua_isstring(L.get(), -1))
 		{
 			size_t len = 0;
-			const char* s = lua_tolstring(L, -1, &len);
+			const char* s = lua_tolstring(L.get(), -1, &len);
 			return std::string(s, len);
 		}
 		return ToString();

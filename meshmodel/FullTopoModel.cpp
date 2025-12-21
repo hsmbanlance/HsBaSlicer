@@ -7,11 +7,12 @@
 #include <cmath>
 #include <climits>
 #include <boost/container_hash/hash.hpp>
-#include <lua.hpp>
 
+#include <lua.hpp>
 #include <igl/per_face_normals.h>
 
 #include "base/error.hpp"
+#include "utils/LuaNewObject.hpp"
 
 namespace HsBa::Slicer
 {
@@ -432,205 +433,201 @@ namespace HsBa::Slicer
 
 	Polygons FullTopoModel::SliceLua(const std::string& script, const float height) const
 	{
-		lua_State* L = luaL_newstate();
+		auto L = MakeUniqueLuaState();
 		if (!L) 
 			throw RuntimeError("Lua init failed");
-		luaL_openlibs(L);
+		luaL_openlibs(L.get());
 
 		// push V (1-based)
-		lua_newtable(L);
+		lua_newtable(L.get());
 		for (int i = 0; i < static_cast<int>(vertices_.size()); ++i)
 		{
-			lua_newtable(L);
-			lua_pushnumber(L, vertices_[i].vertex.x()); lua_setfield(L, -2, "x");
-			lua_pushnumber(L, vertices_[i].vertex.y()); lua_setfield(L, -2, "y");
-			lua_pushnumber(L, vertices_[i].vertex.z()); lua_setfield(L, -2, "z");
-			lua_rawseti(L, -2, i + 1);
+			lua_newtable(L.get());
+			lua_pushnumber(L.get(), vertices_[i].vertex.x()); lua_setfield(L.get(), -2, "x");
+			lua_pushnumber(L.get(), vertices_[i].vertex.y()); lua_setfield(L.get(), -2, "y");
+			lua_pushnumber(L.get(), vertices_[i].vertex.z()); lua_setfield(L.get(), -2, "z");
+			lua_rawseti(L.get(), -2, i + 1);
 		}
-		lua_setglobal(L, "V");
+		lua_setglobal(L.get(), "V");
 
 		// push E (edges)
-		lua_newtable(L);
+		lua_newtable(L.get());
 		for (int i = 0; i < static_cast<int>(edges_.size()); ++i)
 		{
-			lua_newtable(L);
-			lua_pushinteger(L, edges_[i].vertices[0] + 1); lua_rawseti(L, -2, 1);
-			lua_pushinteger(L, edges_[i].vertices[1] + 1); lua_rawseti(L, -2, 2);
-			lua_rawseti(L, -2, i + 1);
+			lua_newtable(L.get());
+			lua_pushinteger(L.get(), edges_[i].vertices[0] + 1); lua_rawseti(L.get(), -2, 1);
+			lua_pushinteger(L.get(), edges_[i].vertices[1] + 1); lua_rawseti(L.get(), -2, 2);
+			lua_rawseti(L.get(), -2, i + 1);
 		}
-		lua_setglobal(L, "E");
+		lua_setglobal(L.get(), "E");
 
 		// push F (faces)
-		lua_newtable(L);
+		lua_newtable(L.get());
 		for (int i = 0; i < static_cast<int>(faces_.size()); ++i)
 		{
-			lua_newtable(L);
-			lua_pushinteger(L, faces_[i].triangle[0] + 1); lua_rawseti(L, -2, 1);
-			lua_pushinteger(L, faces_[i].triangle[1] + 1); lua_rawseti(L, -2, 2);
-			lua_pushinteger(L, faces_[i].triangle[2] + 1); lua_rawseti(L, -2, 3);
-			lua_rawseti(L, -2, i + 1);
+			lua_newtable(L.get());
+			lua_pushinteger(L.get(), faces_[i].triangle[0] + 1); lua_rawseti(L.get(), -2, 1);
+			lua_pushinteger(L.get(), faces_[i].triangle[1] + 1); lua_rawseti(L.get(), -2, 2);
+			lua_pushinteger(L.get(), faces_[i].triangle[2] + 1); lua_rawseti(L.get(), -2, 3);
+			lua_rawseti(L.get(), -2, i + 1);
 		}
-		lua_setglobal(L, "F");
+		lua_setglobal(L.get(), "F");
 
-		lua_pushnumber(L, height);
-		lua_setglobal(L, "height");
+		lua_pushnumber(L.get(), height);
+		lua_setglobal(L.get(), "height");
 
-		int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "FullTopoModelSliceScript");
+		int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "FullTopoModelSliceScript");
 		if (loadStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			const char* es = lua_tostring(L.get(), -1);
+			std::string err = es ? es : "<lua error>";
 			throw RuntimeError("Lua load error: " + err);
 		}
-
-		int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
 		if (callStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			const char* es = lua_tostring(L.get(), -1);
+			std::string err = es ? es : "<lua error>";
 			throw RuntimeError("Lua runtime error: " + err);
 		}
 
 		// get returned table (top of stack) or global 'polys'
 		Polygons result;
-		int top = lua_gettop(L);
-		if (top == 0 || !lua_istable(L, -1))
+		int top = lua_gettop(L.get());
+		if (top == 0 || !lua_istable(L.get(), -1))
 		{
-			lua_getglobal(L, "polys");
-			if (!lua_istable(L, -1))
+			lua_getglobal(L.get(), "polys");
+			if (!lua_istable(L.get(), -1))
 			{
-				lua_close(L);
 				return result;
 			}
 		}
 
 		// Iterate polygons
-		int nPolys = (int)lua_rawlen(L, -1);
+		int nPolys = (int)lua_rawlen(L.get(), -1);
 		for (int i = 1; i <= nPolys; ++i)
 		{
-			lua_rawgeti(L, -1, i); // push polygon table
-			if (!lua_istable(L, -1)) { lua_pop(L, 1); continue; }
+			lua_rawgeti(L.get(), -1, i); // push polygon table
+			if (!lua_istable(L.get(), -1)) { lua_pop(L.get(), 1); continue; }
 			Polygon poly;
-			int nPts = (int)lua_rawlen(L, -1);
+			int nPts = (int)lua_rawlen(L.get(), -1);
 			for (int j = 1; j <= nPts; ++j)
 			{
-				lua_rawgeti(L, -1, j); // push point
-				if (lua_istable(L, -1))
+				lua_rawgeti(L.get(), -1, j); // push point
+				if (lua_istable(L.get(), -1))
 				{
-					lua_getfield(L, -1, "x");
-					lua_getfield(L, -2, "y");
-					double x = lua_tonumber(L, -2);
-					double y = lua_tonumber(L, -1);
-					lua_pop(L, 2);
+					lua_getfield(L.get(), -1, "x");
+					lua_getfield(L.get(), -2, "y");
+					double x = lua_tonumber(L.get(), -2);
+					double y = lua_tonumber(L.get(), -1);
+					lua_pop(L.get(), 2);
 					long long xi = std::llround(x * integerization);
 					long long yi = std::llround(y * integerization);
 					poly.emplace_back(Point2{ xi, yi });
 				}
-				lua_pop(L, 1); // pop point
+				lua_pop(L.get(), 1); // pop point
 			}
-			lua_pop(L, 1); // pop polygon
+			lua_pop(L.get(), 1); // pop polygon
 			if (poly.size() >= 3) result.emplace_back(std::move(poly));
 		}
 
-		lua_close(L);
 		return result;
 	}
 
 	UnSafePolygons FullTopoModel::UnSafeSliceLua(const std::string& script, const float height) const
 	{
 		// reuse SliceLua to get polygons, but also accept open polylines returned via 'polys' where points may be 2 or more
-		lua_State* L = luaL_newstate();
+		auto L = MakeUniqueLuaState();
 		if (!L) 
 			throw RuntimeError("Lua init failed");
-		luaL_openlibs(L);
+		luaL_openlibs(L.get());
 
 		// push V, E, F and height (same as above)
-		lua_newtable(L);
+		lua_newtable(L.get());
 		for (int i = 0; i < static_cast<int>(vertices_.size()); ++i)
 		{
-			lua_newtable(L);
-			lua_pushnumber(L, vertices_[i].vertex.x()); lua_setfield(L, -2, "x");
-			lua_pushnumber(L, vertices_[i].vertex.y()); lua_setfield(L, -2, "y");
-			lua_pushnumber(L, vertices_[i].vertex.z()); lua_setfield(L, -2, "z");
-			lua_rawseti(L, -2, i + 1);
+			lua_newtable(L.get());
+			lua_pushnumber(L.get(), vertices_[i].vertex.x()); lua_setfield(L.get(), -2, "x");
+			lua_pushnumber(L.get(), vertices_[i].vertex.y()); lua_setfield(L.get(), -2, "y");
+			lua_pushnumber(L.get(), vertices_[i].vertex.z()); lua_setfield(L.get(), -2, "z");
+			lua_rawseti(L.get(), -2, i + 1);
 		}
-		lua_setglobal(L, "V");
+		lua_setglobal(L.get(), "V");
 
-		lua_newtable(L);
+		lua_newtable(L.get());
 		for (int i = 0; i < static_cast<int>(edges_.size()); ++i)
 		{
-			lua_newtable(L);
-			lua_pushinteger(L, edges_[i].vertices[0] + 1); lua_rawseti(L, -2, 1);
-			lua_pushinteger(L, edges_[i].vertices[1] + 1); lua_rawseti(L, -2, 2);
-			lua_rawseti(L, -2, i + 1);
+			lua_newtable(L.get());
+			lua_pushinteger(L.get(), edges_[i].vertices[0] + 1); lua_rawseti(L.get(), -2, 1);
+			lua_pushinteger(L.get(), edges_[i].vertices[1] + 1); lua_rawseti(L.get(), -2, 2);
+			lua_rawseti(L.get(), -2, i + 1);
 		}
-		lua_setglobal(L, "E");
+		lua_setglobal(L.get(), "E");
 
-		lua_newtable(L);
+		lua_newtable(L.get());
 		for (int i = 0; i < static_cast<int>(faces_.size()); ++i)
 		{
-			lua_newtable(L);
-			lua_pushinteger(L, faces_[i].triangle[0] + 1); lua_rawseti(L, -2, 1);
-			lua_pushinteger(L, faces_[i].triangle[1] + 1); lua_rawseti(L, -2, 2);
-			lua_pushinteger(L, faces_[i].triangle[2] + 1); lua_rawseti(L, -2, 3);
-			lua_rawseti(L, -2, i + 1);
+			lua_newtable(L.get());
+			lua_pushinteger(L.get(), faces_[i].triangle[0] + 1); lua_rawseti(L.get(), -2, 1);
+			lua_pushinteger(L.get(), faces_[i].triangle[1] + 1); lua_rawseti(L.get(), -2, 2);
+			lua_pushinteger(L.get(), faces_[i].triangle[2] + 1); lua_rawseti(L.get(), -2, 3);
+			lua_rawseti(L.get(), -2, i + 1);
 		}
-		lua_setglobal(L, "F");
+		lua_setglobal(L.get(), "F");
 
-		lua_pushnumber(L, height);
-		lua_setglobal(L, "height");
+		lua_pushnumber(L.get(), height);
+		lua_setglobal(L.get(), "height");
 
-		int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "FullTopoModelSliceScript");
+		int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "FullTopoModelSliceScript");
 		if (loadStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			const char* es = lua_tostring(L.get(), -1);
+			std::string err = es ? es : "<lua error>";
 			throw RuntimeError("Lua load error: " + err);
 		}
-		int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
 		if (callStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			const char* es = lua_tostring(L.get(), -1);
+			std::string err = es ? es : "<lua error>";
 			throw RuntimeError("Lua runtime error: " + err);
 		}
 
 		UnSafePolygons result;
-		int top = lua_gettop(L);
-		if (top == 0 || !lua_istable(L, -1))
+		int top = lua_gettop(L.get());
+		if (top == 0 || !lua_istable(L.get(), -1))
 		{
-			lua_getglobal(L, "polys");
-			if (!lua_istable(L, -1))
+			lua_getglobal(L.get(), "polys");
+			if (!lua_istable(L.get(), -1))
 			{
-				lua_close(L);
 				return result;
 			}
 		}
 
-		int nPolys = (int)lua_rawlen(L, -1);
+		int nPolys = (int)lua_rawlen(L.get(), -1);
 		for (int i = 1; i <= nPolys; ++i)
 		{
-			lua_rawgeti(L, -1, i); // polygon
-			if (!lua_istable(L, -1)) { lua_pop(L, 1); continue; }
+			lua_rawgeti(L.get(), -1, i); // polygon
+			if (!lua_istable(L.get(), -1)) { lua_pop(L.get(), 1); continue; }
 			Polygon poly;
-			int nPts = (int)lua_rawlen(L, -1);
+			int nPts = (int)lua_rawlen(L.get(), -1);
 			for (int j = 1; j <= nPts; ++j)
 			{
-				lua_rawgeti(L, -1, j);
-				if (lua_istable(L, -1))
+				lua_rawgeti(L.get(), -1, j);
+				if (lua_istable(L.get(), -1))
 				{
-					lua_getfield(L, -1, "x");
-					lua_getfield(L, -2, "y");
-					double x = lua_tonumber(L, -2);
-					double y = lua_tonumber(L, -1);
-					lua_pop(L, 2);
+						lua_getfield(L.get(), -1, "x");
+						lua_getfield(L.get(), -2, "y");
+						double x = lua_tonumber(L.get(), -2);
+						double y = lua_tonumber(L.get(), -1);
+						lua_pop(L.get(), 2);
 					long long xi = std::llround(x * integerization);
 					long long yi = std::llround(y * integerization);
 					poly.emplace_back(Point2{ xi, yi });
 				}
-				lua_pop(L, 1);
+				lua_pop(L.get(), 1);
 			}
-			lua_pop(L, 1);
+			lua_pop(L.get(), 1);
 			if (poly.size() >= 2)
 			{
 				UnSafePolygon up;
@@ -640,219 +637,215 @@ namespace HsBa::Slicer
 			}
 		}
 
-		lua_close(L);
+		// L will be closed by UniqueLua deleter
 		return result;
 	}
 
 	Polygons FullTopoModel::SliceLua(const std::string& script, const std::string& funcName, const float height) const
 	{
-		lua_State* L = luaL_newstate();
+		auto L = MakeUniqueLuaState();
 		if (!L) 
 			throw RuntimeError("Lua init failed");
-		luaL_openlibs(L);
+		luaL_openlibs(L.get());
 		// push V, E, F and height (same as above)
-		lua_newtable(L);
+		lua_newtable(L.get());
 		for (int i = 0; i < static_cast<int>(vertices_.size()); ++i)
 		{
-			lua_newtable(L);
-			lua_pushnumber(L, vertices_[i].vertex.x()); lua_setfield(L, -2, "x");
-			lua_pushnumber(L, vertices_[i].vertex.y()); lua_setfield(L, -2, "y");
-			lua_pushnumber(L, vertices_[i].vertex.z()); lua_setfield(L, -2, "z");
-			lua_rawseti(L, -2, i + 1);
+			lua_newtable(L.get());
+			lua_pushnumber(L.get(), vertices_[i].vertex.x()); lua_setfield(L.get(), -2, "x");
+			lua_pushnumber(L.get(), vertices_[i].vertex.y()); lua_setfield(L.get(), -2, "y");
+			lua_pushnumber(L.get(), vertices_[i].vertex.z()); lua_setfield(L.get(), -2, "z");
+			lua_rawseti(L.get(), -2, i + 1);
 		}
-		lua_setglobal(L, "V");
-		lua_newtable(L);
+		lua_setglobal(L.get(), "V");
+		lua_newtable(L.get());
 		for (int i = 0; i < static_cast<int>(edges_.size()); ++i)
 		{
-			lua_newtable(L);
-			lua_pushinteger(L, edges_[i].vertices[0] + 1); lua_rawseti(L, -2, 1);
-			lua_pushinteger(L, edges_[i].vertices[1] + 1); lua_rawseti(L, -2, 2);
-			lua_rawseti(L, -2, i + 1);
+			lua_newtable(L.get());
+			lua_pushinteger(L.get(), edges_[i].vertices[0] + 1); lua_rawseti(L.get(), -2, 1);
+			lua_pushinteger(L.get(), edges_[i].vertices[1] + 1); lua_rawseti(L.get(), -2, 2);
+			lua_rawseti(L.get(), -2, i + 1);
 		}
-		lua_setglobal(L, "E");
-		lua_newtable(L);
+		lua_setglobal(L.get(), "E");
+		lua_newtable(L.get());
 		for (int i = 0; i < static_cast<int>(faces_.size()); ++i)
 		{
-			lua_newtable(L);
-			lua_pushinteger(L, faces_[i].triangle[0] + 1); lua_rawseti(L, -2, 1);
-			lua_pushinteger(L, faces_[i].triangle[1] + 1); lua_rawseti(L, -2, 2);
-			lua_pushinteger(L, faces_[i].triangle[2] + 1); lua_rawseti(L, -2, 3);
-			lua_rawseti(L, -2, i + 1);
+			lua_newtable(L.get());
+			lua_pushinteger(L.get(), faces_[i].triangle[0] + 1); lua_rawseti(L.get(), -2, 1);
+			lua_pushinteger(L.get(), faces_[i].triangle[1] + 1); lua_rawseti(L.get(), -2, 2);
+			lua_pushinteger(L.get(), faces_[i].triangle[2] + 1); lua_rawseti(L.get(), -2, 3);
+			lua_rawseti(L.get(), -2, i + 1);
 		}
-		lua_setglobal(L, "F");
-		lua_pushnumber(L, height);
-		lua_setglobal(L, "height");
-		int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "FullTopoModelSliceScript");
+		lua_setglobal(L.get(), "F");
+		lua_pushnumber(L.get(), height);
+		lua_setglobal(L.get(), "height");
+		int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "FullTopoModelSliceScript");
 		if (loadStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			const char* es = lua_tostring(L.get(), -1);
+			std::string err = es ? es : "<lua error>";
 			throw RuntimeError("Lua load error: " + err);
 		}
-		int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
 		if (callStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			const char* es = lua_tostring(L.get(), -1);
+			std::string err = es ? es : "<lua error>";
 			throw RuntimeError("Lua runtime error: " + err);
 		}
-		lua_getglobal(L, funcName.c_str());
-		if (!lua_isfunction(L, -1))
+		lua_getglobal(L.get(), funcName.c_str());
+		if (!lua_isfunction(L.get(), -1))
 		{
-			lua_close(L);
 			throw RuntimeError("Lua function '" + funcName + "' not found");
 		}
-		int pcallStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		int pcallStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
 		if (pcallStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			const char* es = lua_tostring(L.get(), -1);
+			std::string err = es ? es : "<lua error>";
 			throw RuntimeError("Lua function '" + funcName + "' runtime error: " + err);
 		}
 		Polygons result;
-		int top = lua_gettop(L);
-		if (top == 0 || !lua_istable(L, -1))
+		int top = lua_gettop(L.get());
+		if (top == 0 || !lua_istable(L.get(), -1))
 		{
-			lua_getglobal(L, "polys");
-			if (!lua_istable(L, -1))
+			lua_getglobal(L.get(), "polys");
+			if (!lua_istable(L.get(), -1))
 			{
-				lua_close(L);
 				return result;
 			}
 		}
-		int nPolys = (int)lua_rawlen(L, -1);
+		int nPolys = (int)lua_rawlen(L.get(), -1);
 		for (int i = 1; i <= nPolys; ++i)
 		{
-			lua_rawgeti(L, -1, i); // push polygon table
-			if (!lua_istable(L, -1)) { lua_pop(L, 1); continue; }
+			lua_rawgeti(L.get(), -1, i); // push polygon table
+			if (!lua_istable(L.get(), -1)) { lua_pop(L.get(), 1); continue; }
 			Polygon poly;
-			int nPts = (int)lua_rawlen(L, -1);
+			int nPts = (int)lua_rawlen(L.get(), -1);
 			for (int j = 1; j <= nPts; ++j)
 			{
-				lua_rawgeti(L, -1, j); // push point
-				if (lua_istable(L, -1))
+				lua_rawgeti(L.get(), -1, j); // push point
+				if (lua_istable(L.get(), -1))
 				{
-					lua_getfield(L, -1, "x");
-					lua_getfield(L, -2, "y");
-					double x = lua_tonumber(L, -2);
-					double y = lua_tonumber(L, -1);
-					lua_pop(L, 2);
+					lua_getfield(L.get(), -1, "x");
+					lua_getfield(L.get(), -2, "y");
+					double x = lua_tonumber(L.get(), -2);
+					double y = lua_tonumber(L.get(), -1);
+					lua_pop(L.get(), 2);
 					long long xi = std::llround(x * integerization);
 					long long yi = std::llround(y * integerization);
 					poly.emplace_back(Point2{ xi, yi });
 				}
-				lua_pop(L, 1); // pop point
+				lua_pop(L.get(), 1); // pop point
 			}
-			lua_pop(L, 1); // pop polygon
+			lua_pop(L.get(), 1); // pop polygon
 			if (poly.size() >= 3) result.emplace_back(std::move(poly));
 		}
-		lua_close(L);
+		// L will be closed by UniqueLua deleter
 		return result;
 	}
 
 	Polygons FullTopoModel::SliceLua(const std::filesystem::path& script_file, const std::string& funcName, const float height) const
 	{
-		lua_State* L = luaL_newstate();
+		auto L = MakeUniqueLuaState();
 		if (!L)
 			throw RuntimeError("Lua init failed");
-		luaL_openlibs(L);
+		luaL_openlibs(L.get());
 		// push V, E, F and height (same as above)
-		lua_newtable(L);
+		lua_newtable(L.get());
 		for (int i = 0; i < static_cast<int>(vertices_.size()); ++i)
 		{
-			lua_newtable(L);
-			lua_pushnumber(L, vertices_[i].vertex.x()); lua_setfield(L, -2, "x");
-			lua_pushnumber(L, vertices_[i].vertex.y()); lua_setfield(L, -2, "y");
-			lua_pushnumber(L, vertices_[i].vertex.z()); lua_setfield(L, -2, "z");
-			lua_rawseti(L, -2, i + 1);
+			lua_newtable(L.get());
+			lua_pushnumber(L.get(), vertices_[i].vertex.x()); lua_setfield(L.get(), -2, "x");
+			lua_pushnumber(L.get(), vertices_[i].vertex.y()); lua_setfield(L.get(), -2, "y");
+			lua_pushnumber(L.get(), vertices_[i].vertex.z()); lua_setfield(L.get(), -2, "z");
+			lua_rawseti(L.get(), -2, i + 1);
 		}
-		lua_setglobal(L, "V");
-		lua_newtable(L);
+		lua_setglobal(L.get(), "V");
+		lua_newtable(L.get());
 		for (int i = 0; i < static_cast<int>(edges_.size()); ++i)
 		{
-			lua_newtable(L);
-			lua_pushinteger(L, edges_[i].vertices[0] + 1); lua_rawseti(L, -2, 1);
-			lua_pushinteger(L, edges_[i].vertices[1] + 1); lua_rawseti(L, -2, 2);
-			lua_rawseti(L, -2, i + 1);
+			lua_newtable(L.get());
+			lua_pushinteger(L.get(), edges_[i].vertices[0] + 1); lua_rawseti(L.get(), -2, 1);
+			lua_pushinteger(L.get(), edges_[i].vertices[1] + 1); lua_rawseti(L.get(), -2, 2);
+			lua_rawseti(L.get(), -2, i + 1);
 		}
-		lua_setglobal(L, "E");
-		lua_newtable(L);
+		lua_setglobal(L.get(), "E");
+		lua_newtable(L.get());
 		for (int i = 0; i < static_cast<int>(faces_.size()); ++i)
 		{
-			lua_newtable(L);
-			lua_pushinteger(L, faces_[i].triangle[0] + 1); lua_rawseti(L, -2, 1);
-			lua_pushinteger(L, faces_[i].triangle[1] + 1); lua_rawseti(L, -2, 2);
-			lua_pushinteger(L, faces_[i].triangle[2] + 1); lua_rawseti(L, -2, 3);
-			lua_rawseti(L, -2, i + 1);
+			lua_newtable(L.get());
+			lua_pushinteger(L.get(), faces_[i].triangle[0] + 1); lua_rawseti(L.get(), -2, 1);
+			lua_pushinteger(L.get(), faces_[i].triangle[1] + 1); lua_rawseti(L.get(), -2, 2);
+			lua_pushinteger(L.get(), faces_[i].triangle[2] + 1); lua_rawseti(L.get(), -2, 3);
+			lua_rawseti(L.get(), -2, i + 1);
 		}
-		lua_setglobal(L, "F");
-		lua_pushnumber(L, height);
-		lua_setglobal(L, "height");
-		int loadStatus = luaL_loadfile(L, script_file.string().c_str());
+		lua_setglobal(L.get(), "F");
+		lua_pushnumber(L.get(), height);
+		lua_setglobal(L.get(), "height");
+		int loadStatus = luaL_loadfile(L.get(), script_file.string().c_str());
 		if (loadStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			const char* es = lua_tostring(L.get(), -1);
+			std::string err = es ? es : "<lua error>";
 			throw RuntimeError("Lua load error: " + err);
 		}
-		int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
 		if (callStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			const char* es = lua_tostring(L.get(), -1);
+			std::string err = es ? es : "<lua error>";
 			throw RuntimeError("Lua runtime error: " + err);
 		}
-		lua_getglobal(L, funcName.c_str());
-		if (!lua_isfunction(L, -1))
+		lua_getglobal(L.get(), funcName.c_str());
+		if (!lua_isfunction(L.get(), -1))
 		{
-			lua_close(L);
 			throw RuntimeError("Lua function '" + funcName + "' not found");
 		}
-		int pcallStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		int pcallStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
 		if (pcallStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			const char* es = lua_tostring(L.get(), -1);
+			std::string err = es ? es : "<lua error>";
 			throw RuntimeError("Lua function '" + funcName + "' runtime error: " + err);
 		}
 		Polygons result;
-		int top = lua_gettop(L);
-		if (top == 0 || !lua_istable(L, -1))
+		int top = lua_gettop(L.get());
+		if (top == 0 || !lua_istable(L.get(), -1))
 		{
-			lua_getglobal(L, "polys");
-			if (!lua_istable(L, -1))
+			lua_getglobal(L.get(), "polys");
+			if (!lua_istable(L.get(), -1))
 			{
-				lua_close(L);
 				return result;
 			}
 		}
-		int nPolys = (int)lua_rawlen(L, -1);
+		int nPolys = (int)lua_rawlen(L.get(), -1);
 		for (int i = 1; i <= nPolys; ++i)
 		{
-			lua_rawgeti(L, -1, i); // push polygon table
-			if (!lua_istable(L, -1)) { lua_pop(L, 1); continue; }
+			lua_rawgeti(L.get(), -1, i); // push polygon table
+			if (!lua_istable(L.get(), -1)) { lua_pop(L.get(), 1); continue; }
 			Polygon poly;
-			int nPts = (int)lua_rawlen(L, -1);
+			int nPts = (int)lua_rawlen(L.get(), -1);
 			for (int j = 1; j <= nPts; ++j)
 			{
-				lua_rawgeti(L, -1, j); // push point
-				if (lua_istable(L, -1))
+				lua_rawgeti(L.get(), -1, j); // push point
+				if (lua_istable(L.get(), -1))
 				{
-					lua_getfield(L, -1, "x");
-					lua_getfield(L, -2, "y");
-					double x = lua_tonumber(L, -2);
-					double y = lua_tonumber(L, -1);
-					lua_pop(L, 2);
+					lua_getfield(L.get(), -1, "x");
+					lua_getfield(L.get(), -2, "y");
+					double x = lua_tonumber(L.get(), -2);
+					double y = lua_tonumber(L.get(), -1);
+					lua_pop(L.get(), 2);
 					long long xi = std::llround(x * integerization);
 					long long yi = std::llround(y * integerization);
 					poly.emplace_back(Point2{ xi, yi });
 				}
-				lua_pop(L, 1); // pop point
+				lua_pop(L.get(), 1); // pop point
 			}
-			lua_pop(L, 1); // pop polygon
+			lua_pop(L.get(), 1); // pop polygon
 			if (poly.size() >= 3) result.emplace_back(std::move(poly));
 		}
-		lua_close(L);
+		// L will be closed by UniqueLua deleter
 		return result;
 	}
 

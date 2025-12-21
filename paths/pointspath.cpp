@@ -9,6 +9,7 @@
 #include <string>
 
 #include <lua.hpp>
+#include "utils/LuaNewObject.hpp"
 
 #include "base/error.hpp"
 
@@ -98,98 +99,94 @@ namespace HsBa::Slicer
 	std::string PointsPath::ToString(std::string_view script) const
 	{
 		std::string result;
-		lua_State* L = luaL_newstate();
-		if (!L)
-			throw RuntimeError("Lua init failed");
-		luaL_openlibs(L);
+		auto L = MakeUniqueLuaState();
+		if (!L) throw RuntimeError("Lua init failed");
+		luaL_openlibs(L.get());
 
 		// push points table
-		lua_newtable(L); // points table at -1
+		lua_newtable(L.get()); // points table at -1
 		int idx = 1;
 		for (const auto& pt : points_)
 		{
-			lua_newtable(L); // point table
+			lua_newtable(L.get()); // point table
 			// type
-			lua_pushstring(L, GcodeTypeToString(pt.type));
-			lua_setfield(L, -2, "type");
+			lua_pushstring(L.get(), GcodeTypeToString(pt.type));
+			lua_setfield(L.get(), -2, "type");
 			// p1
-			lua_newtable(L);
-			lua_pushnumber(L, pt.p1.x);
-			lua_setfield(L, -2, "x");
-			lua_pushnumber(L, pt.p1.y);
-			lua_setfield(L, -2, "y");
-			lua_pushnumber(L, pt.p1.z);
-			lua_setfield(L, -2, "z");
-			lua_setfield(L, -2, "p1");
+			lua_newtable(L.get());
+			lua_pushnumber(L.get(), pt.p1.x);
+			lua_setfield(L.get(), -2, "x");
+			lua_pushnumber(L.get(), pt.p1.y);
+			lua_setfield(L.get(), -2, "y");
+			lua_pushnumber(L.get(), pt.p1.z);
+			lua_setfield(L.get(), -2, "z");
+			lua_setfield(L.get(), -2, "p1");
 			// center
-			lua_newtable(L);
-			lua_pushnumber(L, pt.center.x);
-			lua_setfield(L, -2, "x");
-			lua_pushnumber(L, pt.center.y);
-			lua_setfield(L, -2, "y");
-			lua_pushnumber(L, pt.center.z);
-			lua_setfield(L, -2, "z");
-			lua_setfield(L, -2, "center");
+			lua_newtable(L.get());
+			lua_pushnumber(L.get(), pt.center.x);
+			lua_setfield(L.get(), -2, "x");
+			lua_pushnumber(L.get(), pt.center.y);
+			lua_setfield(L.get(), -2, "y");
+			lua_pushnumber(L.get(), pt.center.z);
+			lua_setfield(L.get(), -2, "z");
+			lua_setfield(L.get(), -2, "center");
 			// velocity and extrusion
-			lua_pushnumber(L, pt.velocity);
-			lua_setfield(L, -2, "velocity");
-			lua_pushnumber(L, pt.extrusion);
-			lua_setfield(L, -2, "extrusion");
+			lua_pushnumber(L.get(), pt.velocity);
+			lua_setfield(L.get(), -2, "velocity");
+			lua_pushnumber(L.get(), pt.extrusion);
+			lua_setfield(L.get(), -2, "extrusion");
 
 			// set into points[idx]
-			lua_rawseti(L, -2, idx);
+			lua_rawseti(L.get(), -2, idx);
 			++idx;
 		}
-		lua_setglobal(L, "points");
+		lua_setglobal(L.get(), "points");
 
 		// push startPoint
-		lua_newtable(L);
-		lua_pushnumber(L, startPoint_.x);
-		lua_setfield(L, -2, "x");
-		lua_pushnumber(L, startPoint_.y);
-		lua_setfield(L, -2, "y");
-		lua_pushnumber(L, startPoint_.z);
-		lua_setfield(L, -2, "z");
-		lua_setglobal(L, "startPoint");
+		lua_newtable(L.get());
+		lua_pushnumber(L.get(), startPoint_.x);
+		lua_setfield(L.get(), -2, "x");
+		lua_pushnumber(L.get(), startPoint_.y);
+		lua_setfield(L.get(), -2, "y");
+		lua_pushnumber(L.get(), startPoint_.z);
+		lua_setfield(L.get(), -2, "z");
+		lua_setglobal(L.get(), "startPoint");
 
 		// units
-		lua_pushstring(L, units_ == GCodeUnits::mm ? "mm" : "inch");
-		lua_setglobal(L, "units");
+		lua_pushstring(L.get(), units_ == GCodeUnits::mm ? "mm" : "inch");
+		lua_setglobal(L.get(), "units");
 
 		// load and run script
-		int loadStatus = luaL_loadbuffer(L, script.data(), script.size(), "PointsPathScript");
+		int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "PointsPathScript");
 		if (loadStatus != LUA_OK)
 		{
-			result = std::string("Lua load error: ") + lua_tostring(L, -1);
-			lua_close(L);
+			result = std::string("Lua load error: ") + lua_tostring(L.get(), -1);
 			return result;
 		}
 
-		int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
 		if (callStatus != LUA_OK)
 		{
-			result = std::string("Lua runtime error: ") + lua_tostring(L, -1);
-			lua_close(L);
+			result = std::string("Lua runtime error: ") + lua_tostring(L.get(), -1);
 			return result;
 		}
 
 		// If the chunk returned a string, take the top of stack
-		int nret = lua_gettop(L);
-		if (nret > 0 && lua_isstring(L, -1))
+		int nret = lua_gettop(L.get());
+		if (nret > 0 && lua_isstring(L.get(), -1))
 		{
 			size_t len = 0;
-			const char* s = lua_tolstring(L, -1, &len);
+			const char* s = lua_tolstring(L.get(), -1, &len);
 			result.assign(s, len);
-			lua_close(L);
 			return result;
 		}
 
 		// otherwise try global 'result'
-		lua_getglobal(L, "result");
-		if (lua_isstring(L, -1))
+		lua_getglobal(L.get(), "result");
+		if (lua_isstring(L.get(), -1))
 		{
 			size_t len = 0;
-			const char* s = lua_tolstring(L, -1, &len);
+			const char* s = lua_tolstring(L.get(), -1, &len);
 			result.assign(s, len);
 		}
 		else
@@ -197,7 +194,6 @@ namespace HsBa::Slicer
 			result = std::string();
 		}
 
-		lua_close(L);
 		return result;
 	}
 
@@ -217,98 +213,93 @@ namespace HsBa::Slicer
 
 	std::string PointsPath::ToString(std::string_view script, std::string_view funcName) const
 	{
-		lua_State* L = luaL_newstate();
-		if (!L)
-			throw RuntimeError("Lua init failed");
-		luaL_openlibs(L);
+		auto L = MakeUniqueLuaState();
+		if (!L) throw RuntimeError("Lua init failed");
+		luaL_openlibs(L.get());
 		// push points as global
-		lua_newtable(L);
+		lua_newtable(L.get());
 		int idx = 1;
 		for (const auto& pt : points_)
 		{
-			lua_newtable(L); // point table
+			lua_newtable(L.get()); // point table
 			// type
-			lua_pushstring(L, GcodeTypeToString(pt.type));
-			lua_setfield(L, -2, "type");
+			lua_pushstring(L.get(), GcodeTypeToString(pt.type));
+			lua_setfield(L.get(), -2, "type");
 			// p1
-			lua_newtable(L);
-			lua_pushnumber(L, pt.p1.x);
-			lua_setfield(L, -2, "x");
-			lua_pushnumber(L, pt.p1.y);
-			lua_setfield(L, -2, "y");
-			lua_pushnumber(L, pt.p1.z);
-			lua_setfield(L, -2, "z");
-			lua_setfield(L, -2, "p1");
+			lua_newtable(L.get());
+			lua_pushnumber(L.get(), pt.p1.x);
+			lua_setfield(L.get(), -2, "x");
+			lua_pushnumber(L.get(), pt.p1.y);
+			lua_setfield(L.get(), -2, "y");
+			lua_pushnumber(L.get(), pt.p1.z);
+			lua_setfield(L.get(), -2, "z");
+			lua_setfield(L.get(), -2, "p1");
 			// center
-			lua_newtable(L);
-			lua_pushnumber(L, pt.center.x);
-			lua_setfield(L, -2, "x");
-			lua_pushnumber(L, pt.center.y);
-			lua_setfield(L, -2, "y");
-			lua_pushnumber(L, pt.center.z);
-			lua_setfield(L, -2, "z");
-			lua_setfield(L, -2, "center");
+			lua_newtable(L.get());
+			lua_pushnumber(L.get(), pt.center.x);
+			lua_setfield(L.get(), -2, "x");
+			lua_pushnumber(L.get(), pt.center.y);
+			lua_setfield(L.get(), -2, "y");
+			lua_pushnumber(L.get(), pt.center.z);
+			lua_setfield(L.get(), -2, "z");
+			lua_setfield(L.get(), -2, "center");
 			// velocity and extrusion
-			lua_pushnumber(L, pt.velocity);
-			lua_setfield(L, -2, "velocity");
-			lua_pushnumber(L, pt.extrusion);
-			lua_setfield(L, -2, "extrusion");
+			lua_pushnumber(L.get(), pt.velocity);
+			lua_setfield(L.get(), -2, "velocity");
+			lua_pushnumber(L.get(), pt.extrusion);
+			lua_setfield(L.get(), -2, "extrusion");
 
 			// set into points[idx]
-			lua_rawseti(L, -2, idx);
+			lua_rawseti(L.get(), -2, idx);
 			++idx;
 		}
-		lua_setglobal(L, "points");
+		lua_setglobal(L.get(), "points");
 		// push startPoint
-		lua_newtable(L);
-		lua_pushnumber(L, startPoint_.x);
-		lua_setfield(L, -2, "x");
-		lua_pushnumber(L, startPoint_.y);
-		lua_setfield(L, -2, "y");
-		lua_pushnumber(L, startPoint_.z);
-		lua_setfield(L, -2, "z");
-		lua_setglobal(L, "startPoint");
+		lua_newtable(L.get());
+		lua_pushnumber(L.get(), startPoint_.x);
+		lua_setfield(L.get(), -2, "x");
+		lua_pushnumber(L.get(), startPoint_.y);
+		lua_setfield(L.get(), -2, "y");
+		lua_pushnumber(L.get(), startPoint_.z);
+		lua_setfield(L.get(), -2, "z");
+		lua_setglobal(L.get(), "startPoint");
 		// units
-		lua_pushstring(L, units_ == GCodeUnits::mm ? "mm" : "inch");
-		lua_setglobal(L, "units");
+		lua_pushstring(L.get(), units_ == GCodeUnits::mm ? "mm" : "inch");
+		lua_setglobal(L.get(), "units");
 		// call function
-		lua_getglobal(L, funcName.data());
-		if (!lua_isfunction(L, -1))
+		lua_getglobal(L.get(), funcName.data());
+		if (!lua_isfunction(L.get(), -1))
 		{
-			lua_close(L);
 			throw RuntimeError("Lua function '" + std::string(funcName) + "' not found");
 		}
-		int callStatus = lua_pcall(L, 0, LUA_MULTRET, 0);
+		int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
 		if (callStatus != LUA_OK)
 		{
-			std::string err = lua_tostring(L, -1);
-			lua_close(L);
+			std::string err = lua_tostring(L.get(), -1);
 			throw RuntimeError(std::format("-- Lua runtime error: {}" , err));
 		}
 		std::string result;
 		// If the function returned a string, take the top of stack
-		int nret = lua_gettop(L);
-		if (nret > 0 && lua_isstring(L, -1))
+		int nret = lua_gettop(L.get());
+		if (nret > 0 && lua_isstring(L.get(), -1))
 		{
 			size_t len = 0;
-			const char* s = lua_tolstring(L, -1, &len);
+			const char* s = lua_tolstring(L.get(), -1, &len);
 			result.assign(s, len);
-			lua_close(L);
 			return result;
 		}
 		// otherwise try global 'result'
-		lua_getglobal(L, "result");
-		if (lua_isstring(L, -1))
+		lua_getglobal(L.get(), "result");
+		if (lua_isstring(L.get(), -1))
 		{
 			size_t len = 0;
-			const char* s = lua_tolstring(L, -1, &len);
+			const char* s = lua_tolstring(L.get(), -1, &len);
 			result.assign(s, len);
 		}
 		else
 		{
 			result = std::string();
 		}
-		lua_close(L);
 		return result;
 	}
 

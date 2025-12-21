@@ -43,6 +43,22 @@ namespace HsBa::Slicer
 		if (ud) static_cast<T*>(ud)->~T();
 		return 0;
 	}
+
+	struct LuaStateDeleter
+	{
+		void operator()(lua_State* L) const noexcept
+		{
+			if (L) lua_close(L);
+		}
+	};
+
+	using UniqueLua = std::unique_ptr<lua_State, LuaStateDeleter>;
+
+	inline UniqueLua MakeUniqueLuaState()
+	{
+		lua_State* L = luaL_newstate();
+		return UniqueLua{ L };
+	}
 } // namespace HsBa::Slicer
 
 #endif // !HSBA_LUANEWOBJECT_HPP
