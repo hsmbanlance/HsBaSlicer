@@ -6,12 +6,10 @@
 #include "logger/logger.hpp"
 #include "DllHsBaSlicer/initialize.h"
 
-using namespace std;
-
 int main()
 {
 	auto log = HsBa::Slicer::Log::LoggerSingletone::GetInstance();
-	using namespace HsBa::Slicer::Log::LogLiteral;
+	using namespace HsBa::Slicer::Log::LogLiterals;
 	if (log->UseLogFile())
 	{
 		"use log file"_log_info();
@@ -22,6 +20,5 @@ int main()
 	}
 	initialize();
 	"initialize"_log_info();
-	cout << "Hello CMake." << endl;
 	return 0;
 }

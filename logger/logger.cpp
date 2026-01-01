@@ -260,7 +260,7 @@ namespace HsBa::Slicer::Log
 		}
 		Log(message, 4, location);
 	}
-	inline namespace LogLiteral
+	inline namespace LogLiterals
 	{
 		LogState::LogState(const int log_lv, std::string_view message)
 			: log_lv_{ log_lv }, message_{ message }
@@ -289,5 +289,5 @@ namespace HsBa::Slicer::Log
 		{
 			return LogState{ 4, std::string_view{ message, size } };
 		}
-	}// namespace HsBa::Slicer::Log::LogLiteral
+	}// namespace HsBa::Slicer::Log::LogLiterals
 }// namespace HsBa::Slicer::Log

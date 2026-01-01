@@ -210,12 +210,9 @@ namespace HsBa::Slicer
         {
             return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
         }
-        try {
-            igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_UNION, v, f);
-        } catch (...) {
-            // if CGAL/igl throws, return empty mesh instead of crashing tests
-            return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
-        }
+
+        igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_UNION, v, f);
+        
         if (v.rows() == 0 || f.rows() == 0) return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
         return IglModel(v, f);
     }
@@ -238,11 +235,9 @@ namespace HsBa::Slicer
         Eigen::MatrixXi f;
         if (!is_valid_mesh(left.vertices_, left.faces_) || !is_valid_mesh(right.vertices_, right.faces_))
             return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
-        try {
-            igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_INTERSECT, v, f);
-        } catch (...) {
-            return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
-        }
+
+        igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_INTERSECT, v, f);
+        
         if (v.rows() == 0 || f.rows() == 0) return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
         return IglModel(v, f);
     }
@@ -265,11 +260,9 @@ namespace HsBa::Slicer
         Eigen::MatrixXi f;
         if (!is_valid_mesh(left.vertices_, left.faces_) || !is_valid_mesh(right.vertices_, right.faces_))
             return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
-        try {
-            igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_MINUS, v, f);
-        } catch (...) {
-            return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
-        }
+
+        igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_MINUS, v, f);
+        
         if (v.rows() == 0 || f.rows() == 0) return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
         return IglModel(v, f);
     }
@@ -292,11 +285,9 @@ namespace HsBa::Slicer
         Eigen::MatrixXi f;
         if (!is_valid_mesh(left.vertices_, left.faces_) || !is_valid_mesh(right.vertices_, right.faces_))
             return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
-        try {
-            igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_XOR, v, f);
-        } catch (...) {
-            return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
-        }
+
+        igl::copyleft::cgal::mesh_boolean(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_XOR, v, f);
+
         if (v.rows() == 0 || f.rows() == 0) return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
         return IglModel(v, f);
     }

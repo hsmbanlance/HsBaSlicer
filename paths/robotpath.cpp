@@ -11,8 +11,9 @@
 
 #include "base/error.hpp"
 
+namespace HsBa::Slicer
+{
 namespace {
-    using namespace HsBa::Slicer;
     const char* RLPointTypeToString(RLPointType t)
     {
         switch (t)
@@ -30,6 +31,7 @@ namespace {
         default: return "Unknown";
         }
     }
+}
 }
 
 namespace HsBa::Slicer
