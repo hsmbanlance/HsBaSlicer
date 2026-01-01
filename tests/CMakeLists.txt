@@ -494,3 +494,29 @@ add_test(
 add_custom_command(TARGET image_polygons_test POST_BUILD
   COMMAND ${CMAKE_CTEST_COMMAND} -V -R image_polygons_test
 )
+
+
+## Static Reflect tests
+add_executable(static_reflect_test
+    "Reflect/static_reflect_test.cpp"
+)
+
+target_link_libraries(static_reflect_test
+    HsBaSlicerBase
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(static_reflect_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME static_reflect_test
+  COMMAND $<TARGET_FILE:static_reflect_test>
+)
+
+add_custom_command(TARGET static_reflect_test POST_BUILD
+  COMMAND ${CMAKE_CTEST_COMMAND} -V -R static_reflect_test
+)

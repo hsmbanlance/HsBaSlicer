@@ -437,6 +437,15 @@ namespace HsBa::Slicer::Utils
 			return ptr != nullptr;
 		}
 	};
+
+	inline namespace TemplateStringLiterals
+	{
+		template<TemplateString s>
+		constexpr auto operator""_ts()
+		{
+			return s;
+		}
+	} // namespace TemplateStringLiterals
 }// namespace HsBa::Slicer::Utils
 
 #include <format>

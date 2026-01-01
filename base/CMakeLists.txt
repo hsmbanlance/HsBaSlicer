@@ -20,6 +20,7 @@
     delegate.hpp
     singleton.hpp
     units.hpp
+    static_reflect.hpp
 )
 
 if(NOT ANDROID)
