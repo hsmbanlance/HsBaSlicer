@@ -166,28 +166,6 @@ namespace HsBa::Slicer::Utils::StaticReflect
 			static_assert(Index < FieldCount(), "Field index out of range");
 			return GetFieldInfo<Index>().Get(obj);
 		}
-		static constexpr size_t FindFieldIndexByName(std::string_view name) noexcept
-		{
-			for (size_t i = 0; i < FieldCount(); ++i)
-			{
-				if (GetFieldInfo<i>().Name.ToStringView() == name)
-				{
-					return i;
-				}
-			}
-			return static_cast<size_t>(-1);
-		}
-		static constexpr size_t FindMethodIndexByName(std::string_view name) noexcept
-		{
-			for (size_t i = 0; i < MethodCount(); ++i)
-			{
-				if (GetMethodInfo<i>().Name.ToStringView() == name)
-				{
-					return i;
-				}
-			}
-			return static_cast<size_t>(-1);
-		}
 		template<TemplateString FuncName, typename ...Args>
 		static decltype(auto) InvokeMemberFunction(T& obj, Args&&... args)
 		{
