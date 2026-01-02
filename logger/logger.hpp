@@ -35,7 +35,7 @@ namespace HsBa::Slicer::Log
         int log_level_;
         std::string log_datatime_format_;
     };
-	inline namespace LogLiteral
+	inline namespace LogLiterals
 	{
         class LogState 
         {

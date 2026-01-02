@@ -397,4 +397,7 @@ build_*
 *.vsix
 problems-*
 
+#reports
+*report*
+
 # Add testing obj 3D models as necessary
