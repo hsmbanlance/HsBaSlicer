@@ -20,7 +20,7 @@ namespace HsBa::Slicer::Utils
 		{
 			std::call_once(instance_flag_, [&]() {
 				instance_ = std::make_shared<T>(Protected{},std::forward<Args>(args)...);
-				});
+			});
 			return instance_;
 		}
 		Singleton(const Singleton&) = delete;

@@ -125,6 +125,23 @@ option(HSBA_PROTOBUF_OUT "protobuf out source" ON)
 #copy file to exe_dir
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/utils/logcfg.ini DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/HsBaSlicer)
 
+# static or dynamic
+option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
+# set from VCPKG_TARGET_TRIPLE
+if(DEFINED VCPKG_TARGET_TRIPLET)
+  message("VCPKG_TARGET_TRIPLET is defined: ${VCPKG_TARGET_TRIPLET}")
+# for WIN32 default dynamic, Linux and android default static
+  if(VCPKG_TARGET_TRIPLET MATCHES "windows" AND NOT VCPKG_TARGET_TRIPLET MATCHES "static")
+	set(BUILD_SHARED_LIBS ON CACHE BOOL "Build using shared libraries" FORCE)
+	message("Set BUILD_SHARED_LIBS to ON for Windows dynamic.")
+  elseif(VCPKG_TARGET_TRIPLET MATCHES "linux" OR VCPKG_TARGET_TRIPLET MATCHES "android" OR VCPKG_TARGET_TRIPLET MATCHES "static")
+	set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build using shared libraries" FORCE)
+	message("Set BUILD_SHARED_LIBS to OFF for Linux or Android static.")
+  endif()
+else()
+  message("VCPKG_TARGET_TRIPLET is not defined.")
+endif()
+
 # subdirectory。
 add_subdirectory("third_parts_without_vcpkg")
 add_subdirectory("proto")
