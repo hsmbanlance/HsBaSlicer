@@ -17,14 +17,14 @@ namespace HsBa::Slicer
 	void PushAnyToLua(lua_State* L, const std::any& value);
 	void RegisterLuaZipper(lua_State* L);
 	void RegisterLuaSQLiteAdapter(lua_State* L);
-#ifdef USE_MYSQL
+#ifdef HSBA_USE_MYSQL
 	void RegisterLuaMySQLAdapter(lua_State* L);
-#endif // USE_MYSQL
-#ifdef USE_PGSQL
+#endif // HSBA_USE_MYSQL
+#ifdef HSBA_USE_PGSQL
 	void RegisterLuaPostgreSQLAdapter(lua_State* L);
-#endif // USE_PGSQL
-#ifdef USE_BIT7Z
+#endif // HSBA_USE_PGSQL
+#ifdef HSBA_USE_BIT7Z
 	void RegisterLuaBit7zZipper(lua_State* L);
-#endif // USE_BIT7Z
+#endif // HSBA_USE_BIT7Z
 }// namespace HsBa::Slicer
 #endif // FILEOPERATOR_LUAADAPTER_HPP

@@ -4,6 +4,11 @@
 #include <vector>
 
 namespace HsBa::Slicer::Cipher {
+    inline constexpr size_t AES_KEY_SIZE = 32;
+    inline constexpr size_t AES_IV_SIZE = 16;
+    inline constexpr size_t DES3_KEY_SIZE = 24;
+    inline constexpr size_t DES3_IV_SIZE = 8;
+    inline constexpr size_t RSA_DEFAULT_BITS = 2048;
 
 	class Encrypt 
 	{
@@ -33,7 +38,7 @@ namespace HsBa::Slicer::Cipher {
 		static std::vector<unsigned char> rsa_private_decrypt_pem(std::string_view private_pem, const std::vector<unsigned char>& cipher);
 
 		// RSA keypair generation (returns {public_pem, private_pem})
-		static std::pair<std::string, std::string> rsa_generate_keypair_pem(int bits = 2048);
+		static std::pair<std::string, std::string> rsa_generate_keypair_pem(int bits = RSA_DEFAULT_BITS);
 	};
 
 } // namespace namespace HsBa::Slicer::Cipher

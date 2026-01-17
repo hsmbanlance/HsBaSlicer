@@ -10,10 +10,18 @@
 #include "LuaAdapter.hpp"
 #include "utils/LuaNewObject.hpp"
 
+
 namespace HsBa::Slicer
 {
 	namespace
 	{
+		constexpr double DEG_TO_RAD_FACTOR = 180.0;
+		constexpr int MAX_FILL_ITERATIONS = 10000;
+		constexpr int MAX_BINARY_SEARCH_ITERATIONS = 40;
+		constexpr int LARGE_ROW_OFFSET = 1000000;
+		constexpr double ANGLE_EPSILON = 12.0;
+		constexpr double INTEGERIZATION_PRECISION = 100.0;
+
 		Polygon ClosePath(const Polygon& p)
 		{
 			if (p.empty() || p.front() == p.back()) return p;
@@ -40,7 +48,7 @@ namespace HsBa::Slicer
 			}
 			if (minx > maxx) return rows;
 
-			double ang = angle_deg * std::numbers::pi_v<double> / 180.0;
+			double ang = angle_deg * std::numbers::pi_v<double> / DEG_TO_RAD_FACTOR;
 			ux = std::cos(ang), uy = std::sin(ang);
 			double vx = -uy, vy = ux;
 
@@ -412,7 +420,7 @@ namespace HsBa::Slicer
 			}
 			for (const auto& p : offset_path) res.emplace_back(p);
 			++step;
-			if (step > 10000) break;
+			if (step > MAX_FILL_ITERATIONS) break;
 		}
 		return res;
 	}
@@ -460,7 +468,7 @@ namespace HsBa::Slicer
 			double lo = 0.0, hi = 1.0;
 			if (point_inside(from)) return 0.0;
 			if (!point_inside(to)) return 1.0;
-			for (int iter = 0; iter < 40; ++iter)
+			for (int iter = 0; iter < MAX_BINARY_SEARCH_ITERATIONS; ++iter)
 			{
 				double mid = (lo + hi) * 0.5;
 				Point2D p{ from.x + (to.x - from.x) * mid, from.y + (to.y - from.y) * mid };
@@ -473,7 +481,7 @@ namespace HsBa::Slicer
 			double lo = 0.0, hi = 1.0;
 			if (point_inside(to)) return 1.0;
 			if (!point_inside(from)) return 0.0;
-			for (int iter = 0; iter < 40; ++iter)
+			for (int iter = 0; iter < MAX_BINARY_SEARCH_ITERATIONS; ++iter)
 			{
 				double mid = (lo + hi) * 0.5;
 				Point2D p{ from.x + (to.x - from.x) * mid, from.y + (to.y - from.y) * mid };
@@ -493,7 +501,7 @@ namespace HsBa::Slicer
 
 		// Build polylines, only allowing connectors between the same row or adjacent rows.
 		std::vector<std::vector<Point2D>> polylines;
-		int current_row = -1000000;
+		int current_row = -LARGE_ROW_OFFSET;
 		for (size_t r = 0; r < rows.size(); ++r)
 		{
 			auto &segs = rows[r];
@@ -507,7 +515,7 @@ namespace HsBa::Slicer
 					double len = std::hypot(dx, dy);
 					if (len <= 1e-12) 
 						continue;
-					double eps = (integerization / 100.0) / integerization;
+					double eps = (integerization / INTEGERIZATION_PRECISION) / integerization;
 					double sx = dx / len;
 					double sy = dy / len;
 					Point2D a2{ a.x + sx * eps, a.y + sy * eps };
@@ -559,7 +567,7 @@ namespace HsBa::Slicer
 					double dx = b.x - a.x, dy = b.y - a.y;
 					double len = std::hypot(dx, dy);
 					if (len <= 1e-12) continue;
-					double eps = (integerization / 100.0) / integerization;
+					double eps = (integerization / INTEGERIZATION_PRECISION) / integerization;
 					double sx = dx / len;
 					double sy = dy / len;
 					Point2D a2{ a.x + sx * eps, a.y + sy * eps };
@@ -697,7 +705,7 @@ namespace HsBa::Slicer
 			double lo = 0.0, hi = 1.0;
 			if (point_inside(from)) return 0.0;
 			if (!point_inside(to)) return 1.0;
-			for (int iter = 0; iter < 40; ++iter)
+			for (int iter = 0; iter < MAX_BINARY_SEARCH_ITERATIONS; ++iter)
 			{
 				double mid = (lo + hi) * 0.5;
 				Point2D p{ from.x + (to.x - from.x) * mid, from.y + (to.y - from.y) * mid };
@@ -710,7 +718,7 @@ namespace HsBa::Slicer
 			double lo = 0.0, hi = 1.0;
 			if (point_inside(to)) return 1.0;
 			if (!point_inside(from)) return 0.0;
-			for (int iter = 0; iter < 40; ++iter)
+			for (int iter = 0; iter < MAX_BINARY_SEARCH_ITERATIONS; ++iter)
 			{
 				double mid = (lo + hi) * 0.5;
 				Point2D p{ from.x + (to.x - from.x) * mid, from.y + (to.y - from.y) * mid };
@@ -727,7 +735,7 @@ namespace HsBa::Slicer
 				path = { ca,cb };
 				return path;
 			}
-			const int steps = 40;
+			const int steps = MAX_BINARY_SEARCH_ITERATIONS;
 			Point2D p1, p2; bool ok1 = false, ok2 = false;
 			for (int i = 0; i <= steps; i++) {
 				double t = double(i) / steps;
@@ -793,10 +801,10 @@ namespace HsBa::Slicer
 		std::vector<std::vector<Point2D>> polylines;
 		// collect extra straight segments when connector/bridge fails
 		std::vector<Polygon> extraLines;
-		int prev_row = -1000000;
+		int prev_row = -LARGE_ROW_OFFSET;
 		bool have_prev = false;
 		int prev_comp_local = -1;
-		double eps = (integerization / 100.0) / integerization;
+		double eps = (integerization / INTEGERIZATION_PRECISION) / integerization;
 
 		auto push_seg_to_current = [&](std::vector<Point2D>& pl, const Point2D& aa, const Point2D& bb) {
 			if (pl.empty()) { pl.push_back(aa); pl.push_back(bb); return; }

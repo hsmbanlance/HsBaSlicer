@@ -5,21 +5,36 @@
 
 #include <boost/container/vector.hpp>
 
-#ifdef USE_MYSQL
+#ifdef HSBA_USE_MYSQL
 #include <mysql/mysql.h>
-#endif // USE_MYSQL
+#endif // HSBA_USE_MYSQL
 
 #include <sqlite3.h>
 
-#ifdef USE_PGSQL
+#ifdef HSBA_USE_PGSQL
 #include <libpq-fe.h>
-#endif // USE_PGSQL
+#endif // HSBA_USE_PGSQL
 
 #include "base/any_visit.hpp"
 #include <filesystem>
 
 namespace HsBa::Slicer::SQL
 {
+#ifdef HSBA_USE_PGSQL
+	namespace
+	{
+		// PostgreSQL field type constants
+		constexpr Oid PG_TYPE_INT8 = 20;      // BIGINT
+		constexpr Oid PG_TYPE_INT2 = 21;      // SMALLINT
+		constexpr Oid PG_TYPE_INT4 = 23;      // INTEGER
+		constexpr Oid PG_TYPE_FLOAT4 = 700;   // REAL
+		constexpr Oid PG_TYPE_FLOAT8 = 701;   // DOUBLE PRECISION
+		constexpr Oid PG_TYPE_TEXT = 25;      // TEXT
+		constexpr Oid PG_TYPE_VARCHAR = 1043; // VARCHAR
+		constexpr Oid PG_TYPE_BYTEA = 17;     // BYTEA
+	}
+#endif // HSBA_USE_PGSQL
+
 	class SQLiteAdapter::Impl
 	{
 	public:
@@ -551,7 +566,7 @@ namespace HsBa::Slicer::SQL
 		RaiseEvent("Table removed", sql);
 	}
 
-#ifdef USE_MYSQL
+#ifdef HSBA_USE_MYSQL
 	class MySQLAdapter::Impl
 	{
 	public:
@@ -1252,9 +1267,9 @@ namespace HsBa::Slicer::SQL
 
 		RaiseEvent("Table removed", sql.str());
 	}
-#endif // USE_MYSQL
+#endif // HSBA_USE_MYSQL
 
-#ifdef USE_PGSQL
+#ifdef HSBA_USE_PGSQL
 	class PostgreSQLAdapter::Impl
 	{
 	public:
@@ -1328,20 +1343,20 @@ namespace HsBa::Slicer::SQL
 						Oid fieldType = PQftype(result, j);
 						switch (fieldType)
 						{
-						case 20: // INT8
-						case 21: // INT2
-						case 23: // INT4
+						case PG_TYPE_INT8: // INT8
+						case PG_TYPE_INT2: // INT2
+						case PG_TYPE_INT4: // INT4
 							rowData[fieldName] = std::stoll(PQgetvalue(result, i, j));
 							break;
-						case 700: // FLOAT4
-						case 701: // FLOAT8
+						case PG_TYPE_FLOAT4: // FLOAT4
+						case PG_TYPE_FLOAT8: // FLOAT8
 							rowData[fieldName] = std::stod(PQgetvalue(result, i, j));
 							break;
-						case 25: // TEXT
-						case 1043: // VARCHAR
+						case PG_TYPE_TEXT: // TEXT
+						case PG_TYPE_VARCHAR: // VARCHAR
 							rowData[fieldName] = std::string(PQgetvalue(result, i, j));
 							break;
-						case 17: // BYTEA
+						case PG_TYPE_BYTEA: // BYTEA
 						{
 							size_t length;
 							unsigned char* value = PQunescapeBytea(
@@ -1629,12 +1644,12 @@ namespace HsBa::Slicer::SQL
 				const Oid oid = PQftype(res, c);
 
 				switch (oid) {
-				case 20:   row.emplace(colName, std::stoll(val)); break;          // int8 / bigint
-				case 21:   row.emplace(colName, static_cast<int16_t>(std::stoi(val))); break; // int2
-				case 23:   row.emplace(colName, std::stoi(val)); break;           // int4
-				case 700:  row.emplace(colName, std::stof(val)); break;           // float4
-				case 701:  row.emplace(colName, std::stod(val)); break;           // float8
-				case 17: {                                                    // bytea
+				case PG_TYPE_INT8:   row.emplace(colName, std::stoll(val)); break;          // int8 / bigint
+				case PG_TYPE_INT2:   row.emplace(colName, static_cast<int16_t>(std::stoi(val))); break; // int2
+				case PG_TYPE_INT4:   row.emplace(colName, std::stoi(val)); break;           // int4
+				case PG_TYPE_FLOAT4:  row.emplace(colName, std::stof(val)); break;           // float4
+				case PG_TYPE_FLOAT8:  row.emplace(colName, std::stod(val)); break;           // float8
+				case PG_TYPE_BYTEA: {                                                    // bytea
 					size_t len = 0;
 					unsigned char* data = PQunescapeBytea(reinterpret_cast<const unsigned char*>(val), &len);
 					std::vector<unsigned char> bytes(data, data + len);
@@ -1643,6 +1658,8 @@ namespace HsBa::Slicer::SQL
 					break;
 				}
 				default:   row.emplace(colName, std::string(val)); break;        // text, varchar, etc.
+				case PG_TYPE_TEXT: [[fallthrough]];         // text
+				case PG_TYPE_VARCHAR:   row.emplace(colName, std::string(val)); break;        // varchar
 				}
 			}
 			result.emplace_back(std::move(row));
@@ -1701,5 +1718,5 @@ namespace HsBa::Slicer::SQL
 		PQclear(res);
 		RaiseEvent("RemoveTable executed", sql.str());
 	}
-#endif // USE_PGSQL
+#endif // HSBA_USE_PGSQL
 }

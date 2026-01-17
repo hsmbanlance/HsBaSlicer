@@ -11,8 +11,15 @@
 #include <boost/units/dimension.hpp>
 #include <boost/multiprecision/cpp_dec_float.hpp>
 
-namespace HsBa::Slicer::Units
-{
+namespace HsBa::Slicer::Units {
+
+    inline constexpr long double MULTIPLIER_KILO = 1000.0l;
+    inline constexpr long double MULTIPLIER_MINUTE = 60.0l;
+    inline constexpr long double MULTIPLIER_HOUR = 3600.0l;
+    inline constexpr long double MULTIPLIER_KWH_TO_JOULE = 3600000.0l;
+    inline constexpr long double MULTIPLIER_MICRO = 0.000001l;
+    inline constexpr long double MULTIPLIER_MILLI = 0.001l;
+    inline constexpr long double MULTIPLIER_CENTI = 0.01l;
 	// currency enum
 	enum class Currency
 	{
@@ -105,59 +112,59 @@ namespace HsBa::Slicer::Units
 
 		constexpr auto operator"" _L(long double value)
 		{
-			return value * 0.001l * boost::units::si::cubic_meter;
+			return value * MULTIPLIER_MILLI * boost::units::si::cubic_meter;
 		}
 		constexpr auto operator"" _L(unsigned long long value)
 		{
-			return static_cast<long double>(value) * 0.001l * boost::units::si::cubic_meter;
+			return static_cast<long double>(value) * MULTIPLIER_MILLI * boost::units::si::cubic_meter;
 		}
 		constexpr auto operator"" _mL(long double value)
 		{
-			return value * 0.000001l * boost::units::si::cubic_meter;
+			return value * MULTIPLIER_MICRO * boost::units::si::cubic_meter;
 		}
 		constexpr auto operator"" _mL(unsigned long long value)
 		{
-			return static_cast<long double>(value) * 0.000001l * boost::units::si::cubic_meter;
+			return static_cast<long double>(value) * MULTIPLIER_MICRO * boost::units::si::cubic_meter;
 		}
 		constexpr auto operator"" _mm(long double value)
 		{
-			return value * 0.001l * boost::units::si::meter;
+			return value * MULTIPLIER_MILLI * boost::units::si::meter;
 		}
 		constexpr auto operator"" _mm(unsigned long long value)
 		{
-			return static_cast<long double>(value) * 0.001l * boost::units::si::meter;
+			return static_cast<long double>(value) * MULTIPLIER_MILLI * boost::units::si::meter;
 		}
 		constexpr auto operator"" _cm(long double value)
 		{
-			return value * 0.01l * boost::units::si::meter;
+			return value * MULTIPLIER_CENTI * boost::units::si::meter;
 		}
 		constexpr auto operator"" _cm(unsigned long long value)
 		{
-			return static_cast<long double>(value) * 0.01l * boost::units::si::meter;
+			return static_cast<long double>(value) * MULTIPLIER_CENTI * boost::units::si::meter;
 		}
 		constexpr auto operator"" _km(long double value)
 		{
-			return value * 1000.0l * boost::units::si::meter;
+			return value * MULTIPLIER_KILO * boost::units::si::meter;
 		}
 		constexpr auto operator"" _km(unsigned long long value)
 		{
-			return static_cast<long double>(value) * 1000.0l * boost::units::si::meter;
+			return static_cast<long double>(value) * MULTIPLIER_KILO * boost::units::si::meter;
 		}
 		constexpr auto operator"" _g(long double value)
 		{
-			return value * 0.001l * boost::units::si::kilogram;
+			return value * MULTIPLIER_MILLI * boost::units::si::kilogram;
 		}
 		constexpr auto operator"" _g(unsigned long long value)
 		{
-			return static_cast<long double>(value) * 0.001l * boost::units::si::kilogram;
+			return static_cast<long double>(value) * MULTIPLIER_MILLI * boost::units::si::kilogram;
 		}
 		constexpr auto operator"" _mg(long double value)
 		{
-			return value * 0.000001l * boost::units::si::kilogram;
+			return value * MULTIPLIER_MICRO * boost::units::si::kilogram;
 		}
 		constexpr auto operator"" _mg(unsigned long long value)
 		{
-			return static_cast<long double>(value) * 0.000001l * boost::units::si::kilogram;
+			return static_cast<long double>(value) * MULTIPLIER_MICRO * boost::units::si::kilogram;
 		}
 
 		constexpr auto operator"" _kg_per_m3(long double value)
@@ -170,19 +177,19 @@ namespace HsBa::Slicer::Units
 		}
 		constexpr auto operator"" _g_per_cm3(long double value)
 		{
-			return value * 1000.0l * boost::units::si::kilogram / boost::units::si::cubic_meter;
+			return value * MULTIPLIER_KILO * boost::units::si::kilogram / boost::units::si::cubic_meter;
 		}
 		constexpr auto operator"" _g_per_cm3(unsigned long long value)
 		{
-			return static_cast<long double>(value) * 1000.0l * boost::units::si::kilogram / boost::units::si::cubic_meter;
+			return static_cast<long double>(value) * MULTIPLIER_KILO * boost::units::si::kilogram / boost::units::si::cubic_meter;
 		}
 		constexpr auto operator"" _kg_per_L(long double value)
 		{
-			return value * 1000.0l * boost::units::si::kilogram / boost::units::si::cubic_meter;
+			return value * MULTIPLIER_KILO * boost::units::si::kilogram / boost::units::si::cubic_meter;
 		}
 		constexpr auto operator"" _kg_per_L(unsigned long long value)
 		{
-			return static_cast<long double>(value) * 1000.0l * boost::units::si::kilogram / boost::units::si::cubic_meter;
+			return static_cast<long double>(value) * MULTIPLIER_KILO * boost::units::si::kilogram / boost::units::si::cubic_meter;
 		}
 
 		constexpr auto operator"" _C(long double value)
@@ -253,27 +260,27 @@ namespace HsBa::Slicer::Units
 		}
 		constexpr auto operator"" _min(long double value)
 		{
-			return value * 60.0l * boost::units::si::second;
+			return value * MULTIPLIER_MINUTE * boost::units::si::second;
 		}
 		constexpr auto operator"" _min(unsigned long long value)
 		{
-			return static_cast<long double>(value) * 60.0l * boost::units::si::second;
+			return static_cast<long double>(value) * MULTIPLIER_MINUTE * boost::units::si::second;
 		}
 		constexpr auto operator"" _h(long double value)
 		{
-			return value * 3600.0l * boost::units::si::second;
+			return value * MULTIPLIER_HOUR * boost::units::si::second;
 		}
 		constexpr auto operator"" _h(unsigned long long value)
 		{
-			return static_cast<long double>(value) * 3600.0l * boost::units::si::second;
+			return static_cast<long double>(value) * MULTIPLIER_HOUR * boost::units::si::second;
 		}
 		constexpr auto operator"" _ms(long double value)
 		{
-			return value * 0.001l * boost::units::si::second;
+			return value * MULTIPLIER_MILLI * boost::units::si::second;
 		}
 		constexpr auto operator"" _ms(unsigned long long value)
 		{
-			return static_cast<long double>(value) * 0.001l * boost::units::si::second;
+			return static_cast<long double>(value) * MULTIPLIER_MILLI * boost::units::si::second;
 		}
 
 		constexpr auto operator"" _J(long double value)
@@ -286,20 +293,20 @@ namespace HsBa::Slicer::Units
 		}
 		constexpr auto operator"" _kJ(long double value)
 		{
-			return value * 1000.0l * boost::units::si::joule;
+			return value * MULTIPLIER_KILO * boost::units::si::joule;
 		}
 		constexpr auto operator"" _kJ(unsigned long long value)
 		{
-			return static_cast<long double>(value) * 1000.0l * boost::units::si::joule;
+			return static_cast<long double>(value) * MULTIPLIER_KILO * boost::units::si::joule;
 		}
 
 		constexpr auto operator"" _kWh(long double value)
 		{
-			return value * 3600000.0l * boost::units::si::joule;
+			return value * MULTIPLIER_KWH_TO_JOULE * boost::units::si::joule;
 		}
 		constexpr auto operator"" _kWh(unsigned long long value)
 		{
-			return static_cast<long double>(value) * 3600000.0l * boost::units::si::joule;
+			return static_cast<long double>(value) * MULTIPLIER_KWH_TO_JOULE * boost::units::si::joule;
 		}
 
 	}

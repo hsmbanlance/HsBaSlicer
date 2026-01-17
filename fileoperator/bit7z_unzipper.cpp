@@ -4,7 +4,7 @@
 
 namespace HsBa::Slicer
 {
-#ifdef USE_BIT7Z
+#ifdef HSBA_USE_BIT7Z
 	Bit7ZUnzipper::~Bit7ZUnzipper()
 	{
 		if (is_open_)
@@ -128,5 +128,5 @@ namespace HsBa::Slicer
 		memory_cache_[std::string{ part_name }] = cur_path.string();
 		return stream;
 	}
-#endif // USE_BIT7Z
+#endif // HSBA_USE_BIT7Z
 } // namespace HsBa::Slicer

@@ -1,5 +1,5 @@
 ﻿#include "logger.hpp"
-
+#include <cstddef>
 #include <filesystem>
 
 #ifndef __ANDROID__
@@ -22,6 +22,10 @@
 
 namespace HsBa::Slicer::Log
 {
+    // Define constants for logger configuration
+    constexpr size_t SIZE_1KB = 1024;
+    constexpr size_t SIZE_1MB = SIZE_1KB * 1024;
+    constexpr size_t SIZE_50MB = 50 * SIZE_1MB;  // Used for log rotation size
 	namespace
 	{
 		// internal helper: format source location
@@ -125,7 +129,7 @@ namespace HsBa::Slicer::Log
 		{
 			auto file_log = boost::log::add_file_log(
 				boost::log::keywords::file_name = log_path_,
-				boost::log::keywords::rotation_size = 50 * 1024 * 1024,
+				boost::log::keywords::rotation_size = SIZE_50MB,
 				boost::log::keywords::time_based_rotation = boost::log::sinks::file::rotation_at_time_point(0, 0, 0),
 				boost::log::keywords::open_mode = std::ios::app
 			);

@@ -27,7 +27,7 @@ target_link_libraries(HsBaSlicerFileOperator PUBLIC HsBaSlicerBase
 	rapidjson
 )
 
-if(HSBA_USE_BIT7Z AND NOT ANDROID)
+if(HSBA_HSBA_USE_BIT7Z AND NOT ANDROID)
   find_package(unofficial-bit7z CONFIG REQUIRED)
   target_link_libraries(HsBaSlicerFileOperator PUBLIC unofficial::bit7z::bit7z64)
 endif()

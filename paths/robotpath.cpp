@@ -13,6 +13,10 @@
 
 namespace HsBa::Slicer
 {
+    // Robot movement constants for ABB controller
+    constexpr int ABB_MIN_SPEED = 50;      // Minimum speed for ABB robot
+    constexpr int ABB_MAX_SPEED = 500;     // Maximum speed for ABB robot
+    constexpr int ABB_HIGH_SPEED = 1000;   // High speed for ABB robot
 namespace {
     const char* RLPointTypeToString(RLPointType t)
     {
@@ -216,20 +220,20 @@ namespace HsBa::Slicer
 			case RLPointType::MoveJ:
 				ss << "    MOVEJ ";
 				ss << "[" << pt.end.x << "," << pt.end.y << "," << pt.end.z << ",0.0,0.0,0.0]";
-				// speed bracket: [velocity,50,500,1000]
-				ss << " ,[" << pt.velocity << ",50,500,1000] ,z10 ,tooldata1\\Wobj=workjob1;\n";
+				// speed bracket: [velocity,ABB_MIN_SPEED,ABB_MAX_SPEED,ABB_HIGH_SPEED]
+				ss << " ,[" << pt.velocity << "," << ABB_MIN_SPEED << "," << ABB_MAX_SPEED << "," << ABB_HIGH_SPEED << "] ,z10 ,tooldata1\\Wobj=workjob1;\n";
 				break;
 			case RLPointType::MoveL:
 				ss << "    MOVEL ";
 				ss << "[" << pt.end.x << "," << pt.end.y << "," << pt.end.z << ",0.0,0.0,0.0]";
-				ss << " ,[" << pt.velocity << ",50,500,1000] ,z10 ,tooldata1\\Wobj=workjob1;\n";
+				ss << " ,[" << pt.velocity << "," << ABB_MIN_SPEED << "," << ABB_MAX_SPEED << "," << ABB_HIGH_SPEED << "] ,z10 ,tooldata1\\Wobj=workjob1;\n";
 				break;
 			case RLPointType::ProgramLStart:
 			case RLPointType::ProgramL:
 			case RLPointType::ProgramLEnd:
 				ss << "    MOVEL ";
 				ss << "[" << pt.end.x << "," << pt.end.y << "," << pt.end.z << ",0.0,0.0,0.0]";
-				ss << " ,[" << pt.velocity << ",50,500,1000] ,fine ,tooldata1\\Wobj=workjob1";
+				ss << " ,[" << pt.velocity << "," << ABB_MIN_SPEED << "," << ABB_MAX_SPEED << "," << ABB_HIGH_SPEED << "] ,fine ,tooldata1\\Wobj=workjob1";
 				ss << std::format("; ! Program Point {}\n", pt.programIndex);
 				ss << "\n";
 				break;
@@ -237,7 +241,7 @@ namespace HsBa::Slicer
 				ss << "    MOVEC ";
 				ss << "[" << pt.middle.x << "," << pt.middle.y << "," << pt.middle.z << ",0.0,0.0,0.0], "
 					<< "[" << pt.end.x << "," << pt.end.y << "," << pt.end.z << ",0.0,0.0,0.0]"
-					<< " ,[" << pt.velocity << ",50,500,1000] ,z10 ,tooldata1\\Wobj=workjob1;\n";
+					<< " ,[" << pt.velocity << "," << ABB_MIN_SPEED << "," << ABB_MAX_SPEED << "," << ABB_HIGH_SPEED << "] ,z10 ,tooldata1\\Wobj=workjob1;\n";
 				break;
 			case RLPointType::ProgramCStart:
 			case RLPointType::ProgramC:
@@ -245,7 +249,7 @@ namespace HsBa::Slicer
 				ss << "    MOVEC ";
 				ss << "[" << pt.middle.x << "," << pt.middle.y << "," << pt.middle.z << ",0.0,0.0,0.0], "
 					<< "[" << pt.end.x << "," << pt.end.y << "," << pt.end.z << ",0.0,0.0,0.0]"
-					<< " ,[" << pt.velocity << ",50,500,1000] ,fine ,tooldata1\\Wobj=workjob1;";
+					<< " ,[" << pt.velocity << "," << ABB_MIN_SPEED << "," << ABB_MAX_SPEED << "," << ABB_HIGH_SPEED << "] ,fine ,tooldata1\\Wobj=workjob1;";
 				ss << std::format(" ! Program Point {}\n", pt.programIndex);
 				ss << "\n";
 				break;

@@ -1,4 +1,5 @@
 ﻿#include "LuaAdapter.hpp"
+#include "sql_adapter.hpp"
 #include <format>
 
 namespace HsBa::Slicer
@@ -131,7 +132,7 @@ namespace HsBa::Slicer
 		};
 
 
-#ifdef USE_BIT7Z
+#ifdef HSBA_USE_BIT7Z
 		// ============= Bit7zZipper Wrapper =============
 		constexpr Utils::TemplateString Bit7zZipperTypeName = "Bit7zZipper";
 		int lua_bit7z_zipper_new(lua_State* L)
@@ -252,7 +253,7 @@ namespace HsBa::Slicer
 			{NULL, NULL}
 		};
 
-#endif // USE_BIT7Z
+#endif // HSBA_USE_BIT7Z
 
 		// ============= SQLiteAdapter Wrapper =============
 		constexpr Utils::TemplateString SQLiteAdapterTypeName = "SQLiteAdapter";
@@ -497,7 +498,7 @@ namespace HsBa::Slicer
 			{nullptr, nullptr}
 		};
 
-#ifdef USE_MYSQL
+#ifdef HSBA_USE_MYSQL
 		// ============= MySQLAdapter Wrapper =============
 		constexpr Utils::TemplateString MySQLAdapterTypeName = "MySQLAdapter";
 		int lua_mysql_new(lua_State* L)
@@ -517,7 +518,7 @@ namespace HsBa::Slicer
 			//fourth database
 			std::string database = luaL_checkstring(L, 5);
 			//fifth port (optional)
-			unsigned int port = 3306;
+			unsigned int port = SQL::MYSQL_DEFAULT_PORT;
 			if (lua_gettop(L) >= 6 && lua_isinteger(L, 6))
 			{
 				port = static_cast<unsigned int>(lua_tointeger(L, 6));
@@ -745,8 +746,8 @@ namespace HsBa::Slicer
 			{"__gc", lua_mysql_gc},
 			{nullptr, nullptr}
 		};
-#endif // USE_MYSQL
-#ifdef USE_PGSQL
+#endif // HSBA_USE_MYSQL
+#ifdef HSBA_USE_PGSQL
 		// ============= PostgreSQLAdapter Wrapper =============
 		// Similar implementation as MySQLAdapter can be done here
 		constexpr Utils::TemplateString PostgreSQLAdapterTypeName = "PostgreSQLAdapter";
@@ -767,7 +768,7 @@ namespace HsBa::Slicer
 			//fourth database
 			std::string database = luaL_checkstring(L, 5);
 			//fifth port (optional)
-			unsigned int port = 5432;
+			unsigned int port = SQL::POSTGRESQL_DEFAULT_PORT;
 			if (lua_gettop(L) >= 6 && lua_isinteger(L, 6))
 			{
 				port = static_cast<unsigned int>(lua_tointeger(L, 6));
@@ -995,22 +996,36 @@ namespace HsBa::Slicer
 			{"__gc", lua_pgsql_gc},
 			{nullptr, nullptr}
 		};
-#endif // USE_PGSQL
+#endif // HSBA_USE_PGSQL
 
 	}// namespace
 
 	void RegisterLuaZipper(lua_State* L)
 	{
+		// Create metatable for Zipper
 		luaL_newmetatable(L, static_cast<const char*>(ZipperTypeName));
+		
+		// Set up metatable methods
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
 		lua_pushcfunction(L, lua_zipper_gc);
 		lua_setfield(L, -2, "__gc");
+		
+		// Add methods to metatable
+		lua_pushcfunction(L, lua_zipper_add_file);
+		lua_setfield(L, -2, "AddFile");
+		lua_pushcfunction(L, lua_zipper_add_byte_file);
+		lua_setfield(L, -2, "AddByteFile");
+		lua_pushcfunction(L, lua_zipper_save);
+		lua_setfield(L, -2, "Save");
+		
+		// Pop metatable
 		lua_pop(L, 1);
-
-		lua_getglobal(L, "Zipper");
-		if (lua_isnil(L, -1)) {
-			lua_pop(L, 1);
-			lua_newtable(L);
-		}
+		
+		// Create Zipper global table
+		lua_newtable(L);
+		
+		// Add static methods to the global table
 		lua_pushcfunction(L, lua_zipper_new);
 		lua_setfield(L, -2, "new");
 		lua_pushcfunction(L, lua_zipper_add_file);
@@ -1019,21 +1034,37 @@ namespace HsBa::Slicer
 		lua_setfield(L, -2, "AddByteFile");
 		lua_pushcfunction(L, lua_zipper_save);
 		lua_setfield(L, -2, "Save");
+		
 		lua_setglobal(L, "Zipper");
 	}
 
-#ifdef USE_BIT7Z
+#ifdef HSBA_USE_BIT7Z
 	void RegisterLuaBit7zZipper(lua_State* L)
 	{
+		// Create metatable for Bit7zZipper
 		luaL_newmetatable(L, static_cast<const char*>(Bit7zZipperTypeName));
+		
+		// Set up metatable methods
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
 		lua_pushcfunction(L, lua_bit7z_zipper_gc);
 		lua_setfield(L, -2, "__gc");
+		
+		// Add methods to metatable
+		lua_pushcfunction(L, lua_bit7z_zipper_add_file);
+		lua_setfield(L, -2, "AddFile");
+		lua_pushcfunction(L, lua_bit7z_zipper_add_byte_file);
+		lua_setfield(L, -2, "AddByteFile");
+		lua_pushcfunction(L, lua_bit7z_zipper_save);
+		lua_setfield(L, -2, "Save");
+		
+		// Pop metatable
 		lua_pop(L, 1);
-		lua_getglobal(L, "Bit7zZipper");
-		if (lua_isnil(L, -1)) {
-			lua_pop(L, 1);
-			lua_newtable(L);
-		}
+		
+		// Create Bit7zZipper global table
+		lua_newtable(L);
+		
+		// Add static methods to the global table
 		lua_pushcfunction(L, lua_bit7z_zipper_new);
 		lua_setfield(L, -2, "new");
 		lua_pushcfunction(L, lua_bit7z_zipper_add_file);
@@ -1042,19 +1073,23 @@ namespace HsBa::Slicer
 		lua_setfield(L, -2, "AddByteFile");
 		lua_pushcfunction(L, lua_bit7z_zipper_save);
 		lua_setfield(L, -2, "Save");
+		
 		lua_setglobal(L, "Bit7zZipper");
 	}
-#endif // USE_BIT7Z
+#endif // HSBA_USE_BIT7Z
 
 	void RegisterLuaSQLiteAdapter(lua_State* L)
 	{
+		// Create metatable for SQLiteAdapter
 		luaL_newmetatable(L, static_cast<const char*>(SQLiteAdapterTypeName));
-
+		
+		// Set up metatable methods
 		lua_pushvalue(L, -1);
 		lua_setfield(L, -2, "__index");
 		lua_pushcfunction(L, lua_sqlite_gc);
 		lua_setfield(L, -2, "__gc");
-
+		
+		// Add methods to metatable
 		lua_pushcfunction(L, lua_sqlite_connect);
 		lua_setfield(L, -2, "Connect");
 		lua_pushcfunction(L, lua_sqlite_execute);
@@ -1069,23 +1104,47 @@ namespace HsBa::Slicer
 		lua_setfield(L, -2, "Delete");
 		lua_pushcfunction(L, lua_sqlite_create_table);
 		lua_setfield(L, -2, "CreateTable");
-
+		
+		// Pop metatable
 		lua_pop(L, 1);
-
+		
+		// Create SQLiteAdapter global table
 		lua_newtable(L);
+		
+		// Add static methods to the global table
 		lua_pushcfunction(L, lua_sqlite_new);
 		lua_setfield(L, -2, "new");
+		lua_pushcfunction(L, lua_sqlite_connect);
+		lua_setfield(L, -2, "Connect");
+		lua_pushcfunction(L, lua_sqlite_execute);
+		lua_setfield(L, -2, "Execute");
+		lua_pushcfunction(L, lua_sqlite_query);
+		lua_setfield(L, -2, "Query");
+		lua_pushcfunction(L, lua_sqlite_insert);
+		lua_setfield(L, -2, "Insert");
+		lua_pushcfunction(L, lua_sqlite_update);
+		lua_setfield(L, -2, "Update");
+		lua_pushcfunction(L, lua_sqlite_delete);
+		lua_setfield(L, -2, "Delete");
+		lua_pushcfunction(L, lua_sqlite_create_table);
+		lua_setfield(L, -2, "CreateTable");
+		
 		lua_setglobal(L, "SQLiteAdapter");
 	}
 
-#ifdef USE_MYSQL
+#ifdef HSBA_USE_MYSQL
 	void RegisterLuaMySQLAdapter(lua_State* L)
 	{
+		// Create metatable for MySQLAdapter
 		luaL_newmetatable(L, static_cast<const char*>(MySQLAdapterTypeName));
+		
+		// Set up metatable methods
 		lua_pushvalue(L, -1);
 		lua_setfield(L, -2, "__index");
 		lua_pushcfunction(L, lua_mysql_gc);
 		lua_setfield(L, -2, "__gc");
+		
+		// Add methods to metatable
 		lua_pushcfunction(L, lua_mysql_connect);
 		lua_setfield(L, -2, "Connect");
 		lua_pushcfunction(L, lua_mysql_execute);
@@ -1100,22 +1159,48 @@ namespace HsBa::Slicer
 		lua_setfield(L, -2, "Delete");
 		lua_pushcfunction(L, lua_mysql_create_table);
 		lua_setfield(L, -2, "CreateTable");
+		
+		// Pop metatable
 		lua_pop(L, 1);
+		
+		// Create MySQLAdapter global table
 		lua_newtable(L);
+		
+		// Add static methods to the global table
 		lua_pushcfunction(L, lua_mysql_new);
 		lua_setfield(L, -2, "new");
+		lua_pushcfunction(L, lua_mysql_connect);
+		lua_setfield(L, -2, "Connect");
+		lua_pushcfunction(L, lua_mysql_execute);
+		lua_setfield(L, -2, "Execute");
+		lua_pushcfunction(L, lua_mysql_query);
+		lua_setfield(L, -2, "Query");
+		lua_pushcfunction(L, lua_mysql_insert);
+		lua_setfield(L, -2, "Insert");
+		lua_pushcfunction(L, lua_mysql_update);
+		lua_setfield(L, -2, "Update");
+		lua_pushcfunction(L, lua_mysql_delete);
+		lua_setfield(L, -2, "Delete");
+		lua_pushcfunction(L, lua_mysql_create_table);
+		lua_setfield(L, -2, "CreateTable");
+		
 		lua_setglobal(L, "MySQLAdapter");
 	}
-#endif // USE_MYSQL
+#endif // HSBA_USE_MYSQL
 
-#ifdef USE_PGSQL
+#ifdef HSBA_USE_PGSQL
 	void RegisterLuaPostgreSQLAdapter(lua_State* L)
 	{
+		// Create metatable for PostgreSQLAdapter
 		luaL_newmetatable(L, static_cast<const char*>(PostgreSQLAdapterTypeName));
+		
+		// Set up metatable methods
 		lua_pushvalue(L, -1);
 		lua_setfield(L, -2, "__index");
 		lua_pushcfunction(L, lua_pgsql_gc);
 		lua_setfield(L, -2, "__gc");
+		
+		// Add methods to metatable
 		lua_pushcfunction(L, lua_pgsql_connect);
 		lua_setfield(L, -2, "Connect");
 		lua_pushcfunction(L, lua_pgsql_execute);
@@ -1130,13 +1215,34 @@ namespace HsBa::Slicer
 		lua_setfield(L, -2, "Delete");
 		lua_pushcfunction(L, lua_pgsql_create_table);
 		lua_setfield(L, -2, "CreateTable");
+		
+		// Pop metatable
 		lua_pop(L, 1);
+		
+		// Create PostgreSQLAdapter global table
 		lua_newtable(L);
+		
+		// Add static methods to the global table
 		lua_pushcfunction(L, lua_pgsql_new);
 		lua_setfield(L, -2, "new");
+		lua_pushcfunction(L, lua_pgsql_connect);
+		lua_setfield(L, -2, "Connect");
+		lua_pushcfunction(L, lua_pgsql_execute);
+		lua_setfield(L, -2, "Execute");
+		lua_pushcfunction(L, lua_pgsql_query);
+		lua_setfield(L, -2, "Query");
+		lua_pushcfunction(L, lua_pgsql_insert);
+		lua_setfield(L, -2, "Insert");
+		lua_pushcfunction(L, lua_pgsql_update);
+		lua_setfield(L, -2, "Update");
+		lua_pushcfunction(L, lua_pgsql_delete);
+		lua_setfield(L, -2, "Delete");
+		lua_pushcfunction(L, lua_pgsql_create_table);
+		lua_setfield(L, -2, "CreateTable");
+		
 		lua_setglobal(L, "PostgreSQLAdapter");
 	}
-#endif // USE_PGSQL
+#endif // HSBA_USE_PGSQL
 
 
 } // namespace HsBa::Slicer

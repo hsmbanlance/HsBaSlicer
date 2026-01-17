@@ -9,18 +9,22 @@
 
 namespace HsBa::Slicer
 {
+    // G-code command constants
+    constexpr int GCODE_G17_VALUE = 17;  // Select XY plane
+    constexpr int GCODE_G90_VALUE = 90;  // Absolute positioning
+    constexpr float DEFAULT_VELOCITY = 100.0f;  // Default velocity for GPoint
 	enum class GcodeType
 	{
 		G0,
 		G1,
 		G2,
 		G3,
-		G17 = 17,
+		G17 = GCODE_G17_VALUE,
 		G18,
 		G19,
 		G20,
 		G21,
-		G90 = 90,
+		G90 = GCODE_G90_VALUE,
 		G91
 	};
 
@@ -35,7 +39,7 @@ namespace HsBa::Slicer
 		GcodeType type = GcodeType::G1;
 		OutPoints3 p1;
 		OutPoints3 center; // 圆弧运动的过渡点
-		float velocity = 100.0f;
+		float velocity = DEFAULT_VELOCITY;
 		double extrusion = 0.0;
 	};
 
