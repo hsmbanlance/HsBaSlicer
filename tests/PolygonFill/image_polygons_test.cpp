@@ -19,7 +19,7 @@ struct DisableCrt
 
 BOOST_AUTO_TEST_CASE(fromimage_and_toimage_roundtrip)
 {
-    [[may_unused]]
+    [[maybe_unused]]
     static DisableCrt crt_;
     // create a simple synthetic image (two rectangles with different intensities)
     int w = 80, h = 60;

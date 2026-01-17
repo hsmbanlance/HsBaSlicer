@@ -71,10 +71,10 @@ namespace HsBa::Slicer
         if (!L) throw RuntimeError("Lua init failed");
         luaL_openlibs(L.get());
         RegisterLuaSQLiteAdapter(L.get());
-    #ifdef USE_MYSQL
+    #ifdef HSBA_USE_MYSQL
         RegisterLuaMySQLAdapter(L.get());
     #endif
-    #ifdef USE_PGSQL
+    #ifdef HSBA_USE_PGSQL
         RegisterLuaPostgreSQLAdapter(L.get());
     #endif
 
@@ -163,10 +163,10 @@ namespace HsBa::Slicer
         if (!L) throw RuntimeError("Lua init failed");
         luaL_openlibs(L.get());
         RegisterLuaSQLiteAdapter(L.get());
-    #ifdef USE_MYSQL
+    #ifdef HSBA_USE_MYSQL
         RegisterLuaMySQLAdapter(L.get());
     #endif
-    #ifdef USE_PGSQL
+    #ifdef HSBA_USE_PGSQL
         RegisterLuaPostgreSQLAdapter(L.get());
     #endif
 

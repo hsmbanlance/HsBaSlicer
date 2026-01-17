@@ -1,5 +1,5 @@
 ﻿#include "logger.hpp"
-
+#include <cstddef>
 #include <filesystem>
 
 #ifndef __ANDROID__
@@ -18,8 +18,14 @@
 
 #include "fileoperator/rw_ptree.hpp"
 
+#include "logger.hpp"
+
 namespace HsBa::Slicer::Log
 {
+    // Define constants for logger configuration
+    constexpr size_t SIZE_1KB = 1024;
+    constexpr size_t SIZE_1MB = SIZE_1KB * 1024;
+    constexpr size_t SIZE_50MB = 50 * SIZE_1MB;  // Used for log rotation size
 	namespace
 	{
 		// internal helper: format source location
@@ -69,7 +75,7 @@ namespace HsBa::Slicer::Log
 #endif // __ANDROID__
 	} // namespace (anonymous)
 
-	LoggerSingletone::LoggerSingletone()
+	HSBA_SLICER_LOG_API LoggerSingletone::LoggerSingletone(LoggerSingletone::Private)
 	{
 		auto current_path = std::filesystem::current_path();
 		auto cfg_path = current_path.string() + "/logcfg.ini";
@@ -123,7 +129,7 @@ namespace HsBa::Slicer::Log
 		{
 			auto file_log = boost::log::add_file_log(
 				boost::log::keywords::file_name = log_path_,
-				boost::log::keywords::rotation_size = 50 * 1024 * 1024,
+				boost::log::keywords::rotation_size = SIZE_50MB,
 				boost::log::keywords::time_based_rotation = boost::log::sinks::file::rotation_at_time_point(0, 0, 0),
 				boost::log::keywords::open_mode = std::ios::app
 			);
@@ -141,7 +147,7 @@ namespace HsBa::Slicer::Log
 #endif
 	}
 
-	bool LoggerSingletone::UseLogFile() const
+	HSBA_SLICER_LOG_API bool LoggerSingletone::UseLogFile() const
 	{
 		std::shared_lock lock{ mutex_ };
 #ifdef __ANDROID__
@@ -151,11 +157,21 @@ namespace HsBa::Slicer::Log
 #endif // __ANDROID__
 	}
 
-	void LoggerSingletone::Log(std::string_view message,const int log_lv, const std::source_location& location)
+	HSBA_SLICER_LOG_API std::shared_ptr<LoggerSingletone> LoggerSingletone::GetInstance()
+	{
+		std::call_once(instance_flag_, [&]() {
+			instance_ = CreateInstance();
+		});
+		return instance_;
+	}
+
+	HSBA_SLICER_LOG_API void LoggerSingletone::Log(std::string_view message,const int log_lv, const std::source_location& location)
 	{
 		if (!instance_)
 		{
-			GetInstance();
+			std::call_once(instance_flag_, [&]() {
+				instance_ = std::make_shared<LoggerSingletone>(Private{});
+			});
 		}
 		switch (log_lv)
 		{
@@ -225,69 +241,89 @@ namespace HsBa::Slicer::Log
 		}
 	}
 
-	void LoggerSingletone::LogDebug(std::string_view message, const std::source_location& location)
+	HSBA_SLICER_LOG_API void LoggerSingletone::LogDebug(std::string_view message, const std::source_location& location)
 	{
 		if (!instance_)
 		{
-			GetInstance();
+			std::call_once(instance_flag_, [&]() {
+				instance_ = std::make_shared<LoggerSingletone>(Private{});
+			});
 		}
 		Log(message, 1, location);
 	}
 
-	void LoggerSingletone::LogInfo(std::string_view message, const std::source_location& location)
+	HSBA_SLICER_LOG_API void LoggerSingletone::LogInfo(std::string_view message, const std::source_location& location)
 	{
 		if (!instance_)
 		{
-			GetInstance();
+			std::call_once(instance_flag_, [&]() {
+				instance_ = std::make_shared<LoggerSingletone>(Private{});
+			});
 		}
 		Log(message, 2, location);
 	}
 
-	void LoggerSingletone::LogWarning(std::string_view message, const std::source_location& location)
+	HSBA_SLICER_LOG_API void LoggerSingletone::LogWarning(std::string_view message, const std::source_location& location)
 	{
 		if (!instance_)
 		{
-			GetInstance();
+			std::call_once(instance_flag_, [&]() {
+				instance_ = std::make_shared<LoggerSingletone>(Private{});
+			});
 		}
 		Log(message, 3, location);
 	}
 
-	void LoggerSingletone::LogError(std::string_view message, const std::source_location& location)
+	HSBA_SLICER_LOG_API void LoggerSingletone::LogError(std::string_view message, const std::source_location& location)
 	{
 		if (!instance_)
 		{
-			GetInstance();
+			std::call_once(instance_flag_, [&]() {
+				instance_ = std::make_shared<LoggerSingletone>(Private{});
+			});
 		}
 		Log(message, 4, location);
 	}
 	inline namespace LogLiterals
 	{
-		LogState::LogState(const int log_lv, std::string_view message)
+		HSBA_SLICER_LOG_API LogState::LogState(const int log_lv, std::string_view message)
 			: log_lv_{ log_lv }, message_{ message }
 		{
 		}
-		LogState::~LogState()
+		HSBA_SLICER_LOG_API LogState::~LogState()
 		{
 		}
-		void LogState::operator()(const std::source_location& location)
+		HSBA_SLICER_LOG_API void LogState::operator()(const std::source_location& location)
 		{
 			LoggerSingletone::Log(message_, log_lv_, location);
 		}
-		LogState operator""_log_debug(const char* message, std::size_t size)
+		HSBA_SLICER_LOG_API LogState operator""_log_debug(const char* message, std::size_t size)
 		{
 			return LogState{ 1, std::string_view{ message, size } };
 		}
-		LogState operator""_log_info(const char* message, std::size_t size)
+		HSBA_SLICER_LOG_API LogState operator""_log_info(const char* message, std::size_t size)
 		{
 			return LogState{ 2, std::string_view{ message, size } };
 		}
-		LogState operator""_log_warning(const char* message, std::size_t size)
+		HSBA_SLICER_LOG_API LogState operator""_log_warning(const char* message, std::size_t size)
 		{
 			return LogState{ 3, std::string_view{ message, size } };
 		}
-		LogState operator""_log_error(const char* message, std::size_t size)
+		HSBA_SLICER_LOG_API LogState operator""_log_error(const char* message, std::size_t size)
 		{
 			return LogState{ 4, std::string_view{ message, size } };
 		}
 	}// namespace HsBa::Slicer::Log::LogLiterals
 }// namespace HsBa::Slicer::Log
+
+// 定义LoggerSingletone的静态成员
+namespace HsBa::Slicer::Log {
+    HSBA_SLICER_LOG_API std::shared_ptr<LoggerSingletone> LoggerSingletone::instance_ = nullptr;
+    HSBA_SLICER_LOG_API std::shared_mutex LoggerSingletone::mutex_;
+    HSBA_SLICER_LOG_API std::once_flag LoggerSingletone::instance_flag_;
+    
+    std::shared_ptr<LoggerSingletone> LoggerSingletone::CreateInstance()
+    {
+        return std::make_shared<LoggerSingletone>(Private{});
+    }
+}

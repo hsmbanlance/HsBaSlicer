@@ -52,10 +52,10 @@ pkg_check_modules(Clipper2 REQUIRED IMPORTED_TARGET Clipper2)
 #miniz
 find_package(miniz CONFIG REQUIRED)
 #use bit7z operator zipper
-option(HSBA_USE_BIT7Z "use bit7z" ON)
+option(HSBA_HSBA_USE_BIT7Z "use bit7z" ON)
 
-if (HSBA_USE_BIT7Z AND NOT ANDROID)
-	add_compile_definitions(USE_BIT7Z)
+if (HSBA_HSBA_USE_BIT7Z AND NOT ANDROID)
+	add_compile_definitions(HSBA_USE_BIT7Z)
 	find_package(unofficial-bit7z CONFIG REQUIRED)
 endif()
 
@@ -108,8 +108,8 @@ endif()
 #sqlpp11 with SQLite3 MySQL PostgreSQL
 if(NOT ANDROID AND NOT IOS AND NOT SWITCH)
 	find_package(Sqlpp11 CONFIG REQUIRED COMPONENTS SQLite3 MySQL PostgreSQL)
-	add_compile_definitions(USE_MYSQL)
-	add_compile_definitions(USE_PGSQL)
+	add_compile_definitions(HSBA_USE_MYSQL)
+	add_compile_definitions(HSBA_USE_PGSQL)
 else()
 	find_package(Sqlpp11 CONFIG REQUIRED COMPONENTS SQLite3)
 endif()
@@ -124,6 +124,31 @@ option(HSBA_PROTOBUF_OUT "protobuf out source" ON)
 
 #copy file to exe_dir
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/utils/logcfg.ini DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/HsBaSlicer)
+
+# static or dynamic
+option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
+# set from VCPKG_TARGET_TRIPLE
+if(DEFINED VCPKG_TARGET_TRIPLET)
+  message("VCPKG_TARGET_TRIPLET is defined: ${VCPKG_TARGET_TRIPLET}")
+# for WIN32 default dynamic, Linux and android default static
+  if(VCPKG_TARGET_TRIPLET MATCHES "windows" AND NOT VCPKG_TARGET_TRIPLET MATCHES "static")
+	set(BUILD_SHARED_LIBS ON CACHE BOOL "Build using shared libraries" FORCE)
+	message("Set BUILD_SHARED_LIBS to ON for Windows dynamic.")
+# if match dynamic use dynamic
+  elseif(VCPKG_TARGET_TRIPLET MATCHES "dynamic")
+	set(BUILD_SHARED_LIBS ON CACHE BOOL "Build using shared libraries" FORCE)
+	message("Set BUILD_SHARED_LIBS to ON for dynamic.")
+  elseif(VCPKG_TARGET_TRIPLET MATCHES "linux" OR VCPKG_TARGET_TRIPLET MATCHES "android" OR VCPKG_TARGET_TRIPLET MATCHES "static")
+	set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build using shared libraries" FORCE)
+	message("Set BUILD_SHARED_LIBS to OFF for Linux or Android static.")
+#other use static
+  else()
+	set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build using shared libraries" FORCE)
+	message("Set BUILD_SHARED_LIBS to OFF for other static.")
+  endif()
+else()
+  message("VCPKG_TARGET_TRIPLET is not defined.")
+endif()
 
 # subdirectory。
 add_subdirectory("third_parts_without_vcpkg")

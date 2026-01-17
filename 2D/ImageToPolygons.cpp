@@ -20,6 +20,7 @@ namespace HsBa::Slicer
 {
     namespace
     {
+        inline constexpr int SVG_PERCENT_VALUE = 100;
         static std::string ToLower(const std::string &s)
         {
             std::string out = s;
@@ -155,7 +156,7 @@ namespace HsBa::Slicer
             ofs << "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
             ofs << "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" << width << "\" height=\"" << height << "\" viewBox=\"0 0 " << width << " " << height << "\">\n";
             // background
-            ofs << "<rect width=\"100%\" height=\"100%\" fill=\"rgb(" << int(background) << "," << int(background) << "," << int(background) << ")\"/>\n";
+            ofs << "<rect width=\"" << SVG_PERCENT_VALUE << "%\" height=\"" << SVG_PERCENT_VALUE << "%\" fill=\"rgb(" << int(background) << "," << int(background) << "," << int(background) << ")\"/>\n";
             for (const auto &poly : polys)
             {
                 if (poly.empty()) continue;
@@ -207,7 +208,7 @@ namespace HsBa::Slicer
         for (int thr : thresholds)
         {
             std::vector<uint8_t> bin(w*h);
-            for (int i = 0; i < w*h; ++i) bin[i] = (img[i] > thr) ? 255 : 0;
+            for (int i = 0; i < w*h; ++i) bin[i] = (img[i] > thr) ? MAX_GRAY_VALUE : 0;
             PolygonsD layer = ExtractContoursFromBinary(bin, w, h, pixelSize);
             res.emplace_back(std::move(layer));
         }
@@ -253,7 +254,7 @@ namespace HsBa::Slicer
             if (lua_isinteger(L.get(), -1))
             {
                 int val = static_cast<int>(lua_tointeger(L.get(), -1));
-                img.push_back(static_cast<uint8_t>(std::clamp(val, 0, 255)));
+                img.push_back(static_cast<uint8_t>(std::clamp(val, 0, static_cast<int>(MAX_GRAY_VALUE))));
             }
             else
             {
@@ -314,7 +315,7 @@ namespace HsBa::Slicer
             if (lua_isinteger(L.get(), -1))
             {
                 int val = static_cast<int>(lua_tointeger(L.get(), -1));
-                img.push_back(static_cast<uint8_t>(std::clamp(val, 0, 255)));
+                img.push_back(static_cast<uint8_t>(std::clamp(val, 0, static_cast<int>(MAX_GRAY_VALUE))));
             }
             else
             {

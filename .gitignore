@@ -400,4 +400,8 @@ problems-*
 #reports
 *report*
 
+# AI Kiwi
+.qoder
+.gemini
+
 # Add testing obj 3D models as necessary

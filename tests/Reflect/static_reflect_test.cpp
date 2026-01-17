@@ -1,4 +1,4 @@
-#define BOOST_TEST_MODULE anyvisit_test
+﻿#define BOOST_TEST_MODULE anyvisit_test
 #include <boost/test/included/unit_test.hpp>
 
 #include <base/static_reflect.hpp>

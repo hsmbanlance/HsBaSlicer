@@ -89,7 +89,7 @@ namespace HsBa::Slicer
 #endif // !QT_VERSION
 
 #if _WIN32
-	constexpr UINT WINDOWS_CHCP_UTF8 = 65001;
+	constexpr UINT WINDOWS_CHCP_UTF8 = CP_UTF8;//65001
 	bool windows_chcp_utf8()
 	{
 		return GetACP() == WINDOWS_CHCP_UTF8;//65001 is utf-8

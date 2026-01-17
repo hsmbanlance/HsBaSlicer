@@ -22,9 +22,12 @@ namespace HsBa::Slicer
 		{
 			return std::make_shared<Unzipper>(Private{});
 		}
+		
+		inline static constexpr size_t MB_SIZE = 1024 * 1024;        // 1MB大小
+		inline static constexpr size_t GB_SIZE = 1024 * 1024 * 1024;  // 1GB大小
 		~Unzipper();
 		friend class IUnzipper<Unzipper>;
-		inline static void SetMaxMemSize(size_t size = 1024 * 1024 * 1024)
+		inline static void SetMaxMemSize(size_t size = GB_SIZE)
 		{
 			max_mem_size_ = size;
 		}
@@ -36,7 +39,7 @@ namespace HsBa::Slicer
 		Unzipper& operator=(const Unzipper&) = delete;
 		Unzipper(Unzipper&&) = delete;
 		Unzipper& operator=(Unzipper&&) = delete;
-		inline static size_t max_mem_size_ = 1024 * 1024 * 1024; // 1GB
+		inline static size_t max_mem_size_ = GB_SIZE; // 1GB
 		inline static constexpr size_t user_buff_size = 4096;
 		mz_zip_archive zip_archive_{};
 		std::unordered_map<std::string, UnzipperStream::BufferOrFile> memory_cache_;

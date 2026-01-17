@@ -16,294 +16,461 @@
 #include "base/concepts.hpp"
 #include "base/error.hpp"
 #include "base/template_helper.hpp"
+#include "base/static_reflect.hpp"
 
 namespace HsBa::Slicer::Utils
 {
-    template<typename T>
+	template<typename T>
 	concept Aggregte = std::is_aggregate_v<T> && !std::is_union_v<T>;
 
 	template<typename T>
 	concept RapidJsonValueConvertible =
-		requires(const T& value, rapidjson::Value& json, rapidjson::Document::AllocatorType& doc) {
+		requires(const T & value, rapidjson::Value & json, rapidjson::Document::AllocatorType & doc) {
 			{ value.to_json(json, doc) } -> std::same_as<void>;
 			{ T::from_json(json) } -> std::same_as<T>;
-		};
+	};
+
+	// Reflectable: wrapper concept pointing to the static reflect system
+	template<typename T>
+	concept Reflectable = StaticReflect::Reflectable<T>;
 
 	namespace detail
 	{
-		template<typename T>
-		void to_json_impl(const T& value, rapidjson::Value& json, rapidjson::Document::AllocatorType& allocator)
+		// Forward declarations for recursive / dependent calls
+		template<Aggregte T>
+			requires(!Reflectable<T>)
+		void to_json_impl(const T& value, rapidjson::Value& json, rapidjson::Document::AllocatorType& allocator);
+
+		template<Aggregte T>
+			requires(!Reflectable<T>)
+		void from_json_impl(const rapidjson::Value& json, T& value);
+
+		// Forward decls for reflectable types
+		template<Reflectable T>
+		void to_json_impl(const T& value, rapidjson::Value& json, rapidjson::Document::AllocatorType& allocator);
+
+		template<Reflectable T>
+		void from_json_impl(const rapidjson::Value& json, T& value);
+
+		template<typename FieldType>
+		void add_member(rapidjson::Value& parent, std::string_view name, const FieldType& field, rapidjson::Document::AllocatorType& allocator);
+
+		// Helper: expand reflectable fields into add_member calls (works around MSVC template-lambda parsing)
+		template<typename FieldType, std::size_t... Is>
+		void add_reflectable_members_impl(rapidjson::Value& parent, const FieldType& field, rapidjson::Document::AllocatorType& allocator, std::index_sequence<Is...>)
 		{
-			constexpr std::array<std::string_view, boost::pfr::tuple_size_v<T>> field_names =
-				boost::pfr::names_as_array<T>();
-			boost::pfr::for_each_field(value, [&](const auto& field,size_t idx) {
-				std::string_view field_name = field_names[idx];
-				using FieldType = std::remove_cvref_t<decltype(field)>;
-				if constexpr (RapidJsonValueConvertible<FieldType>)
-				{
-					rapidjson::Value field_json(rapidjson::kObjectType);
-					field.to_json(field_json, allocator);
-					json.AddMember(rapidjson::StringRef(field_name.data()), field_json, allocator);
-				}
-				else if constexpr (std::is_enum_v<FieldType>)
-				{
-					const std::string enum_str{ EnumName(field).data(),EnumName(field).size()};
-					json.AddMember(rapidjson::StringRef(field_name.data()), rapidjson::Value(enum_str.c_str(), allocator), allocator);
-				}
-				else if constexpr (Aggregte<FieldType>)
-				{
-					rapidjson::Value field_json(rapidjson::kObjectType);
-					to_json_impl(field, field_json,allocator);
-					json.AddMember(rapidjson::StringRef(field_name.data()), field_json, allocator);
-				}
-				else if constexpr (std::is_same_v<FieldType, std::string>)
-				{
-					json.AddMember(rapidjson::StringRef(field_name.data()), rapidjson::Value(field.c_str(), allocator), allocator);
-				}
-				else if constexpr (std::is_arithmetic_v<FieldType>)
-				{
-					json.AddMember(rapidjson::StringRef(field_name.data()), field, allocator);
-				}
-				else if constexpr (std::ranges::range<FieldType>)
-				{
-					rapidjson::Value array_json(rapidjson::kArrayType);
-					for (const auto& item : field)
-					{
-						using ItemType = std::remove_cvref_t<decltype(item)>;
-						if constexpr (RapidJsonValueConvertible<ItemType>)
-						{
-							rapidjson::Value item_json(rapidjson::kObjectType);
-							item.to_json(item_json, allocator);
-							array_json.PushBack(item_json, allocator);
-						}
-						else if constexpr (Aggregte<ItemType>)
-						{
-							rapidjson::Value item_json(rapidjson::kObjectType);
-							to_json_impl(item, item_json, allocator);
-							array_json.PushBack(item_json, allocator);
-						}
-						else if constexpr (std::is_same_v<ItemType, std::string>)
-						{
-							array_json.PushBack(rapidjson::Value(item.c_str(), allocator), allocator);
-						}
-						else if constexpr (std::is_arithmetic_v<ItemType>)
-						{
-							array_json.PushBack(item, allocator);
-						}
-						else if constexpr (OptionalLike<ItemType>)
-						{
-							if (item.has_value())
-							{
-								using ValueType = std::remove_cvref_t<typename ItemType::value_type>;
-								if constexpr (RapidJsonValueConvertible<ValueType>)
-								{
-									rapidjson::Value item_json(rapidjson::kObjectType);
-									item->to_json(item_json, allocator);
-									array_json.PushBack(item_json, allocator);
-								}
-								else if constexpr (Aggregte<ValueType>)
-								{
-									rapidjson::Value item_json(rapidjson::kObjectType);
-									to_json_impl(*item, item_json, allocator);
-									array_json.PushBack(item_json, allocator);
-								}
-								else if constexpr (std::is_same_v<ValueType, std::string>)
-								{
-									array_json.PushBack(rapidjson::Value(item->c_str(), allocator), allocator);
-								}
-								else if constexpr (std::is_arithmetic_v<ValueType>)
-								{
-									array_json.PushBack(*item, allocator);
-								}
-								else if constexpr(std::is_enum_v<ValueType>)
-								{
-									const std::string enum_str{ EnumName(*item).data(),EnumName(*item).size()};
-									array_json.PushBack(rapidjson::Value(enum_str.c_str(), allocator), allocator);
-								}
-								else
-								{
-									throw RuntimeError("Unsupported item type in to_json_impl for range field with optional");
-								}
-							}
-							else
-							{
-								array_json.PushBack(rapidjson::Value(rapidjson::kNullType), allocator);
-							}
-						}	
-						else
-						{
-							throw RuntimeError("Unsupported item type in to_json_impl for range field");
-						}
-					}
-					json.AddMember(rapidjson::StringRef(field_name.data()), array_json, allocator);
-				}
-				else
-				{
-					throw RuntimeError("Unsupported field type in to_json_impl");
-				}
-			});
+			if constexpr (sizeof...(Is) > 0)
+			{
+				int dummy[] = { ((add_member(parent, StaticReflect::Reflector<FieldType>::template FieldName<Is>(), StaticReflect::Reflector<FieldType>::template GetField<Is>(field), allocator), 0))... };
+				(void)dummy;
+			}
 		}
 
-		template<typename T>
-		void from_json_impl(const rapidjson::Value& json, T& value)
+		// Helper: expand reflectable fields into set_field_from_json calls (works around MSVC template-lambda parsing)
+		template<typename T, std::size_t... Is>
+		void set_reflectable_fields_impl(const rapidjson::Value& json, T& value, std::index_sequence<Is...>)
 		{
-			constexpr std::array<std::string_view, boost::pfr::tuple_size_v<T>> field_names =
-				boost::pfr::names_as_array<T>();
-			boost::pfr::for_each_field(value, [&](auto& field,size_t idx) {
-				std::string_view field_name = field_names[idx];
-				using FieldType = std::remove_cvref_t<decltype(field)>;
-				if constexpr (RapidJsonValueConvertible<FieldType>)
+			if constexpr (sizeof...(Is) > 0)
+			{
+				int dummy[] = {
+					((json.HasMember(StaticReflect::Reflector<T>::template FieldName<Is>().data())
+						? (set_field_from_json(StaticReflect::Reflector<T>::template GetField<Is>(value), json[StaticReflect::Reflector<T>::template FieldName<Is>().data()]), 0)
+						: 0), 0)...
+				};
+				(void)dummy;
+			}
+		}
+
+		template<RapidJsonValueConvertible FieldType>
+		void add_member(rapidjson::Value& parent, std::string_view name, const FieldType& field, rapidjson::Document::AllocatorType& allocator)
+		{
+			rapidjson::Value field_json(rapidjson::kObjectType);
+			field.to_json(field_json, allocator);
+			parent.AddMember(rapidjson::StringRef(name.data()), field_json, allocator);
+		}
+
+		template<typename FieldType>
+			requires std::is_enum_v<FieldType>
+		void add_member(rapidjson::Value& parent, std::string_view name, const FieldType& field, rapidjson::Document::AllocatorType& allocator)
+		{
+			const std::string enum_str{ EnumName(field).data(), EnumName(field).size() };
+			parent.AddMember(rapidjson::StringRef(name.data()), rapidjson::Value(enum_str.c_str(), allocator), allocator);
+		}
+
+		template<Aggregte FieldType>
+			requires(!Reflectable<FieldType>)
+		void add_member(rapidjson::Value& parent, std::string_view name, const FieldType& field, rapidjson::Document::AllocatorType& allocator)
+		{
+			rapidjson::Value field_json(rapidjson::kObjectType);
+			to_json_impl(field, field_json, allocator);
+			parent.AddMember(rapidjson::StringRef(name.data()), field_json, allocator);
+		}
+
+		// Reflectable field serialization (uses StaticReflect::Reflector)
+		template<Reflectable FieldType>
+		void add_member(rapidjson::Value& parent, std::string_view name, const FieldType& field, rapidjson::Document::AllocatorType& allocator)
+		{
+			rapidjson::Value field_json(rapidjson::kObjectType);
+			// dispatch by index sequence over reflect fields
+			constexpr size_t N = StaticReflect::Reflector<FieldType>::FieldCount();
+			add_reflectable_members_impl<FieldType>(field_json, field, allocator, std::make_index_sequence<N>{});
+			parent.AddMember(rapidjson::StringRef(name.data()), field_json, allocator);
+		}
+		template<typename FieldType>
+			requires std::is_same_v<FieldType, std::string>
+		void add_member(rapidjson::Value& parent, std::string_view name, const FieldType& field, rapidjson::Document::AllocatorType& allocator)
+		{
+			parent.AddMember(rapidjson::StringRef(name.data()), rapidjson::Value(field.c_str(), allocator), allocator);
+		}
+
+		template<typename FieldType>
+			requires std::is_arithmetic_v<FieldType>
+		void add_member(rapidjson::Value& parent, std::string_view name, const FieldType& field, rapidjson::Document::AllocatorType& allocator)
+		{
+			parent.AddMember(rapidjson::StringRef(name.data()), field, allocator);
+		}
+
+		template<std::ranges::range Range>
+			requires (!std::is_same_v<Range, std::string>)
+		void add_member(rapidjson::Value& parent, std::string_view name, const Range& rng, rapidjson::Document::AllocatorType& allocator)
+		{
+			rapidjson::Value array_json(rapidjson::kArrayType);
+			for (const auto& item : rng)
+			{
+				using ItemType = std::remove_cvref_t<decltype(item)>;
+				if constexpr (RapidJsonValueConvertible<ItemType>)
 				{
-					if (json.HasMember(field_name.data()))
-					{
-						field = field.from_json(json[field_name.data()]);
-					}
+					rapidjson::Value item_json(rapidjson::kObjectType);
+					item.to_json(item_json, allocator);
+					array_json.PushBack(item_json, allocator);
 				}
-				else if constexpr (std::is_enum_v<FieldType>)
+				else if constexpr (Reflectable<ItemType>)
 				{
-					if (json.HasMember(field_name.data()) && json[field_name.data()].IsString())
-					{
-						const auto n = json[field_name.data()].GetString();
-						field = EnumFromName<FieldType>(json[field_name.data()].GetString());
-					}
+					rapidjson::Value item_json(rapidjson::kObjectType);
+					to_json_impl(item, item_json, allocator);
+					array_json.PushBack(item_json, allocator);
 				}
-				else if constexpr (Aggregte<FieldType>)
+				else if constexpr (Aggregte<ItemType>)
 				{
-					if (json.HasMember(field_name.data()))
-					{
-						from_json_impl(json[field_name.data()], field);
-					}
+					rapidjson::Value item_json(rapidjson::kObjectType);
+					to_json_impl(item, item_json, allocator);
+					array_json.PushBack(item_json, allocator);
 				}
-				else if constexpr(std::is_same_v<FieldType, std::string>)
+				else if constexpr (std::is_same_v<ItemType, std::string>)
 				{
-					if (json.HasMember(field_name.data()) && json[field_name.data()].IsString())
-					{
-						field = json[field_name.data()].GetString();
-					}
+					array_json.PushBack(rapidjson::Value(item.c_str(), allocator), allocator);
 				}
-				else if constexpr (std::is_arithmetic_v<FieldType>)
+				else if constexpr (std::is_arithmetic_v<ItemType>)
 				{
-					if (json.HasMember(field_name.data()) && json[field_name.data()].IsNumber())
-					{
-						field = json[field_name.data()].Get<FieldType>();
-					}
+					array_json.PushBack(item, allocator);
 				}
-				else if constexpr (std::ranges::range<FieldType>)
+				else if constexpr (OptionalLike<ItemType>)
 				{
-					if (json.HasMember(field_name.data()) && json[field_name.data()].IsArray())
+					if (item.has_value())
 					{
-						using ItemType = std::remove_cvref_t<typename FieldType::value_type>;
-						field.clear();
-						for (const auto& item_json : json[field_name.data()].GetArray())
+						using ValueType = std::remove_cvref_t<typename ItemType::value_type>;
+						if constexpr (RapidJsonValueConvertible<ValueType>)
 						{
-							if constexpr (RapidJsonValueConvertible<ItemType>)
-							{
-								ItemType item;
-								item.from_json(item_json);
-								field.push_back(std::move(item));
-							}
-							else if constexpr (Aggregte<ItemType>)
-							{
-								ItemType item;
-								from_json_impl(item_json, item);
-								field.push_back(std::move(item));
-							}
-							else if constexpr (std::is_same_v<ItemType, std::string>)
-							{
-								if (item_json.IsString())
-								{
-									field.push_back(item_json.GetString());
-								}
-							}
-							else if constexpr (std::is_arithmetic_v<ItemType>)
-							{
-								if (item_json.IsNumber())
-								{
-									field.push_back(item_json.Get<ItemType>());
-								}
-							}
-							else
-							{
-								throw RuntimeError("Unsupported item type in from_json_impl for range field");
-							}
+							rapidjson::Value item_json(rapidjson::kObjectType);
+							item->to_json(item_json, allocator);
+							array_json.PushBack(item_json, allocator);
 						}
-					}
-				}
-				else if constexpr (OptionalLike<FieldType>)
-				{
-					using ValueType = std::remove_cvref_t<typename FieldType::value_type>;
-					if (json.HasMember(field_name.data()))
-					{
-						const auto& field_json = json[field_name.data()];
-						if (field_json.IsNull())
+						else if constexpr (Reflectable<ValueType>)
 						{
-							field.reset();
+							rapidjson::Value item_json(rapidjson::kObjectType);
+							to_json_impl(*item, item_json, allocator);
+							array_json.PushBack(item_json, allocator);
+						}
+						else if constexpr (Aggregte<ValueType>)
+						{
+							rapidjson::Value item_json(rapidjson::kObjectType);
+							to_json_impl(*item, item_json, allocator);
+							array_json.PushBack(item_json, allocator);
+						}
+						else if constexpr (std::is_same_v<ValueType, std::string>)
+						{
+							array_json.PushBack(rapidjson::Value(item->c_str(), allocator), allocator);
+						}
+						else if constexpr (std::is_arithmetic_v<ValueType>)
+						{
+							array_json.PushBack(*item, allocator);
+						}
+						else if constexpr (std::is_enum_v<ValueType>)
+						{
+							const std::string enum_str{ EnumName(*item).data(), EnumName(*item).size() };
+							array_json.PushBack(rapidjson::Value(enum_str.c_str(), allocator), allocator);
 						}
 						else
 						{
-							if constexpr (RapidJsonValueConvertible<ValueType>)
-							{
-								ValueType v;
-								v.from_json(field_json);
-								field = std::move(v);
-							}
-							else if constexpr (Aggregte<ValueType>)
-							{
-								ValueType v;
-								from_json_impl(field_json, v);
-								field = std::move(v);
-							}
-							else if constexpr (std::is_same_v<ValueType, std::string>)
-							{
-								if (field_json.IsString())
-								{
-									field = field_json.GetString();
-								}
-							}
-							else if constexpr (std::is_arithmetic_v<ValueType>)
-							{
-								if (field_json.IsNumber())
-								{
-									field = field_json.Get<ValueType>();
-								}
-							}
-							else if constexpr (std::is_enum_v<ValueType>)
-							{
-								if (field_json.IsString())
-								{
-									field = EnumFromName<ValueType>(field_json.GetString());
-								}
-							}
-							else
-							{
-								throw RuntimeError("Unsupported field type in from_json_impl for optional field");
-							}
+							throw RuntimeError("Unsupported item type in to_json_impl for range field with optional");
 						}
+					}
+					else
+					{
+						array_json.PushBack(rapidjson::Value(rapidjson::kNullType), allocator);
 					}
 				}
 				else
 				{
-					throw RuntimeError("Unsupported field type in from_json_impl");
+					throw RuntimeError("Unsupported item type in to_json_impl for range field");
 				}
-			});
+			}
+			parent.AddMember(rapidjson::StringRef(name.data()), array_json, allocator);
+		}
+
+		template<OptionalLike Opt>
+		void add_member(rapidjson::Value& parent, std::string_view name, const Opt& opt, rapidjson::Document::AllocatorType& allocator)
+		{
+			using ValueType = std::remove_cvref_t<typename Opt::value_type>;
+			if (opt.has_value())
+			{
+				if constexpr (RapidJsonValueConvertible<ValueType>)
+				{
+					rapidjson::Value field_json(rapidjson::kObjectType);
+					opt->to_json(field_json, allocator);
+					parent.AddMember(rapidjson::StringRef(name.data()), field_json, allocator);
+				}
+				else if constexpr (Aggregte<ValueType>)
+				{
+					rapidjson::Value field_json(rapidjson::kObjectType);
+					to_json_impl(*opt, field_json, allocator);
+					parent.AddMember(rapidjson::StringRef(name.data()), field_json, allocator);
+				}
+				else if constexpr (std::is_same_v<ValueType, std::string>)
+				{
+					parent.AddMember(rapidjson::StringRef(name.data()), rapidjson::Value(opt->c_str(), allocator), allocator);
+				}
+				else if constexpr (std::is_arithmetic_v<ValueType>)
+				{
+					parent.AddMember(rapidjson::StringRef(name.data()), *opt, allocator);
+				}
+				else if constexpr (std::is_enum_v<ValueType>)
+				{
+					const std::string enum_str{ EnumName(*opt).data(), EnumName(*opt).size() };
+					parent.AddMember(rapidjson::StringRef(name.data()), rapidjson::Value(enum_str.c_str(), allocator), allocator);
+				}
+				else
+				{
+					throw RuntimeError("Unsupported field type in to_json_impl for optional field");
+				}
+			}
+			else
+			{
+				parent.AddMember(rapidjson::StringRef(name.data()), rapidjson::Value(rapidjson::kNullType), allocator);
+			}
+		}
+
+		// fallback for unsupported field types
+		template<typename FieldType>
+		void add_member(rapidjson::Value&, std::string_view, const FieldType&, rapidjson::Document::AllocatorType&)
+		{
+			throw RuntimeError("Unsupported field type in to_json_impl");
+		}
+
+		template<Aggregte T>
+			requires(!Reflectable<T>)
+		void to_json_impl(const T& value, rapidjson::Value& json, rapidjson::Document::AllocatorType& allocator)
+		{
+			constexpr std::array<std::string_view, boost::pfr::tuple_size_v<T>> field_names = boost::pfr::names_as_array<T>();
+			boost::pfr::for_each_field(value, [&](const auto& field, size_t idx) {
+				add_member(json, field_names[idx], field, allocator);
+				});
+		}
+
+		// Reflectable to_json_impl using StaticReflect::Reflector<T>
+		template<Reflectable T>
+		void to_json_impl(const T& value, rapidjson::Value& json, rapidjson::Document::AllocatorType& allocator)
+		{
+			constexpr size_t N = StaticReflect::Reflector<T>::FieldCount();
+			// expand over index sequence using helper (avoids template-lambda parsing issues)
+			add_reflectable_members_impl<T>(json, value, allocator, std::make_index_sequence<N>{});
+		}
+		// -------------------- from_json helpers --------------------
+		template<RapidJsonValueConvertible FieldType>
+		void set_field_from_json(FieldType& field, const rapidjson::Value& field_json)
+		{
+			field = FieldType::from_json(field_json);
+		}
+
+		template<typename FieldType>
+			requires std::is_enum_v<FieldType>
+		void set_field_from_json(FieldType& field, const rapidjson::Value& field_json)
+		{
+			if (field_json.IsString())
+			{
+				field = EnumFromName<FieldType>(field_json.GetString());
+			}
+		}
+
+		template<Aggregte FieldType>
+			requires(!Reflectable<FieldType>)
+		void set_field_from_json(FieldType& field, const rapidjson::Value& field_json)
+		{
+			from_json_impl(field_json, field);
+		}
+
+		// Reflectable field deserialization
+		template<Reflectable FieldType>
+		void set_field_from_json(FieldType& field, const rapidjson::Value& field_json)
+		{
+			from_json_impl(field_json, field);
+		}
+		template<typename FieldType>
+			requires std::is_same_v<FieldType, std::string>
+		void set_field_from_json(FieldType& field, const rapidjson::Value& field_json)
+		{
+			if (field_json.IsString()) field = field_json.GetString();
+		}
+
+		template<typename FieldType>
+			requires std::is_arithmetic_v<FieldType>
+		void set_field_from_json(FieldType& field, const rapidjson::Value& field_json)
+		{
+			if (field_json.IsNumber()) field = field_json.template Get<FieldType>();
+		}
+
+		template<std::ranges::range Range>
+			requires (!std::is_same_v<Range, std::string>)
+		void set_field_from_json(Range& field, const rapidjson::Value& array_json)
+		{
+			using ItemType = std::remove_cvref_t<typename Range::value_type>;
+			field.clear();
+			for (const auto& item_json : array_json.GetArray())
+			{
+				if constexpr (RapidJsonValueConvertible<ItemType>)
+				{
+					ItemType item = ItemType::from_json(item_json);
+					field.push_back(std::move(item));
+				}
+				else if constexpr (Reflectable<ItemType>)
+				{
+					ItemType item;
+					from_json_impl(item_json, item);
+					field.push_back(std::move(item));
+				}
+				else if constexpr (Aggregte<ItemType>)
+				{
+					ItemType item;
+					from_json_impl(item_json, item);
+					field.push_back(std::move(item));
+				}
+				else if constexpr (std::is_same_v<ItemType, std::string>)
+				{
+					if (item_json.IsString()) field.push_back(item_json.GetString());
+				}
+				else if constexpr (std::is_arithmetic_v<ItemType>)
+				{
+					if (item_json.IsNumber()) field.push_back(item_json.template Get<ItemType>());
+				}
+				else
+				{
+					throw RuntimeError("Unsupported item type in from_json_impl for range field");
+				}
+			}
+		}
+
+		template<OptionalLike Opt>
+		void set_field_from_json(Opt& opt, const rapidjson::Value& field_json)
+		{
+			using ValueType = std::remove_cvref_t<typename Opt::value_type>;
+			if (field_json.IsNull())
+			{
+				opt.reset();
+				return;
+			}
+			if constexpr (RapidJsonValueConvertible<ValueType>)
+			{
+				opt = ValueType::from_json(field_json);
+			}
+			else if constexpr (Aggregte<ValueType>)
+			{
+				ValueType v;
+				from_json_impl(field_json, v);
+				opt = std::move(v);
+			}
+			else if constexpr (std::is_same_v<ValueType, std::string>)
+			{
+				if (field_json.IsString()) opt = field_json.GetString();
+			}
+			else if constexpr (std::is_arithmetic_v<ValueType>)
+			{
+				if (field_json.IsNumber()) opt = field_json.template Get<ValueType>();
+			}
+			else if constexpr (std::is_enum_v<ValueType>)
+			{
+				if (field_json.IsString()) opt = EnumFromName<ValueType>(field_json.GetString());
+			}
+			else
+			{
+				throw RuntimeError("Unsupported field type in from_json_impl for optional field");
+			}
+		}
+
+		// fallback
+		template<typename FieldType>
+		void set_field_from_json(FieldType&, const rapidjson::Value&)
+		{
+			throw RuntimeError("Unsupported field type in from_json_impl");
+		}
+
+		template<Aggregte T>
+			requires(!Reflectable<T>)
+		void from_json_impl(const rapidjson::Value& json, T& value)
+		{
+			constexpr std::array<std::string_view, boost::pfr::tuple_size_v<T>> field_names = boost::pfr::names_as_array<T>();
+			boost::pfr::for_each_field(value, [&](auto& field, size_t idx) {
+				auto name = field_names[idx];
+				if (!json.HasMember(name.data())) return;
+				const auto& field_json = json[name.data()];
+				set_field_from_json(field, field_json);
+				});
+		}
+
+		// Reflectable from_json_impl using StaticReflect::Reflector<T>
+		template<Reflectable T>
+		void from_json_impl(const rapidjson::Value& json, T& value)
+		{
+			constexpr size_t N = StaticReflect::Reflector<T>::FieldCount();
+			set_reflectable_fields_impl<T>(json, value, std::make_index_sequence<N>{});
 		}
 	} // namespace detail
 
 	template<Aggregte T>
+		requires(!Reflectable<T>)
 	rapidjson::Document to_json(const T& value)
 	{
 		rapidjson::Document doc;
 		doc.SetObject();
-		detail::to_json_impl(value, doc,doc.GetAllocator());
+		detail::to_json_impl(value, doc, doc.GetAllocator());
 		return doc;
 	}
 
-	template<Aggregte T>
+	// Reflectable public to_json overloads
+	template<Reflectable T>
+	rapidjson::Document to_json(const T& value)
+	{
+		rapidjson::Document doc;
+		doc.SetObject();
+		detail::to_json_impl(value, doc, doc.GetAllocator());
+		return doc;
+	}
+
+	template<Reflectable T>
 	rapidjson::Document to_json(const T& value, rapidjson::Document::AllocatorType& allocator)
 	{
 		rapidjson::Document doc(&allocator);
 		doc.SetObject();
-		detail::to_json_impl(value, doc);
+		detail::to_json_impl(value, doc, doc.GetAllocator());
+		return doc;
+	}
+
+	template<Aggregte T>
+		requires(!Reflectable<T>)
+	rapidjson::Document to_json(const T& value, rapidjson::Document::AllocatorType& allocator)
+	{
+		rapidjson::Document doc(&allocator);
+		doc.SetObject();
+		detail::to_json_impl(value, doc, doc.GetAllocator());
 		return doc;
 	}
 
@@ -326,6 +493,20 @@ namespace HsBa::Slicer::Utils
 	}
 
 	template<Aggregte T>
+		requires(!Reflectable<T>)
+	T from_json(const rapidjson::Value& json)
+	{
+		T value{};
+		if (!json.IsObject())
+		{
+			throw InvalidArgumentError("JSON value is not an object");
+		}
+		detail::from_json_impl(json, value);
+		return value;
+	}
+
+	// Reflectable public from_json overloads
+	template<Reflectable T>
 	T from_json(const rapidjson::Value& json)
 	{
 		T value{};
@@ -338,9 +519,20 @@ namespace HsBa::Slicer::Utils
 	}
 
 	template<Aggregte T>
+		requires(!Reflectable<T>)
 	T from_json(const rapidjson::Document& doc)
 	{
-		if(!doc.IsObject())
+		if (!doc.IsObject())
+		{
+			throw InvalidArgumentError("JSON document is not an object");
+		}
+		return from_json<T>(static_cast<const rapidjson::Value&>(doc));
+	}
+
+	template<Reflectable T>
+	T from_json(const rapidjson::Document& doc)
+	{
+		if (!doc.IsObject())
 		{
 			throw InvalidArgumentError("JSON document is not an object");
 		}

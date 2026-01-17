@@ -8,6 +8,9 @@
 
 namespace HsBa::Slicer
 {
+    // Robot path constants
+    constexpr int ROBOT_UNDEFINED_TYPE = 255;  // Used for undefined robot type
+    constexpr float DEFAULT_ROBOT_VELOCITY = 100.0f;  // Default velocity for robot movements
 	enum class RLPointType
 	{
 		MoveJ,
@@ -28,14 +31,14 @@ namespace HsBa::Slicer
 		Abb,
 		Kuka,
 		Fanuc,
-		Undefine = 255,
+		Undefine = ROBOT_UNDEFINED_TYPE,
 	};
 
 	struct RLPoint
 	{
 		OutPoints3 end;
 		OutPoints3 middle;
-		float velocity = 100.0f;
+		float velocity = DEFAULT_ROBOT_VELOCITY;
 		RLPointType type = RLPointType::MoveL;
 		size_t programIndex = 0;
 	};

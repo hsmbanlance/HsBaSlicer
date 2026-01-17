@@ -73,7 +73,7 @@ BOOST_AUTO_TEST_CASE(test_sqlite_adapter_lua_integration)
 	// Register SQLiteAdapter to Lua
 	HsBa::Slicer::RegisterLuaSQLiteAdapter(L.get());
 	
-	// Execute Lua script to test SQLiteAdapter
+	// Execute Lua script to test SQLiteAdapter with method call syntax
 	const char* lua_code = R"(
 		local SQLiteAdapter = SQLiteAdapter          
 		local db = SQLiteAdapter.new()               
@@ -117,6 +117,128 @@ BOOST_AUTO_TEST_CASE(test_sqlite_adapter_lua_integration)
                           "Cannot delete lua_test.db, still locked");
 	}
 	BOOST_TEST_MESSAGE("SQLite adapter Lua Integration test completed successfully");
+}
+
+BOOST_AUTO_TEST_CASE(test_sqlite_adapter_lua_static_call)
+{
+	BOOST_TEST_MESSAGE("Running SQLite adapter Lua Static Call test");
+#if _WIN32
+	SetConsoleOutputCP(CP_UTF8);
+	SetConsoleCP(CP_UTF8);
+#endif // _WIN32
+	if (std::filesystem::exists("lua_static_test.db")) 
+	{
+		std::filesystem::remove("lua_static_test.db");
+	}
+	// Create Lua state
+	auto L = HsBa::Slicer::MakeUniqueLuaState();
+	luaL_openlibs(L.get());
+	
+	// Register SQLiteAdapter to Lua
+	HsBa::Slicer::RegisterLuaSQLiteAdapter(L.get());
+	
+	// Execute Lua script to test SQLiteAdapter with static call syntax
+	const char* lua_code = R"(
+		local db = SQLiteAdapter.new()
+		SQLiteAdapter.Connect(db, "lua_static_test.db")
+		SQLiteAdapter.CreateTable(db, "users", {id = "INTEGER PRIMARY KEY", name = "TEXT", age = "INTEGER"})
+		SQLiteAdapter.Insert(db, "users", {name = "Alice", age = 30})
+		SQLiteAdapter.Insert(db, "users", {name = "Bob",   age = 25})
+		local rows = SQLiteAdapter.Query(db, "SELECT * FROM users ORDER BY id")
+		assert(#rows == 2,            "Expected 2 rows")
+		assert(rows[1].name == "Alice", "Expected Alice")
+		assert(rows[2].name == "Bob",   "Expected Bob")
+	)";
+
+	
+	int ret = luaL_dostring(L.get(), lua_code);
+	BOOST_REQUIRE_MESSAGE(ret == 0, lua_tostring(L.get(), -1));
+
+    // Explicitly destroy Lua state so SQLite DB is closed before deletion
+    L.reset();
+
+	auto safe_remove = [](const std::filesystem::path& p) {
+    	for (int i = 0; i < 50; ++i) {          // 最多 5 s
+        	try 
+			{
+            	std::filesystem::remove(p);
+            	return true;
+        	} catch (const std::filesystem::filesystem_error&) 
+			{
+            	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        	}
+    	}
+    	return false;
+	};
+
+	if (std::filesystem::exists("lua_static_test.db")) 
+	{
+    	BOOST_REQUIRE_MESSAGE(safe_remove("lua_static_test.db"),
+                          "Cannot delete lua_static_test.db, still locked");
+	}
+	BOOST_TEST_MESSAGE("SQLite adapter Lua Static Call test completed successfully");
+}
+
+BOOST_AUTO_TEST_CASE(test_sqlite_adapter_lua_both_call_conventions)
+{
+	BOOST_TEST_MESSAGE("Running SQLite adapter Lua Both Call Conventions test");
+#if _WIN32
+	SetConsoleOutputCP(CP_UTF8);
+	SetConsoleCP(CP_UTF8);
+#endif // _WIN32
+	if (std::filesystem::exists("lua_both_test.db")) 
+	{
+		std::filesystem::remove("lua_both_test.db");
+	}
+	// Create Lua state
+	auto L = HsBa::Slicer::MakeUniqueLuaState();
+	luaL_openlibs(L.get());
+	
+	// Register SQLiteAdapter to Lua
+	HsBa::Slicer::RegisterLuaSQLiteAdapter(L.get());
+	
+	// Execute Lua script to test SQLiteAdapter with both calling conventions
+	const char* lua_code = R"(
+		local db = SQLiteAdapter.new()
+		-- Using method call syntax
+		db:Connect("lua_both_test.db")
+		db:CreateTable("users", {id = "INTEGER PRIMARY KEY", name = "TEXT", age = "INTEGER"})
+		db:Insert("users", {name = "Alice", age = 30})
+		-- Using static call syntax
+		SQLiteAdapter.Insert(db, "users", {name = "Bob",   age = 25})
+		local rows = db:Query("SELECT * FROM users ORDER BY id")
+		assert(#rows == 2,            "Expected 2 rows")
+		assert(rows[1].name == "Alice", "Expected Alice")
+		assert(rows[2].name == "Bob",   "Expected Bob")
+	)";
+
+	
+	int ret = luaL_dostring(L.get(), lua_code);
+	BOOST_REQUIRE_MESSAGE(ret == 0, lua_tostring(L.get(), -1));
+
+    // Explicitly destroy Lua state so SQLite DB is closed before deletion
+    L.reset();
+
+	auto safe_remove = [](const std::filesystem::path& p) {
+    	for (int i = 0; i < 50; ++i) {          // 最多 5 s
+        	try 
+			{
+            	std::filesystem::remove(p);
+            	return true;
+        	} catch (const std::filesystem::filesystem_error&) 
+			{
+            	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        	}
+    	}
+    	return false;
+	};
+
+	if (std::filesystem::exists("lua_both_test.db")) 
+	{
+    	BOOST_REQUIRE_MESSAGE(safe_remove("lua_both_test.db"),
+                          "Cannot delete lua_both_test.db, still locked");
+	}
+	BOOST_TEST_MESSAGE("SQLite adapter Lua Both Call Conventions test completed successfully");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

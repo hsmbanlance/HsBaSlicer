@@ -2,6 +2,8 @@
 #include <boost/test/included/unit_test.hpp>
 
 #include "utils/struct_json.hpp"
+#include <base/static_reflect.hpp>
+using namespace HsBa::Slicer::Utils::TemplateStringLiterals;
 
 #if _WIN32
 #include <Windows.h>
@@ -23,6 +25,29 @@ struct Person {
 	int age;
 	std::string name;
 	Sexual sexuality;
+};
+
+// Reflectable equivalents using static reflect
+struct ReflectPerson {
+	int age;
+	std::string name;
+	Sexual sexuality;
+	using FieldList = std::tuple<
+		HsBa::Slicer::Utils::StaticReflect::FieldInfo<ReflectPerson, int, "age"_ts, &ReflectPerson::age>,
+		HsBa::Slicer::Utils::StaticReflect::FieldInfo<ReflectPerson, std::string, "name"_ts, &ReflectPerson::name>,
+		HsBa::Slicer::Utils::StaticReflect::FieldInfo<ReflectPerson, Sexual, "sexuality"_ts, &ReflectPerson::sexuality>>;
+	using MethodList = std::tuple<>;
+	constexpr static auto ClassName = "ReflectPerson"_ts;
+};
+
+struct ReflectCouple {
+	ReflectPerson person1;
+	ReflectPerson person2;
+	using FieldList = std::tuple<
+		HsBa::Slicer::Utils::StaticReflect::FieldInfo<ReflectCouple, ReflectPerson, "person1"_ts, &ReflectCouple::person1>,
+		HsBa::Slicer::Utils::StaticReflect::FieldInfo<ReflectCouple, ReflectPerson, "person2"_ts, &ReflectCouple::person2>>;
+	using MethodList = std::tuple<>;
+	constexpr static auto ClassName = "ReflectCouple"_ts;
 };
 
 struct Couple {
@@ -92,6 +117,28 @@ namespace Testing {
 		double value;
 	};
 } // Testing
+
+// Reflectable test types
+using namespace HsBa::Slicer::Utils::TemplateStringLiterals;
+struct ReflectPerson {
+	int age;
+	std::string name;
+	Sexual sexuality;
+	using FieldList = std::tuple<
+		HsBa::Slicer::Utils::StaticReflect::FieldInfo<ReflectPerson, int, "age"_ts, &ReflectPerson::age>,
+		HsBa::Slicer::Utils::StaticReflect::FieldInfo<ReflectPerson, std::string, "name"_ts, &ReflectPerson::name>,
+		HsBa::Slicer::Utils::StaticReflect::FieldInfo<ReflectPerson, Sexual, "sexuality"_ts, &ReflectPerson::sexuality>>;
+	constexpr static auto ClassName = "ReflectPerson"_ts;
+};
+
+struct ReflectCouple {
+	ReflectPerson person1;
+	ReflectPerson person2;
+	using FieldList = std::tuple<
+		HsBa::Slicer::Utils::StaticReflect::FieldInfo<ReflectCouple, ReflectPerson, "person1"_ts, &ReflectCouple::person1>,
+		HsBa::Slicer::Utils::StaticReflect::FieldInfo<ReflectCouple, ReflectPerson, "person2"_ts, &ReflectCouple::person2>>;
+	constexpr static auto ClassName = "ReflectCouple"_ts;
+};
 
 BOOST_AUTO_TEST_CASE(json_convert_simple_struct)
 {
@@ -174,6 +221,40 @@ BOOST_AUTO_TEST_CASE(json_convert_nested_struct)
 	BOOST_TEST_MESSAGE("Nested JSON convert test completed successfully");
 }
 
+// ------------------- Reflectable tests -------------------
+BOOST_AUTO_TEST_CASE(json_convert_reflectable_struct)
+{
+	ReflectPerson rp{ 28, "Fiona", Sexual_Female };
+	auto doc = HsBa::Slicer::Utils::to_json(rp);
+	BOOST_REQUIRE(doc.IsObject());
+	BOOST_REQUIRE(doc.HasMember("age"));
+	BOOST_REQUIRE(doc.HasMember("name"));
+	BOOST_REQUIRE(doc.HasMember("sexuality"));
+	ReflectPerson converted = HsBa::Slicer::Utils::from_json<ReflectPerson>(doc);
+	BOOST_REQUIRE_EQUAL(converted.age, rp.age);
+	BOOST_REQUIRE_EQUAL(converted.name, rp.name);
+	BOOST_REQUIRE_EQUAL(converted.sexuality, rp.sexuality);
+}
+
+BOOST_AUTO_TEST_CASE(json_convert_reflectable_nested)
+{
+	ReflectPerson r1{ 40, "Garry", Sexual_Male };
+	ReflectPerson r2{ 38, "Helen", Sexual_Female };
+	ReflectCouple rc{ r1, r2 };
+	auto doc = HsBa::Slicer::Utils::to_json(rc);
+	BOOST_REQUIRE(doc.IsObject());
+	BOOST_REQUIRE(doc.HasMember("person1"));
+	BOOST_REQUIRE(doc.HasMember("person2"));
+	ReflectCouple converted = HsBa::Slicer::Utils::from_json<ReflectCouple>(doc);
+	BOOST_REQUIRE_EQUAL(converted.person1.age, rc.person1.age);
+	BOOST_REQUIRE_EQUAL(converted.person1.name, rc.person1.name);
+	BOOST_REQUIRE_EQUAL(converted.person1.sexuality, rc.person1.sexuality);
+	BOOST_REQUIRE_EQUAL(converted.person2.age, rc.person2.age);
+	BOOST_REQUIRE_EQUAL(converted.person2.name, rc.person2.name);
+	BOOST_REQUIRE_EQUAL(converted.person2.sexuality, rc.person2.sexuality);
+}
+
+
 BOOST_AUTO_TEST_CASE(json_convert_with_json)
 {
 	// Create an instance of WithJson
@@ -221,6 +302,34 @@ BOOST_AUTO_TEST_CASE(json_stream)
 	BOOST_REQUIRE_EQUAL(converted_instance.name, test_instance.name);
 	BOOST_REQUIRE_EQUAL(converted_instance.value, test_instance.value);
 	BOOST_TEST_MESSAGE("JSON stream test completed successfully");
+}
+
+BOOST_AUTO_TEST_CASE(reflectable_structs)
+{
+	ReflectPerson p{30, "Alice", Sexual_Female};
+	auto json_doc = HsBa::Slicer::Utils::to_json(p);
+	BOOST_REQUIRE(json_doc.IsObject());
+	BOOST_REQUIRE(json_doc.HasMember("age"));
+	BOOST_REQUIRE(json_doc.HasMember("name"));
+	BOOST_REQUIRE(json_doc.HasMember("sexuality"));
+	auto rp = HsBa::Slicer::Utils::from_json<ReflectPerson>(json_doc);
+	BOOST_REQUIRE_EQUAL(rp.age, p.age);
+	BOOST_REQUIRE_EQUAL(rp.name, p.name);
+	BOOST_REQUIRE_EQUAL(rp.sexuality, p.sexuality);
+
+	ReflectCouple c{ {20, "Bob", Sexual_Male}, {25, "Carol", Sexual_Female} };
+	auto cdoc = HsBa::Slicer::Utils::to_json(c);
+	BOOST_REQUIRE(cdoc.IsObject());
+	BOOST_REQUIRE(cdoc.HasMember("person1"));
+	BOOST_REQUIRE(cdoc.HasMember("person2"));
+	auto rc = HsBa::Slicer::Utils::from_json<ReflectCouple>(cdoc);
+	BOOST_REQUIRE_EQUAL(rc.person1.age, c.person1.age);
+	BOOST_REQUIRE_EQUAL(rc.person1.name, c.person1.name);
+	BOOST_REQUIRE_EQUAL(rc.person1.sexuality, c.person1.sexuality);
+	BOOST_REQUIRE_EQUAL(rc.person2.age, c.person2.age);
+	BOOST_REQUIRE_EQUAL(rc.person2.name, c.person2.name);
+	BOOST_REQUIRE_EQUAL(rc.person2.sexuality, c.person2.sexuality);
+	BOOST_TEST_MESSAGE("Reflectable structs JSON convert test completed successfully");
 }
 
 BOOST_AUTO_TEST_CASE(test_json_throw)

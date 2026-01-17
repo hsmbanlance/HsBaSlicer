@@ -3,7 +3,7 @@
 
 namespace HsBa::Slicer 
 {
-#ifdef USE_BIT7Z
+#ifdef HSBA_USE_BIT7Z
 #if _WIN32
     const std::string HSBA_7Z_DLL = "C:/Program Files/7-Zip/7z.dll";
 #elif __APPLE__
@@ -24,7 +24,7 @@ namespace HsBa::Slicer
     const std::string HSBA_7ZA_DLL = "";
 #endif
 
-#endif // USE_BIT7Z
+#endif // HSBA_USE_BIT7Z
 } // namespace HsBa::Slicer
 
 #endif // !HSBA_SLICER_BIT7Z_DEF_HPP

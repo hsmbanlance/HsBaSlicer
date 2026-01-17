@@ -8,9 +8,9 @@
 #include <map>
 #include <variant>
 
-#ifdef USE_BIT7Z
+#ifdef HSBA_USE_BIT7Z
 #include <bit7z/bit7z.hpp>
-#endif // USE_BIT7Z
+#endif // HSBA_USE_BIT7Z
 
 #include "IZipper.hpp"
 #include "bit7z_def.hpp"
@@ -18,7 +18,7 @@
 
 namespace HsBa::Slicer
 {
-#ifdef USE_BIT7Z
+#ifdef HSBA_USE_BIT7Z
     void Bit7zExtract(const std::string& archive, const std::string& outdir, const std::string& password = "",
         const std::string& dll_path = HSBA_7Z_DLL);
     void Bit7zExtract(const std::string& archive,
@@ -68,6 +68,6 @@ namespace HsBa::Slicer
         std::string password_;
         void SaveAllFile(/*ref*/bit7z::BitArchiveWriter& compress, const std::string& path);
     };
-#endif // USE_BIT7Z
+#endif // HSBA_USE_BIT7Z
 }// namespace HsBa::Slicer
 #endif // !HSBA_SLICER_BIT7Z_ZIPPER_HPP

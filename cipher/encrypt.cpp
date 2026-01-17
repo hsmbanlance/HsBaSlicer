@@ -14,18 +14,19 @@
 
 namespace HsBa::Slicer::Cipher
 {
+
 	namespace
 	{
-		// Derive 32-byte key and 16-byte iv from a password using a simple SHA256-based scheme.
-		void derive_key_iv(std::string_view password, unsigned char key[32], unsigned char iv[16]) 
+		// Derive AES_KEY_SIZE-byte key and AES_IV_SIZE-byte iv from a password using a simple SHA256-based scheme.
+		void derive_key_iv(std::string_view password, unsigned char key[AES_KEY_SIZE], unsigned char iv[AES_IV_SIZE]) 
 		{
 
 			auto hash = Hasher::sha256_hex(password);
 
 			// key: first 32 bytes (SHA256 gives 32)
-			memcpy(key, hash.c_str(), 32);
+			memcpy(key, hash.c_str(), AES_KEY_SIZE);
 
-			memcpy(iv, hash.c_str(), 16);
+			memcpy(iv, hash.c_str(), AES_IV_SIZE);
 		}
 
 		// Derive 24-byte key and 8-byte iv for 3DES
@@ -33,10 +34,10 @@ namespace HsBa::Slicer::Cipher
 		{
 			auto hash = Hasher::sha256_hex(password);
 
-			// Use first 24 bytes for 3DES key (SHA256 gives 32 bytes)
-			memcpy(key, hash.c_str(), 24);
+			// Use first DES3_KEY_SIZE bytes for 3DES key (SHA256 gives 32 bytes)
+			memcpy(key, hash.c_str(), DES3_KEY_SIZE);
 
-			memcpy(iv, hash.c_str(), 8);
+			memcpy(iv, hash.c_str(), DES3_IV_SIZE);
 		}
 
 		std::string openssl_err() 
@@ -51,8 +52,8 @@ namespace HsBa::Slicer::Cipher
 
 	std::vector<unsigned char> Encrypt::aes256_cbc_encrypt(const std::vector<unsigned char>& plaintext, std::string_view password) 
 	{
-		unsigned char key[32];
-		unsigned char iv[16];
+		unsigned char key[AES_KEY_SIZE];
+		unsigned char iv[AES_IV_SIZE];
 		derive_key_iv(password, key, iv);
 
 		EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
@@ -87,8 +88,8 @@ namespace HsBa::Slicer::Cipher
 
 	std::vector<unsigned char> Encrypt::aes256_cbc_decrypt(const std::vector<unsigned char>& cipher, std::string_view password) 
 	{
-		unsigned char key[32];
-		unsigned char iv[16];
+		unsigned char key[AES_KEY_SIZE];
+		unsigned char iv[AES_IV_SIZE];
 		derive_key_iv(password, key, iv);
 
 		EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
@@ -124,8 +125,8 @@ namespace HsBa::Slicer::Cipher
 
 	std::vector<unsigned char> Encrypt::aes256_ecb_encrypt(const std::vector<unsigned char>& plaintext, std::string_view password) 
 	{
-		unsigned char key[32];
-		unsigned char iv[16];
+		unsigned char key[AES_KEY_SIZE];
+		unsigned char iv[AES_IV_SIZE];
 		derive_key_iv(password, key, iv); // iv unused for ECB
 
 		EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
@@ -161,8 +162,8 @@ namespace HsBa::Slicer::Cipher
 
 	std::vector<unsigned char> Encrypt::aes256_ecb_decrypt(const std::vector<unsigned char>& cipher, std::string_view password) 
 	{
-		unsigned char key[32];
-		unsigned char iv[16];
+		unsigned char key[AES_KEY_SIZE];
+		unsigned char iv[AES_IV_SIZE];
 		derive_key_iv(password, key, iv);
 
 		EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
@@ -198,11 +199,11 @@ namespace HsBa::Slicer::Cipher
 
 	std::vector<unsigned char> Encrypt::aes256_cbc_encrypt_with_iv(const std::vector<unsigned char>& plaintext, std::string_view password, const std::vector<unsigned char>& iv_in) 
 	{
-		if (iv_in.size() != 16) throw std::invalid_argument("IV must be 16 bytes for AES-256-CBC");
-		unsigned char key[32];
-		unsigned char iv[16];
+		if (iv_in.size() != AES_IV_SIZE) throw std::invalid_argument("IV must be " + std::to_string(AES_IV_SIZE) + " bytes for AES-256-CBC");
+		unsigned char key[AES_KEY_SIZE];
+		unsigned char iv[AES_IV_SIZE];
 		derive_key_iv(password, key, iv); // we'll ignore derived iv and use iv_in
-		memcpy(iv, iv_in.data(), 16);
+		memcpy(iv, iv_in.data(), AES_IV_SIZE);
 
 		EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
 		if (!ctx)
@@ -237,12 +238,12 @@ namespace HsBa::Slicer::Cipher
 
 	std::vector<unsigned char> Encrypt::aes256_cbc_decrypt_with_iv(const std::vector<unsigned char>& cipher, std::string_view password, const std::vector<unsigned char>& iv_in) 
 	{
-		if (iv_in.size() != 16)
-			throw std::invalid_argument("IV must be 16 bytes for AES-256-CBC");
-		unsigned char key[32];
-		unsigned char iv[16];
+		if (iv_in.size() != AES_IV_SIZE)
+			throw std::invalid_argument("IV must be " + std::to_string(AES_IV_SIZE) + " bytes for AES-256-CBC");
+		unsigned char key[AES_KEY_SIZE];
+		unsigned char iv[AES_IV_SIZE];
 		derive_key_iv(password, key, iv);
-		memcpy(iv, iv_in.data(), 16);
+		memcpy(iv, iv_in.data(), AES_IV_SIZE);
 
 		EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
 		if (!ctx)
@@ -277,8 +278,8 @@ namespace HsBa::Slicer::Cipher
 
 	std::vector<unsigned char> Encrypt::des3_ecb_encrypt(const std::vector<unsigned char>& plaintext, std::string_view password) 
 	{
-		unsigned char key[24];
-		unsigned char iv[8];
+		unsigned char key[DES3_KEY_SIZE];
+		unsigned char iv[DES3_IV_SIZE];
 		derive_3des_key_iv(password, key, iv);
 
 		EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
@@ -314,8 +315,8 @@ namespace HsBa::Slicer::Cipher
 
 	std::vector<unsigned char> Encrypt::des3_ecb_decrypt(const std::vector<unsigned char>& cipher, std::string_view password)
 	{
-		unsigned char key[24];
-		unsigned char iv[8];
+		unsigned char key[DES3_KEY_SIZE];
+		unsigned char iv[DES3_IV_SIZE];
 		derive_3des_key_iv(password, key, iv);
 
 		EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
@@ -351,11 +352,11 @@ namespace HsBa::Slicer::Cipher
 
 	std::vector<unsigned char> Encrypt::des3_cbc_encrypt_with_iv(const std::vector<unsigned char>& plaintext, std::string_view password, const std::vector<unsigned char>& iv_in) 
 	{
-		if (iv_in.size() != 8) throw std::invalid_argument("IV must be 8 bytes for 3DES-CBC");
-		unsigned char key[24];
-		unsigned char iv[8];
+		if (iv_in.size() != DES3_IV_SIZE) throw std::invalid_argument("IV must be " + std::to_string(DES3_IV_SIZE) + " bytes for 3DES-CBC");
+		unsigned char key[DES3_KEY_SIZE];
+		unsigned char iv[DES3_IV_SIZE];
 		derive_3des_key_iv(password, key, iv);
-		memcpy(iv, iv_in.data(), 8);
+		memcpy(iv, iv_in.data(), DES3_IV_SIZE);
 
 		EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
 		if (!ctx)

@@ -47,7 +47,7 @@ namespace HsBa::Slicer
 		// register helpers
 		RegisterLuaZipper(L.get());
 		Cipher::RegisterLuaCipher(L.get());
-#ifdef USE_BIT7Z
+#ifdef HSBA_USE_BIT7Z
 		RegisterLuaBit7zZipper(L.get());
 #endif
 
@@ -109,7 +109,7 @@ namespace HsBa::Slicer
 		luaL_openlibs(L.get());
 		RegisterLuaZipper(L.get());
 		Cipher::RegisterLuaCipher(L.get());
-#ifdef USE_BIT7Z
+#ifdef HSBA_USE_BIT7Z
 		RegisterLuaBit7zZipper(L.get());
 #endif
 

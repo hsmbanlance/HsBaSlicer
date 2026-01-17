@@ -2,18 +2,18 @@
 
 #include <format>
 
-#ifdef USE_BIT7Z
+#ifdef HSBA_USE_BIT7Z
 #include <bit7z/bitfileextractor.hpp>
 #include <bit7z/bitfilecompressor.hpp>
 #include <bit7z/bitexception.hpp>
-#endif // USE_BIT7Z
+#endif // HSBA_USE_BIT7Z
 
 #include "base/error.hpp"
 #include "base/encoding_convert.hpp"
 
 namespace HsBa::Slicer
 {
-#ifdef USE_BIT7Z
+#ifdef HSBA_USE_BIT7Z
 	void Bit7zExtract(const std::string& archive, const std::string& outdir, const std::string& password,
 		const std::string& dll_path)
 	{
@@ -183,5 +183,5 @@ namespace HsBa::Slicer
 		compress.compressTo(path);
 	}
 
-#endif // USE_BIT7Z
+#endif // HSBA_USE_BIT7Z
 }// namespace HsBa::Slicer

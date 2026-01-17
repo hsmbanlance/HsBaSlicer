@@ -17,13 +17,17 @@
 
 namespace HsBa::Slicer::SQL
 {
+    // Database port constants
+    constexpr unsigned int MYSQL_DEFAULT_PORT = 3306;
+    constexpr unsigned int POSTGRESQL_DEFAULT_PORT = 5432;
+
 	class ISQLAdapter
 	{
 	public:
 		using Rows = std::vector<std::unordered_map<std::string, std::any>>;
 		virtual ~ISQLAdapter() = default;
 		virtual void Connect(std::string_view host, std::string_view user, std::string_view password,
-			std::string_view database, unsigned int port = 3306) = 0;
+			std::string_view database, unsigned int port = MYSQL_DEFAULT_PORT) = 0;
 		virtual void Execute(const std::string& query) = 0;
 		virtual Rows Query(const std::string& query) = 0;
 		virtual bool IsConnected() const noexcept = 0;
@@ -109,7 +113,7 @@ namespace HsBa::Slicer::SQL
 		SQLiteAdapter();
 		void Connect(std::string_view path);
 		void Connect(std::string_view host, std::string_view user, std::string_view password,
-			std::string_view database, unsigned int port = 3306) override;
+			std::string_view database, unsigned int port = MYSQL_DEFAULT_PORT) override;
 		void Execute(const std::string& query) override;
 		Rows Query(const std::string& query) override;
 		bool IsConnected() const noexcept override;
@@ -134,13 +138,13 @@ namespace HsBa::Slicer::SQL
 		std::unique_ptr<Impl> impl_;
 	};
 
-#ifdef USE_MYSQL
+#ifdef HSBA_USE_MYSQL
 	class MySQLAdapter : public ISQLAdapter, public Utils::EventSource<SQLiteAdapter, void, std::string_view, std::string_view>
 	{
 	public:
 		MySQLAdapter();
 		void Connect(std::string_view host, std::string_view user, std::string_view password,
-			std::string_view database, unsigned int port = 3306) override;
+			std::string_view database, unsigned int port = MYSQL_DEFAULT_PORT) override;
 		void Execute(const std::string& query) override;
 		Rows Query(const std::string& query) override;
 		bool IsConnected() const noexcept override;
@@ -164,15 +168,15 @@ namespace HsBa::Slicer::SQL
 		class Impl;
 		std::unique_ptr<Impl> impl_;
 	};
-#endif // USE_MYSQL
+#endif // HSBA_USE_MYSQL
 
-#ifdef USE_PGSQL
+#ifdef HSBA_USE_PGSQL
 	class PostgreSQLAdapter : public ISQLAdapter, public HsBa::Slicer::Utils::EventSource<SQLiteAdapter, void, std::string_view, std::string_view>
 	{
 	public:
 		PostgreSQLAdapter();
 		void Connect(std::string_view host, std::string_view user, std::string_view password,
-			std::string_view database, unsigned int port = 5432) override;
+			std::string_view database, unsigned int port = POSTGRESQL_DEFAULT_PORT) override;
 		void Execute(const std::string& query) override;
 		Rows Query(const std::string& query) override;
 		bool IsConnected() const noexcept override;
@@ -196,7 +200,7 @@ namespace HsBa::Slicer::SQL
 		class Impl;
 		std::unique_ptr<Impl> impl_;
 	};
-#endif // USE_PGSQL
+#endif // HSBA_USE_PGSQL
 
 	inline ISQLAdapter::Rows operator|(ISQLAdapter& db, const std::string& sql)
 	{

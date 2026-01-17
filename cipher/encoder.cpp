@@ -11,13 +11,18 @@
 
 namespace HsBa::Slicer::Cipher
 {
+    namespace {
+        constexpr unsigned char HEX_BASE = 10;
+    }
+
+
 	namespace
 	{
 		unsigned char hex_val(char c) 
 		{
 			if (c >= '0' && c <= '9') return c - '0';
-			if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-			if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+			if (c >= 'a' && c <= 'f') return c - 'a' + HEX_BASE;
+			if (c >= 'A' && c <= 'F') return c - 'A' + HEX_BASE;
 			throw InvalidArgumentError("Invalid hex char");
 		}
 	}
