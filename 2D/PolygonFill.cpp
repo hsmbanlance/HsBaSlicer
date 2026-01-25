@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "base/error.hpp"
+#include "base/template_helper.hpp"
 #include "LuaAdapter.hpp"
 #include "utils/LuaNewObject.hpp"
 
@@ -654,7 +655,17 @@ namespace HsBa::Slicer
 
 		std::vector<size_t> parent(N);
 		for (size_t i = 0; i < N; ++i) parent[i] = i;
-		std::function<size_t(size_t)> findp = [&](size_t x)->size_t { return parent[x] == x ? x : parent[x] = findp(parent[x]); };
+#ifndef __cpp_explicit_this_parameter
+		auto findp = Utils::YCombinator([&](auto&& self, size_t x) -> size_t {
+			if (parent[x] == x) return x;
+			return parent[x] = self(parent[x]);
+			});
+#else
+		auto findp = [&](this auto&& self, size_t x) -> size_t {
+			if (parent[x] == x) return x;
+			return parent[x] = self(parent[x]);
+		};
+#endif // !__cpp_explicit_this_parameter
 		auto unite = [&](size_t a, size_t b) { size_t pa = findp(a), pb = findp(b); if (pa != pb) parent[pa] = pb; };
 
 		// index mapping

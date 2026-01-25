@@ -91,7 +91,7 @@ namespace HsBa::Slicer::Utils
 			}
 			return StringView{ str, N };
 		}
-		inline explicit constexpr operator String() const
+		inline constexpr operator String() const
 		{
 			if(str[N - 1] == '\0')
 			{
@@ -437,6 +437,23 @@ namespace HsBa::Slicer::Utils
 			return ptr != nullptr;
 		}
 	};
+
+#ifndef __cpp_explicit_this_parameter
+	template<typename Func>
+	struct YCombinator
+	{
+		Func func;
+		template<typename... Args>
+		constexpr decltype(auto) operator()(Args&&... args) const
+		{
+			return func(*this, std::forward<Args>(args)...);
+		}
+	};
+
+	template<typename Func>
+	YCombinator(Func) -> YCombinator<Func>;
+#endif // !__cpp_explicit_this_parameter
+
 
 	inline namespace TemplateStringLiterals
 	{
