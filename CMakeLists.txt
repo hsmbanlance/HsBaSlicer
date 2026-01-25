@@ -14,7 +14,23 @@ endif()
 if(CMAKE_VERSION VERSION_GREATER 3.12)
   set(CMAKE_CXX_STANDARD 20)
   # Prefer C11 for C sources so features like _Generic are available when supported
-  set(CMAKE_C_STANDARD 11)
+  # if able use C23
+  if(CMAKE_VERSION VERSION_GREATER 3.23)
+    if(CMAKE_C_COMPILER_ID STREQUAL "GNU" 
+      AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 13)
+        set(CMAKE_C_STANDARD 23)
+    elseif(CMAKE_C_COMPILER_ID MATCHES "Clang" 
+       AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
+      set(CMAKE_C_STANDARD 23)
+    elseif(CMAKE_C_COMPILER_ID STREQUAL "MSVC"
+       AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 19.36)
+      set(CMAKE_C_STANDARD 23)
+    else()
+      set(CMAKE_C_STANDARD 11)
+    endif()
+  else()
+    set(CMAKE_C_STANDARD 11)
+  endif()
   set(CMAKE_C_STANDARD_REQUIRED ON)
 endif()
 

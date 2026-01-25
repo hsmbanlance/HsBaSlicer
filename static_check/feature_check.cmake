@@ -95,13 +95,8 @@ endfunction()
 # Optional: C23 constexpr-like support check (try compile with C2x-style constexpr usage)
 function(check_c_feature_c23_constexpr result)
 	check_c_source_compiles(
-"#if __STDC_VERSION__ >= 202300L
-/* try a simple consteval-like usage in C23 (implementation-defined) */
-#define MAYBE_CONSTEXPR constexpr
-#else
-#define MAYBE_CONSTEXPR
-#endif
-MAYBE_CONSTEXPR int a = 42;
+"
+constexpr int a = 42;
 int main(void){ (void)a; return 1; }
 " ${result})
 endfunction()
