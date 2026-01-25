@@ -5,6 +5,10 @@
 #include "FloatPolygons.hpp"
 #include <string>
 #include <vector>
+#include <functional>
+
+// forward-declare lua state to avoid including lua.hpp in this header
+struct lua_State;
 
 inline constexpr uint8_t MAX_GRAY_VALUE = 255;
 inline constexpr uint8_t MIN_GRAY_VALUE = 0;
@@ -19,10 +23,12 @@ namespace HsBa::Slicer
         uint8_t foreground = MAX_GRAY_VALUE, uint8_t background = MIN_GRAY_VALUE);
 
     bool LuaToImage(const PolygonsD& poly, const std::string& scriptPath,
-     const std::string& outPath = "output.png", const std::string& functionName = "generate_image");
+     const std::string& outPath = "output.png", const std::string& functionName = "generate_image",
+     const std::function<void(lua_State*)>& lua_reg = {});
 
     bool LuaToImageString(const PolygonsD& poly, const std::string& script,
-        const std::string& outPath = "output.png", const std::string& functionName = "generate_image");
+        const std::string& outPath = "output.png", const std::string& functionName = "generate_image",
+        const std::function<void(lua_State*)>& lua_reg = {});
 }
 
 #endif // HSBA_SLICER_IMAGETOPOLYGONS_HPP

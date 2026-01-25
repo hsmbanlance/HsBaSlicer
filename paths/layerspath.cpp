@@ -64,7 +64,8 @@ namespace HsBa::Slicer
         }
     }
 
-    void LayersPath::Save(const std::filesystem::path& path, std::string_view script) const
+        void LayersPath::Save(const std::filesystem::path& path, std::string_view script,
+        const std::function<void(lua_State*)>& lua_reg) const
     {
         // create lua state and register adapters
         auto L = MakeUniqueLuaState();
@@ -77,6 +78,7 @@ namespace HsBa::Slicer
     #ifdef HSBA_USE_PGSQL
         RegisterLuaPostgreSQLAdapter(L.get());
     #endif
+        if (lua_reg) lua_reg(L.get());
 
         // create SQLiteAdapter as a Lua userdata and expose as global 'db'
         SQL::SQLiteAdapter* db = NewLuaObject<SQL::SQLiteAdapter>(L.get(), "SQLiteAdapter");
@@ -157,7 +159,8 @@ namespace HsBa::Slicer
         // lua_guard will close L when going out of scope
     }
 
-    void LayersPath::Save(const std::filesystem::path& path, std::string_view script, std::string_view funcName) const
+        void LayersPath::Save(const std::filesystem::path& path, std::string_view script, std::string_view funcName,
+        const std::function<void(lua_State*)>& lua_reg) const
     {
         auto L = MakeUniqueLuaState();
         if (!L) throw RuntimeError("Lua init failed");
@@ -169,6 +172,7 @@ namespace HsBa::Slicer
     #ifdef HSBA_USE_PGSQL
         RegisterLuaPostgreSQLAdapter(L.get());
     #endif
+        if (lua_reg) lua_reg(L.get());
 
         // create SQLiteAdapter as a Lua userdata and expose as global 'db'
         SQL::SQLiteAdapter* db = NewLuaObject<SQL::SQLiteAdapter>(L.get(), "SQLiteAdapter");
@@ -246,7 +250,8 @@ namespace HsBa::Slicer
         // lua_guard will close L
     }
 
-    void LayersPath::Save(const std::filesystem::path& path, const std::filesystem::path& script_file, std::string_view funcName) const
+    void LayersPath::Save(const std::filesystem::path& path, const std::filesystem::path& script_file, std::string_view funcName,
+        const std::function<void(lua_State*)>& lua_reg) const
     {
         std::ifstream ifs(script_file, std::ios::binary);
         if (!ifs)
@@ -256,7 +261,7 @@ namespace HsBa::Slicer
         std::ostringstream oss;
         oss << ifs.rdbuf();
         std::string script = oss.str();
-        Save(path, std::string_view{script}, funcName);
+        Save(path, std::string_view{script}, funcName, lua_reg);
     }
 
     std::string LayersPath::ToString() const
@@ -283,13 +288,15 @@ namespace HsBa::Slicer
         return ss.str();
     }
 
-    std::string LayersPath::ToString(const std::string_view script) const
+    std::string LayersPath::ToString(const std::string_view script,
+        const std::function<void(lua_State*)>& lua_reg) const
     {
         if (script.empty()) return ToString();
 
         auto L = MakeUniqueLuaState();
         if (!L) throw RuntimeError("Lua init failed");
         luaL_openlibs(L.get());
+        if (lua_reg) lua_reg(L.get());
 
         // push layers as global like Save
         lua_newtable(L.get());
@@ -361,11 +368,13 @@ namespace HsBa::Slicer
         return body;
     }
 
-    std::string LayersPath::ToString(const std::string_view script, const std::string_view funcName) const
+    std::string LayersPath::ToString(const std::string_view script, const std::string_view funcName,
+        const std::function<void(lua_State*)>& lua_reg) const
     {
         auto L = MakeUniqueLuaState();
         if (!L) throw RuntimeError("Lua init failed");
         luaL_openlibs(L.get());
+        if (lua_reg) lua_reg(L.get());
         // like without funcName, push layers
         lua_newtable(L.get());
         int idx = 1;
@@ -436,7 +445,8 @@ namespace HsBa::Slicer
         return result;
     }
 
-    std::string LayersPath::ToString(const std::filesystem::path& script_file, const std::string_view funcName) const
+    std::string LayersPath::ToString(const std::filesystem::path& script_file, const std::string_view funcName,
+        const std::function<void(lua_State*)>& lua_reg) const
     {
         // load script from file
         std::ifstream ifs(script_file, std::ios::binary);
@@ -447,7 +457,7 @@ namespace HsBa::Slicer
         std::ostringstream oss;
         oss << ifs.rdbuf();
         std::string script = oss.str();
-        return ToString(std::string_view{script}, funcName);
+        return ToString(std::string_view{script}, funcName, lua_reg);
     }
 
 

@@ -62,9 +62,10 @@ namespace HsBa::Slicer
 		ofs << txt;
 	}
 
-	void RobotPath::Save(const std::filesystem::path& p, std::string_view script) const
+	void RobotPath::Save(const std::filesystem::path& p, std::string_view script,
+		const std::function<void(lua_State*)>& lua_reg) const
 	{
-		auto txt = ToString(script);
+		auto txt = ToString(script, lua_reg);
 		std::ofstream ofs(p, std::ios::binary);
 		ofs << txt;
 	}
@@ -93,14 +94,16 @@ namespace HsBa::Slicer
 		return ss.str();
 	}
 
-	std::string RobotPath::ToString(std::string_view script) const
+	std::string RobotPath::ToString(std::string_view script,
+		const std::function<void(lua_State*)>& lua_reg) const
 	{
 		// When script provided: prepend header that declares script is user-provided and robot type is ignored
 		const std::string header = "// Script provided by user - robot type ignored, remove this line when using real robots\n";
 
-        auto L = MakeUniqueLuaState();
-        if (!L) throw RuntimeError("Lua init failed");
-        luaL_openlibs(L.get());
+		auto L = MakeUniqueLuaState();
+		if (!L) throw RuntimeError("Lua init failed");
+		luaL_openlibs(L.get());
+		if (lua_reg) lua_reg(L.get());
 
         // push header
         lua_pushstring(L.get(), header.c_str());
@@ -354,12 +357,14 @@ namespace HsBa::Slicer
 		return ss.str();
 	}
 
-	std::string RobotPath::ToString(std::string_view script, std::string_view funcName) const
+	std::string RobotPath::ToString(std::string_view script, std::string_view funcName,
+		const std::function<void(lua_State*)>& lua_reg) const
 	{
 		auto L = MakeUniqueLuaState();
 		if (!L)
 			throw RuntimeError("Lua init failed");
 		luaL_openlibs(L.get());
+		if (lua_reg) lua_reg(L.get());
 		// push function name
 		lua_pushstring(L.get(), funcName.data());
 		lua_setglobal(L.get(), "funcName");
@@ -428,7 +433,8 @@ namespace HsBa::Slicer
 		return result;
 	}
 
-	std::string RobotPath::ToString(const std::filesystem::path& script_file,const std::string_view funcName) const
+	std::string RobotPath::ToString(const std::filesystem::path& script_file,const std::string_view funcName,
+		const std::function<void(lua_State*)>& lua_reg) const
 	{
 		std::ifstream ifs(script_file, std::ios::binary);
 		if (!ifs)
@@ -436,19 +442,21 @@ namespace HsBa::Slicer
 		std::stringstream buffer;
 		buffer << ifs.rdbuf();
 		auto script = buffer.str();
-		return ToString(std::string_view{script}, funcName);
+		return ToString(std::string_view{script}, funcName, lua_reg);
 	}
 
-	void RobotPath::Save(const std::filesystem::path& path, std::string_view script, std::string_view funcName) const
+	void RobotPath::Save(const std::filesystem::path& path, std::string_view script, std::string_view funcName,
+		const std::function<void(lua_State*)>& lua_reg) const
 	{
-		auto txt = ToString(script, funcName);
+		auto txt = ToString(script, funcName, lua_reg);
 		std::ofstream ofs(path, std::ios::binary);
 		ofs << txt;
 	}
 
-	void RobotPath::Save(const std::filesystem::path& path, const std::filesystem::path& script_file, std::string_view funcName) const
+	void RobotPath::Save(const std::filesystem::path& path, const std::filesystem::path& script_file, std::string_view funcName,
+		const std::function<void(lua_State*)>& lua_reg) const
 	{
-		auto txt = ToString(script_file, funcName);
+		auto txt = ToString(script_file, funcName, lua_reg);
 		std::ofstream ofs(path, std::ios::binary);
 		ofs << txt;
 	}
