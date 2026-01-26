@@ -215,12 +215,14 @@ namespace HsBa::Slicer
         return res;
     }
 
-    bool LuaToImage(const PolygonsD& poly, const std::string& scriptPath, const std::string& outPath, const std::string& functionName)
+    bool LuaToImage(const PolygonsD& poly, const std::string& scriptPath, const std::string& outPath, const std::string& functionName,
+        const std::function<void(lua_State*)>& lua_reg)
     {
         auto L = MakeUniqueLuaState();
         if (!L) throw RuntimeError("Failed to create Lua state");
         luaL_openlibs(L.get());
         RegisterLuaPolygonOperations(L.get());
+        if (lua_reg) lua_reg(L.get());
         // load script
         if (luaL_loadfile(L.get(), scriptPath.c_str()) || lua_pcall(L.get(), 0, 0, 0))
         {
@@ -274,12 +276,14 @@ namespace HsBa::Slicer
         return true;
     }
 
-    bool LuaToImageString(const PolygonsD& poly, const std::string& script, const std::string& outPath, const std::string& functionName)
+    bool LuaToImageString(const PolygonsD& poly, const std::string& script, const std::string& outPath, const std::string& functionName,
+        const std::function<void(lua_State*)>& lua_reg)
     {
         auto L = MakeUniqueLuaState();
         if (!L) throw RuntimeError("Failed to create Lua state");
         luaL_openlibs(L.get());
         RegisterLuaPolygonOperations(L.get());
+        if (lua_reg) lua_reg(L.get());
         // load script and execute it (define function in global)
         if (luaL_loadstring(L.get(), script.c_str()) != LUA_OK) {
             std::string err = lua_tostring(L.get(), -1);

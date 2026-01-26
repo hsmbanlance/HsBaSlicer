@@ -13,6 +13,25 @@ endif()
 
 if(CMAKE_VERSION VERSION_GREATER 3.12)
   set(CMAKE_CXX_STANDARD 20)
+  # Prefer C11 for C sources so features like _Generic are available when supported
+  # if able use C23
+  if(CMAKE_VERSION VERSION_GREATER 3.23)
+    if(CMAKE_C_COMPILER_ID STREQUAL "GNU" 
+      AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 13)
+        set(CMAKE_C_STANDARD 23)
+    elseif(CMAKE_C_COMPILER_ID MATCHES "Clang" 
+       AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
+      set(CMAKE_C_STANDARD 23)
+    elseif(CMAKE_C_COMPILER_ID STREQUAL "MSVC"
+       AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 19.36)
+      set(CMAKE_C_STANDARD 23)
+    else()
+      set(CMAKE_C_STANDARD 11)
+    endif()
+  else()
+    set(CMAKE_C_STANDARD 11)
+  endif()
+  set(CMAKE_C_STANDARD_REQUIRED ON)
 endif()
 
 #add Debug suffix
@@ -22,6 +41,64 @@ set_target_properties(${TARGET_NAME} PROPERTIES DEBUG_POSTFIX "d")
 project ("HsBaSlicer")
 
 include_directories(${CMAKE_SOURCE_DIR})
+
+# Include static feature checks and run them early so results can influence configuration
+include(${CMAKE_SOURCE_DIR}/static_check/feature_check.cmake)
+
+# Run required feature checks (fatal if missing)
+check_cxx_feature_concepts(HAS_CXX_CONCEPTS)
+check_cxx_feature_ranges(HAS_CXX_RANGES)
+check_cxx_feature_source_location(HAS_CXX_SOURCE_LOCATION)
+check_cxx_feature_nttp_class(HAS_CXX_NTTP_CLASS)
+check_cxx_feature_nttp_fp(HAS_CXX_NTTP_FP)
+check_cxx_feature_template_template_matching(HAS_CXX_TT_MATCH)
+check_c_feature_GENERIC(HAS_C_GENERIC_GENERIC)
+
+if(NOT HAS_CXX_CONCEPTS)
+  message(FATAL_ERROR "Compiler does not support C++ concepts (required)")
+endif()
+if(NOT HAS_CXX_RANGES)
+  message(FATAL_ERROR "Compiler does not support C++ ranges (required)")
+endif()
+if(NOT HAS_CXX_SOURCE_LOCATION)
+  message(FATAL_ERROR "Compiler does not support std::source_location (required)")
+endif()
+if(NOT HAS_CXX_NTTP_CLASS)
+  message(FATAL_ERROR "Compiler does not support class-type non-type template parameters (required)")
+endif()
+if(NOT HAS_CXX_NTTP_FP)
+  message(WARNING "Compiler does not support floating-point non-type template parameters; falling back where possible.")
+  add_compile_definitions(HSBA_NO_NTTP_FP)
+else()
+  add_compile_definitions(HSBA_HAS_NTTP_FP)
+endif()
+if(NOT HAS_CXX_TT_MATCH)
+  message(FATAL_ERROR "Compiler does not support template-template parameter matching required by P0522R0")
+endif()
+if(NOT HAS_C_GENERIC_GENERIC)
+  message(WARNING "C compiler does not support _Generic. Some C code may rely on C11 _Generic; falling back where possible.")
+  add_compile_definitions(HSBA_NO_C_GENERIC)
+else()
+  add_compile_definitions(HSBA_HAS_C_GENERIC)
+endif()
+
+# Optional checks: coroutines, explicit this, C23 constexpr
+check_cxx_feature_coroutines(HAS_CXX_COROUTINES)
+check_cxx_feature_explicit_this(HAS_CXX_EXPLICIT_THIS)
+check_c_feature_c23_constexpr(HAS_C_C23_CONSTEXPR)
+
+if(HAS_CXX_COROUTINES)
+  message(STATUS "Compiler supports C++ coroutines")
+  add_compile_definitions(HSBA_HAS_CXX_COROUTINES)
+endif()
+if(HAS_CXX_EXPLICIT_THIS)
+  message(STATUS "Compiler supports explicit object parameter (explicit this)")
+  add_compile_definitions(HSBA_HAS_CXX_EXPLICIT_THIS)
+endif()
+if(HAS_C_C23_CONSTEXPR)
+  message(STATUS "C compiler appears to support C23 constexpr-style features")
+  add_compile_definitions(HSBA_HAS_C23_CONSTEXPR)
+endif()
 
 #Todo:add defined for gamer
 if(SWITCH)

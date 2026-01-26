@@ -12,6 +12,7 @@
 #include "base/IModel.hpp"
 #include "2D/FloatPolygons.hpp"
 #include "2D/IntPolygon.hpp"
+#include <lua.hpp>
 
 namespace HsBa::Slicer
 {
@@ -104,6 +105,8 @@ namespace HsBa::Slicer
 
 		Polygons SliceLua(const std::filesystem::path& script_file, const std::string& funcName, const float height) const;
 
+
+
 		// Same but returns potentially open polylines with closed flag
 		UnSafePolygons UnSafeSliceLua(const std::string& script, const float height) const;
 
@@ -113,6 +116,10 @@ namespace HsBa::Slicer
 		std::vector<Edge> edges_;
 		std::vector<Face> faces_;
 	};
+
+	// Push this model data to a Lua state as globals: V, E, F and set 'height'
+	void PushFullTopoModelToLua(lua_State* L, const FullTopoModel& model, float height);
 }// namespace HsBa::Slicer
+
 
 #endif // !HSBA_FULLTOPOMODEL_HPP

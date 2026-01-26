@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "base/error.hpp"
+#include "base/template_helper.hpp"
 #include "LuaAdapter.hpp"
 #include "utils/LuaNewObject.hpp"
 
@@ -654,7 +655,17 @@ namespace HsBa::Slicer
 
 		std::vector<size_t> parent(N);
 		for (size_t i = 0; i < N; ++i) parent[i] = i;
-		std::function<size_t(size_t)> findp = [&](size_t x)->size_t { return parent[x] == x ? x : parent[x] = findp(parent[x]); };
+#ifndef __cpp_explicit_this_parameter
+		auto findp = Utils::YCombinator([&](auto&& self, size_t x) -> size_t {
+			if (parent[x] == x) return x;
+			return parent[x] = self(parent[x]);
+			});
+#else
+		auto findp = [&](this auto&& self, size_t x) -> size_t {
+			if (parent[x] == x) return x;
+			return parent[x] = self(parent[x]);
+		};
+#endif // !__cpp_explicit_this_parameter
 		auto unite = [&](size_t a, size_t b) { size_t pa = findp(a), pb = findp(b); if (pa != pb) parent[pa] = pb; };
 
 		// index mapping
@@ -1089,7 +1100,7 @@ namespace HsBa::Slicer
 
 	// LuaCustomFill: call Lua script function to generate table of polylines/polygons
 	Polygons LuaCustomFill(const Polygons& poly, const std::string& scriptPath, const std::string& functionName,
-		double lineThickness)
+		double lineThickness, const std::function<void(lua_State*)>& lua_reg)
 	{
 		Polygons res;
 		// Convert integer polygon to float polygon for Lua
@@ -1103,6 +1114,7 @@ namespace HsBa::Slicer
 		// load register functions
 		RegisterLuaPolygonOperations(L.get());
 		RegisterLuaPolygonFillFunctions(L.get());
+		if (lua_reg) lua_reg(L.get());
 
 		// load script
 		if (luaL_loadfile(L.get(), scriptPath.c_str()) || lua_pcall(L.get(), 0, 0, 0))
@@ -1176,7 +1188,7 @@ namespace HsBa::Slicer
 	Polygons LuaCustomFillString(const Polygons& poly,
 		const std::string& luaScript,
 		const std::string& functionName,
-		double lineThickness)
+		double lineThickness, const std::function<void(lua_State*)>& lua_reg)
 	{
 		auto polyD = UnIntegerization(poly);
 
@@ -1187,6 +1199,7 @@ namespace HsBa::Slicer
 
 		RegisterLuaPolygonOperations(L.get());
 		RegisterLuaPolygonFillFunctions(L.get());
+		if (lua_reg) lua_reg(L.get());
 
 		if (luaL_loadstring(L.get(), luaScript.c_str()) != LUA_OK) 
 		{

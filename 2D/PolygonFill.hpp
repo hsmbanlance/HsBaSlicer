@@ -4,6 +4,10 @@
 
 #include "IntPolygon.hpp"
 #include "FloatPolygons.hpp"
+#include <functional>
+
+// forward-declare lua state to avoid including lua.hpp in this header
+struct lua_State;
 
 namespace HsBa::Slicer
 {
@@ -36,10 +40,10 @@ namespace HsBa::Slicer
         Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square);
 
     Polygons LuaCustomFill(const Polygons& poly, const std::string& scriptPath, const std::string& functionName = "generate_fill",
-        double lineThickness = 0.5);
+        double lineThickness = 0.5, const std::function<void(lua_State*)>& lua_reg = {});
 
     Polygons LuaCustomFillString(const Polygons& poly, const std::string& script, const std::string& functionName = "generate_fill",
-        double lineThickness = 0.5);
+        double lineThickness = 0.5, const std::function<void(lua_State*)>& lua_reg = {});
 }
 
 #endif // !HSBA_SLICER_POLYGONFILL_HPP

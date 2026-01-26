@@ -10,6 +10,7 @@
 
 #include <lua.hpp>
 #include <igl/per_face_normals.h>
+#include "2D/LuaAdapter.hpp"
 
 #include "base/error.hpp"
 #include "utils/LuaNewObject.hpp"
@@ -253,6 +254,50 @@ namespace HsBa::Slicer
 		return true;
 	}
 
+void PushFullTopoModelToLua(lua_State* L, const FullTopoModel& model, float height)
+{
+	// push V (1-based)
+	lua_newtable(L);
+	const auto& verts = model.GetVertices();
+	for (int i = 0; i < static_cast<int>(verts.size()); ++i)
+	{
+		lua_newtable(L);
+		lua_pushnumber(L, verts[i].vertex.x()); lua_setfield(L, -2, "x");
+		lua_pushnumber(L, verts[i].vertex.y()); lua_setfield(L, -2, "y");
+		lua_pushnumber(L, verts[i].vertex.z()); lua_setfield(L, -2, "z");
+		lua_rawseti(L, -2, i + 1);
+	}
+	lua_setglobal(L, "V");
+
+	// push E (edges)
+	lua_newtable(L);
+	const auto& edges = model.GetEdges();
+	for (int i = 0; i < static_cast<int>(edges.size()); ++i)
+	{
+		lua_newtable(L);
+		lua_pushinteger(L, edges[i].vertices[0] + 1); lua_rawseti(L, -2, 1);
+		lua_pushinteger(L, edges[i].vertices[1] + 1); lua_rawseti(L, -2, 2);
+		lua_rawseti(L, -2, i + 1);
+	}
+	lua_setglobal(L, "E");
+
+	// push F (faces)
+	lua_newtable(L);
+	const auto& faces = model.GetFaces();
+	for (int i = 0; i < static_cast<int>(faces.size()); ++i)
+	{
+		lua_newtable(L);
+		lua_pushinteger(L, faces[i].triangle[0] + 1); lua_rawseti(L, -2, 1);
+		lua_pushinteger(L, faces[i].triangle[1] + 1); lua_rawseti(L, -2, 2);
+		lua_pushinteger(L, faces[i].triangle[2] + 1); lua_rawseti(L, -2, 3);
+		lua_rawseti(L, -2, i + 1);
+	}
+	lua_setglobal(L, "F");
+
+	lua_pushnumber(L, height);
+	lua_setglobal(L, "height");
+}
+
 	Polygons FullTopoModel::Slice(const float height) const
 	{
 		// Collect intersection segments (as integerized 2D points)
@@ -434,47 +479,12 @@ namespace HsBa::Slicer
 	Polygons FullTopoModel::SliceLua(const std::string& script, const float height) const
 	{
 		auto L = MakeUniqueLuaState();
-		if (!L) 
+		if (!L)
 			throw RuntimeError("Lua init failed");
 		luaL_openlibs(L.get());
 
-		// push V (1-based)
-		lua_newtable(L.get());
-		for (int i = 0; i < static_cast<int>(vertices_.size()); ++i)
-		{
-			lua_newtable(L.get());
-			lua_pushnumber(L.get(), vertices_[i].vertex.x()); lua_setfield(L.get(), -2, "x");
-			lua_pushnumber(L.get(), vertices_[i].vertex.y()); lua_setfield(L.get(), -2, "y");
-			lua_pushnumber(L.get(), vertices_[i].vertex.z()); lua_setfield(L.get(), -2, "z");
-			lua_rawseti(L.get(), -2, i + 1);
-		}
-		lua_setglobal(L.get(), "V");
-
-		// push E (edges)
-		lua_newtable(L.get());
-		for (int i = 0; i < static_cast<int>(edges_.size()); ++i)
-		{
-			lua_newtable(L.get());
-			lua_pushinteger(L.get(), edges_[i].vertices[0] + 1); lua_rawseti(L.get(), -2, 1);
-			lua_pushinteger(L.get(), edges_[i].vertices[1] + 1); lua_rawseti(L.get(), -2, 2);
-			lua_rawseti(L.get(), -2, i + 1);
-		}
-		lua_setglobal(L.get(), "E");
-
-		// push F (faces)
-		lua_newtable(L.get());
-		for (int i = 0; i < static_cast<int>(faces_.size()); ++i)
-		{
-			lua_newtable(L.get());
-			lua_pushinteger(L.get(), faces_[i].triangle[0] + 1); lua_rawseti(L.get(), -2, 1);
-			lua_pushinteger(L.get(), faces_[i].triangle[1] + 1); lua_rawseti(L.get(), -2, 2);
-			lua_pushinteger(L.get(), faces_[i].triangle[2] + 1); lua_rawseti(L.get(), -2, 3);
-			lua_rawseti(L.get(), -2, i + 1);
-		}
-		lua_setglobal(L.get(), "F");
-
-		lua_pushnumber(L.get(), height);
-		lua_setglobal(L.get(), "height");
+		// push model data to Lua
+		PushFullTopoModelToLua(L.get(), *this, height);
 
 		int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "FullTopoModelSliceScript");
 		if (loadStatus != LUA_OK)
@@ -503,80 +513,21 @@ namespace HsBa::Slicer
 			}
 		}
 
-		// Iterate polygons
-		int nPolys = (int)lua_rawlen(L.get(), -1);
-		for (int i = 1; i <= nPolys; ++i)
-		{
-			lua_rawgeti(L.get(), -1, i); // push polygon table
-			if (!lua_istable(L.get(), -1)) { lua_pop(L.get(), 1); continue; }
-			Polygon poly;
-			int nPts = (int)lua_rawlen(L.get(), -1);
-			for (int j = 1; j <= nPts; ++j)
-			{
-				lua_rawgeti(L.get(), -1, j); // push point
-				if (lua_istable(L.get(), -1))
-				{
-					lua_getfield(L.get(), -1, "x");
-					lua_getfield(L.get(), -2, "y");
-					double x = lua_tonumber(L.get(), -2);
-					double y = lua_tonumber(L.get(), -1);
-					lua_pop(L.get(), 2);
-					long long xi = std::llround(x * integerization);
-					long long yi = std::llround(y * integerization);
-					poly.emplace_back(Point2{ xi, yi });
-				}
-				lua_pop(L.get(), 1); // pop point
-			}
-			lua_pop(L.get(), 1); // pop polygon
-			if (poly.size() >= 3) result.emplace_back(std::move(poly));
-		}
+		// convert using LuaAdapter helper
+		result = LuaTableToPolygons(L.get(), -1);
 
 		return result;
 	}
 
 	UnSafePolygons FullTopoModel::UnSafeSliceLua(const std::string& script, const float height) const
 	{
-		// reuse SliceLua to get polygons, but also accept open polylines returned via 'polys' where points may be 2 or more
 		auto L = MakeUniqueLuaState();
-		if (!L) 
+		if (!L)
 			throw RuntimeError("Lua init failed");
 		luaL_openlibs(L.get());
 
-		// push V, E, F and height (same as above)
-		lua_newtable(L.get());
-		for (int i = 0; i < static_cast<int>(vertices_.size()); ++i)
-		{
-			lua_newtable(L.get());
-			lua_pushnumber(L.get(), vertices_[i].vertex.x()); lua_setfield(L.get(), -2, "x");
-			lua_pushnumber(L.get(), vertices_[i].vertex.y()); lua_setfield(L.get(), -2, "y");
-			lua_pushnumber(L.get(), vertices_[i].vertex.z()); lua_setfield(L.get(), -2, "z");
-			lua_rawseti(L.get(), -2, i + 1);
-		}
-		lua_setglobal(L.get(), "V");
-
-		lua_newtable(L.get());
-		for (int i = 0; i < static_cast<int>(edges_.size()); ++i)
-		{
-			lua_newtable(L.get());
-			lua_pushinteger(L.get(), edges_[i].vertices[0] + 1); lua_rawseti(L.get(), -2, 1);
-			lua_pushinteger(L.get(), edges_[i].vertices[1] + 1); lua_rawseti(L.get(), -2, 2);
-			lua_rawseti(L.get(), -2, i + 1);
-		}
-		lua_setglobal(L.get(), "E");
-
-		lua_newtable(L.get());
-		for (int i = 0; i < static_cast<int>(faces_.size()); ++i)
-		{
-			lua_newtable(L.get());
-			lua_pushinteger(L.get(), faces_[i].triangle[0] + 1); lua_rawseti(L.get(), -2, 1);
-			lua_pushinteger(L.get(), faces_[i].triangle[1] + 1); lua_rawseti(L.get(), -2, 2);
-			lua_pushinteger(L.get(), faces_[i].triangle[2] + 1); lua_rawseti(L.get(), -2, 3);
-			lua_rawseti(L.get(), -2, i + 1);
-		}
-		lua_setglobal(L.get(), "F");
-
-		lua_pushnumber(L.get(), height);
-		lua_setglobal(L.get(), "height");
+		// push model data to Lua
+		PushFullTopoModelToLua(L.get(), *this, height);
 
 		int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "FullTopoModelSliceScript");
 		if (loadStatus != LUA_OK)
@@ -604,81 +555,30 @@ namespace HsBa::Slicer
 			}
 		}
 
-		int nPolys = (int)lua_rawlen(L.get(), -1);
-		for (int i = 1; i <= nPolys; ++i)
+		// convert using helper and accept open polylines
+		Polygons polys = LuaTableToPolygons(L.get(), -1);
+		for (auto& p : polys)
 		{
-			lua_rawgeti(L.get(), -1, i); // polygon
-			if (!lua_istable(L.get(), -1)) { lua_pop(L.get(), 1); continue; }
-			Polygon poly;
-			int nPts = (int)lua_rawlen(L.get(), -1);
-			for (int j = 1; j <= nPts; ++j)
-			{
-				lua_rawgeti(L.get(), -1, j);
-				if (lua_istable(L.get(), -1))
-				{
-						lua_getfield(L.get(), -1, "x");
-						lua_getfield(L.get(), -2, "y");
-						double x = lua_tonumber(L.get(), -2);
-						double y = lua_tonumber(L.get(), -1);
-						lua_pop(L.get(), 2);
-					long long xi = std::llround(x * integerization);
-					long long yi = std::llround(y * integerization);
-					poly.emplace_back(Point2{ xi, yi });
-				}
-				lua_pop(L.get(), 1);
-			}
-			lua_pop(L.get(), 1);
-			if (poly.size() >= 2)
+			if (p.size() >= 2)
 			{
 				UnSafePolygon up;
-				up.path = std::move(poly);
+				up.path = std::move(p);
 				up.closed = (up.path.size() >= 3);
 				result.emplace_back(std::move(up));
 			}
 		}
 
-		// L will be closed by UniqueLua deleter
 		return result;
 	}
 
 	Polygons FullTopoModel::SliceLua(const std::string& script, const std::string& funcName, const float height) const
 	{
 		auto L = MakeUniqueLuaState();
-		if (!L) 
+		if (!L)
 			throw RuntimeError("Lua init failed");
 		luaL_openlibs(L.get());
-		// push V, E, F and height (same as above)
-		lua_newtable(L.get());
-		for (int i = 0; i < static_cast<int>(vertices_.size()); ++i)
-		{
-			lua_newtable(L.get());
-			lua_pushnumber(L.get(), vertices_[i].vertex.x()); lua_setfield(L.get(), -2, "x");
-			lua_pushnumber(L.get(), vertices_[i].vertex.y()); lua_setfield(L.get(), -2, "y");
-			lua_pushnumber(L.get(), vertices_[i].vertex.z()); lua_setfield(L.get(), -2, "z");
-			lua_rawseti(L.get(), -2, i + 1);
-		}
-		lua_setglobal(L.get(), "V");
-		lua_newtable(L.get());
-		for (int i = 0; i < static_cast<int>(edges_.size()); ++i)
-		{
-			lua_newtable(L.get());
-			lua_pushinteger(L.get(), edges_[i].vertices[0] + 1); lua_rawseti(L.get(), -2, 1);
-			lua_pushinteger(L.get(), edges_[i].vertices[1] + 1); lua_rawseti(L.get(), -2, 2);
-			lua_rawseti(L.get(), -2, i + 1);
-		}
-		lua_setglobal(L.get(), "E");
-		lua_newtable(L.get());
-		for (int i = 0; i < static_cast<int>(faces_.size()); ++i)
-		{
-			lua_newtable(L.get());
-			lua_pushinteger(L.get(), faces_[i].triangle[0] + 1); lua_rawseti(L.get(), -2, 1);
-			lua_pushinteger(L.get(), faces_[i].triangle[1] + 1); lua_rawseti(L.get(), -2, 2);
-			lua_pushinteger(L.get(), faces_[i].triangle[2] + 1); lua_rawseti(L.get(), -2, 3);
-			lua_rawseti(L.get(), -2, i + 1);
-		}
-		lua_setglobal(L.get(), "F");
-		lua_pushnumber(L.get(), height);
-		lua_setglobal(L.get(), "height");
+		// push model data to Lua
+		PushFullTopoModelToLua(L.get(), *this, height);
 		int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "FullTopoModelSliceScript");
 		if (loadStatus != LUA_OK)
 		{
@@ -715,32 +615,8 @@ namespace HsBa::Slicer
 				return result;
 			}
 		}
-		int nPolys = (int)lua_rawlen(L.get(), -1);
-		for (int i = 1; i <= nPolys; ++i)
-		{
-			lua_rawgeti(L.get(), -1, i); // push polygon table
-			if (!lua_istable(L.get(), -1)) { lua_pop(L.get(), 1); continue; }
-			Polygon poly;
-			int nPts = (int)lua_rawlen(L.get(), -1);
-			for (int j = 1; j <= nPts; ++j)
-			{
-				lua_rawgeti(L.get(), -1, j); // push point
-				if (lua_istable(L.get(), -1))
-				{
-					lua_getfield(L.get(), -1, "x");
-					lua_getfield(L.get(), -2, "y");
-					double x = lua_tonumber(L.get(), -2);
-					double y = lua_tonumber(L.get(), -1);
-					lua_pop(L.get(), 2);
-					long long xi = std::llround(x * integerization);
-					long long yi = std::llround(y * integerization);
-					poly.emplace_back(Point2{ xi, yi });
-				}
-				lua_pop(L.get(), 1); // pop point
-			}
-			lua_pop(L.get(), 1); // pop polygon
-			if (poly.size() >= 3) result.emplace_back(std::move(poly));
-		}
+		// convert using LuaAdapter helper
+		result = LuaTableToPolygons(L.get(), -1);
 		// L will be closed by UniqueLua deleter
 		return result;
 	}
@@ -751,38 +627,8 @@ namespace HsBa::Slicer
 		if (!L)
 			throw RuntimeError("Lua init failed");
 		luaL_openlibs(L.get());
-		// push V, E, F and height (same as above)
-		lua_newtable(L.get());
-		for (int i = 0; i < static_cast<int>(vertices_.size()); ++i)
-		{
-			lua_newtable(L.get());
-			lua_pushnumber(L.get(), vertices_[i].vertex.x()); lua_setfield(L.get(), -2, "x");
-			lua_pushnumber(L.get(), vertices_[i].vertex.y()); lua_setfield(L.get(), -2, "y");
-			lua_pushnumber(L.get(), vertices_[i].vertex.z()); lua_setfield(L.get(), -2, "z");
-			lua_rawseti(L.get(), -2, i + 1);
-		}
-		lua_setglobal(L.get(), "V");
-		lua_newtable(L.get());
-		for (int i = 0; i < static_cast<int>(edges_.size()); ++i)
-		{
-			lua_newtable(L.get());
-			lua_pushinteger(L.get(), edges_[i].vertices[0] + 1); lua_rawseti(L.get(), -2, 1);
-			lua_pushinteger(L.get(), edges_[i].vertices[1] + 1); lua_rawseti(L.get(), -2, 2);
-			lua_rawseti(L.get(), -2, i + 1);
-		}
-		lua_setglobal(L.get(), "E");
-		lua_newtable(L.get());
-		for (int i = 0; i < static_cast<int>(faces_.size()); ++i)
-		{
-			lua_newtable(L.get());
-			lua_pushinteger(L.get(), faces_[i].triangle[0] + 1); lua_rawseti(L.get(), -2, 1);
-			lua_pushinteger(L.get(), faces_[i].triangle[1] + 1); lua_rawseti(L.get(), -2, 2);
-			lua_pushinteger(L.get(), faces_[i].triangle[2] + 1); lua_rawseti(L.get(), -2, 3);
-			lua_rawseti(L.get(), -2, i + 1);
-		}
-		lua_setglobal(L.get(), "F");
-		lua_pushnumber(L.get(), height);
-		lua_setglobal(L.get(), "height");
+		// push model data to Lua
+		PushFullTopoModelToLua(L.get(), *this, height);
 		int loadStatus = luaL_loadfile(L.get(), script_file.string().c_str());
 		if (loadStatus != LUA_OK)
 		{
@@ -819,32 +665,7 @@ namespace HsBa::Slicer
 				return result;
 			}
 		}
-		int nPolys = (int)lua_rawlen(L.get(), -1);
-		for (int i = 1; i <= nPolys; ++i)
-		{
-			lua_rawgeti(L.get(), -1, i); // push polygon table
-			if (!lua_istable(L.get(), -1)) { lua_pop(L.get(), 1); continue; }
-			Polygon poly;
-			int nPts = (int)lua_rawlen(L.get(), -1);
-			for (int j = 1; j <= nPts; ++j)
-			{
-				lua_rawgeti(L.get(), -1, j); // push point
-				if (lua_istable(L.get(), -1))
-				{
-					lua_getfield(L.get(), -1, "x");
-					lua_getfield(L.get(), -2, "y");
-					double x = lua_tonumber(L.get(), -2);
-					double y = lua_tonumber(L.get(), -1);
-					lua_pop(L.get(), 2);
-					long long xi = std::llround(x * integerization);
-					long long yi = std::llround(y * integerization);
-					poly.emplace_back(Point2{ xi, yi });
-				}
-				lua_pop(L.get(), 1); // pop point
-			}
-			lua_pop(L.get(), 1); // pop polygon
-			if (poly.size() >= 3) result.emplace_back(std::move(poly));
-		}
+		result = LuaTableToPolygons(L.get(), -1);
 		// L will be closed by UniqueLua deleter
 		return result;
 	}
