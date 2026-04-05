@@ -12,6 +12,8 @@
     template_helper.hpp
     coroutine.hpp
     any_visit.hpp
+    any_object.hpp
+    any_object.cpp
     tuple_each.hpp
     boost_std_convert.hpp
     base_interface.hpp
@@ -21,7 +23,10 @@
     singleton.hpp
     units.hpp
     static_reflect.hpp
-)
+    object_pool.hpp
+    thread_pool.hpp
+    memory_pool.hpp
+    )
 
 if(NOT ANDROID)
     find_package(boost_locale REQUIRED CONFIG)

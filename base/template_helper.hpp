@@ -15,6 +15,8 @@
 #include <exception>
 #include <ranges>
 #include <array>
+#include <bit>
+#include <cstdint>
 
 #if __cpp_lib_coroutine && __cpp_impl_coroutine
 #include <coroutine>
@@ -437,6 +439,27 @@ namespace HsBa::Slicer::Utils
 			return ptr != nullptr;
 		}
 	};
+
+#ifdef HSBA_NO_NTTP_FP
+	struct FloatTemplateArgs 
+	{
+		int32_t value;
+		constexpr FloatTemplateArgs(float v) : value(std::bit_cast<int32_t>(v)) {}
+		constexpr operator float() const { return std::bit_cast<float>(value); }	
+	};
+	struct DoubleTemplateArgs 
+	{
+		int64_t value;
+		constexpr DoubleTemplateArgs(double v) : value(std::bit_cast<int64_t>(v)) {}
+		constexpr operator double() const { return std::bit_cast<double>(value); }
+	};
+
+	// long double is not supported in NTTP
+#else
+	using FloatTemplateArgs = float;
+	using DoubleTemplateArgs = double;
+
+#endif // HSBA_NO_NTTP_FP
 
 #ifndef __cpp_explicit_this_parameter
 	template<typename Func>

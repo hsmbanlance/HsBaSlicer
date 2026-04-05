@@ -15,6 +15,10 @@
       "name": "boost-log",
       "platform": "!android"
     },
+    {
+      "name": "boost-dll",
+      "platform": "!android"
+    },
     "boost-multiprecision",
     {
       "name": "boost-nowide",

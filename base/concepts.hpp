@@ -169,6 +169,12 @@ namespace HsBa::Slicer
 			requires std::is_destructible_v<Allocator>;
 	};
 
+	template<typename Allocator>
+	concept NoStateAllocator = std::is_empty_v<Allocator>&& requires {
+		typename std::allocator_traits<Allocator>::is_always_equal;
+		requires std::allocator_traits<Allocator>::is_always_equal::value;
+	};
+
 	template<typename T>
 	concept CharType = std::is_same_v<T, char> || std::is_same_v<T, wchar_t> || std::is_same_v<T, signed char> || std::is_same_v<T, unsigned char>
 		|| std::is_same_v<T, char16_t> || std::is_same_v<T, char32_t> || std::is_same_v<T, char8_t>;

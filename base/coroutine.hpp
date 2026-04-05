@@ -10,6 +10,20 @@
 #endif // __cpp_lib_generator
 
 #include "template_helper.hpp"
+#if __cpp_lib_coroutine && __cpp_impl_coroutine
+#include <memory>
+#include <functional>
+#include <thread>
+#include <future>
+#include <optional>
+#include <mutex>
+#include <condition_variable>
+#include <list>
+#include <exception>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
+#endif
 
 namespace HsBa::Slicer::Utils
 {
@@ -35,25 +49,7 @@ namespace HsBa::Slicer::Utils
 			func();
 		}
 	};
-	/**
-	 * @brief coroutine executor new thread
-	 */
-	class NewThreadExecutor : public IExecutor
-	{
-	public:
-		inline void execute(std::function<void()>&& func) override
-		{
-			if (!func)
-			{
-				throw HsBa::Slicer::InvalidArgumentError("Null function");
-			}
-			std::thread thread(std::move(func));
-			if (thread.joinable())
-			{
-				thread.detach();
-			}
-		}
-	};
+
 	/**
 	 * @brief coroutine executor async
 	 */
@@ -76,26 +72,28 @@ namespace HsBa::Slicer::Utils
 	 * @tparam T coroutine return type
 	 * @tparam Executor coroutine executor
 	 */
-	template<typename T, typename Executor>
+template<typename T, typename Executor>
 		requires (std::movable<T> || std::is_void_v<T>) && std::derived_from<Executor, IExecutor>
-	class TaskAwaiter
+class TaskAwaiter
 	{
 		friend class Task<T, Executor>;
 	public:
-		inline explicit TaskAwaiter(IExecutor* executor, Task<T, Executor>&& task) noexcept
-			:executor_(executor), task_(std::move(task)) {}
-		TaskAwaiter(TaskAwaiter&& o) { *this = std::move(o); }
-		inline TaskAwaiter& operator=(TaskAwaiter&& o)
+        inline explicit TaskAwaiter(Executor executor, Task<T, Executor>&& task) noexcept
+			:executor_(std::move(executor)), task_(std::move(task)) {}
+		TaskAwaiter(TaskAwaiter&& o) noexcept : executor_(std::move(o.executor_)), task_(std::move(o.task_)) {}
+		inline TaskAwaiter& operator=(TaskAwaiter&& o) noexcept
 		{
-			task_(std::exchange(task_), {});
+			executor_ = std::move(o.executor_);
+			task_ = std::move(o.task_);
+			return *this;
 		}
-		inline constexpr bool await_ready() const noexcept { return task_.handle_.done(); }
-		inline void await_suspend(std::coroutine_handle<> handle) noexcept
+		inline constexpr bool await_ready() const noexcept { return task_.handle_ && task_.handle_.done(); }
+        inline void await_suspend(std::coroutine_handle<> handle) noexcept
 		{
 			if (!await_ready())
 			{
-				task_.finally([handle, this]() {
-					executor_->execute([handle] {handle.resume(); }); });
+				auto exec = executor_;
+				task_.finally([handle, exec]() mutable { exec.execute([handle] { handle.resume(); }); });
 			}
 		}
 		inline T await_resume() noexcept
@@ -111,10 +109,10 @@ namespace HsBa::Slicer::Utils
 		}
 	private:
 		Task<T, Executor> task_;
-		IExecutor* executor_;
+        Executor executor_;
 	};
 	template<typename T, typename Executor = AsyncExecutor, typename Allocator = std::allocator<T>>
-		requires std::default_initializable<T>&& std::movable<T>&& std::derived_from<Executor, IExecutor>&& TAllocator<T, Allocator>
+		requires std::default_initializable<T>&& std::movable<T>&& std::derived_from<Executor, IExecutor>&& TAllocator<T, Allocator>&& NoStateAllocator<Allocator>
 	class CustomAllocatorTask;
 	
 	/**
@@ -123,26 +121,28 @@ namespace HsBa::Slicer::Utils
 	 * @tparam Executor coroutine executor
 	 * @tparam Allocator coroutine allocator
 	 */
-	template<typename T, typename Executor, typename Allocator>
-		requires std::movable<T>&& std::derived_from<Executor, IExecutor>&& TAllocator<T, Allocator>
-	class CustomAllocatorTaskAwaiter
+template<typename T, typename Executor, typename Allocator>
+		requires std::movable<T>&& std::derived_from<Executor, IExecutor>&& TAllocator<T, Allocator> && NoStateAllocator<Allocator> && NoStateAllocator<Allocator>
+class CustomAllocatorTaskAwaiter
 	{
 		friend class CustomAllocatorTask<T, Executor, Allocator>;
 	public:
-		inline explicit CustomAllocatorTaskAwaiter(IExecutor* executor, CustomAllocatorTask<T, Executor, Allocator>&& task) noexcept
-			:executor_(executor), task_(std::move(task)) {}
-		CustomAllocatorTaskAwaiter(CustomAllocatorTaskAwaiter&& o) { *this = std::move(o); }
-		inline CustomAllocatorTaskAwaiter& operator=(CustomAllocatorTaskAwaiter&& o)
+        inline explicit CustomAllocatorTaskAwaiter(Executor executor, CustomAllocatorTask<T, Executor, Allocator>&& task) noexcept
+			:executor_(std::move(executor)), task_(std::move(task)) {}
+		CustomAllocatorTaskAwaiter(CustomAllocatorTaskAwaiter&& o) noexcept : executor_(std::move(o.executor_)), task_(std::move(o.task_)) {}
+		inline CustomAllocatorTaskAwaiter& operator=(CustomAllocatorTaskAwaiter&& o) noexcept
 		{
-			task_(std::exchange(task_), {});
+			executor_ = std::move(o.executor_);
+			task_ = std::move(o.task_);
+			return *this;
 		}
-		inline constexpr bool await_ready() const noexcept { return task_.handle_.done(); }
-		inline void await_suspend(std::coroutine_handle<> handle) noexcept
+		inline constexpr bool await_ready() const noexcept { return task_.handle_ && task_.handle_.done(); }
+        inline void await_suspend(std::coroutine_handle<> handle) noexcept
 		{
 			if (!await_ready())
 			{
-				task_.finally([handle, this]() {
-					executor_->execute([handle] {handle.resume(); }); });
+				auto exec = executor_;
+				task_.finally([handle, exec]() mutable { exec.execute([handle] { handle.resume(); }); });
 			}
 		}
 		inline T await_resume() noexcept
@@ -157,8 +157,8 @@ namespace HsBa::Slicer::Utils
 			}
 		}
 	private:
-		CustomAllocatorTask<T, Executor, Allocator> task_;
-		IExecutor* executor_;
+        CustomAllocatorTask<T, Executor, Allocator> task_;
+		Executor executor_;
 	};
 	
 	/**
@@ -250,13 +250,13 @@ namespace HsBa::Slicer::Utils
 			&& std::derived_from<Exe, IExecutor>
 				inline TaskAwaiter<R, Exe> await_transform(Task<R, Exe>&& task)
 			{
-				return TaskAwaiter<R, Exe>(&executor_, std::move(task));
+                return TaskAwaiter<R, Exe>(std::move(executor_), std::move(task));
 			}
 			template<typename R, typename Exe, typename Allo>
 				requires std::default_initializable<R>&& std::movable<R>&& std::derived_from<Exe, IExecutor>&& TAllocator<R, Allo>
 			inline CustomAllocatorTaskAwaiter<R, Exe, Allo> await_transform(CustomAllocatorTask<R, Exe, Allo>&& task)
 			{
-				return CustomAllocatorTaskAwaiter<R, Exe, Allo>(&executor_, std::move(task));
+                return CustomAllocatorTaskAwaiter<R, Exe, Allo>(std::move(executor_), std::move(task));
 			}
 			inline T get_result()
 			{
@@ -338,6 +338,11 @@ namespace HsBa::Slicer::Utils
 		inline explicit Task(std::coroutine_handle<promise_type> handle) noexcept : handle_(handle) {}
 
 		inline Task(Task&& task) noexcept : handle_(std::exchange(task.handle_, {})) {}
+		inline Task& operator=(Task&& task) noexcept
+		{
+			handle_ = std::exchange(task.handle_, {});
+			return *this;
+		}
 
 		Task(Task&) = delete;
 
@@ -408,13 +413,13 @@ namespace HsBa::Slicer::Utils
 			&& std::derived_from<Exe, IExecutor>
 				inline TaskAwaiter<R, Exe> await_transform(Task<R, Exe>&& task)
 			{
-				return TaskAwaiter<R, Exe>(&executor_, std::move(task));
+                return TaskAwaiter<R, Exe>(executor_, std::move(task));
 			}
 			template<typename R, typename Exe, typename Allo>
 				requires std::default_initializable<R>&& std::movable<R>&& std::derived_from<Exe, IExecutor>&& TAllocator<R, Allo>
 			inline CustomAllocatorTaskAwaiter<R, Exe, Allo> await_transform(CustomAllocatorTask<R, Exe, Allo>&& task)
 			{
-				return CustomAllocatorTaskAwaiter<R, Exe, Allo>(&executor_, std::move(task));
+                return CustomAllocatorTaskAwaiter<R, Exe, Allo>(executor_, std::move(task));
 			}
 			inline void get_result()
 			{
@@ -497,6 +502,11 @@ namespace HsBa::Slicer::Utils
 		inline explicit Task(std::coroutine_handle<promise_type> handle) noexcept : handle_(handle) {}
 
 		inline Task(Task&& task) noexcept : handle_(std::exchange(task.handle_, {})) {}
+		inline Task& operator=(Task&& task) noexcept
+		{
+			handle_ = std::exchange(task.handle_, {});
+			return *this;
+		}
 
 		Task(Task&) = delete;
 
@@ -519,7 +529,7 @@ namespace HsBa::Slicer::Utils
 	 * @tparam Allocator custom allocator type
 	 */
 	template<typename T, typename Executor, typename Allocator>
-		requires std::default_initializable<T>&& std::movable<T>&& std::derived_from<Executor, IExecutor>&& TAllocator<T, Allocator>
+		requires std::default_initializable<T>&& std::movable<T>&& std::derived_from<Executor, IExecutor>&& TAllocator<T, Allocator>&& NoStateAllocator<Allocator>
 	class CustomAllocatorTask
 	{
 		friend class CustomAllocatorTaskAwaiter<T, Executor, Allocator>;
@@ -550,9 +560,9 @@ namespace HsBa::Slicer::Utils
 		{
 			inline DispatchAwaiter initial_suspend() { return DispatchAwaiter{ &executor_ }; }
 			inline std::suspend_always final_suspend() noexcept { return {}; }
-			inline CustomAllocatorTask<T, Executor> get_return_object()
+			inline CustomAllocatorTask<T, Executor, Allocator> get_return_object()
 			{
-				return CustomAllocatorTask{ std::coroutine_handle<promise_type>::from_promise(*this) };
+				return CustomAllocatorTask<T, Executor, Allocator>{ std::coroutine_handle<promise_type>::from_promise(*this) };
 			}
 			inline void unhandled_exception()
 			{
@@ -581,13 +591,13 @@ namespace HsBa::Slicer::Utils
 			&& std::derived_from<Exe, IExecutor>
 			inline TaskAwaiter<R, Exe> await_transform(Task<R, Exe>&& task)
 			{
-				return TaskAwaiter<R, Exe>(&executor_, std::move(task));
+                return TaskAwaiter<R, Exe>(executor_, std::move(task));
 			}
 			template<typename R, typename Exe, typename Allo>
 				requires std::default_initializable<R>&& std::movable<R>&& std::derived_from<Exe, IExecutor>&& TAllocator<R, Allo>
 			inline CustomAllocatorTaskAwaiter<R, Exe, Allo> await_transform(CustomAllocatorTask<R, Exe, Allo>&& task)
 			{
-				return CustomAllocatorTaskAwaiter<R, Exe, Allo>(&executor_, std::move(task));
+                return CustomAllocatorTaskAwaiter<R, Exe, Allo>(executor_, std::move(task));
 			}
 			inline T get_result()
 			{
@@ -613,16 +623,33 @@ namespace HsBa::Slicer::Utils
 				}
 			}
 
-			inline static Allocator alloc;
+            // Use custom allocator for promise allocation
 			void* operator new(size_t size)
 			{
-				return alloc.allocate(size);
+				using AllocTraits = std::allocator_traits<Allocator>;
+				using PromiseAlloc = typename AllocTraits::template rebind_alloc<promise_type>;
+				PromiseAlloc promise_alloc(alloc);
+				size_t count = (size + sizeof(promise_type) - 1) / sizeof(promise_type);
+				return promise_alloc.allocate(count);
+			}
+
+			void operator delete(void* p) noexcept
+			{
+				using AllocTraits = std::allocator_traits<Allocator>;
+				using PromiseAlloc = typename AllocTraits::template rebind_alloc<promise_type>;
+				PromiseAlloc promise_alloc(alloc);
+				promise_alloc.deallocate(static_cast<promise_type*>(p), 1);
 			}
 
 			void operator delete(void* p, size_t size) noexcept
 			{
-				alloc.deallocate(static_cast<T*>(p), size);
+				using AllocTraits = std::allocator_traits<Allocator>;
+				using PromiseAlloc = typename AllocTraits::template rebind_alloc<promise_type>;
+				PromiseAlloc promise_alloc(alloc);
+				size_t count = (size + sizeof(promise_type) - 1) / sizeof(promise_type);
+				promise_alloc.deallocate(static_cast<promise_type*>(p), count);
 			}
+			inline static Allocator alloc{};
 		private:
 			Executor executor_;
 			std::optional<Result> result_;
@@ -685,6 +712,11 @@ namespace HsBa::Slicer::Utils
 		inline explicit CustomAllocatorTask(std::coroutine_handle<promise_type> handle) noexcept : handle_(handle) {}
 
 		inline CustomAllocatorTask(CustomAllocatorTask&& task) noexcept : handle_(std::exchange(task.handle_, {})) {}
+		inline CustomAllocatorTask& operator=(CustomAllocatorTask&& task) noexcept
+		{
+			handle_ = std::exchange(task.handle_, {});
+			return *this;
+		}
 
 		CustomAllocatorTask(CustomAllocatorTask&) = delete;
 
@@ -742,22 +774,22 @@ namespace HsBa::Slicer::Utils
 			}
 			inline void return_void() {} // return_void for co_return
 			void await_transform() = delete;
-			template<typename R, typename Exe>
+            template<typename R, typename Exe>
 				requires ((std::movable<R>&& std::default_initializable<R>) || std::is_void_v<R>)
 			&& std::derived_from<Exe, IExecutor>
 				inline TaskAwaiter<R, Exe> await_transform(Task<R, Exe>&& task)
 			{
 				Exe exe{};
-				return TaskAwaiter<R, Exe>(&exe, std::move(task));
+				return TaskAwaiter<R, Exe>(std::move(exe), std::move(task));
 			}
-			template<typename R, typename Exe, typename Allo>
+            template<typename R, typename Exe, typename Allo>
 				requires std::default_initializable<R>&& std::movable<R>&& std::derived_from<Exe, IExecutor>&& TAllocator<R, Allo>
 			inline CustomAllocatorTaskAwaiter<R, Exe, Allo> await_transform(CustomAllocatorTask<R, Exe, Allo>&& task)
 			{
 				Exe exe{};
-				return CustomAllocatorTaskAwaiter<R, Exe, Allo>(&exe, std::move(task));
+				return CustomAllocatorTaskAwaiter<R, Exe, Allo>(std::move(exe), std::move(task));
 			}
-			[[noreturn]]
+            [[noreturn]]
 			inline static void unhandled_exception()
 			{
 				onCancel();
@@ -807,7 +839,7 @@ namespace HsBa::Slicer::Utils
 		public:
 			iterator& operator++()
 			{
-				if (coroutine_) coroutine_.resume();
+				if (coroutine_ && !coroutine_.done()) coroutine_.resume();
 				return *this;
 			}
 			inline const T& operator*() const
@@ -855,7 +887,7 @@ namespace HsBa::Slicer::Utils
 	 * @tparam T yield type
 	 */
 	template<std::movable T, typename Allocator = std::allocator<T>>
-		requires TAllocator<T, Allocator>
+		requires TAllocator<T, Allocator>&& NoStateAllocator<Allocator>
 	class CustomAllocatorGenerator
 	{
 	public:
@@ -865,7 +897,7 @@ namespace HsBa::Slicer::Utils
 			using return_type = CustomAllocatorGenerator<T, Allocator>;
 			inline return_type get_return_object()
 			{
-				return CustomAllocatorGenerator{ Handle::from_promise(*this) };
+				return CustomAllocatorGenerator<T,Allocator>{ Handle::from_promise(*this) };
 			}
 			inline static std::suspend_always initial_suspend() noexcept
 			{
@@ -888,39 +920,52 @@ namespace HsBa::Slicer::Utils
 			}
 			inline void return_void() {} // return_void for co_return
 			void await_transform() = delete;
-			template<typename R, typename Exe>
+            template<typename R, typename Exe>
 			inline TaskAwaiter<R, Exe> await_transform(Task<R, Exe>&& task)
 			{
 				Exe exe{};
-				return TaskAwaiter<R, Exe>(&exe, std::move(task));
+				return TaskAwaiter<R, Exe>(std::move(exe), std::move(task));
 			}
 			template<typename R, typename Exe, typename Allo>
 			inline CustomAllocatorTaskAwaiter<R, Exe, Allo> await_transform(CustomAllocatorTask<R, Exe, Allo>&& task)
 			{
 				Exe exe{};
-				return CustomAllocatorTaskAwaiter<R, Exe, Allo>(&exe, std::move(task));
+				return CustomAllocatorTaskAwaiter<R, Exe, Allo>(std::move(exe), std::move(task));
 			}
-			[[noreturn]]
+            [[noreturn]]
 			inline static void unhandled_exception()
 			{
 				onCancel();
 				throw std::runtime_error("unhandled exception in coroutine");
 			}
 
-			std::optional<T> current_value;
-			inline static Allocator alloc;
-
-			// new and delete for promise_type, force promise_type to use allocator
-			// no get_return_object_on_allocation_failure function, because new operator isn't noexcept
-
+            std::optional<T> current_value;
+            inline static Allocator alloc{};
+            // Use custom allocator for promise allocation
 			void* operator new(size_t size)
 			{
-				return alloc.allocate(size);
+				using AllocTraits = std::allocator_traits<Allocator>;
+				using PromiseAlloc = typename AllocTraits::template rebind_alloc<promise_type>;
+				PromiseAlloc promise_alloc(alloc);
+				size_t count = (size + sizeof(promise_type) - 1) / sizeof(promise_type);
+				return promise_alloc.allocate(count);
+			}
+
+			void operator delete(void* p) noexcept
+			{
+				using AllocTraits = std::allocator_traits<Allocator>;
+				using PromiseAlloc = typename AllocTraits::template rebind_alloc<promise_type>;
+				PromiseAlloc promise_alloc(alloc);
+				promise_alloc.deallocate(static_cast<promise_type*>(p), 1);
 			}
 
 			void operator delete(void* p, size_t size) noexcept
 			{
-				alloc.deallocate(static_cast<T*>(p), size);
+				using AllocTraits = std::allocator_traits<Allocator>;
+				using PromiseAlloc = typename AllocTraits::template rebind_alloc<promise_type>;
+				PromiseAlloc promise_alloc(alloc);
+				size_t count = (size + sizeof(promise_type) - 1) / sizeof(promise_type);
+				promise_alloc.deallocate(static_cast<promise_type*>(p), count);
 			}
 		};
 
@@ -954,7 +999,7 @@ namespace HsBa::Slicer::Utils
 				coroutine_ = other.coroutine_;
 				other.coroutine_ = {};
 			}
-			return *this;
+		 return *this;
 		}
 		inline void static SetAllocator(const Allocator& allocator)
 		{
@@ -968,7 +1013,7 @@ namespace HsBa::Slicer::Utils
 		public:
 			iterator& operator++()
 			{
-				if (coroutine_) coroutine_.resume();
+				if (coroutine_ && !coroutine_.done()) coroutine_.resume();
 				return *this;
 			}
 			inline const T& operator*() const
@@ -1028,11 +1073,11 @@ namespace HsBa::Slicer::Utils
 	inline auto GeneratorInvoke(Callback&& callback, const Container<Arg>& arg)
 		-> Container<std::invoke_result_t<Callback, Arg>>
 	{
-		using R = decltype(std::declval<Callback>()(std::forward<T>(t), std::declval<Arg>()));
+      using R = std::invoke_result_t<Callback, Arg>;
 		Container<R> ret;
 		for (const auto& i : arg)
 		{
-			ret.emplace_back(std::forward<Callback>(callback)(std::forward<T>(t), i));
+			ret.emplace_back(std::forward<Callback>(callback)(i));
 		}
 		return ret;
 	}
