@@ -12,6 +12,7 @@
 #include <any>
 
 #include "base/error.hpp"
+#include "base/template_helper.hpp"
 
 namespace HsBa::Slicer
 {
@@ -56,7 +57,14 @@ namespace HsBa::Slicer
 		}
 		~UnzipperStream()
 		{
-			std::visit(CloseStream{}, stream_);
+			std::visit(Utils::Overloaded{
+				[](std::ifstream& ifs) {
+					if (ifs.is_open()) {
+						ifs.close();
+					}
+				},
+				[](std::istringstream&){}
+			}, stream_);
 		}
 		struct Buffer {
 			Buffer() = default;
@@ -73,7 +81,14 @@ namespace HsBa::Slicer
 
 		inline static std::shared_ptr<UnzipperStream> MakeUnzipperStream(const BufferOrFile& data)
 		{
-			auto res = std::visit(MakeOperator{}, data);
+			auto res = std::visit(Utils::Overloaded{
+				[](const Buffer& buff) -> std::shared_ptr<UnzipperStream> {
+					return std::make_shared<UnzipperStream>(std::string{ buff.data.get(),buff.size });
+				},
+				[](const std::string& str) -> std::shared_ptr<UnzipperStream> {
+					return std::make_shared<UnzipperStream>(str, std::ios_base::binary | std::ios_base::in);
+				}
+			}, data);
 			return res;
 		}
 		template<typename T>
@@ -83,28 +98,7 @@ namespace HsBa::Slicer
 		}
 	private:
 		std::variant<std::ifstream, std::istringstream> stream_;
-		struct CloseStream
-		{
-			void operator()(std::ifstream& ifs) const
-			{
-				if (ifs.is_open())
-				{
-					ifs.close();
-				}
-			}
-			void operator()(std::istringstream&){}
-		};
-		struct MakeOperator 
-		{
-			std::shared_ptr<UnzipperStream> operator()(const Buffer& buff)
-			{
-				return std::make_shared<UnzipperStream>(std::string{ buff.data.get(),buff.size });
-			}
-			std::shared_ptr<UnzipperStream> operator()(const std::string& str)
-			{
-				return std::make_shared<UnzipperStream>(str, std::ios_base::binary | std::ios_base::in);
-			}
-		};
+		// Removed CloseStream and MakeOperator structs since they're now replaced with Overloaded lambdas
 		std::any unzipper_;
 	};
 

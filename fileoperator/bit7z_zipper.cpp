@@ -10,6 +10,7 @@
 
 #include "base/error.hpp"
 #include "base/encoding_convert.hpp"
+#include "base/template_helper.hpp"
 
 namespace HsBa::Slicer
 {
@@ -164,14 +165,11 @@ namespace HsBa::Slicer
 		compress.setOverwriteMode(bit7z::OverwriteMode::Overwrite);
 		for (const auto& [name, bytes] : byteFilesWaitCompress_)
 		{
-			std::visit([&name, &compress, this](auto&& arg) {
-				using T = std::decay_t<decltype(arg)>;
-				if constexpr (std::is_same_v<std::string, T>)
-				{
+			std::visit(Utils::Overloaded{
+				[&name, &compress](const std::string& arg) {
 					compress.addFile(arg, name);
-				}
-				else if constexpr (std::is_same_v<Bytes, T>)
-				{
+				},
+				[&name, &compress](const Bytes& arg) {
 					compress.addFile(arg, name);
 				}
 				},

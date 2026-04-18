@@ -16,6 +16,7 @@
 
 #include "base/encoding_convert.hpp"
 #include "base/error.hpp"
+#include "base/ModelFormat.hpp"
 
 
 namespace HsBa::Slicer

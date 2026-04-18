@@ -5,6 +5,7 @@
 
 #include "base/error.hpp"
 #include "base/encoding_convert.hpp"
+#include "base/template_helper.hpp"
 
 namespace HsBa::Slicer
 {
@@ -98,18 +99,14 @@ namespace HsBa::Slicer
 		size_t currentFileIndex = 0;
 		for (const auto& [name, bytes] : byteFilesWaitCompress_)
 		{
-			status = std::visit([&archiver, &name, this](auto&& arg)
-				{
-					using T = std::decay_t<decltype(arg)>;
-					if constexpr (std::is_same_v<std::string, T>)
-					{
-						return ZipAddFile(archiver, name, arg);
-					}
-					else if constexpr (std::is_same_v<Bytes, T>)
-					{
-						return ZipAddMember(archiver, name, arg);
-					}
-				}, bytes);
+			status = std::visit(Utils::Overloaded{
+				[&archiver, &name, this](const std::string& arg) -> mz_bool {
+					return ZipAddFile(archiver, name, arg);
+				},
+				[&archiver, &name, this](const Bytes& arg) -> mz_bool {
+					return ZipAddMember(archiver, name, arg);
+				}
+			}, bytes);
 			if (status <= MZ_OK)
 			{
 				return status;

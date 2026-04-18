@@ -17,20 +17,20 @@ else()
 endif()
 
 if(WIN32)
-    target_link_libraries(HsBaSlicerLog PUBLIC
+    target_link_libraries(HsBaSlicerLog PRIVATE
     HsBaSlicerBase
     HsBaSlicerFileOperator
     Boost::boost
     Boost::log
     )
 elseif(ANDROID)
-    target_link_libraries(HsBaSlicerLog PUBLIC
+    target_link_libraries(HsBaSlicerLog PRIVATE
     HsBaSlicerBase
     HsBaSlicerFileOperator
     log
     )
 else()
-    target_link_libraries(HsBaSlicerLog PUBLIC
+    target_link_libraries(HsBaSlicerLog PRIVATE
     HsBaSlicerBase
     HsBaSlicerFileOperator
     Boost::boost

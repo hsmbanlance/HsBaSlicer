@@ -1,9 +1,41 @@
 ﻿find_package(Boost 1.54 REQUIRED unit_test_framework)
 
+if(NOT DEFINED HSBA_SLICER_RUN_TESTS_AFTER_BUILD)
+  set(HSBA_SLICER_RUN_TESTS_AFTER_BUILD ON)
+endif()
+
+set(HSBA_RUN_TESTS_AFTER_BUILD ${HSBA_SLICER_RUN_TESTS_AFTER_BUILD})
+
 #force utf-8
 if(MSVC)
   add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>")
   add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
+endif()
+
+# any_object_test
+add_executable(any_object_test AnyObject/any_object_test.cpp)
+
+target_link_libraries(any_object_test
+	HsBaSlicerBase
+    HsBaSlicerUtils
+	Boost::unit_test_framework
+)
+
+target_compile_definitions(any_object_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME any_object_test
+  COMMAND $<TARGET_FILE:any_object_test>
+  )
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET any_object_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R any_object_test
+  )
 endif()
 
 #any_visit_test
@@ -45,6 +77,81 @@ add_test(
   COMMAND $<TARGET_FILE:coroutines_test>
   -t generator_tasks
   )
+
+# memory_pool_test
+add_executable(memory_pool_test Pool/memory_pool_test.cpp)
+
+target_link_libraries(memory_pool_test
+	HsBaSlicerBase
+	Boost::unit_test_framework
+)
+
+target_compile_definitions(memory_pool_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME memory_pool_test
+  COMMAND $<TARGET_FILE:memory_pool_test>
+  )
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET memory_pool_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R memory_pool_test
+  )
+endif()
+
+# thread_pool_test
+add_executable(thread_pool_test Pool/thread_pool_test.cpp)
+
+target_link_libraries(thread_pool_test
+	HsBaSlicerBase
+	Boost::unit_test_framework
+)
+
+target_compile_definitions(thread_pool_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME thread_pool_test
+  COMMAND $<TARGET_FILE:thread_pool_test>
+  )
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET thread_pool_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R thread_pool_test
+  )
+endif()
+
+# object_pool_test
+add_executable(object_pool_test Pool/object_pool_test.cpp)
+
+target_link_libraries(object_pool_test
+	HsBaSlicerBase
+	Boost::unit_test_framework
+)
+
+target_compile_definitions(object_pool_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME object_pool_test
+  COMMAND $<TARGET_FILE:object_pool_test>
+  )
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET object_pool_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R object_pool_test
+  )
+endif()
 
 #filename check and operator
 #test for filename check
@@ -131,34 +238,79 @@ add_test(
   -t enum_simple_convert
   )
 
-add_custom_target(RunAllTests
-  COMMAND ${CMAKE_CTEST_COMMAND} -V
-  DEPENDS anyvisit_test coroutines_test filename_check_test configmap_test boost_std_convert_test enum_simple_convert_test cipher_test
+set(ALL_TEST_TARGETS
+  any_object_test
+  anyvisit_test
+  coroutines_test
+  memory_pool_test
+  thread_pool_test
+  object_pool_test
+  filename_check_test
+  configmap_test
+  boost_std_convert_test
+  enum_simple_convert_test
+  sqlite_test
+  zipper_test
+  json_convert_test
+  cipher_test
+  string_utils_test
+  points_path_test
+  layers_path_test
+  images_path_test
+  cgal_model_test
+  igl_model_test
+  full_topo_model_test
+  polygon_fill_test
+  image_polygons_test
+  static_reflect_test
 )
 
-add_custom_command(TARGET anyvisit_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R anyvisit_test
-)
+if(TARGET HsBaSlicerCADModel)
+  list(APPEND ALL_TEST_TARGETS occt_model_test)
+endif()
 
-add_custom_command(TARGET coroutines_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R coroutines_test
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_target(RunAllTests
+    COMMAND ${CMAKE_CTEST_COMMAND} -V
+    DEPENDS ${ALL_TEST_TARGETS}
+  )
+endif()
 
-add_custom_command(TARGET filename_check_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R filename_check_test
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET anyvisit_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R anyvisit_test
+  )
+endif()
 
-add_custom_command(TARGET configmap_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R configmap_test
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET coroutines_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R coroutines_test
+  )
+endif()
 
-add_custom_command(TARGET boost_std_convert_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R boost_std_convert_test 
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET filename_check_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R filename_check_test
+  )
+endif()
 
-add_custom_command(TARGET enum_simple_convert_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R enum_simple_convert_test 
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET configmap_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R configmap_test
+  )
+endif()
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET boost_std_convert_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R boost_std_convert_test
+  )
+endif()
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET enum_simple_convert_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R enum_simple_convert_test
+  )
+endif()
 
 #filename check and operator
 #test for sql operator
@@ -184,9 +336,11 @@ add_test(
   )
 
 
-add_custom_command(TARGET sqlite_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R sqlite_test 
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET sqlite_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R sqlite_test
+  )
+endif()
 
 #filename check and operator
 #test for zipper operator
@@ -212,9 +366,11 @@ add_test(
   )
 
 
-add_custom_command(TARGET zipper_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R zipper_test
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET zipper_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R zipper_test
+  )
+endif()
 
 #json convert test
 #test for json convert
@@ -240,9 +396,11 @@ add_test(
   )
 
 
-add_custom_command(TARGET json_convert_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R json_convert
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET json_convert_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R json_convert
+  )
+endif()
 
 # cipher tests
 add_executable(cipher_test
@@ -265,9 +423,11 @@ add_test(
   COMMAND $<TARGET_FILE:cipher_test>
   )
 
-add_custom_command(TARGET cipher_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R cipher_test
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET cipher_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R cipher_test
+  )
+endif()
 
 
 #string utils test
@@ -293,9 +453,11 @@ add_test(
   )
 
 
-add_custom_command(TARGET string_utils_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R string_utils_test
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET string_utils_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R string_utils_test
+  )
+endif()
 
 #points path test
 #test for points path
@@ -321,9 +483,11 @@ add_test(
   )
 
 
-add_custom_command(TARGET points_path_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R points_path_test
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET points_path_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R points_path_test
+  )
+endif()
 
 # layers path test
 add_executable(layers_path_test
@@ -347,9 +511,11 @@ add_test(
   COMMAND $<TARGET_FILE:layers_path_test>
 )
 
-add_custom_command(TARGET layers_path_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R layers_path_test
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET layers_path_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R layers_path_test
+  )
+endif()
 
 # images path test
 add_executable(images_path_test
@@ -374,9 +540,11 @@ add_test(
   COMMAND $<TARGET_FILE:images_path_test>
 )
 
-add_custom_command(TARGET images_path_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R images_path_test
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET images_path_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R images_path_test
+  )
+endif()
 
 include_directories(${CMAKE_SOURCE_DIR})
 
@@ -391,9 +559,11 @@ if(TARGET HsBaSlicerCADModel)
   target_compile_definitions(occt_model_test PRIVATE BOOST_TEST_DYN_LINK)
   enable_testing()
   add_test(NAME occt_model_test COMMAND $<TARGET_FILE:occt_model_test>)
+  if(HSBA_RUN_TESTS_AFTER_BUILD)
   add_custom_command(TARGET occt_model_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R occt_model_test
-)
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R occt_model_test
+  )
+endif()
 endif()
 
 add_executable(cgal_model_test Models/cgal_model_test.cpp)
@@ -413,12 +583,16 @@ target_compile_definitions(igl_model_test PRIVATE $<$<CONFIG:Debug>:DISABLE_BOOL
 enable_testing()
 add_test(NAME cgal_model_test COMMAND $<TARGET_FILE:cgal_model_test>)
 add_test(NAME igl_model_test COMMAND $<TARGET_FILE:igl_model_test>)
-add_custom_command(TARGET cgal_model_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R cgal_model_test
-)
-add_custom_command(TARGET igl_model_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R igl_model_test
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET cgal_model_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R cgal_model_test
+  )
+endif()
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET igl_model_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R igl_model_test
+  )
+endif()
 
 add_executable(full_topo_model_test Models/full_topo_model_test.cpp)
 
@@ -440,9 +614,11 @@ add_test(
   -t full_topo_model_test
   )
 
-add_custom_command(TARGET full_topo_model_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R full_topo_model_test
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET full_topo_model_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R full_topo_model_test
+  )
+endif()
 
 
 ## PolygonFill tests
@@ -466,9 +642,11 @@ add_test(
   COMMAND $<TARGET_FILE:polygon_fill_test>
 )
 
-add_custom_command(TARGET polygon_fill_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R polygon_fill_test
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET polygon_fill_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R polygon_fill_test
+  )
+endif()
 
 ## ImagePolygons tests
 add_executable(image_polygons_test
@@ -491,9 +669,11 @@ add_test(
   COMMAND $<TARGET_FILE:image_polygons_test>
 )
 
-add_custom_command(TARGET image_polygons_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R image_polygons_test
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET image_polygons_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R image_polygons_test
+  )
+endif()
 
 
 ## Static Reflect tests
@@ -517,6 +697,8 @@ add_test(
   COMMAND $<TARGET_FILE:static_reflect_test>
 )
 
-add_custom_command(TARGET static_reflect_test POST_BUILD
-  COMMAND ${CMAKE_CTEST_COMMAND} -V -R static_reflect_test
-)
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET static_reflect_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R static_reflect_test
+  )
+endif()
