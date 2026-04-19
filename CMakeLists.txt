@@ -136,12 +136,6 @@ if (HSBA_HSBA_USE_BIT7Z AND NOT ANDROID)
 	find_package(unofficial-bit7z CONFIG REQUIRED)
 endif()
 
-#PNG
-find_package(PNG REQUIRED)
-
-#libjpeg-turbo
-find_package(libjpeg-turbo CONFIG REQUIRED)
-
 #Protobuf
 find_package(Protobuf CONFIG REQUIRED)
 
@@ -233,7 +227,11 @@ add_subdirectory("proto")
 add_subdirectory("base")
 add_subdirectory("cipher")
 add_subdirectory("utils")
-add_subdirectory("logger")
+if(SWITCH)
+  LOG(WARNING "Logger is not supported on Game Consoles")
+else()
+  add_subdirectory("logger")
+endif()
 add_subdirectory("2D")
 add_subdirectory("paths")
 add_subdirectory("fileoperator")

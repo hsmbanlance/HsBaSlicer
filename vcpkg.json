@@ -5,8 +5,6 @@
       "name": "bit7z",
       "platform": "!android & !ios"
     },
-    "boost-asio",
-    "boost-graph",
     {
       "name": "boost-locale",
       "platform": "!android"
@@ -24,7 +22,7 @@
       "name": "boost-nowide",
       "platform": "!android"
     },
-    "boost-polygon",
+    "fontconfig",
     "boost-property-tree",
     "boost-test",
     "boost-units",
@@ -40,8 +38,6 @@
         "cgal"
       ]
     },
-    "libjpeg-turbo",
-    "libpng",
     "miniz",
     {
       "name": "opencascade",

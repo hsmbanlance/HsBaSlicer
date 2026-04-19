@@ -6,13 +6,13 @@
 #include <QString>
 #include <QStringConverter>
 #else
-#ifndef __ANDROID__
+#if !defined(__ANDROID__ ) && !(defined(TARGET_OS_IOS) && TARGET_OS_IOS)
 #include <boost/locale.hpp>
 #else
 #include <vector>
 #include <iconv.h>
 #include <errno.h>
-#endif // !__ANDROID__
+#endif // ANDROID or IOS
 #endif // QT_VERSION 
 
 #if _WIN32
@@ -82,13 +82,13 @@ namespace HsBa::Slicer
 #ifndef QT_VERSION
 	std::string encoding_convert(const std::string& str, const std::string& from, const std::string& to)
 	{
-#ifndef __ANDROID__
+#if !defined(__ANDROID__ ) && !(defined(TARGET_OS_IOS) && TARGET_OS_IOS)
 		if (from == to)
 		{
 			return str;
 		}
 		return boost::locale::conv::between(str, from, to);
-#else // __ANDROID__
+#else // Android and iOS do not support boost.locale, use iconv instead
 		constexpr size_t kMinBufferSize = 64; // Minimum buffer size for output
 		constexpr size_t kInitialExpansionFactor = 2;
 		constexpr size_t kMaxExpansionFactor = 16; // Maximum expansion factor to prevent infinite loops
@@ -140,7 +140,7 @@ namespace HsBa::Slicer
 		} while (errno == E2BIG && outBufSize < inBytesLeft * kMaxExpansionFactor);
 
 		return std::string(outBuf.data(), outBuf.size() - outBytesLeft);
-#endif // __ANDROID__
+#endif // android or iOS
 	}
 #endif // !QT_VERSION
 
