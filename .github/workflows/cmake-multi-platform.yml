@@ -165,7 +165,7 @@ jobs:
     - name: Build (macOS)
       if: runner.os == 'macOS'
       run: |
-        cmake --build build --config ${{ matrix.build_type }}
+        cmake --build build
 
     - name: Test (Linux)
       if: runner.os == 'Linux'
