@@ -273,7 +273,14 @@ namespace HsBa::Slicer::Utils
 	template<Enum T, size_t N = 0>
 	constexpr auto EnumMax()
 	{
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wenum-constexpr-conversion"
+#endif
 		constexpr auto value = static_cast<T>(N);
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 		if constexpr (EnumName<value>().find(")") == std::string_view::npos)
 		{
 			return EnumMax<T, N + 1>();
