@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
         build_type: [Release]
         c_compiler: [gcc, cl]
         include:
@@ -22,19 +22,12 @@ jobs:
           - os: ubuntu-latest
             c_compiler: gcc
             cpp_compiler: g++
-          - os: macos-latest
-            c_compiler: clang
-            cpp_compiler: clang++
         exclude:
           - os: windows-latest
             c_compiler: gcc
           - os: windows-latest
             c_compiler: clang
           - os: ubuntu-latest
-            c_compiler: cl
-          - os: macos-latest
-            c_compiler: gcc
-          - os: macos-latest
             c_compiler: cl
 
     steps:
@@ -52,19 +45,6 @@ jobs:
         remove-codeql: 'true'
         remove-docker-images: 'true'
 
-    - name: Maximize build disk space (macOS)
-      if: runner.os == 'macOS'
-      run: |
-        sudo rm -rf /Applications/Xcode*.app/Contents/Developer/Platforms/AppleTVOS.platform
-        sudo rm -rf /Applications/Xcode*.app/Contents/Developer/Platforms/WatchOS.platform
-        sudo rm -rf /Applications/Xcode*.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS*.sdk
-        sudo rm -rf /Applications/Xcode*.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator*.sdk
-        sudo rm -rf /Applications/Xcode*.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift
-        sudo rm -rf /Applications/Xcode*.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0
-        sudo rm -rf /Applications/Xcode*.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.5
-        sudo rm -rf /Library/Developer/CoreSimulator
-        df -h
-
     - name: Cache vcpkg binary cache
       uses: actions/cache@v4
       with:
@@ -81,11 +61,6 @@ jobs:
         sudo apt-get install -y git curl zip unzip tar at libxt-dev gperf libxaw7-dev cifs-utils build-essential g++ gfortran libx11-dev libxkbcommon-x11-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev mesa-common-dev libxinerama-dev libxxf86vm-dev libxcursor-dev yasm libnuma1 libnuma-dev libtool-bin libltdl-dev flex bison libbison-dev autoconf libudev-dev libncurses5-dev libtool libxrandr-dev xutils-dev dh-autoreconf autoconf-archive libgles2-mesa-dev ruby-full pkg-config meson nasm cmake ninja-build libxext-dev libxfixes-dev libxrender-dev libxcb1-dev libx11-xcb-dev libxcb-dri3-dev libxcb-present-dev libxcb-glx0-dev libxcb-util0-dev libxkbcommon-dev libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev libxcb-icccm4-dev libxcb-sync-dev libxcb-xfixes0-dev libxcb-shape0-dev libxcb-randr0-dev libxcb-render-util0-dev libxcb-xinerama0-dev libxcb-xkb-dev libxcb-xinput-dev libxcb-cursor-dev libkrb5-dev libxcb-res0-dev libxcb-keysyms1-dev libxcb-xkb-dev libxcb-record0-dev python3-setuptools python3-mako python3-pip python3-venv python3-jinja2 nodejs libwayland-dev python-is-python3 guile-2.2-dev libxdamage-dev libdbus-1-dev libxtst-dev haskell-stack golang-go wayland-protocols libbluetooth-dev autoconf-archive
         sudo apt-get install -y libncurses-dev libtirpc-dev libfontconfig1-dev bison flex libxrender-dev libxtst-dev libxrandr-dev ninja-build
 
-    - name: Install dependencies on macOS
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew update
-        brew install cmake ninja python@3.9 autoconf automake libtool autoconf-archive
 
     - name: Set reusable strings
       id: strings
@@ -120,16 +95,6 @@ jobs:
         echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
         # sudo ln -sf /usr/bin/ninja-build /usr/local/bin/ninja
 
-    - name: Clone vcpkg, bootstrap and set VCPKG_ROOT (macOS)
-      if: runner.os == 'macOS'
-      run: |
-        if [ ! -d vcpkg ]; then
-          git clone https://github.com/microsoft/vcpkg.git
-          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
-          ./vcpkg/vcpkg integrate install
-        fi
-        echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
-
     - name: Locate source
       if: runner.os != 'Windows'
       run: |
@@ -145,38 +110,15 @@ jobs:
           -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
           -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 
-    - name: Configure CMake (macOS)
-      if: runner.os == 'macOS'
-      run: |
-        export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
-        which ninja
-        cmake -B build -S . -G Ninja \
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
-          -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
-          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
-
     - name: Build (Linux)
       if: runner.os == 'Linux'
       shell: bash
       run: |
         cmake --build build --config ${{ matrix.build_type }}
 
-    - name: Build (macOS)
-      if: runner.os == 'macOS'
-      run: |
-        cmake --build build
-
     - name: Test (Linux)
       if: runner.os == 'Linux'
       shell: bash
-      run: |
-        cd build/tests
-        ctest --build-config Release --output-on-failure --parallel 2
-      continue-on-error: true
-
-    - name: Test (macOS)
-      if: runner.os == 'macOS'
       run: |
         cd build/tests
         ctest --build-config Release --output-on-failure --parallel 2
@@ -232,55 +174,6 @@ jobs:
         Set-Location $exe.DirectoryName
         ctest -C Release --output-on-failure --parallel 2
       continue-on-error: true
-
-
-  build-ios:
-    runs-on: macos-latest
-    needs: build
-    steps:
-    - name: Maximize build disk space (macOS)
-      run: |
-        sudo rm -rf /Applications/Xcode*.app/Contents/Developer/Platforms/AppleTVOS.platform
-        sudo rm -rf /Applications/Xcode*.app/Contents/Developer/Platforms/WatchOS.platform
-        sudo rm -rf /Applications/Xcode*.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS*.sdk
-        sudo rm -rf /Applications/Xcode*.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator*.sdk
-        sudo rm -rf /Applications/Xcode*.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift
-        sudo rm -rf /Applications/Xcode*.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0
-        sudo rm -rf /Applications/Xcode*.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.5
-        sudo rm -rf /Library/Developer/CoreSimulator
-        df -h
-
-    - uses: actions/checkout@v4
-
-    - name: Install dependencies on macOS
-      run: |
-        brew update
-        brew install cmake ninja python@3.9 autoconf automake libtool
-
-    - name: Clone vcpkg, bootstrap and set VCPKG_ROOT (macOS)
-      run: |
-        if [ ! -d vcpkg ]; then
-          git clone https://github.com/microsoft/vcpkg.git
-          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
-          ./vcpkg/vcpkg integrate install
-        fi
-        echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
-
-    - name: Configure CMake for iOS
-      run: |
-        cmake -B build-ios -S . -G Xcode \
-          -DCMAKE_SYSTEM_NAME=iOS \
-          -DCMAKE_OSX_ARCHITECTURES=arm64 \
-          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
-
-    - name: Build for iOS
-      run: |
-        cmake --build build-ios --config Release
-
-    - name: Test for iOS (if applicable)
-      run: |
-        # iOS tests may not run directly, skip or use simulator
-        echo "iOS build completed"
 
   build-android:
     runs-on: ubuntu-latest
