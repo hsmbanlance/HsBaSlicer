@@ -3,7 +3,7 @@
 #include <filesystem>
 
 #ifndef __ANDROID__
-#ifndef TARGET_OS_IOS
+#if !(defined(TARGET_OS_IOS) && TARGET_OS_IOS)
 #include <boost/log/trivial.hpp>
 #include <boost/log/utility/setup/file.hpp>
 #include <boost/log/utility/setup/console.hpp>
@@ -40,7 +40,7 @@ namespace HsBa::Slicer::Log
 			return "[" + std::string{ location.file_name() } + ":" + std::to_string(location.line()) + "] " + location.function_name() + ": ";
 		}
 
-#ifndef __ANDROID__
+#if !defined(__ANDROID__) && !(defined(TARGET_OS_IOS) && TARGET_OS_IOS)
 		static boost::log::trivial::severity_level GetLogLevel(int log_level)
 		{
 			switch (log_level)
@@ -80,6 +80,28 @@ namespace HsBa::Slicer::Log
 			}
 		}
 #endif // TARGET_OS_IOS
+
+#ifdef __ANDROID__
+
+		static int GetAndroidLogPriority(int log_level)
+		{
+			switch (log_level)
+			{
+			case 0: return ANDROID_LOG_VERBOSE;
+			case 1: return ANDROID_LOG_DEBUG;
+			case 2: return ANDROID_LOG_INFO;
+			case 3: return ANDROID_LOG_WARN;
+			case 4: return ANDROID_LOG_ERROR;
+			case 5: return ANDROID_LOG_FATAL;
+			default:
+#if _DEBUG
+				return ANDROID_LOG_DEBUG;
+#else
+				return ANDROID_LOG_WARN;
+#endif
+			}
+		}
+#endif // __ANDROID__
 	} // namespace (anonymous)
 
 	HSBA_SLICER_LOG_API LoggerSingletone::LoggerSingletone(LoggerSingletone::Private)
