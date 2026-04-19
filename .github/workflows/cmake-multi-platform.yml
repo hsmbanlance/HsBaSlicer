@@ -136,7 +136,7 @@ jobs:
         find "$GITHUB_WORKSPACE" -name CMakeLists.txt -type f
 
     - name: Configure CMake (Linux)
-      if: runner.os != 'Windows'
+      if: runner.os == 'Linux'
       shell: bash
       run: |
         cmake -B build -S . -G Ninja \
