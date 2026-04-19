@@ -248,10 +248,16 @@ add_subdirectory ("HsBaSlicer")
 
 #test
 option(HSBA_SLICER_USE_TESTS "use tests" ON)
-
-if(ANDROID OR IOS)
-  set(HSBA_SLICER_USE_TESTS OFF)
-  message("Disable tests on Android or IOS.")
+if(ANDROID OR IOS OR SWITCH)
+  set(HSBA_SLICER_USE_TESTS OFF CACHE BOOL "use tests" FORCE)
+  message(STATUS "Tests disabled on Android, iOS, or Switch due to output limitations.")
+endif()
+if(NOT DEFINED HSBA_SLICER_RUN_TESTS_AFTER_BUILD)
+  set(HSBA_SLICER_RUN_TESTS_AFTER_BUILD ON CACHE BOOL "Run tests after build" ON)
+endif()
+if(CMAKE_CROSSCOMPILING)
+  set(HSBA_SLICER_RUN_TESTS_AFTER_BUILD OFF CACHE BOOL "Run tests after build" FORCE)
+  message(STATUS "Cross-compiling: test executables will be built but not executed.")
 endif()
 
 if(HSBA_SLICER_USE_TESTS)

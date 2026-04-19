@@ -19,6 +19,7 @@
 
 #include "base/error.hpp"
 #include "base/encoding_convert.hpp"
+#include "base/ModelFormat.hpp"
 #include <cmath>
 #include <algorithm>
 

@@ -13,6 +13,7 @@
 #include "2D/LuaAdapter.hpp"
 
 #include "base/error.hpp"
+#include "base/ModelFormat.hpp"
 #include "utils/LuaNewObject.hpp"
 
 namespace HsBa::Slicer

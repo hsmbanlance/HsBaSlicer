@@ -3,14 +3,68 @@
 #define HSBA_SLICER_IModel_HPP
 
 #include <string_view>
+#include <cstdint>
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 
-#include "ModelFormat.hpp"
+extern "C"
+{
+    // defined for C interface
+
+    typedef struct HsBaVector2f
+    {
+        float x;
+        float y;
+	} HsBaVector2f_t;
+    typedef struct HsBaVector3f
+    {
+        float x;
+        float y;
+        float z;
+	} HsBaVector3f_t;
+    typedef struct HsBaQuaternionf
+    {
+        float x;
+        float y;
+        float z;
+        float w;
+	} HsBaQuaternionf_t;
+    typedef struct HsBaMatrix4f
+    {
+        float m[4][4];
+	} HsBaMatrix4f_t;
+    typedef struct HsBaPoly2D
+    {
+		HsBaVector2f_t* vertices;
+		size_t vertexCount;
+    } HsBaPoly2D_t;
+}
 
 namespace HsBa::Slicer
 {
+    enum class ModelFormat : uint32_t
+    {
+        //mesh
+        UnknownPLY,
+        ASCIIPLY,
+        BinaryPLY,
+        OBJ,
+        UnknownSTL,
+        BinarySTL,
+        ASCIISTL,
+        OFF,
+        //Brep
+        VRML,
+        STEP,
+        IGES,
+        //csg
+
+        //point cloud
+        XYZ,
+        //Unknown
+        Unknown
+    };
     class IModel
     {
     public:

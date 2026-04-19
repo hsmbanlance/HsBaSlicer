@@ -4,6 +4,8 @@
 	app_config.cpp
 	struct_json.hpp
 	LuaNewObject.hpp
+	LuaAnyObject.hpp
+	LuaAnyObject.cpp
 )
 
 find_package(boost_date_time CONFIG REQUIRED)

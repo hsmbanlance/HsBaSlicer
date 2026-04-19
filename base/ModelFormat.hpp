@@ -5,30 +5,10 @@
 #include <string>
 #include <string_view>
 
+#include "IModel.hpp"
+
 namespace HsBa::Slicer
 {
-    enum class ModelFormat
-    {
-        //mesh
-        UnknownPLY,
-        ASCIIPLY,
-        BinaryPLY,
-        OBJ,
-        UnknownSTL,
-        BinarySTL,
-        ASCIISTL,
-        OFF,
-        //Brep
-        VRML,
-        STEP,
-        IGES,
-        //csg
-        
-        //point cloud
-        XYZ,
-        //Unknown
-        Unknown
-    };
 
     //convert to string
     inline const char* ToString(ModelFormat format)
