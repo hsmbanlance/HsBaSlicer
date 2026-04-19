@@ -157,7 +157,7 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 
     - name: Build (Linux)
-      if: runner.os != 'Windows'
+      if: runner.os == 'Linux'
       shell: bash
       run: |
         cmake --build build --config ${{ matrix.build_type }}
@@ -168,7 +168,7 @@ jobs:
         cmake --build build --config ${{ matrix.build_type }}
 
     - name: Test (Linux)
-      if: runner.os != 'Windows'
+      if: runner.os == 'Linux'
       shell: bash
       run: |
         cd build/tests
