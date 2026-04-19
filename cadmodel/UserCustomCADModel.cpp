@@ -1,4 +1,7 @@
-﻿#include "UserCustomCADModel.hpp"
+﻿#ifdef HAS_BOOST_DLL
+
+
+#include "UserCustomCADModel.hpp"
 
 #include <unordered_map>
 
@@ -259,3 +262,5 @@ namespace HsBa::Slicer
 
 	// static NamedObjectPool<UserCustomCADDll, 10> dllPool;
 }
+
+#endif // HAS_BOOST_DLL

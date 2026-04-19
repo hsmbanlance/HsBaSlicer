@@ -9,7 +9,9 @@
 #include <cstring>
 #include <filesystem>
 // use OpenCV for image IO and simple raster operations
+#ifdef HAS_OPENCV
 #include <opencv2/opencv.hpp>
+#endif
 #include <lua.hpp>
 
 #include "base/error.hpp"
@@ -30,6 +32,7 @@ namespace HsBa::Slicer
 
         bool LoadImageGray(const std::string &path, std::vector<uint8_t> &out, int &w, int &h)
         {
+#ifdef HAS_OPENCV
             try {
                 cv::Mat img = cv::imread(path, cv::IMREAD_UNCHANGED);
                 if (img.empty()) return false;
@@ -49,10 +52,14 @@ namespace HsBa::Slicer
             {
                  return false; 
             }
+#else
+            return false;
+#endif
         }
 
         bool SavePNGGray(const std::string &path, const std::vector<uint8_t> &img, int w, int h)
         {
+#ifdef HAS_OPENCV
             try {
                 cv::Mat m(h, w, CV_8UC1);
                 std::memcpy(m.data, img.data(), w * h);
@@ -62,6 +69,9 @@ namespace HsBa::Slicer
             {
                 return false;
             }
+#else
+            return false;
+#endif
         }
 
         PolygonsD ExtractContoursFromBinary(const std::vector<uint8_t>& img, int w, int h, double pixelSize)
@@ -145,6 +155,7 @@ namespace HsBa::Slicer
     bool ToImage(const PolygonsD& polys, int width, int height, double pixelSize, const std::string& outPath,
         uint8_t foreground, uint8_t background)
     {
+#ifdef HAS_OPENCV
         if (width <= 0 || height <= 0) return false;
 
         std::string low = ToLower(outPath);
@@ -194,6 +205,9 @@ namespace HsBa::Slicer
             }
             return cv::imwrite(outPath, img);
         }
+#else
+        return false;
+#endif
     }
 
     std::vector<PolygonsD> FromImageMulti(const std::string& path, const std::vector<int>& thresholds, double pixelSize)

@@ -131,7 +131,7 @@ find_package(miniz CONFIG REQUIRED)
 #use bit7z operator zipper
 option(HSBA_HSBA_USE_BIT7Z "use bit7z" ON)
 
-if (HSBA_HSBA_USE_BIT7Z AND NOT ANDROID)
+if(HSBA_HSBA_USE_BIT7Z AND NOT ANDROID AND NOT IOS AND NOT SWITCH)
 	add_compile_definitions(HSBA_USE_BIT7Z)
 	find_package(unofficial-bit7z CONFIG REQUIRED)
 endif()
@@ -149,7 +149,10 @@ find_package(Eigen3 CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 #OpenCV
-find_package(OpenCV REQUIRED)
+if(NOT IOS)
+  find_package(OpenCV REQUIRED)
+  add_compile_definitions(HAS_OPENCV)
+endif()
 
 #Option for kernel
 

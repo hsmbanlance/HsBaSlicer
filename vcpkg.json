@@ -22,7 +22,11 @@
       "name": "boost-nowide",
       "platform": "!android"
     },
-    "fontconfig",
+    "boost-date-time",
+    {
+      "name": "fontconfig",
+      "platform": "!android"
+    },
     "boost-property-tree",
     "boost-test",
     "boost-units",
@@ -30,7 +34,10 @@
     "boost-pfr",
     "cgal",
     "clipper2",
-    "opencv",
+    {
+      "name": "opencv",
+      "platform": "!ios"
+    },
     "eigen3",
     {
       "name": "libigl",
