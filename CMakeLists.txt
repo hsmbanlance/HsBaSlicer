@@ -191,6 +191,9 @@ endif()
 #Lua
 find_package(Lua REQUIRED)
 
+#magic_enum
+find_package(magic_enum CONFIG REQUIRED)
+
 #protobuf out
 option(HSBA_PROTOBUF_OUT "protobuf out source" ON)
 

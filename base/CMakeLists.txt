@@ -38,3 +38,5 @@ if(NOT ANDROID)
 else()
     target_link_libraries(HsBaSlicerBase PUBLIC Eigen3::Eigen Boost::boost)
 endif()
+
+target_link_libraries(HsBaSlicerBase PUBLIC magic_enum::magic_enum)

@@ -32,6 +32,7 @@ BOOST_AUTO_TEST_CASE(thread_pool_normal)
     BOOST_CHECK_EQUAL(counter.load(std::memory_order_relaxed), 3);
 }
 
+#ifdef HSBA_ENABLE_THREAD_POOL_COROUTINE
 BOOST_AUTO_TEST_CASE(thread_pool_coroutine)
 {
     auto task = []() -> Task<int, ThreadPoolExecutor> {
@@ -68,5 +69,6 @@ BOOST_AUTO_TEST_CASE(thread_pool_mixed)
 
     ThreadPoolExecutor::SetDefaultPool(nullptr);
 }
+#endif
 
 BOOST_AUTO_TEST_SUITE_END()

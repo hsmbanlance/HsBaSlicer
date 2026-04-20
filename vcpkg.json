@@ -73,6 +73,7 @@
     {
       "name": "vcpkg-pkgconfig-get-modules",
       "platform": "!android"
-    }
+    },
+    "magic-enum"
   ]
 }

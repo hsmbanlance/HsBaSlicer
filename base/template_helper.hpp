@@ -25,6 +25,8 @@
 #include <generator>
 #endif // __cpp_lib_generator
 
+#include <magic_enum/magic_enum.hpp>
+
 #include "concepts.hpp"
 #include "error.hpp"
 
@@ -239,59 +241,6 @@ namespace HsBa::Slicer::Utils
 	template<typename... Ts> Overloaded(Ts...) -> Overloaded<Ts...>;
 	
 	/**
-	 * @brief enum to string name with template, only support enum with continuous value
-	 * @tparam T enum value
-	 * @return enum name
-	 */
-	template<auto T>
-	constexpr auto EnumName()
-	{
-		std::string_view name;
-#if __GNUC__ || __clang__
-		name = __PRETTY_FUNCTION__;
-		size_t start = name.find('=') + 2;
-		size_t end = name.size() - 1;
-		name = std::string_view{ name.data() + start, end - start };
-		start = name.rfind("::");
-#elif _MSC_VER
-		name = __FUNCSIG__;
-		size_t start = name.find('<') + 1;
-		size_t end = name.rfind(">(");
-		name = std::string_view{ name.data() + start, end - start };
-		start = name.rfind("::");
-#endif
-		return start == std::string::npos ? name : std::string_view{
-			name.data() + start + 2, name.size() - start - 2 };
-	}
-	
-	/**
-	 * @brief enum max value, only support enum with continuous value, negative value will be ignored
-	 * @tparam T enum class
-	 * @tparam N ingore
-	 * @return enum max value
-	 */
-	template<Enum T, size_t N = 0>
-	constexpr auto EnumMax()
-	{
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wenum-constexpr-conversion"
-#endif
-		constexpr auto value = static_cast<T>(N);
-#if defined(__clang__)
-#pragma clang diagnostic pop
-#endif
-		if constexpr (EnumName<value>().find(")") == std::string_view::npos)
-		{
-			return EnumMax<T, N + 1>();
-		}
-		else
-		{
-			return N;
-		}
-	}
-
-	/**
 	 * @brief enum to string name in function argument, only support enum with continuous value, negative value will be ignored
 	 * @tparam T enum class
 	 * @param value enum value
@@ -300,12 +249,7 @@ namespace HsBa::Slicer::Utils
 	template<Enum T>
 	constexpr auto EnumName(T value)
 	{
-		constexpr auto num = EnumMax<T>();
-		constexpr auto names = []<size_t... Is>(std::index_sequence<Is...>)
-		{
-			return std::array<std::string_view, num>{ EnumName<static_cast<T>(Is)>()... };
-		}(std::make_index_sequence<num>{});
-		return names[static_cast<size_t>(value)];
+		return magic_enum::enum_name<T>(value);
 	}
 	
 	/**
@@ -317,19 +261,15 @@ namespace HsBa::Slicer::Utils
 	template<Enum T>
 	constexpr auto EnumFromName(std::string_view name)
 	{
-		constexpr auto num = EnumMax<T>();
-		constexpr auto names = []<size_t... Is>(std::index_sequence<Is...>)
+		auto opt = magic_enum::enum_cast<T>(name);
+		if(opt.has_value() && static_cast<std::underlying_type_t<T>>(opt.value()) >= 0)
 		{
-			return std::array<std::string_view, num>{ EnumName<static_cast<T>(Is)>()... };
-		}(std::make_index_sequence<num>{});
-		for (size_t i = 0; i < num; i++)
-		{
-			if (names[i] == name)
-			{
-				return static_cast<T>(i);
-			}
+			return opt.value();
 		}
-		return T{};
+		else
+		{
+			return T{};
+		}
 	}
 
 	template<typename T, typename... Us>
