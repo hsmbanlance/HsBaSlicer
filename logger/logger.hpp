@@ -9,6 +9,10 @@
 #include <boost/log/core.hpp>
 #endif
 
+#if defined(TARGET_OS_IOS) && TARGET_OS_IOS
+#include <os/log.h>
+#endif
+
 #include "base/singleton.hpp"
 #include "export.h"
 
@@ -31,6 +35,9 @@ namespace HsBa::Slicer::Log
         std::string log_path_;
         int log_level_;
         std::string log_datatime_format_;
+#if defined(TARGET_OS_IOS) && TARGET_OS_IOS
+        os_log_t log_handle_;
+#endif
     public:
         LoggerSingletone(Private);        
         LoggerSingletone(const LoggerSingletone&) = delete;

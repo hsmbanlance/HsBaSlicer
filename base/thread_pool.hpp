@@ -108,10 +108,28 @@ namespace HsBa::Slicer
                     {
                         return;
                     }
+                    if (!tasks_.empty())
+                    {
                         task = std::move(tasks_.front());
                         tasks_.pop();
+                    }
+                    else
+                    {
+                        continue;  // Spurious wakeup, go back to waiting
+                    }
                 }
-                task();
+                try 
+                {
+                    task();
+                }
+                catch (const std::exception& e) 
+                {
+                    // Handle exception in task but still decrement active_tasks
+                }
+                catch (...) 
+                {
+                    // Handle unknown exception but still decrement active_tasks
+                }
                 {
                     std::unique_lock<std::mutex> lock(queue_mutex_);
                     --active_tasks_;

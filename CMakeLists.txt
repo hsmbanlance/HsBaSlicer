@@ -131,16 +131,10 @@ find_package(miniz CONFIG REQUIRED)
 #use bit7z operator zipper
 option(HSBA_HSBA_USE_BIT7Z "use bit7z" ON)
 
-if (HSBA_HSBA_USE_BIT7Z AND NOT ANDROID)
+if(HSBA_HSBA_USE_BIT7Z AND NOT ANDROID AND NOT IOS AND NOT SWITCH)
 	add_compile_definitions(HSBA_USE_BIT7Z)
 	find_package(unofficial-bit7z CONFIG REQUIRED)
 endif()
-
-#PNG
-find_package(PNG REQUIRED)
-
-#libjpeg-turbo
-find_package(libjpeg-turbo CONFIG REQUIRED)
 
 #Protobuf
 find_package(Protobuf CONFIG REQUIRED)
@@ -155,7 +149,10 @@ find_package(Eigen3 CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 #OpenCV
-find_package(OpenCV REQUIRED)
+if(NOT IOS)
+  find_package(OpenCV REQUIRED)
+  add_compile_definitions(HAS_OPENCV)
+endif()
 
 #Option for kernel
 
@@ -193,6 +190,9 @@ endif()
 
 #Lua
 find_package(Lua REQUIRED)
+
+#magic_enum
+find_package(magic_enum CONFIG REQUIRED)
 
 #protobuf out
 option(HSBA_PROTOBUF_OUT "protobuf out source" ON)
@@ -233,7 +233,11 @@ add_subdirectory("proto")
 add_subdirectory("base")
 add_subdirectory("cipher")
 add_subdirectory("utils")
-add_subdirectory("logger")
+if(SWITCH)
+  LOG(WARNING "Logger is not supported on Game Consoles")
+else()
+  add_subdirectory("logger")
+endif()
 add_subdirectory("2D")
 add_subdirectory("paths")
 add_subdirectory("fileoperator")

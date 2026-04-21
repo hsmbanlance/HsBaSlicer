@@ -2,7 +2,9 @@
 #include <boost/test/included/unit_test.hpp>
 
 #include "../../2D/ImageToPolygons.hpp"
+#ifdef HAS_OPENCV
 #include <opencv2/opencv.hpp>
+#endif
 #include <filesystem>
 
 using namespace HsBa::Slicer;
@@ -19,6 +21,7 @@ struct DisableCrt
 
 BOOST_AUTO_TEST_CASE(fromimage_and_toimage_roundtrip)
 {
+#ifdef HAS_OPENCV
     [[maybe_unused]]
     static DisableCrt crt_;
     // create a simple synthetic image (two rectangles with different intensities)
@@ -61,6 +64,10 @@ BOOST_AUTO_TEST_CASE(fromimage_and_toimage_roundtrip)
     BOOST_CHECK(std::filesystem::exists(outSvg));
     std::filesystem::remove(tmpPath, ec);
     std::filesystem::remove(outPng, ec);
+    std::filesystem::remove(outSvg, ec);
+#else
+    BOOST_TEST_MESSAGE("OpenCV not available, skipping fromimage_and_toimage_roundtrip test");
+#endif
 }
 
 BOOST_AUTO_TEST_CASE(lua_to_image)

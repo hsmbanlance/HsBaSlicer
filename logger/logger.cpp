@@ -3,6 +3,7 @@
 #include <filesystem>
 
 #ifndef __ANDROID__
+#if !(defined(TARGET_OS_IOS) && TARGET_OS_IOS)
 #include <boost/log/trivial.hpp>
 #include <boost/log/utility/setup/file.hpp>
 #include <boost/log/utility/setup/console.hpp>
@@ -12,13 +13,18 @@
 #include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/log/sources/severity_logger.hpp>
 #include <boost/log/sources/record_ostream.hpp>
-#else
-#include <android/log.h>
+#endif // !TARGET_OS_IOS
 #endif // !__ANDROID__
 
-#include "fileoperator/rw_ptree.hpp"
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif // __ANDROID__
 
-#include "logger.hpp"
+#if defined(TARGET_OS_IOS) && TARGET_OS_IOS
+#include <os/log.h>
+#endif // TARGET_OS_IOS
+
+#include "fileoperator/rw_ptree.hpp"
 
 namespace HsBa::Slicer::Log
 {
@@ -34,7 +40,7 @@ namespace HsBa::Slicer::Log
 			return "[" + std::string{ location.file_name() } + ":" + std::to_string(location.line()) + "] " + location.function_name() + ": ";
 		}
 
-#ifndef __ANDROID__
+#if !defined(__ANDROID__) && !(defined(TARGET_OS_IOS) && TARGET_OS_IOS)
 		static boost::log::trivial::severity_level GetLogLevel(int log_level)
 		{
 			switch (log_level)
@@ -53,7 +59,30 @@ namespace HsBa::Slicer::Log
 #endif
 			}
 		}
+#endif // !__ANDROID__
+#if defined(TARGET_OS_IOS) && TARGET_OS_IOS
+		static os_log_type_t GetiOSLogType(int log_level)
+		{
+			switch (log_level)
+			{
+			case 0: return OS_LOG_TYPE_DEBUG;
+			case 1: return OS_LOG_TYPE_DEBUG;
+			case 2: return OS_LOG_TYPE_INFO;
+			case 3: return OS_LOG_TYPE_DEFAULT;
+			case 4: return OS_LOG_TYPE_ERROR;
+			case 5: return OS_LOG_TYPE_FAULT;
+			default:
+#if _DEBUG
+				return OS_LOG_TYPE_DEBUG;
 #else
+				return OS_LOG_TYPE_DEFAULT;
+#endif
+			}
+		}
+#endif // TARGET_OS_IOS
+
+#ifdef __ANDROID__
+
 		static int GetAndroidLogPriority(int log_level)
 		{
 			switch (log_level)
@@ -77,6 +106,9 @@ namespace HsBa::Slicer::Log
 
 	HSBA_SLICER_LOG_API LoggerSingletone::LoggerSingletone(LoggerSingletone::Private)
 	{
+#if defined(TARGET_OS_IOS) && TARGET_OS_IOS
+		log_handle_ = os_log_create("HsBaSlicer", "Log");
+#endif
 		auto current_path = std::filesystem::current_path();
 		auto cfg_path = current_path.string() + "/logcfg.ini";
 		bool existed = std::filesystem::exists(std::filesystem::path{ cfg_path });
@@ -116,6 +148,7 @@ namespace HsBa::Slicer::Log
 		}
 
 #ifndef __ANDROID__
+#ifndef TARGET_OS_IOS
 		auto log_level = GetLogLevel(log_level_);
 
 		// configure Boost.Log
@@ -140,10 +173,18 @@ namespace HsBa::Slicer::Log
 		console_log->set_formatter(log_format);
 		boost::log::core::get()->set_filter(boost::log::trivial::severity >= log_level);
 		boost::log::core::get()->add_global_attribute("TimeStamp", boost::log::attributes::local_clock());
-#else
+#endif // !TARGET_OS_IOS
+#endif // !__ANDROID__
+
+#ifdef __ANDROID__
 		// On Android, use the kernel log. Emit a warning that Android logging is used.
 		int log_level = GetAndroidLogPriority(log_level_);
 		__android_log_print(ANDROID_LOG_WARN, "HsBaSlicer", "LoggerSingletone initialized: using Android kernel log");
+#endif
+
+#if defined(TARGET_OS_IOS) && TARGET_OS_IOS
+		// On iOS, use the system log. Emit a warning that iOS logging is used.
+		os_log(OS_LOG_DEFAULT, "LoggerSingletone initialized: using iOS system log");
 #endif
 	}
 
@@ -152,9 +193,11 @@ namespace HsBa::Slicer::Log
 		std::shared_lock lock{ mutex_ };
 #ifdef __ANDROID__
 		return true;
+#elif defined(TARGET_OS_IOS) && TARGET_OS_IOS
+		return true;
 #else
 		return use_log_file_;
-#endif // __ANDROID__
+#endif
 	}
 
 	HSBA_SLICER_LOG_API std::shared_ptr<LoggerSingletone> LoggerSingletone::GetInstance()
@@ -179,6 +222,8 @@ namespace HsBa::Slicer::Log
 		{
 #ifdef __ANDROID__
 			__android_log_print(ANDROID_LOG_VERBOSE, "HsBaSlicer", "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
+#elif defined(TARGET_OS_IOS) && TARGET_OS_IOS
+			os_log_with_type(instance_->log_handle_, GetiOSLogType(log_lv), "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
 #else
 			BOOST_LOG_TRIVIAL(trace) << GetSourceLocation(location)<< message;
 #endif
@@ -188,6 +233,8 @@ namespace HsBa::Slicer::Log
 		{
 #ifdef __ANDROID__
 			__android_log_print(ANDROID_LOG_DEBUG, "HsBaSlicer", "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
+#elif defined(TARGET_OS_IOS) && TARGET_OS_IOS
+			os_log_with_type(instance_->log_handle_, GetiOSLogType(log_lv), "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
 #else
 			BOOST_LOG_TRIVIAL(debug) << GetSourceLocation(location) << message;
 #endif
@@ -197,6 +244,8 @@ namespace HsBa::Slicer::Log
 		{
 #ifdef __ANDROID__
 			__android_log_print(ANDROID_LOG_INFO, "HsBaSlicer", "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
+#elif defined(TARGET_OS_IOS) && TARGET_OS_IOS
+			os_log_with_type(instance_->log_handle_, GetiOSLogType(log_lv), "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
 #else
 			BOOST_LOG_TRIVIAL(info) << GetSourceLocation(location) << message;
 #endif
@@ -206,6 +255,8 @@ namespace HsBa::Slicer::Log
 		{
 #ifdef __ANDROID__
 			__android_log_print(ANDROID_LOG_WARN, "HsBaSlicer", "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
+#elif defined(TARGET_OS_IOS) && TARGET_OS_IOS
+			os_log_with_type(instance_->log_handle_, GetiOSLogType(log_lv), "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
 #else
 			BOOST_LOG_TRIVIAL(warning) << GetSourceLocation(location) << message;
 #endif
@@ -215,6 +266,8 @@ namespace HsBa::Slicer::Log
 		{
 #ifdef __ANDROID__
 			__android_log_print(ANDROID_LOG_ERROR, "HsBaSlicer", "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
+#elif defined(TARGET_OS_IOS) && TARGET_OS_IOS
+			os_log_with_type(instance_->log_handle_, GetiOSLogType(log_lv), "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
 #else
 			BOOST_LOG_TRIVIAL(error) << GetSourceLocation(location) << message;
 #endif
@@ -224,6 +277,8 @@ namespace HsBa::Slicer::Log
 		{
 #ifdef __ANDROID__
 			__android_log_print(ANDROID_LOG_FATAL, "HsBaSlicer", "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
+#elif defined(TARGET_OS_IOS) && TARGET_OS_IOS
+			os_log_with_type(instance_->log_handle_, GetiOSLogType(log_lv), "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
 #else
 			BOOST_LOG_TRIVIAL(fatal) << GetSourceLocation(location) << message;
 #endif
@@ -233,6 +288,8 @@ namespace HsBa::Slicer::Log
 		{
 #ifdef __ANDROID__
 			__android_log_print(ANDROID_LOG_INFO, "HsBaSlicer", "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
+#elif defined(TARGET_OS_IOS) && TARGET_OS_IOS
+			os_log_with_type(instance_->log_handle_, GetiOSLogType(log_lv), "%s%s", GetSourceLocation(location).c_str(), std::string(message).c_str());
 #else
 			BOOST_LOG_TRIVIAL(info) << GetSourceLocation(location) << message;
 #endif

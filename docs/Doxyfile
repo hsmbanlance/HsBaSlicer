@@ -1,0 +1,119 @@
+# Doxyfile 1.9.8
+
+# Basic project information
+PROJECT_NAME           = "HsBaSlicer"
+PROJECT_NUMBER         = "1.0"
+PROJECT_BRIEF          = "3D slicer for additive manufacturing"
+
+# Output settings
+OUTPUT_DIRECTORY       = docs/doxygen
+CREATE_SUBDIRS         = NO
+OUTPUT_LANGUAGE        = English
+
+# Input settings
+INPUT                  = .. \
+                         docs/base
+RECURSIVE              = YES
+EXCLUDE                = static_check \
+                         out \
+                         build \
+                         tests \
+                         examples
+EXCLUDE_PATTERNS       = */.git/*
+
+# File patterns
+FILE_PATTERNS          = *.c \
+                         *.cc \
+                         *.cxx \
+                         *.cpp \
+                         *.c++ \
+                         *.h \
+                         *.hh \
+                         *.hxx \
+                         *.hpp \
+                         *.h++ \
+                         *.java \
+                         *.ii \
+                         *.ixx \
+                         *.ipp \
+                         *.i++ \
+                         *.inl \
+                         *.idl \
+                         *.ddl \
+                         *.odl \
+                         *.cs \
+                         *.d \
+                         *.php \
+                         *.php4 \
+                         *.php5 \
+                         *.phtml \
+                         *.inc \
+                         *.m \
+                         *.markdown \
+                         *.md \
+                         *.mm \
+                         *.dox \
+                         *.py \
+                         *.pyw \
+                         *.f90 \
+                         *.f95 \
+                         *.f03 \
+                         *.f08 \
+                         *.f18 \
+                         *.f \
+                         *.for \
+                         *.vhd \
+                         *.vhdl \
+                         *.ucf \
+                         *.qsf \
+                         *.ice \
+                         *.yaml \
+                         *.yml \
+                         *.xml
+
+# Warning settings
+QUIET                  = NO
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_FORMAT            = "$file:$line: $text"
+
+# Source browsing
+SOURCE_BROWSER         = NO
+INLINE_SOURCES         = NO
+STRIP_CODE_COMMENTS    = YES
+
+# HTML output settings
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+HTML_FILE_EXTENSION    = html
+HTML_COLORSTYLE        = LIGHT
+
+# Graphviz integration for generating diagrams
+HAVE_DOT              = YES
+DOT_FONTNAME          = Helvetica
+DOT_FONTSIZE          = 10
+CLASS_DIAGRAMS        = YES
+TEMPLATE_RELATIONS    = YES
+INCLUDE_GRAPH         = YES
+INCLUDED_BY_GRAPH     = YES
+CALL_GRAPH            = YES
+CALLER_GRAPH          = YES
+GRAPHICAL_HIERARCHY   = YES
+DIRECTORY_GRAPH       = YES
+DOT_IMAGE_FORMAT      = png
+INTERACTIVE_SVG       = NO
+
+# Layout and navigation
+GENERATE_TREEVIEW     = YES
+TREEVIEW_WIDTH        = 250
+
+# Extract settings
+EXTRACT_ALL           = NO
+EXTRACT_PRIVATE       = NO
+EXTRACT_STATIC        = NO
+
+# Preprocessor settings
+ENABLE_PREPROCESSING  = YES
+MACRO_EXPANSION       = NO
+SEARCH_INCLUDES       = YES

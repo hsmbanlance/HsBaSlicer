@@ -61,6 +61,7 @@ jobs:
         sudo apt-get install -y git curl zip unzip tar at libxt-dev gperf libxaw7-dev cifs-utils build-essential g++ gfortran libx11-dev libxkbcommon-x11-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev mesa-common-dev libxinerama-dev libxxf86vm-dev libxcursor-dev yasm libnuma1 libnuma-dev libtool-bin libltdl-dev flex bison libbison-dev autoconf libudev-dev libncurses5-dev libtool libxrandr-dev xutils-dev dh-autoreconf autoconf-archive libgles2-mesa-dev ruby-full pkg-config meson nasm cmake ninja-build libxext-dev libxfixes-dev libxrender-dev libxcb1-dev libx11-xcb-dev libxcb-dri3-dev libxcb-present-dev libxcb-glx0-dev libxcb-util0-dev libxkbcommon-dev libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev libxcb-icccm4-dev libxcb-sync-dev libxcb-xfixes0-dev libxcb-shape0-dev libxcb-randr0-dev libxcb-render-util0-dev libxcb-xinerama0-dev libxcb-xkb-dev libxcb-xinput-dev libxcb-cursor-dev libkrb5-dev libxcb-res0-dev libxcb-keysyms1-dev libxcb-xkb-dev libxcb-record0-dev python3-setuptools python3-mako python3-pip python3-venv python3-jinja2 nodejs libwayland-dev python-is-python3 guile-2.2-dev libxdamage-dev libdbus-1-dev libxtst-dev haskell-stack golang-go wayland-protocols libbluetooth-dev autoconf-archive
         sudo apt-get install -y libncurses-dev libtirpc-dev libfontconfig1-dev bison flex libxrender-dev libxtst-dev libxrandr-dev ninja-build
 
+
     - name: Set reusable strings
       id: strings
       shell: pwsh
@@ -100,7 +101,7 @@ jobs:
         find "$GITHUB_WORKSPACE" -name CMakeLists.txt -type f
 
     - name: Configure CMake (Linux)
-      if: runner.os != 'Windows'
+      if: runner.os == 'Linux'
       shell: bash
       run: |
         cmake -B build -S . -G Ninja \
@@ -110,13 +111,13 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 
     - name: Build (Linux)
-      if: runner.os != 'Windows'
+      if: runner.os == 'Linux'
       shell: bash
       run: |
         cmake --build build --config ${{ matrix.build_type }}
 
     - name: Test (Linux)
-      if: runner.os != 'Windows'
+      if: runner.os == 'Linux'
       shell: bash
       run: |
         cd build/tests
@@ -174,7 +175,6 @@ jobs:
         ctest -C Release --output-on-failure --parallel 2
       continue-on-error: true
 
-
   build-android:
     runs-on: ubuntu-latest
     needs: build
@@ -196,6 +196,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y openjdk-11-jdk wget unzip
         sudo apt-get install -y ninja-build
+        sudo apt-get install -y autoconf autoconf-archive automake libtool
 
     - name: Install Android command line tools and SDK packages
       shell: bash
