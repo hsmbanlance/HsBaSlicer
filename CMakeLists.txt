@@ -136,6 +136,12 @@ if(HSBA_HSBA_USE_BIT7Z AND NOT ANDROID AND NOT IOS AND NOT SWITCH)
 	find_package(unofficial-bit7z CONFIG REQUIRED)
 endif()
 
+option(HSBA_ENABLE_THREAD_POOL_COROUTINE "Enable coroutine support in thread pool" ON)
+
+if(HSBA_ENABLE_THREAD_POOL_COROUTINE)
+  add_compile_definitions(HSBA_ENABLE_THREAD_POOL_COROUTINE)
+endif()
+
 #Protobuf
 find_package(Protobuf CONFIG REQUIRED)
 

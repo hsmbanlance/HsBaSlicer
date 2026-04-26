@@ -1,0 +1,52 @@
+name: Build on macOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ~/vcpkg-cache
+          key: vcpkg-macos-${{ hashFiles('vcpkg.json') }}
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          brew update
+          brew install cmake ninja python autoconf automake libtool autoconf-archive
+
+      - name: Clone vcpkg and bootstrap
+        shell: bash
+        run: |
+          if [ ! -d "vcpkg" ]; then
+            git clone https://github.com/microsoft/vcpkg.git
+            ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+            ./vcpkg/vcpkg integrate install
+          fi
+          echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
+
+      - name: Configure CMake
+        shell: bash
+        run: |
+          cmake -B build -S . -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+
+      - name: Build
+        shell: bash
+        run: |
+          cmake --build build --config Release
+
+      - name: Run tests
+        shell: bash
+        run: |
+          cd build
+          ctest --build-config Release --output-on-failure --parallel 2
+        continue-on-error: true

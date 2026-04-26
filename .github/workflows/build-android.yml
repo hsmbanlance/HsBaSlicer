@@ -1,0 +1,108 @@
+name: Build on Android
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ~/vcpkg-cache
+          key: vcpkg-android-${{ hashFiles('vcpkg.json') }}
+
+      - name: Install Android and build dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjdk-11-jdk wget unzip git cmake ninja-build python3 python3-pip python3-venv
+
+      - name: Install Android command line tools and SDK packages
+        shell: bash
+        run: |
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          cd $HOME/android-sdk
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline.zip
+          unzip -q cmdline.zip -d cmdline-tools
+          export PATH=$PATH:$HOME/android-sdk/cmdline-tools/cmdline-tools/bin
+          yes | sdkmanager --licenses || true
+          sdkmanager --sdk_root=$HOME/android-sdk "platform-tools" "platforms;android-31" "build-tools;31.0.0"
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+
+      - name: Install Android NDK (r27d)
+        shell: bash
+        run: |
+          mkdir -p $HOME/android-sdk/ndk
+          cd $HOME/android-sdk
+          wget https://dl.google.com/android/repository/android-ndk-r27d-linux.zip -O ndk.zip
+          unzip -q ndk.zip -d ndk
+          echo "ANDROID_NDK=$HOME/android-sdk/ndk/$(ls $HOME/android-sdk/ndk | tail -n1)" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+
+      - name: Bootstrap vcpkg
+        shell: bash
+        run: |
+          if [ ! -d "vcpkg" ]; then
+            git clone https://github.com/microsoft/vcpkg.git vcpkg
+            ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+            ./vcpkg/vcpkg integrate install
+          fi
+
+      - name: Set vcpkg and Android env
+        shell: bash
+        run: |
+          echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
+          echo "ANDROID_NDK=$ANDROID_NDK" >> $GITHUB_ENV
+          echo "VCPKG_FEATURE_FLAGS=versions" >> $GITHUB_ENV
+
+      - name: Configure CMake for Android
+        shell: bash
+        run: |
+          cmake -B build-android -S . -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+            -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
+            -DVCPKG_TARGET_TRIPLET=arm64-android \
+            -DANDROID_NDK=$ANDROID_NDK \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-28
+
+      - name: Build native libraries
+        shell: bash
+        run: |
+          cmake --build build-android --config Release
+
+      - name: Copy native libraries into Android app jniLibs
+        shell: bash
+        run: |
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          cp build-android/android_libs/arm64-v8a/*.so android/app/src/main/jniLibs/arm64-v8a/ || true
+
+      - name: Build APK using Gradle wrapper
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+          GRADLE_VERSION=7.5.1
+          GRADLE_DIR=/opt/gradle/gradle-${GRADLE_VERSION}
+          if [ ! -d "$GRADLE_DIR" ]; then
+            sudo mkdir -p /opt/gradle
+            wget https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip -O /tmp/gradle-${GRADLE_VERSION}.zip
+            sudo unzip -q /tmp/gradle-${GRADLE_VERSION}.zip -d /opt/gradle
+          fi
+          export PATH=$GRADLE_DIR/bin:$PATH
+          cd android
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
