@@ -404,4 +404,11 @@ problems-*
 .qoder
 .gemini
 
+# needed ai skills
+-*skills.md
+-*skills.json
+-*skills.yaml
+-*skills.yml
+-*skills.json
+
 # Add testing obj 3D models as necessary

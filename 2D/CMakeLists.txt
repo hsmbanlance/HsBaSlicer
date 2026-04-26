@@ -19,10 +19,14 @@ find_package(Lua REQUIRED)
 if(NOT IOS)
 target_include_directories(HsBaSlicer2D PRIVATE ${LUA_INCLUDE_DIR} ${OpenCV_LIBRARIES})
 
+find_package(libpng REQUIRED)
+find_package(libjpeg-turbo REQUIRED)
+
 target_link_libraries(HsBaSlicer2D PUBLIC 
 	HsBaSlicerBase
 	PkgConfig::Clipper2
-	PNG::PNG JPEG::JPEG
+	PNG::PNG 
+	$<IF:$<TARGET_EXISTS:libjpeg-turbo::turbojpeg>,libjpeg-turbo::turbojpeg,libjpeg-turbo::turbojpeg-static>
 	${OpenCV_LIBRARIES}
 	${LUA_LIBRARIES}
 )

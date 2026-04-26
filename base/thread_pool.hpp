@@ -147,6 +147,7 @@ namespace HsBa::Slicer
     };
 
 #if __cpp_lib_coroutine && __cpp_impl_coroutine
+#ifdef HSBA_ENABLE_THREAD_POOL_COROUTINE
 namespace Utils
 {
     class ThreadPoolExecutor : public IExecutor
@@ -185,6 +186,7 @@ namespace Utils
         }
     };
 }
+#endif // HSBA_ENABLE_THREAD_POOL_COROUTINE
 #endif // __cpp_lib_coroutine && __cpp_impl_coroutine
 
 } // namespace HsBa::Slicer

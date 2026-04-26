@@ -1,0 +1,53 @@
+name: Build on Windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: C:\\vcpkg-cache
+          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
+
+      - name: Clone vcpkg and bootstrap
+        shell: pwsh
+        run: |
+          if (-not (Test-Path vcpkg)) {
+            git clone https://github.com/microsoft/vcpkg.git
+            & .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+            & .\vcpkg\vcpkg integrate install
+          }
+          Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg"
+
+      - name: Configure CMake
+        shell: cmd
+        run: |
+          call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
+          set /p VSPATH=<vspath.txt
+          call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%\\scripts\\buildsystems\\vcpkg.cmake" -DHSBA_ENABLE_THREAD_POOL_COROUTINE=OFF
+
+      - name: Build
+        shell: cmd
+        run: |
+          call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
+          set /p VSPATH=<vspath.txt
+          call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cmake --build build --config Release
+
+      - name: Run tests
+        shell: cmd
+        run: |
+          call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
+          set /p VSPATH=<vspath.txt
+          call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cd build
+          ctest -C Release --output-on-failure --parallel 2
+        continue-on-error: true

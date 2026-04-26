@@ -1,0 +1,50 @@
+name: Build on iOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ~/vcpkg-cache
+          key: vcpkg-ios-${{ hashFiles('vcpkg.json') }}
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          brew update
+          brew install cmake ninja python
+
+      - name: Clone vcpkg and bootstrap
+        shell: bash
+        run: |
+          if [ ! -d "vcpkg" ]; then
+            git clone https://github.com/microsoft/vcpkg.git
+            ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+            ./vcpkg/vcpkg integrate install
+          fi
+          echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
+
+      - name: Configure CMake for iOS
+        shell: bash
+        run: |
+          cmake -B build-ios -S . -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+            -DVCPKG_TARGET_TRIPLET=arm64-ios \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
+
+      - name: Build iOS target
+        shell: bash
+        run: |
+          cmake --build build-ios --config Release

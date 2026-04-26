@@ -135,7 +135,8 @@ jobs:
         where ninja >nul 2>nul || (echo Ninja not found! && exit 1)
         cmake -B build -S . -G Ninja ^
           -DCMAKE_BUILD_TYPE=Release ^
-          -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake"
+          -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake" ^
+          -DHSBA_ENABLE_THREAD_POOL_COROUTINE=OFF
 
     - name: Build (Windows)
       if: runner.os == 'Windows'
