@@ -197,6 +197,12 @@ endif()
 #Lua
 find_package(Lua REQUIRED)
 
+#tinyxml2
+find_package(tinyxml2 CONFIG REQUIRED)
+
+#yaml-cpp
+find_package(yaml-cpp CONFIG REQUIRED)
+
 #magic_enum
 find_package(magic_enum CONFIG REQUIRED)
 

@@ -7,15 +7,15 @@
     },
     {
       "name": "boost-locale",
-      "platform": "!android"
+      "platform": "!android & !ios"
     },
     {
       "name": "boost-log",
-      "platform": "!android"
+      "platform": "!android & !ios"
     },
     {
       "name": "boost-dll",
-      "platform": "!android"
+      "platform": "!android & !ios"
     },
     "boost-multiprecision",
     {
@@ -25,7 +25,7 @@
     "boost-date-time",
     {
       "name": "fontconfig",
-      "platform": "!android"
+      "platform": "!android & !ios"
     },
     "boost-property-tree",
     "boost-test",
@@ -54,6 +54,8 @@
     },
     "protobuf",
     "rapidjson",
+    "tinyxml2",
+    "yaml-cpp",
     "lua",
     "openssl",
     {
@@ -63,18 +65,18 @@
         "mysql",
         "postgresql"
       ],
-      "platform": "!android"
+      "platform": "!android & !ios"
     },
     {
       "name": "sqlpp11",
       "features": [
         "sqlite3"
       ],
-      "platform": "android"
+      "platform": "android | ios"
     },
     {
       "name": "vcpkg-pkgconfig-get-modules",
-      "platform": "!android"
+      "platform": "!android & !ios"
     },
     "magic-enum"
   ]

@@ -18,10 +18,10 @@
 #include "base/template_helper.hpp"
 #include "base/static_reflect.hpp"
 
+#include "struct_concepts.hpp"
+
 namespace HsBa::Slicer::Utils
 {
-	template<typename T>
-	concept Aggregte = std::is_aggregate_v<T> && !std::is_union_v<T>;
 
 	template<typename T>
 	concept RapidJsonValueConvertible =
@@ -30,9 +30,7 @@ namespace HsBa::Slicer::Utils
 			{ T::from_json(json) } -> std::same_as<T>;
 	};
 
-	// Reflectable: wrapper concept pointing to the static reflect system
-	template<typename T>
-	concept Reflectable = StaticReflect::Reflectable<T>;
+
 
 	namespace detail
 	{

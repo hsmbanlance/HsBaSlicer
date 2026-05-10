@@ -702,3 +702,57 @@ if(HSBA_RUN_TESTS_AFTER_BUILD)
     COMMAND ${CMAKE_CTEST_COMMAND} -V -R static_reflect_test
   )
 endif()
+
+## StructXml tests
+add_executable(struct_xml_test
+    "ConfigMap/struct_xml_test.cpp"
+)
+
+target_link_libraries(struct_xml_test
+    HsBaSlicerUtils
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(struct_xml_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME struct_xml_test
+  COMMAND $<TARGET_FILE:struct_xml_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET struct_xml_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R struct_xml_test
+  )
+endif()
+
+## StructYaml tests
+add_executable(struct_yaml_test
+    "ConfigMap/struct_yaml_test.cpp"
+)
+
+target_link_libraries(struct_yaml_test
+    HsBaSlicerUtils
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(struct_yaml_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME struct_yaml_test
+  COMMAND $<TARGET_FILE:struct_yaml_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET struct_yaml_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R struct_yaml_test
+  )
+endif()

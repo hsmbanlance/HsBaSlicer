@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: |
           brew update
-          brew install cmake ninja python
+          brew install cmake ninja python autoconf automake libtool autoconf-archive
 
       - name: Clone vcpkg and bootstrap
         shell: bash

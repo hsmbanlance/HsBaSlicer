@@ -2,7 +2,9 @@
 	pch_headers.hpp
 	app_config.hpp
 	app_config.cpp
+	struct_concepts.hpp
 	struct_json.hpp
+	struct_xml.hpp
 	LuaNewObject.hpp
 	LuaAnyObject.hpp
 	LuaAnyObject.cpp
@@ -15,6 +17,8 @@ target_link_libraries(HsBaSlicerUtils PUBLIC
 	HsBaSlicerBase
 	HsBaSlicerFileOperator
 	rapidjson
+	tinyxml2::tinyxml2
+	yaml-cpp::yaml-cpp
 	${LUA_LIBRARIES}
 )
 
