@@ -6,7 +6,7 @@
 
 find_package(OpenCASCADE CONFIG REQUIRED)
 
-if(NOT ANDROID AND NOT IOS AND NOT SWITCH)
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
   find_package(Boost REQUIRED COMPONENTS dll)
 endif()
 
@@ -16,7 +16,6 @@ target_link_libraries(HsBaSlicerCADModel PUBLIC
 	HsBaSlicerMesh
 )
 
-if(NOT ANDROID AND NOT IOS AND NOT SWITCH)
+if(HSBA_DESKTOP)
   target_link_libraries(HsBaSlicerCADModel PUBLIC Boost::dll)
-  target_compile_definitions(HsBaSlicerCADModel PUBLIC HAS_BOOST_DLL)
 endif()
