@@ -328,3 +328,17 @@ endif()
 if(HSBA_SLICER_USE_TESTS)
 	add_subdirectory("tests")
 endif()
+
+#docs
+option(HSBA_SLICER_BUILD_DOCS "Build documentation" ON)
+
+#if has not doxygen, disable docs
+find_package(Doxygen)
+if(NOT DOXYGEN_FOUND)
+  set(HSBA_SLICER_BUILD_DOCS OFF CACHE BOOL "Doxygen not found, cannot build documentation" FORCE)
+  message(STATUS "Doxygen not found: documentation will not be built.")
+endif()
+
+if(HSBA_SLICER_BUILD_DOCS)
+  add_subdirectory("docs")
+endif()
