@@ -140,7 +140,7 @@ find_package(PkgConfig REQUIRED)
 if(WIN32)
 ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
 find_package(Boost REQUIRED log)
-elseif(ANDROID)
+elseif(ANDROID OR IOS OR HSBA_GAME_CONSOLE)
   #no log on android, use __android_log_print
 else()
 find_package(Boost REQUIRED log_setup log)
