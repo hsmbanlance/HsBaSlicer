@@ -21,6 +21,13 @@ namespace {
 	};
 }
 
+BOOST_AUTO_TEST_CASE(test_enum_name)
+{
+	BOOST_TEST_MESSAGE("Running enum_name test");
+	BOOST_REQUIRE_MESSAGE(HsBa::Slicer::Utils::EnumName<TestEnum::First>() == "First", "Failed to get enum name");
+	BOOST_REQUIRE_MESSAGE(HsBa::Slicer::Utils::EnumName<CStyleEnum::CStyleFirst>() == "CStyleFirst", "Failed to get enum name");
+}
+
 BOOST_AUTO_TEST_CASE(test_enum_name_args)
 {
 	BOOST_TEST_MESSAGE("Running enum_name_args test");

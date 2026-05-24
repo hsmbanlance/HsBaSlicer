@@ -64,6 +64,10 @@ namespace HsBa::Slicer::Utils
 			}
 		}
 
+		// Forward declaration so dependent calls in set_reflectable_fields_impl can find overloads
+		template<typename FieldType>
+		void set_field_from_json(FieldType& field, const rapidjson::Value& field_json);
+
 		// Helper: expand reflectable fields into set_field_from_json calls (works around MSVC template-lambda parsing)
 		template<typename T, std::size_t... Is>
 		void set_reflectable_fields_impl(const rapidjson::Value& json, T& value, std::index_sequence<Is...>)

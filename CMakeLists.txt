@@ -329,6 +329,12 @@ if(HSBA_SLICER_USE_TESTS)
 	add_subdirectory("tests")
 endif()
 
+#static_tests
+option(HSBA_SLICER_USE_STATIC_TESTS "use static tests" ON)
+if(HSBA_SLICER_USE_STATIC_TESTS)
+    add_subdirectory("static_tests")
+endif()
+
 #docs
 option(HSBA_SLICER_BUILD_DOCS "Build documentation" ON)
 

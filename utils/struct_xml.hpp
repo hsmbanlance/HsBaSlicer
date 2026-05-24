@@ -61,6 +61,10 @@ namespace HsBa::Slicer::Utils
 			}
 		}
 
+		// Forward declaration so dependent calls in set_reflectable_fields_impl can find overloads
+		template<typename FieldType>
+		void set_field_from_xml(FieldType& field, const tinyxml2::XMLElement* field_element);
+
 		// Helper: expand reflectable fields into set_field_from_xml calls
 		template<typename T, std::size_t... Is>
 		void set_reflectable_fields_impl(const tinyxml2::XMLElement* element, T& value, std::index_sequence<Is...>)
