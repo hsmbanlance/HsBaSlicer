@@ -6,18 +6,16 @@
 #include <QString>
 #include <QStringConverter>
 #else
-#if !defined(__ANDROID__ ) && !(defined(TARGET_OS_IOS) && TARGET_OS_IOS)
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+#if !defined(__ANDROID__) && !(defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
 #include <boost/locale.hpp>
-#else
-#include <vector>
-#include <iconv.h>
-#include <errno.h>
-#endif // ANDROID or IOS
-#endif // QT_VERSION 
-
 #if _WIN32
 #include <Windows.h>
 #include <VersionHelpers.h>
+#endif
+#endif
 #endif
 
 #include "base/error.hpp"
@@ -82,7 +80,7 @@ namespace HsBa::Slicer
 #ifndef QT_VERSION
 	std::string encoding_convert(const std::string& str, const std::string& from, const std::string& to)
 	{
-#if !defined(__ANDROID__ ) && !(defined(TARGET_OS_IOS) && TARGET_OS_IOS)
+#if !defined(__ANDROID__) && !(defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
 		if (from == to)
 		{
 			return str;

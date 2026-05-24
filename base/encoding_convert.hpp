@@ -4,6 +4,9 @@
 
 #include <string>
 #include <string_view>
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 
 namespace HsBa::Slicer 
 {
