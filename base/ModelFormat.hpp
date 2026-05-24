@@ -26,6 +26,8 @@ namespace HsBa::Slicer
         case ModelFormat::VRML: return "VRML";
         case ModelFormat::STEP: return "STEP";
         case ModelFormat::IGES: return "IGES";
+		case ModelFormat::SLDPRT: return "SLDPRT";
+		case ModelFormat::CATPART: return "CATPART";
         case ModelFormat::XYZ: return "XYZ";
         default: return "Unknown";
         }
@@ -37,10 +39,12 @@ namespace HsBa::Slicer
 
     bool IsMeshFormat(ModelFormat format);
     bool IsBrepFormat(ModelFormat format);
+	bool IsCSGFormat(ModelFormat format);
     bool IsPointCloudFormat(ModelFormat format);
 
     bool IsMeshFormat(const std::string& file_name);
     bool IsBrepFormat(const std::string& file_name);
+	bool IsCSGFormat(const std::string& file_name);
     bool IsPointCloudFormat(const std::string& file_name);
 }// namespace HsBa::Slicer
 #endif // !HSBA_SLICER_MODELFORMAT_HPP

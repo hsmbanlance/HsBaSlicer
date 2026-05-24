@@ -79,22 +79,25 @@ void JsonXmlYamlTests()
 	TestClass deserializedYamlObj = HsBa::Slicer::Utils::read_yaml_from_string<TestClass>("");
 }
 
-#include "utils/LuaAnyObject.hpp"
+#include "utils/LuaNewObject.hpp"
 
-void LuaAnyObjectTests()
+void LuaNewObjectTests()
 {
 	TestStruct testStruct{ TestEnum::Value2, 42, 3.14, "Hello World" };
 	auto luaState = HsBa::Slicer::MakeUniqueLuaState();
-	using AnyIntCast = HsBa::Slicer::LuaAnyObjectNewCastImpl<int, "int">;
-	AnyIntCast anyIntCast;
-	(void)anyIntCast;
+
 
 	auto* luaObj = HsBa::Slicer::NewLuaObject<TestStruct, "TestStruct">(luaState.get(), testStruct);
 	HsBa::Slicer::LuaGC<TestStruct, "TestStruct">(luaState.get());
 
-	auto* anyObj = HsBa::Slicer::NewLuaObject<HsBa::Slicer::Utils::AnyObject, HsBa::Slicer::AnyObjectTypeName>(luaState.get(), HsBa::Slicer::Utils::AnyObject{});
-	HsBa::Slicer::LuaGC<HsBa::Slicer::Utils::AnyObject, HsBa::Slicer::AnyObjectTypeName>(luaState.get());
 }
 
+#include "utils/LuaAnyObject.hpp"
 
+void LuaAnyObjectTests()
+{
+	auto luaState = HsBa::Slicer::MakeUniqueLuaState();
+	using AnyIntCast = HsBa::Slicer::LuaAnyObjectNewCastImpl<int, "int">;
+	HsBa::Slicer::RegisterAnyObject(luaState.get(), { new AnyIntCast() });
+}
 

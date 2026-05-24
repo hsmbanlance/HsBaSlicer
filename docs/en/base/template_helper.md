@@ -315,6 +315,5 @@ int main() {
 - TemplateString size is determined at compile time and requires specifying maximum length
 - Named types are mainly used for type safety, basic operations are accessed through Get() method
 - Concept constraints are used for compile-time type checking to improve code safety
-- Enum utilities only work with continuous enum values
 - Named pointers provide type safety by distinguishing pointers based on their names
 - The YCombinator enables recursion in lambdas without explicit self-reference in C++ versions before C++23

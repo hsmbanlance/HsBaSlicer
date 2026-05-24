@@ -46,7 +46,7 @@ namespace HsBa::Slicer
     enum class ModelFormat : uint32_t
     {
         //mesh
-        UnknownPLY,
+        UnknownPLY = 0,
         ASCIIPLY,
         BinaryPLY,
         OBJ,
@@ -55,15 +55,18 @@ namespace HsBa::Slicer
         ASCIISTL,
         OFF,
         //Brep
-        VRML,
+        VRML = 10,
         STEP,
         IGES,
         //csg
-
+		// SolidWorksPart,
+		SLDPRT = 30,
+		// CATIAPart,
+		CATPART,
         //point cloud
-        XYZ,
+        XYZ = 40,
         //Unknown
-        Unknown
+        Unknown = 100
     };
     class IModel
     {
@@ -87,5 +90,14 @@ namespace HsBa::Slicer
         virtual std::pair<Eigen::MatrixXf,Eigen::MatrixXi> TriangleMesh() const = 0; //get igl style trianglemesh
     };
 }// namespace HsBa::Slicer
+
+#include <magic_enum/magic_enum.hpp>
+
+template<>
+struct magic_enum::customize::enum_range<HsBa::Slicer::ModelFormat>
+{
+	static constexpr int min = static_cast<int>(HsBa::Slicer::ModelFormat::UnknownPLY);
+	static constexpr int max = static_cast<int>(HsBa::Slicer::ModelFormat::Unknown);
+};
 
 #endif // HSBA_SLICER_IModel_HPP

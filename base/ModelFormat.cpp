@@ -46,6 +46,16 @@ namespace HsBa::Slicer
             return std::regex_match(ext, iges_match);
         }
         //csg
+		const std::regex sldprt_match{ "\\.?sldprt",std::regex_constants::icase };
+		const std::regex catpart_match{ "\\.?catpart",std::regex_constants::icase };
+		bool MatchSLDPRT(const std::string& ext)
+		{
+			return std::regex_match(ext, sldprt_match);
+		}
+		bool MatchCATPART(const std::string& ext)
+		{
+			return std::regex_match(ext, catpart_match);
+		}
 
         //point cloud
         const std::regex xyz_match{ "\\.?xyz",std::regex_constants::icase };
@@ -138,6 +148,18 @@ namespace HsBa::Slicer
         }
     }
 
+	bool IsCSGFormat(ModelFormat format)
+	{
+		switch (format)
+		{
+		case ModelFormat::SLDPRT:
+		case ModelFormat::CATPART:
+			return true;
+		default:
+			return false;
+		}
+	}
+
     bool IsPointCloudFormat(ModelFormat format)
     {
         switch (format)
@@ -163,4 +185,9 @@ namespace HsBa::Slicer
         auto type = ModelTypeFromExtName(file_name);
         return IsPointCloudFormat(type);
     }
+	bool IsCSGFormat(const std::string& file_name)
+	{
+		auto type = ModelTypeFromExtName(file_name);
+		return IsCSGFormat(type);
+	}
 }
