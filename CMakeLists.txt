@@ -144,6 +144,7 @@ elseif(ANDROID OR IOS OR HSBA_GAME_CONSOLE)
   #no log on android, use __android_log_print
   #no log on ios, use os_log
   #no log on game console, use other log or no log
+  find_package(Boost REQUIRED)
 else()
 find_package(Boost REQUIRED log_setup log)
 endif()
