@@ -122,7 +122,7 @@ else()
   message(STATUS "VCPKG_TARGET_TRIPLET is not defined.")
 endif()
 
-if(WIN32 OR LINUX OR APPLE)
+if(WIN32 OR LINUX OR (APPLE AND NOT IOS))
   message(STATUS "Building for desktop platform: ${CMAKE_SYSTEM_NAME}")
   set(HSBA_DESKTOP ON CACHE BOOL "Building for desktop platform" FORCE)
 elseif(ANDROID OR IOS)
@@ -142,6 +142,8 @@ ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
 find_package(Boost REQUIRED log)
 elseif(ANDROID OR IOS OR HSBA_GAME_CONSOLE)
   #no log on android, use __android_log_print
+  #no log on ios, use os_log
+  #no log on game console, use other log or no log
 else()
 find_package(Boost REQUIRED log_setup log)
 endif()
