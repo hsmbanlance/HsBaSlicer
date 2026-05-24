@@ -202,7 +202,7 @@ find_package(Eigen3 CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 #OpenCV
-if(NOT IOS)
+if(NOT IOS AND NOT HSBA_GAME_CONSOLE)
   find_package(OpenCV REQUIRED)
   add_compile_definitions(HAS_OPENCV)
 endif()

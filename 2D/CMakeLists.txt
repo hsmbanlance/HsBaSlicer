@@ -16,7 +16,7 @@ find_package(PNG REQUIRED)
 find_package(JPEG REQUIRED)
 find_package(Lua REQUIRED)
 
-if(NOT IOS)
+if(NOT IOS AND NOT HSBA_GAME_CONSOLE)
 target_include_directories(HsBaSlicer2D PRIVATE ${LUA_INCLUDE_DIR} ${OpenCV_LIBRARIES})
 
 find_package(libpng REQUIRED)

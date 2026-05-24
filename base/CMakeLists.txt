@@ -28,12 +28,12 @@
     memory_pool.hpp
     )
 
-if(NOT ANDROID)
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
     find_package(boost_locale REQUIRED CONFIG)
     find_package(boost_nowide REQUIRED CONFIG)
 endif()
 
-if(NOT ANDROID)
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
     target_link_libraries(HsBaSlicerBase PUBLIC Eigen3::Eigen Boost::boost Boost::locale Boost::nowide)
 else()
     target_link_libraries(HsBaSlicerBase PUBLIC Eigen3::Eigen Boost::boost)
