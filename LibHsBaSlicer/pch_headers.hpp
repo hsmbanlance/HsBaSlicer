@@ -29,7 +29,9 @@
 #include "base/encoding_convert.hpp"
 
 #include "meshmodel/IglModel.hpp"
+#ifdef USE_CGAL
 #include "meshmodel/CgalModel.hpp"
+#endif // USE_CGAL
 #ifdef USE_OCCT
 #include "cadmodel/OcctModel.hpp"
 #endif // USE_OCCT

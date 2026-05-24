@@ -5,7 +5,11 @@
 #include <shared_mutex>
 #include <source_location>
 
-#ifndef __ANDROID__
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
+#if !defined(__ANDROID__) && !(defined(TARGET_OS_IOS) && TARGET_OS_IOS)
 #include <boost/log/core.hpp>
 #endif
 
