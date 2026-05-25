@@ -12,9 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
         build_type: [Release]
-        c_compiler: [gcc, cl]
         include:
           - os: windows-latest
             c_compiler: cl
@@ -22,13 +20,9 @@ jobs:
           - os: ubuntu-latest
             c_compiler: gcc
             cpp_compiler: g++
-        exclude:
-          - os: windows-latest
-            c_compiler: gcc
-          - os: windows-latest
+          - os: macos-latest
             c_compiler: clang
-          - os: ubuntu-latest
-            c_compiler: cl
+            cpp_compiler: clang++
 
     steps:
 
@@ -80,11 +74,17 @@ jobs:
         }
         Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg"
 
-
     - uses: actions/checkout@v4
 
-    - name: Clone vcpkg, bootstrap and set VCPKG_ROOT (Linux)
-      if: runner.os == 'Linux'
+    - name: Install dependencies on macOS
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        brew update
+        brew install cmake ninja python autoconf automake libtool autoconf-archive
+
+    - name: Clone vcpkg, bootstrap and set VCPKG_ROOT (macOS)
+      if: runner.os == 'macOS'
       shell: bash
       run: |
         if [ ! -d vcpkg ]; then
@@ -93,15 +93,14 @@ jobs:
           ./vcpkg/vcpkg integrate install
         fi
         echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
-        # sudo ln -sf /usr/bin/ninja-build /usr/local/bin/ninja
 
     - name: Locate source
       if: runner.os != 'Windows'
       run: |
         find "$GITHUB_WORKSPACE" -name CMakeLists.txt -type f
 
-    - name: Configure CMake (Linux)
-      if: runner.os == 'Linux'
+    - name: Configure CMake (Unix)
+      if: runner.os != 'Windows'
       shell: bash
       run: |
         cmake -B build -S . -G Ninja \
@@ -110,14 +109,14 @@ jobs:
           -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
           -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 
-    - name: Build (Linux)
-      if: runner.os == 'Linux'
+    - name: Build (Unix)
+      if: runner.os != 'Windows'
       shell: bash
       run: |
         cmake --build build --config ${{ matrix.build_type }}
 
-    - name: Test (Linux)
-      if: runner.os == 'Linux'
+    - name: Test (Unix)
+      if: runner.os != 'Windows'
       shell: bash
       run: |
         cd build/tests
@@ -309,3 +308,48 @@ jobs:
       with:
         name: app-debug-apk
         path: android/app/build/outputs/apk/debug/app-debug.apk
+
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ~/vcpkg-cache
+          key: vcpkg-ios-${{ hashFiles('vcpkg.json') }}
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          brew update
+          brew install cmake ninja python autoconf automake libtool autoconf-archive
+
+      - name: Clone vcpkg and bootstrap
+        shell: bash
+        run: |
+          if [ ! -d "vcpkg" ]; then
+            git clone https://github.com/microsoft/vcpkg.git
+            ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+            ./vcpkg/vcpkg integrate install
+          fi
+          echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
+
+      - name: Configure CMake for iOS
+        shell: bash
+        run: |
+          cmake -B build-ios -S . -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+            -DVCPKG_TARGET_TRIPLET=arm64-ios \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=16.3
+
+      - name: Build iOS target
+        shell: bash
+        run: |
+          cmake --build build-ios --config Release
