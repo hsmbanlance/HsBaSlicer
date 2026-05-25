@@ -1,4 +1,5 @@
-﻿add_library(HsBaSlicerMesh STATIC
+﻿if(NOT IOS AND NOT HSBA_GAME_CONSOLE)
+add_library(HsBaSlicerMesh STATIC
 	IglModel.hpp
     IglModel.cpp
     CgalModel.hpp
@@ -15,3 +16,19 @@ target_link_libraries(HsBaSlicerMesh PUBLIC
     HsBaSlicer2D
     ${LUA_LIBRARIES}
 )
+else()
+add_library(HsBaSlicerMesh STATIC
+	IglModel.hpp
+    IglModel.cpp
+    FullTopoModel.hpp
+    FullTopoModel.cpp)
+
+target_include_directories(HsBaSlicerMesh PRIVATE ${LUA_INCLUDE_DIR})
+target_link_libraries(HsBaSlicerMesh PUBLIC 
+    igl::igl_core
+    HsBaSlicerBase
+    HsBaSlicerProto
+    HsBaSlicer2D
+    ${LUA_LIBRARIES}
+)
+endif()

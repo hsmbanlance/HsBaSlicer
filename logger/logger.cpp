@@ -2,8 +2,11 @@
 #include <cstddef>
 #include <filesystem>
 
-#ifndef __ANDROID__
-#if !(defined(TARGET_OS_IOS) && TARGET_OS_IOS)
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
+#if !defined(__ANDROID__) && !(defined(TARGET_OS_IOS) && TARGET_OS_IOS)
 #include <boost/log/trivial.hpp>
 #include <boost/log/utility/setup/file.hpp>
 #include <boost/log/utility/setup/console.hpp>
@@ -13,8 +16,7 @@
 #include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/log/sources/severity_logger.hpp>
 #include <boost/log/sources/record_ostream.hpp>
-#endif // !TARGET_OS_IOS
-#endif // !__ANDROID__
+#endif // !TARGET_OS_IOS && !__ANDROID__
 
 #ifdef __ANDROID__
 #include <android/log.h>

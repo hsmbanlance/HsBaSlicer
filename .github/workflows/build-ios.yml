@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: |
           brew update
-          brew install cmake ninja python
+          brew install cmake ninja python autoconf automake libtool autoconf-archive
 
       - name: Clone vcpkg and bootstrap
         shell: bash
@@ -42,7 +42,7 @@ jobs:
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_OSX_SYSROOT=iphoneos \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=16.3
 
       - name: Build iOS target
         shell: bash

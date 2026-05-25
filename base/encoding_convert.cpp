@@ -6,18 +6,20 @@
 #include <QString>
 #include <QStringConverter>
 #else
-#if !defined(__ANDROID__ ) && !(defined(TARGET_OS_IOS) && TARGET_OS_IOS)
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+#if !defined(__ANDROID__) && !(defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
 #include <boost/locale.hpp>
+#if _WIN32
+#include <Windows.h>
+#include <VersionHelpers.h>
+#endif
 #else
 #include <vector>
 #include <iconv.h>
 #include <errno.h>
-#endif // ANDROID or IOS
-#endif // QT_VERSION 
-
-#if _WIN32
-#include <Windows.h>
-#include <VersionHelpers.h>
+#endif // ANDROID or iOS
 #endif
 
 #include "base/error.hpp"
@@ -28,20 +30,20 @@ namespace HsBa::Slicer
 	//boost system locale may error if use qt
 	static std::string SystemLocaleStr()
 	{
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || (defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
 		return "utf8";
 #else
 		std::string strCodePage = boost::locale::util::get_system_locale();
 		std::locale loc = boost::locale::generator().generate(strCodePage);
 		return std::use_facet<boost::locale::info>(loc).encoding();
-#endif // __ANDROID__
+#endif // __ANDROID__ or iOS
 	}
 #endif // !USE_QSTRING
 
 	std::string utf8_to_local(const std::string& str)
 	{
 #ifndef USE_QSTRING
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || (defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
 		return str;
 #else
 #if _WIN32
@@ -51,7 +53,7 @@ namespace HsBa::Slicer
 		}
 #endif // _WIN32
 		return boost::locale::conv::between(str, SystemLocaleStr(), "utf-8");
-#endif // __ANDROID__
+#endif // __ANDROID__ or iOS
 #else
 		//If Use qt,code here
 		return QString::fromStdString(str).toStdString();
@@ -60,7 +62,7 @@ namespace HsBa::Slicer
 	std::string local_to_utf8(const std::string& str)
 	{
 #ifndef USE_QSTRING
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || (defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
 		return str;
 #else
 #if _WIN32
@@ -70,7 +72,7 @@ namespace HsBa::Slicer
 		}
 #endif // _WIN32
 		return boost::locale::conv::between(str, "utf-8", SystemLocaleStr());
-#endif // __ANDROID__
+#endif // __ANDROID__ or iOS
 
 
 #else
@@ -82,7 +84,7 @@ namespace HsBa::Slicer
 #ifndef QT_VERSION
 	std::string encoding_convert(const std::string& str, const std::string& from, const std::string& to)
 	{
-#if !defined(__ANDROID__ ) && !(defined(TARGET_OS_IOS) && TARGET_OS_IOS)
+#if !defined(__ANDROID__) && !(defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
 		if (from == to)
 		{
 			return str;

@@ -28,13 +28,19 @@
     memory_pool.hpp
     )
 
-if(NOT ANDROID)
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
     find_package(boost_locale REQUIRED CONFIG)
     find_package(boost_nowide REQUIRED CONFIG)
 endif()
 
-if(NOT ANDROID)
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
     target_link_libraries(HsBaSlicerBase PUBLIC Eigen3::Eigen Boost::boost Boost::locale Boost::nowide)
+elseif(IOS)
+    find_library(ICONV_LIBRARY iconv)
+    if(NOT ICONV_LIBRARY)
+        message(FATAL_ERROR "iconv library not found on iOS")
+    endif()
+    target_link_libraries(HsBaSlicerBase PUBLIC Eigen3::Eigen Boost::boost ${ICONV_LIBRARY})
 else()
     target_link_libraries(HsBaSlicerBase PUBLIC Eigen3::Eigen Boost::boost)
 endif()

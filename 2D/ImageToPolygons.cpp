@@ -54,6 +54,8 @@ namespace HsBa::Slicer
 #endif
 		}
 
+		bool SavePNG(const std::string& path, const std::vector<uint8_t>& img, int w, int h);
+
 		bool SavePNGGray(const std::string& path, const std::vector<uint8_t>& img, int w, int h)
 		{
 #ifdef HAS_OPENCV

@@ -239,7 +239,12 @@ namespace HsBa::Slicer::Utils
 	};
 
 	template<typename... Ts> Overloaded(Ts...) -> Overloaded<Ts...>;
-	
+
+	template<auto EnumValue>
+	constexpr auto EnumName()
+	{
+		return magic_enum::enum_name<EnumValue>();
+	}	
 	/**
 	 * @brief enum to string name in function argument, only support enum with continuous value, negative value will be ignored
 	 * @tparam T enum class

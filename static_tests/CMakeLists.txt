@@ -1,0 +1,3 @@
+add_subdirectory(base_static_tests)
+
+add_subdirectory(utils_static_tests)

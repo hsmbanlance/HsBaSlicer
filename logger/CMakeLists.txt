@@ -33,7 +33,6 @@ elseif(IOS)
     target_link_libraries(HsBaSlicerLog PRIVATE
     HsBaSlicerBase
     HsBaSlicerFileOperator
-    os_log
     )
 else()
     target_link_libraries(HsBaSlicerLog PRIVATE

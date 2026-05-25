@@ -15,7 +15,9 @@
 #include <igl/per_edge_normals.h>
 #include <igl/volume.h>
 
+#ifdef USE_CGAL
 #include <igl/copyleft/cgal/mesh_boolean.h>
+#endif
 
 #include "base/error.hpp"
 #include "base/encoding_convert.hpp"
@@ -177,6 +179,8 @@ namespace HsBa::Slicer
         Eigen::MatrixXi f=faces_;
         return std::make_pair(v,f);
     }
+
+#ifdef USE_CGAL
     IglModel Union(const IglModel& left, const IglModel& right)
     {
         auto is_valid_mesh = [](const Eigen::MatrixXf& V, const Eigen::MatrixXi& F)->bool{
@@ -292,8 +296,26 @@ namespace HsBa::Slicer
         if (v.rows() == 0 || f.rows() == 0) return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
         return IglModel(v, f);
     }
+#else
+    IglModel Union(const IglModel& left, const IglModel& right)
+    {
+        throw NotSupportedError("Boolean operations are not supported without CGAL.");
+    }
+    IglModel Intersection(const IglModel& left, const IglModel& right)
+    {
+        throw NotSupportedError("Boolean operations are not supported without CGAL.");
+    }   
+    IglModel Difference(const IglModel& left, const IglModel& right)
+    {
+        throw NotSupportedError("Boolean operations are not supported without CGAL.");
+    }
+    IglModel Xor(const IglModel& left, const IglModel& right)
+    {
+        throw NotSupportedError("Boolean operations are not supported without CGAL.");
+    }
+#endif
 
-        IglModel IglModel::CreateBox(const Eigen::Vector3f& size)
+    IglModel IglModel::CreateBox(const Eigen::Vector3f& size)
     {
         const Eigen::Vector3f h = size * 0.5f;
         std::vector<Eigen::Vector3f> verts{

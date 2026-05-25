@@ -100,10 +100,36 @@ if(HAS_C_C23_CONSTEXPR)
   add_compile_definitions(HSBA_HAS_C23_CONSTEXPR)
 endif()
 
-#Todo:add defined for gamer
-if(SWITCH)
-  add_compile_definitions(SWITCH)
-  add_definitions(GAMER 3)
+#Todo:add defined for gamer console
+
+message(STATUS "Configuring for platform: ${CMAKE_SYSTEM_NAME}")
+
+#VCPKG triplet
+if(DEFINED VCPKG_TARGET_TRIPLET)
+  message(STATUS "VCPKG_TARGET_TRIPLET is defined: ${VCPKG_TARGET_TRIPLET}")
+  # Xbox or other game console
+  if(VCPKG_TARGET_TRIPLET MATCHES "xbox" OR VCPKG_TARGET_TRIPLET MATCHES "switch"
+     OR VCPKG_TARGET_TRIPLET MATCHES "playstation" OR VCPKG_TARGET_TRIPLET MATCHES "stadia")
+    add_compile_definitions(HSBA_IS_GAME_CONSOLE)
+    add_compile_definitions(HSBA_GAME_CONSOLE_${VCPKG_TARGET_TRIPLET})
+    #add_options for disable features on game console, such as logger, or use other logger for game console
+    set(HSBA_GAME_CONSOLE ON CACHE BOOL "Building for game console" FORCE)
+    message(STATUS "Building for game console: ${VCPKG_TARGET_TRIPLET}")
+  else()
+    set(HSBA_GAME_CONSOLE OFF CACHE BOOL "Not building for game console" FORCE)
+  endif()
+else()
+  message(STATUS "VCPKG_TARGET_TRIPLET is not defined.")
+endif()
+
+if(WIN32 OR LINUX OR (APPLE AND NOT IOS))
+  message(STATUS "Building for desktop platform: ${CMAKE_SYSTEM_NAME}")
+  set(HSBA_DESKTOP ON CACHE BOOL "Building for desktop platform" FORCE)
+elseif(ANDROID OR IOS)
+  message(STATUS "Building for mobile platform: ${CMAKE_SYSTEM_NAME}")
+  set(HSBA_MOBILE ON CACHE BOOL "Building for mobile platform" FORCE)
+else()
+  message(STATUS "Building for unknown platform: ${CMAKE_SYSTEM_NAME}")
 endif()
 
 find_package(PkgConfig REQUIRED)
@@ -114,8 +140,11 @@ find_package(PkgConfig REQUIRED)
 if(WIN32)
 ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
 find_package(Boost REQUIRED log)
-elseif(ANDROID)
+elseif(ANDROID OR IOS OR HSBA_GAME_CONSOLE)
   #no log on android, use __android_log_print
+  #no log on ios, use os_log
+  #no log on game console, use other log or no log
+  find_package(Boost REQUIRED)
 else()
 find_package(Boost REQUIRED log_setup log)
 endif()
@@ -125,13 +154,32 @@ include_directories(${Boost_INCLUDE_DIRS})
 #Clipper2
 pkg_check_modules(Clipper2 REQUIRED IMPORTED_TARGET Clipper2)
 
+#runtime dll/so/dylib loader
+option(HSBA_USE_DLL_LOADER "Use dynamic library loader" ON)
+if(HSBA_DESKTOP)
+  message(STATUS "Dynamic library loader enabled for desktop platform.")
+elseif(ANDROID)
+  set(HSBA_USE_DLL_LOADER OFF CACHE BOOL "Disable dynamic library loader on non-desktop platforms" FORCE)
+  add_compile_definitions(HSBA_NO_DLL_LOADER)
+  message(STATUS "Dynamic library loader may have limited support on Android Native Development Kit (NDK) due to platform restrictions.")
+else()
+  set(HSBA_USE_DLL_LOADER OFF CACHE BOOL "Disable dynamic library loader on non-desktop platforms" FORCE)
+  add_compile_definitions(HSBA_NO_DLL_LOADER)
+  message(STATUS "Dynamic library loader disabled on non-desktop platform.")
+endif()
+
 #Compress
 #miniz
 find_package(miniz CONFIG REQUIRED)
 #use bit7z operator zipper
 option(HSBA_HSBA_USE_BIT7Z "use bit7z" ON)
 
-if(HSBA_HSBA_USE_BIT7Z AND NOT ANDROID AND NOT IOS AND NOT SWITCH)
+if(NOT HSBA_DESKTOP)
+  set(HSBA_HSBA_USE_BIT7Z OFF CACHE BOOL "Disable bit7z on non-desktop platforms" FORCE)
+  message(STATUS "Bit7z disabled on non-desktop platform.")
+endif()
+
+if(HSBA_HSBA_USE_BIT7Z)
 	add_compile_definitions(HSBA_USE_BIT7Z)
 	find_package(unofficial-bit7z CONFIG REQUIRED)
 endif()
@@ -155,7 +203,7 @@ find_package(Eigen3 CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 #OpenCV
-if(NOT IOS)
+if(NOT IOS AND NOT HSBA_GAME_CONSOLE)
   find_package(OpenCV REQUIRED)
   add_compile_definitions(HAS_OPENCV)
 endif()
@@ -164,7 +212,11 @@ endif()
 
 #Mesh_kernel
 find_package(libigl CONFIG REQUIRED)
-find_package(CGAL CONFIG REQUIRED)
+if(NOT IOS AND NOT HSBA_GAME_CONSOLE)
+  find_package(CGAL CONFIG REQUIRED)
+  add_compile_definitions(USE_CGAL)
+  message("Use CGAL and igl enable boolean operations or other features.")
+endif()
 add_compile_definitions(USE_IGL)
 message("Use igl as mesh kernel.")
 
@@ -178,7 +230,7 @@ endif()
 #OpenCascade
 #disable if andoird and IOS
 #Todo: disable if not support OpenCascade, or use other CAD kernel
-if(NOT ANDROID AND NOT IOS AND NOT SWITCH)
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
   find_package(OpenCASCADE CONFIG REQUIRED)
   message("Use occt as cad kernel.")
   add_compile_definitions(USE_OCCT)
@@ -186,7 +238,7 @@ if(NOT ANDROID AND NOT IOS AND NOT SWITCH)
 endif()
 
 #sqlpp11 with SQLite3 MySQL PostgreSQL
-if(NOT ANDROID AND NOT IOS AND NOT SWITCH)
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
 	find_package(Sqlpp11 CONFIG REQUIRED COMPONENTS SQLite3 MySQL PostgreSQL)
 	add_compile_definitions(HSBA_USE_MYSQL)
 	add_compile_definitions(HSBA_USE_PGSQL)
@@ -196,6 +248,12 @@ endif()
 
 #Lua
 find_package(Lua REQUIRED)
+
+#tinyxml2
+find_package(tinyxml2 CONFIG REQUIRED)
+
+#yaml-cpp
+find_package(yaml-cpp CONFIG REQUIRED)
 
 #magic_enum
 find_package(magic_enum CONFIG REQUIRED)
@@ -213,8 +271,8 @@ option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 # set from VCPKG_TARGET_TRIPLE
 if(DEFINED VCPKG_TARGET_TRIPLET)
   message("VCPKG_TARGET_TRIPLET is defined: ${VCPKG_TARGET_TRIPLET}")
-# for WIN32 default dynamic, Linux and android default static
-  if(VCPKG_TARGET_TRIPLET MATCHES "windows" AND NOT VCPKG_TARGET_TRIPLET MATCHES "static")
+# for Windows and Xbox default dynamic, Linux and android default static
+  if((VCPKG_TARGET_TRIPLET MATCHES "windows" OR VCPKG_TARGET_TRIPLET MATCHES "xbox") AND NOT VCPKG_TARGET_TRIPLET MATCHES "static")
 	set(BUILD_SHARED_LIBS ON CACHE BOOL "Build using shared libraries" FORCE)
 	message("Set BUILD_SHARED_LIBS to ON for Windows dynamic.")
 # if match dynamic use dynamic
@@ -239,7 +297,7 @@ add_subdirectory("proto")
 add_subdirectory("base")
 add_subdirectory("cipher")
 add_subdirectory("utils")
-if(SWITCH)
+if(HSBA_GAME_CONSOLE)
   LOG(WARNING "Logger is not supported on Game Consoles")
 else()
   add_subdirectory("logger")
@@ -248,7 +306,7 @@ add_subdirectory("2D")
 add_subdirectory("paths")
 add_subdirectory("fileoperator")
 add_subdirectory("meshmodel")
-if(NOT ANDROID AND NOT IOS AND NOT SWITCH)
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
   add_subdirectory("cadmodel")
 endif()
 add_subdirectory("convert")
@@ -258,9 +316,9 @@ add_subdirectory ("HsBaSlicer")
 
 #test
 option(HSBA_SLICER_USE_TESTS "use tests" ON)
-if(ANDROID OR IOS OR SWITCH)
+if(ANDROID OR IOS OR HSBA_GAME_CONSOLE)
   set(HSBA_SLICER_USE_TESTS OFF CACHE BOOL "use tests" FORCE)
-  message(STATUS "Tests disabled on Android, iOS, or Switch due to output limitations.")
+  message(STATUS "Tests disabled on Android, iOS, or game consoles due to output limitations.")
 endif()
 if(NOT DEFINED HSBA_SLICER_RUN_TESTS_AFTER_BUILD)
   set(HSBA_SLICER_RUN_TESTS_AFTER_BUILD ON CACHE BOOL "Run tests after build" ON)
@@ -272,4 +330,24 @@ endif()
 
 if(HSBA_SLICER_USE_TESTS)
 	add_subdirectory("tests")
+endif()
+
+#static_tests
+option(HSBA_SLICER_USE_STATIC_TESTS "use static tests" ON)
+if(HSBA_SLICER_USE_STATIC_TESTS)
+    add_subdirectory("static_tests")
+endif()
+
+#docs
+option(HSBA_SLICER_BUILD_DOCS "Build documentation" ON)
+
+#if has not doxygen, disable docs
+find_package(Doxygen)
+if(NOT DOXYGEN_FOUND)
+  set(HSBA_SLICER_BUILD_DOCS OFF CACHE BOOL "Doxygen not found, cannot build documentation" FORCE)
+  message(STATUS "Doxygen not found: documentation will not be built.")
+endif()
+
+if(HSBA_SLICER_BUILD_DOCS)
+  add_subdirectory("docs")
 endif()

@@ -152,4 +152,6 @@ cmake --build .
 
 ### macOS(未测试)
 
+仅测试了Github Action可以编译和单元测试通过
+
 ### 编译安卓版本(未测试)

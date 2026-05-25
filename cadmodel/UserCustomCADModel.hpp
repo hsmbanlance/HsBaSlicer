@@ -1,5 +1,5 @@
 ﻿#pragma once
-#ifdef HAS_BOOST_DLL
+#ifndef HSBA_NO_DLL_LOADER
 
 
 #ifndef HSBA_SLICER_USER_CUSTOM_CAD_MODEL_HPP
@@ -79,4 +79,4 @@ namespace HsBa::Slicer
 
 #endif // !HSBA_SLICER_USER_CUSTOM_CAD_MODEL_HPP
 
-#endif // HAS_BOOST_DLL
+#endif // !HSBA_NO_DLL_LOADER

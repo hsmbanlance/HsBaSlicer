@@ -3,57 +3,67 @@
   "dependencies": [
     {
       "name": "bit7z",
-      "platform": "!android & !ios"
+      "platform": "windows | linux | osx"
     },
     {
       "name": "boost-locale",
-      "platform": "!android"
+      "platform": "windows | linux | osx"
     },
     {
       "name": "boost-log",
-      "platform": "!android"
+      "platform": "windows | linux | osx"
     },
     {
       "name": "boost-dll",
-      "platform": "!android"
+      "platform": "windows | linux | osx"
     },
     "boost-multiprecision",
     {
       "name": "boost-nowide",
-      "platform": "!android"
+      "platform": "windows | linux | osx"
     },
     "boost-date-time",
     {
       "name": "fontconfig",
-      "platform": "!android"
+      "platform": "windows | linux | osx"
     },
     "boost-property-tree",
     "boost-test",
     "boost-units",
     "boost-uuid",
     "boost-pfr",
-    "cgal",
+    {
+      "name": "cgal",
+      "platform": "windows | linux | osx | android"
+    },
     "clipper2",
     "libjpeg-turbo",
     "libpng",
     {
       "name": "opencv",
-      "platform": "!ios"
+      "platform": "windows | linux | osx | android"
     },
     "eigen3",
     {
       "name": "libigl",
       "features": [
         "cgal"
-      ]
+      ],
+      "platform": "windows | linux | osx | android"
+    },
+    {
+      "name": "libigl",
+      "platform": "!windows & !linux & !osx & !android"
     },
     "miniz",
     {
       "name": "opencascade",
-      "platform": "!android & !ios"
+      "platform": "windows | linux | osx "
     },
     "protobuf",
     "rapidjson",
+    "tinyxml2",
+    "yaml-cpp",
     "lua",
     "openssl",
     {
@@ -63,18 +73,18 @@
         "mysql",
         "postgresql"
       ],
-      "platform": "!android"
+      "platform": "windows | linux | osx "
     },
     {
       "name": "sqlpp11",
       "features": [
         "sqlite3"
       ],
-      "platform": "android"
+      "platform": "android | ios"
     },
     {
       "name": "vcpkg-pkgconfig-get-modules",
-      "platform": "!android"
+      "platform": "windows | linux | osx "
     },
     "magic-enum"
   ]
