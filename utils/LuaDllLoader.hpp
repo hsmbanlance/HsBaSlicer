@@ -71,7 +71,7 @@ namespace HsBa::Slicer
             {
                 auto func = dll->GetFunction<FuncType>(function_name);
                 // Push the function pointer as lightuserdata
-                lua_pushlightuserdata(L, (void*)func.target<void*>());
+                lua_pushlightuserdata(L, (void*)func.template target<void*>());
                 return 1;
             }
             catch (const std::exception& e)

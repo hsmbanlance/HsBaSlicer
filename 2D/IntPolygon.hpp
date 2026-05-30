@@ -4,6 +4,7 @@
 
 #include <clipper2/clipper.h>
 #include <clipper2/clipper.offset.h>
+#include <string_view>
 
 namespace HsBa::Slicer
 {
@@ -57,6 +58,11 @@ namespace HsBa::Slicer
 
 	double Area(const Polygon& p);
 	double Area(const Polygons& ps);
+
+#ifdef HSBA_POLYGON_DUMP
+	void DumpPolygon(const Polygon& p, std::string_view filename, bool close_path = true);
+	void DumpPolygons(const Polygons& ps, std::string_view filename, bool close_path = true);
+#endif
 
 }// namespace HsBa::Slicer
 #endif // !HSBA_SLICER_INTPOLYGON_HPP

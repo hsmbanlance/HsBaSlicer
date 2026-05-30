@@ -7,6 +7,7 @@
 
 #include "IntPolygon.hpp"
 #include <string>
+#include <string_view>
 
 namespace HsBa::Slicer
 {
@@ -53,6 +54,11 @@ namespace HsBa::Slicer
 
 	PolygonD UnIntegerization(const Polygon& poly);
 	PolygonsD UnIntegerization(const Polygons& polys);
+
+#ifdef HSBA_POLYGON_DUMP
+	void DumpPolygon(const PolygonD& p, std::string_view filename, bool close_path = true);
+	void DumpPolygons(const PolygonsD& ps, std::string_view filename, bool close_path = true);
+#endif
 }// namespace HsBa::Slicer
 #endif // !HSBA_SLICER_FLOATPOLYGONS_HPP
 
