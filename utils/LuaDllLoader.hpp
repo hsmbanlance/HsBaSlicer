@@ -141,7 +141,7 @@ namespace HsBa::Slicer
             }
         }
 
-        template<Utils::TemplateString Name, typename Ret, typename ... Args>
+        template<Utils::TemplateString TName, typename Ret, typename ... Args>
         class LuaDllGetFunction : public DllGetFunctionAbstract
         {
         public:
@@ -155,11 +155,11 @@ namespace HsBa::Slicer
             }
             virtual std::string_view Name() const override
             {
-                return Name;
+                return TName;
             }
         };
     } // namespace detail
-
+    void RegisterLuaDllLoader(lua_State* L,std::vector<std::unique_ptr<DllGetFunctionAbstract>>&& get_function_registers);
 }
 
 #endif // !HSBA_NO_DLL_LOADER
