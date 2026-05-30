@@ -8,6 +8,8 @@
 	LuaNewObject.hpp
 	LuaAnyObject.hpp
 	LuaAnyObject.cpp
+	LuaDllLoader.hpp
+	LuaDllLoader.cpp
 )
 
 find_package(boost_date_time CONFIG REQUIRED)
