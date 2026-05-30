@@ -131,6 +131,34 @@ namespace HsBa::Slicer
 			return 1; // return the area
 		}
 
+#ifdef HSBA_POLYGON_DUMP
+		int l_dumpPolygon(lua_State* L)
+		{
+			if (lua_gettop(L) < 2 || !lua_istable(L, 1) || !lua_isstring(L, 2))
+				l_booleanError(L, "dumpPolygon", "Expected a polygon table and a filename string");
+			Polygon poly = LuaTableToPolygon(L, 1);
+			const char* filename = lua_tostring(L, 2);
+			bool close_path = true;
+			if (lua_gettop(L) >= 3)
+				close_path = lua_toboolean(L, 3);
+			DumpPolygon(poly, filename, close_path);
+			return 0;
+		}
+
+		int l_dumpPolygons(lua_State* L)
+		{
+			if (lua_gettop(L) < 2 || !lua_istable(L, 1) || !lua_isstring(L, 2))
+				l_booleanError(L, "dumpPolygons", "Expected a polygons table and a filename string");
+			Polygons polys = LuaTableToPolygons(L, 1);
+			const char* filename = lua_tostring(L, 2);
+			bool close_path = true;
+			if (lua_gettop(L) >= 3)
+				close_path = lua_toboolean(L, 3);
+			DumpPolygons(polys, filename, close_path);
+			return 0;
+		}
+#endif
+
 		const luaL_Reg booleanLib[] = {
 			{"booleanOperation", l_booleanOperation},
 			{"union", l_union},
@@ -141,9 +169,12 @@ namespace HsBa::Slicer
 			{"convexHullOperation", l_convexHullOperation},
 			{"concaveHullOperation", l_concaveHullOperation},
 			{"area", l_area},
+	#ifdef HSBA_POLYGON_DUMP
+			{"dumpPolygon", l_dumpPolygon},
+			{"dumpPolygons", l_dumpPolygons},
+	#endif
 			{NULL, NULL}
 		};
-
 	} // namespace
 
 	void PushPolygonDToLua(lua_State* L, const PolygonD& poly)
@@ -284,4 +315,5 @@ namespace HsBa::Slicer
 		luaL_newlib(L, booleanLib);
 		lua_setglobal(L, "PolygonOperations");
 	}
+
 } // namespace HsBa::Slicer

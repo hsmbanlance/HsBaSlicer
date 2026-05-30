@@ -147,7 +147,7 @@ namespace HsBa::Slicer
             lua_setfield(L, -2, cast_pair.name.data());
         }
         
-        lua_setglobal(L, "AnyObject");
+        lua_setglobal(L, static_cast<const char*>(AnyObjectTypeName));
     }
 
 } // namespace HsBa::Slicer

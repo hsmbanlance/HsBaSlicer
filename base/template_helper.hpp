@@ -429,6 +429,15 @@ namespace HsBa::Slicer::Utils
 	YCombinator(Func) -> YCombinator<Func>;
 #endif // !__cpp_explicit_this_parameter
 
+	template<typename T,size_t N,typename... Args>
+		requires (std::move_constructible<T> && !std::copy_constructible<T>)
+	constexpr auto MakeNonCopyableArray(Args&&... args)
+	{
+		return [&args...]<size_t... Is>(std::index_sequence<Is...>)
+		{
+			return std::array<T, N>{ ((void)Is, T{std::forward<Args>(args)...})... };
+		}(std::make_index_sequence<N>());
+	}
 
 	inline namespace TemplateStringLiterals
 	{

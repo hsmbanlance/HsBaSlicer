@@ -39,6 +39,8 @@ namespace HsBa::Slicer
         double angle_deg, double lineThickness = 0.5,
         Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square);
 
+    // others defined in lua script
+
     Polygons LuaCustomFill(const Polygons& poly, const std::string& scriptPath, const std::string& functionName = "generate_fill",
         double lineThickness = 0.5, const std::function<void(lua_State*)>& lua_reg = {});
 

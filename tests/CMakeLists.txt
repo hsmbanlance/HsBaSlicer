@@ -648,6 +648,31 @@ if(HSBA_RUN_TESTS_AFTER_BUILD)
   )
 endif()
 
+add_executable(lua_polygon_operations_test
+    "PolygonFill/lua_polygon_operations_test.cpp"
+)
+
+target_link_libraries(lua_polygon_operations_test
+    HsBaSlicer2D
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(lua_polygon_operations_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+add_test(
+  NAME lua_polygon_operations_test
+  COMMAND $<TARGET_FILE:lua_polygon_operations_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET lua_polygon_operations_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R lua_polygon_operations_test
+  )
+endif()
+
 ## ImagePolygons tests
 add_executable(image_polygons_test
     "PolygonFill/image_polygons_test.cpp"
