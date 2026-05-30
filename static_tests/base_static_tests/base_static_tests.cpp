@@ -21,6 +21,17 @@ static_assert(HsBa::Slicer::Utils::EnumFromName<Enum>("First") == Enum::First);
 static_assert(HsBa::Slicer::Utils::EnumFromName<Enum>("Second") == Enum::Second);
 static_assert(HsBa::Slicer::Utils::EnumFromName<Enum>("Third") == Enum::Third);
 
+class NonCopyable
+{
+public:
+	NonCopyable(int value) : value_(value) {}
+	NonCopyable(const NonCopyable&) = delete;
+	NonCopyable(NonCopyable&&) = default;
+	int GetValue() const { return value_; }
+private:
+	int value_;
+};
+
 void TemplateHelperTests()
 {
 	// just to make sure the code compiles, no runtime test
@@ -29,6 +40,8 @@ void TemplateHelperTests()
 	static_assert(std::is_same_v<decltype(ptr.Get()), int*>);
 
 	HsBa::Slicer::Utils::template_call<"abc">([](std::string_view,int){}, 1);
+
+	HsBa::Slicer::Utils::MakeNonCopyableArray<NonCopyable, 3>(1);
 }
 
 // static any visit tests
