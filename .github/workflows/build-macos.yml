@@ -26,18 +26,23 @@ jobs:
           fi
           echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
 
+      - name: Set up vcpkg binary cache backend
+        shell: bash
+        run: |
+          echo "VCPKG_BINARY_SOURCES=clear;x-gha,readwrite" >> $GITHUB_ENV
+
+      - name: Cache vcpkg downloads cache
+        uses: actions/cache@v5
+        with:
+          path: ${VCPKG_ROOT}/downloads
+          key: vcpkg-macos-${{ hashFiles('vcpkg.json') }}
+
       - name: Configure CMake
         shell: bash
         run: |
           cmake -B build -S . -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
-
-      - name: Cache vcpkg binary cache
-        uses: actions/cache@v5
-        with:
-          path: ${VCPKG_ROOT}/downloads
-          key: vcpkg-macos-${{ hashFiles('vcpkg.json') }}
 
       - name: Build
         shell: bash
@@ -47,6 +52,6 @@ jobs:
       - name: Run tests
         shell: bash
         run: |
-          cd build
+          cd build/tests
           ctest --build-config Release --output-on-failure --parallel 2
         continue-on-error: true

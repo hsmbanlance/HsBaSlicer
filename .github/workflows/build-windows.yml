@@ -20,6 +20,17 @@ jobs:
           }
           Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg"
 
+      - name: Set up vcpkg binary cache backend
+        shell: pwsh
+        run: |
+          Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_BINARY_SOURCES=clear;x-gha,readwrite"
+
+      - name: Cache vcpkg downloads cache
+        uses: actions/cache@v5
+        with:
+          path: ${ env.VCPKG_ROOT }/downloads
+          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
+
       - name: Configure CMake
         shell: cmd
         run: |
@@ -27,12 +38,6 @@ jobs:
           set /p VSPATH=<vspath.txt
           call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
           cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%\\scripts\\buildsystems\\vcpkg.cmake" -DHSBA_ENABLE_THREAD_POOL_COROUTINE=OFF
-
-      - name: Cache vcpkg binary cache
-        uses: actions/cache@v5
-        with:
-          path: "%VCPKG_ROOT%\\downloads"
-          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
 
       - name: Build
         shell: cmd
@@ -48,6 +53,6 @@ jobs:
           call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
           set /p VSPATH=<vspath.txt
           call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
-          cd build
+          cd build/tests
           ctest -C Release --output-on-failure --parallel 2
         continue-on-error: true

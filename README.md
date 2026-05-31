@@ -51,6 +51,10 @@ Slicer过程中的类型和protobuf定义的类型的交换。
 如果需要复制dll和pdb文件，则需要在首次编译后再次配置并编译。
 如果你安装了Visual Studio 2022但在Visual Studio Code等IDE中调试，把Vcpkg的安装路径添加到环境变量中。
 
+直接选择预设windows-release配置和编译即可。
+
+`windows-debug仅用于测试部分内存问题，因为cgal不适用Debug版本。`
+
 不支持MingW/Msys2等。
 
 ### Linux
@@ -143,15 +147,47 @@ cmake .. -DCMAKE_TOOLCHAIN_FILE=/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
 cmake --build .
 ```
 
-如果需要复制共享库，则需要在首次编译后再次配置并编译:
+或者直接使用CMake预设：
 
 ```bash
-cmake .. -DCMAKE_TOOLCHAIN_FILE=/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake -DBUILD_SHARED_LIBS=ON
+cmake . --preset linux-release
+cd out/build/linux-release
 cmake --build .
 ```
 
 ### macOS(未测试)
 
-仅测试了Github Action可以编译和单元测试通过
+仅测试了Github Action可以编译和单元测试通过。
 
-### 编译安卓版本(未测试)
+需要安装依赖
+
+```bash
+brew install cmake ninja python autoconf automake libtool autoconf-archive
+```
+
+### 编译安卓版本
+
+在Linux中编译，从可以编译Linux版本的设备的进行编译。
+
+先下载安卓SDK和NDK，需要SDK版本至少支持到28，NDK至少r27d，以支持C++20。
+
+然后把Android NDK路径添加到环境变量ANDROID_NDK_HOME中。
+
+可以直接使用CMake预设。
+
+```bash
+cmake . --preset android-release
+
+cd out/build/android-release
+cmake ..
+```
+
+### IOS（未测试）
+
+仅测试了Github Action可以编译通过，目标平台至少为16.3以支持C++20。
+
+需要安装依赖:
+
+```bash
+brew install cmake ninja python autoconf automake libtool autoconf-archive
+```

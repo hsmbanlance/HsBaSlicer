@@ -26,6 +26,17 @@ jobs:
           fi
           echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
 
+      - name: Set up vcpkg binary cache backend
+        shell: bash
+        run: |
+          echo "VCPKG_BINARY_SOURCES=clear;x-gha,readwrite" >> $GITHUB_ENV
+
+      - name: Cache vcpkg downloads cache
+        uses: actions/cache@v5
+        with:
+          path: ${env.VCPKG_ROOT}/downloads
+          key: vcpkg-ios-${{ hashFiles('vcpkg.json') }}
+
       - name: Configure CMake for iOS
         shell: bash
         run: |
@@ -37,12 +48,6 @@ jobs:
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_OSX_SYSROOT=iphoneos \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=16.3
-
-      - name: Cache vcpkg binary cache
-        uses: actions/cache@v5
-        with:
-          path: ${VCPKG_ROOT}/downloads
-          key: vcpkg-ios-${{ hashFiles('vcpkg.json') }}
 
       - name: Build iOS target
         shell: bash

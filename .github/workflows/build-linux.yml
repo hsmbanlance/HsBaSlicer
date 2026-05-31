@@ -8,7 +8,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
 
       - name: Maximize build disk space
         if: runner.os == 'Linux'
@@ -23,11 +22,17 @@ jobs:
           remove-codeql: 'true'
           remove-docker-images: 'true'
 
+      - uses: actions/checkout@v6
+
       - name: Install build dependencies
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y git curl zip unzip tar python3 python3-pip python3-venv cmake ninja-build build-essential
+          python --version || sudo apt-get install -y python3 python3-pip python-is-python3
+          sudo apt-get install -y python3-venv
+          sudo apt-get install -y git curl zip unzip tar at libxt-dev gperf libxaw7-dev cifs-utils build-essential g++ gfortran libx11-dev libxkbcommon-x11-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev mesa-common-dev libxinerama-dev libxxf86vm-dev libxcursor-dev yasm libnuma1 libnuma-dev libtool-bin libltdl-dev flex bison libbison-dev autoconf libudev-dev libncurses5-dev libtool libxrandr-dev xutils-dev dh-autoreconf autoconf-archive libgles2-mesa-dev ruby-full pkg-config meson nasm cmake ninja-build libxext-dev libxfixes-dev libxrender-dev libxcb1-dev libx11-xcb-dev libxcb-dri3-dev libxcb-present-dev libxcb-glx0-dev libxcb-util0-dev libxkbcommon-dev libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev libxcb-icccm4-dev libxcb-sync-dev libxcb-xfixes0-dev libxcb-shape0-dev libxcb-randr0-dev libxcb-render-util0-dev libxcb-xinerama0-dev libxcb-xkb-dev libxcb-xinput-dev libxcb-cursor-dev libkrb5-dev libxcb-res0-dev libxcb-keysyms1-dev libxcb-xkb-dev libxcb-record0-dev python3-setuptools python3-mako python3-pip python3-venv python3-jinja2 nodejs libwayland-dev python-is-python3 guile-2.2-dev libxdamage-dev libdbus-1-dev libxtst-dev haskell-stack golang-go wayland-protocols libbluetooth-dev autoconf-archive
+          sudo apt-get install -y libncurses-dev libtirpc-dev libfontconfig1-dev bison flex libxrender-dev libxtst-dev libxrandr-dev ninja-build
+
 
       - name: Clone vcpkg and bootstrap
         shell: bash
@@ -39,18 +44,23 @@ jobs:
           fi
           echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
 
+      - name: Set up vcpkg binary cache backend
+        shell: bash
+        run: |
+          echo "VCPKG_BINARY_SOURCES=clear;x-gha,readwrite" >> $GITHUB_ENV
+
+      - name: Cache vcpkg downloads cache
+        uses: actions/cache@v5
+        with:
+          path: ${env.VCPKG_ROOT}/downloads
+          key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}
+
       - name: Configure CMake
         shell: bash
         run: |
           cmake -B build -S . -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
-
-      - name: Cache vcpkg binary cache
-        uses: actions/cache@v5
-        with:
-          path: ${VCPKG_ROOT}/downloads
-          key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}
 
       - name: Build
         shell: bash
@@ -60,6 +70,6 @@ jobs:
       - name: Run tests
         shell: bash
         run: |
-          cd build
+          cd build/tests
           ctest --build-config Release --output-on-failure --parallel 2
         continue-on-error: true
