@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v6
 
       - name: Install Android and build dependencies
         shell: bash
@@ -29,8 +30,6 @@ jobs:
           sdkmanager --sdk_root=$HOME/android-sdk "platform-tools" "platforms;android-31" "build-tools;31.0.0"
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-
-      - uses: actions/checkout@v6
 
       - name: Install Android NDK (r27d)
         shell: bash
@@ -93,14 +92,8 @@ jobs:
           mkdir -p android/app/src/main/jniLibs/arm64-v8a
           cp build-android/android_libs/arm64-v8a/*.so android/app/src/main/jniLibs/arm64-v8a/ || true
 
-      - name: Install Gradle 7.5.1, generate Gradle wrapper and build APK
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip git
-          # Ensure a compatible Gradle is available (AGP 7.4.2 needs Gradle 7.5+)
           GRADLE_VERSION=7.5.1
           GRADLE_DIR=/opt/gradle/gradle-${GRADLE_VERSION}
           if [ ! -d "$GRADLE_DIR" ]; then
@@ -110,24 +103,24 @@ jobs:
           fi
           export PATH=$GRADLE_DIR/bin:$PATH
 
-          # Generate Gradle wrapper using the downloaded Gradle so we can commit it for future runs
           cd android
           gradle wrapper --gradle-version ${GRADLE_VERSION} || true
           chmod +x gradlew || true
 
-          # If wrapper files were created or changed, commit them back to the repo
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add gradlew gradlew.bat gradle/wrapper/gradle-wrapper.properties gradle/wrapper/gradle-wrapper.jar || true
-          if ! git diff --staged --quiet; then
-            git commit -m "chore(android): add Gradle wrapper (generated in CI)" || true
-            # Push to the current branch
-            git push origin HEAD:${{ github.ref_name }} || true
+          if [ "${{ github.ref_name }}" != "main" ] && [ "${{ github.ref_name }}" != "master" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add gradlew gradlew.bat gradle/wrapper/gradle-wrapper.properties gradle/wrapper/gradle-wrapper.jar || true
+            if ! git diff --staged --quiet; then
+              git commit -m "chore(android): add Gradle wrapper (generated in CI)" || true
+              git push origin HEAD:${{ github.ref_name }} || true
+            else
+              echo "Gradle wrapper unchanged"
+            fi
           else
-            echo "Gradle wrapper unchanged"
+            echo "On main or master branch, skipping gradlew commit"
           fi
 
-          # Build debug APK with the wrapper (deterministic Gradle version)
           ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK artifact
