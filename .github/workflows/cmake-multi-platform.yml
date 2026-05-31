@@ -30,10 +30,11 @@ jobs:
         remove-codeql: 'true'
         remove-docker-images: 'true'
 
-    - name: Cache vcpkg binary cache
+    - name: Cache vcpkg binary cache(Unix)
+      if: runner.os != 'Windows'
       uses: actions/cache@v5
       with:
-        path: ~/vcpkg-cache
+        path: ${VCPKG_ROOT}/downloads
         key: vcpkg-bin-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
 
     - name: Install dependencies on Linux
@@ -126,10 +127,18 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake" ^
           -DHSBA_ENABLE_THREAD_POOL_COROUTINE=OFF
 
-    - name: Cache vcpkg binary cache
+    - name: Cache vcpkg binary cache(Unix)
+      if: runner.os != 'Windows'
       uses: actions/cache@v5
       with:
-        path: C:\\vcpkg-cache
+        path: ${VCPKG_ROOT}/downloads
+        key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+
+    - name: Cache vcpkg binary cache(Windows)
+      if: runner.os == 'Windows'
+      uses: actions/cache@v5
+      with:
+        path: "%VCPKG_ROOT%\\downloads"
         key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
 
     - name: Build (Unix)
@@ -267,8 +276,8 @@ jobs:
     - name: Cache vcpkg binary cache
       uses: actions/cache@v6
       with:
-        path: ~/vcpkg-cache
-        key: vcpkg-ios-${{ hashFiles('vcpkg.json') }}
+        path: ${VCPKG_ROOT}/downloads
+        key: vcpkg-android-${{ hashFiles('vcpkg.json') }}
 
     - name: Build native libraries
       shell: bash
@@ -362,7 +371,7 @@ jobs:
       - name: Cache vcpkg binary cache
         uses: actions/cache@v6
         with:
-          path: ~/vcpkg-cache
+          path: ${VCPKG_ROOT}/downloads
           key: vcpkg-ios-${{ hashFiles('vcpkg.json') }}
 
       - name: Build iOS target

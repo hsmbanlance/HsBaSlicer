@@ -31,7 +31,7 @@ jobs:
       - name: Cache vcpkg binary cache
         uses: actions/cache@v5
         with:
-          path: C:\\vcpkg-cache
+          path: "%VCPKG_ROOT%\\downloads"
           key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
 
       - name: Build
