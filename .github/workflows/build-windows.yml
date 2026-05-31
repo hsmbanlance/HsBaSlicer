@@ -8,13 +8,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Cache vcpkg binary cache
-        uses: actions/cache@v4
-        with:
-          path: C:\\vcpkg-cache
-          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
+      - uses: actions/checkout@v6
 
       - name: Clone vcpkg and bootstrap
         shell: pwsh
@@ -33,6 +27,12 @@ jobs:
           set /p VSPATH=<vspath.txt
           call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
           cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%\\scripts\\buildsystems\\vcpkg.cmake" -DHSBA_ENABLE_THREAD_POOL_COROUTINE=OFF
+
+      - name: Cache vcpkg binary cache
+        uses: actions/cache@v5
+        with:
+          path: C:\\vcpkg-cache
+          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
 
       - name: Build
         shell: cmd
