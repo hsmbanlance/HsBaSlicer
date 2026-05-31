@@ -15,7 +15,7 @@ struct DisableCrt
     {
 #if defined(_MSC_VER) && defined(_DEBUG)
         _CrtSetDbgFlag(_CrtSetDbgFlag(_CRTDBG_REPORT_FLAG) & ~_CRTDBG_LEAK_CHECK_DF);
-#endif // defined(_MSC_VER) && defined(_DEBUG)
+#endif  // defined(_MSC_VER) && defined(_DEBUG)
     }
 };
 
@@ -48,7 +48,10 @@ BOOST_AUTO_TEST_CASE(fromimage_and_toimage_roundtrip)
     PolygonsD simple;
     // one rectangle
     PolygonD rect;
-    rect.emplace_back(Point2D{10.0, 10.0}); rect.emplace_back(Point2D{30.0, 10.0}); rect.emplace_back(Point2D{30.0, 30.0}); rect.emplace_back(Point2D{10.0, 30.0});
+    rect.emplace_back(Point2D{10.0, 10.0});
+    rect.emplace_back(Point2D{30.0, 10.0});
+    rect.emplace_back(Point2D{30.0, 30.0});
+    rect.emplace_back(Point2D{10.0, 30.0});
     simple.push_back(rect);
 
     auto outPng = std::filesystem::temp_directory_path() / "hsbaslicer_out.png";

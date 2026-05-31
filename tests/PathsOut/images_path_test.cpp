@@ -13,7 +13,7 @@ struct DisableCrt
     {
 #if defined(_MSC_VER) && defined(_DEBUG)
         _CrtSetDbgFlag(_CrtSetDbgFlag(_CRTDBG_REPORT_FLAG) & ~_CRTDBG_LEAK_CHECK_DF);
-#endif // defined(_MSC_VER) && defined(_DEBUG)
+#endif  // defined(_MSC_VER) && defined(_DEBUG)
     }
 };
 
@@ -25,10 +25,10 @@ BOOST_AUTO_TEST_CASE(test_to_string_with_encoding)
     [[maybe_unused]]
     static DisableCrt crt_;
     // create ImagesPath with dummy config
-    ImagesPath ip("cfgfile", "{}", [](double, std::string_view){});
+    ImagesPath ip("cfgfile", "{}", [](double, std::string_view) {});
     // add two small images as base64 strings ("abc" -> "YWJj", bytes {0x01,0x02} -> "AQI=")
-    std::string img1 = "YWJj"; // base64 of "abc"
-    std::string img2 = "AQI="; // base64 of bytes 0x01,0x02
+    std::string img1 = "YWJj";  // base64 of "abc"
+    std::string img2 = "AQI=";  // base64 of bytes 0x01,0x02
     ip.AddImage("img1.png", img1);
     ip.AddImage("img2.bin", img2);
 
@@ -52,14 +52,14 @@ return table.concat(out, "\n")
 
 BOOST_AUTO_TEST_CASE(test_save_creates_file)
 {
-    ImagesPath ip("cfgfile", "{}", [](double rate, std::string_view path){
-        std::cout << "Callback: " << rate << "%, " << path << "\n";
-    });
-    std::string img = "eA=="; // base64 of 'x'
+    ImagesPath ip("cfgfile", "{}", [](double rate, std::string_view path)
+                  { std::cout << "Callback: " << rate << "%, " << path << "\n"; });
+    std::string img = "eA==";  // base64 of 'x'
     ip.AddImage("one.png", img);
 
     auto tmp = std::filesystem::temp_directory_path() / "images_out_test.zip";
-    std::error_code ec; std::filesystem::remove(tmp, ec);
+    std::error_code ec;
+    std::filesystem::remove(tmp, ec);
 
     // script that creates a zip using the provided zipper and writes to output_path
     std::string script = R"lua(

@@ -9,70 +9,68 @@
 
 namespace HsBa::Slicer
 {
-    // G-code command constants
-    constexpr int GCODE_G17_VALUE = 17;  // Select XY plane
-    constexpr int GCODE_G90_VALUE = 90;  // Absolute positioning
-    constexpr float DEFAULT_VELOCITY = 100.0f;  // Default velocity for GPoint
-	enum class GcodeType
-	{
-		G0,
-		G1,
-		G2,
-		G3,
-		G17 = GCODE_G17_VALUE,
-		G18,
-		G19,
-		G20,
-		G21,
-		G90 = GCODE_G90_VALUE,
-		G91
-	};
+// G-code command constants
+constexpr int GCODE_G17_VALUE = 17;         // Select XY plane
+constexpr int GCODE_G90_VALUE = 90;         // Absolute positioning
+constexpr float DEFAULT_VELOCITY = 100.0f;  // Default velocity for GPoint
+enum class GcodeType
+{
+    G0,
+    G1,
+    G2,
+    G3,
+    G17 = GCODE_G17_VALUE,
+    G18,
+    G19,
+    G20,
+    G21,
+    G90 = GCODE_G90_VALUE,
+    G91
+};
 
-	enum class GCodeUnits
-	{
-		Inch,
-		mm
-	};
+enum class GCodeUnits
+{
+    Inch,
+    mm
+};
 
-	struct GPoint
-	{
-		GcodeType type = GcodeType::G1;
-		OutPoints3 p1;
-		OutPoints3 center; // 圆弧运动的过渡点
-		float velocity = DEFAULT_VELOCITY;
-		double extrusion = 0.0;
-	};
+struct GPoint
+{
+    GcodeType type = GcodeType::G1;
+    OutPoints3 p1;
+    OutPoints3 center;  // 圆弧运动的过渡点
+    float velocity = DEFAULT_VELOCITY;
+    double extrusion = 0.0;
+};
 
-	class PointsPath : public IPath
-	{
-	public:
-		PointsPath(GCodeUnits units = GCodeUnits::mm,OutPoints3 p = {0.0,0.0,0.0});
-		void push_back(const GPoint& point);
-		virtual ~PointsPath() = default;
-		virtual void Save(const std::filesystem::path&) const override;
-		virtual void Save(const std::filesystem::path&, std::string_view script,
-			const std::function<void(lua_State*)>& lua_reg = {}) const override;
-		virtual std::string ToString() const override;
-		virtual std::string ToString(std::string_view script,
-			const std::function<void(lua_State*)>& lua_reg = {}) const override;
-		virtual void Save(const std::filesystem::path& path, std::string_view script, std::string_view funcName,
-			const std::function<void(lua_State*)>& lua_reg = {}) const override;
-		virtual void Save(const std::filesystem::path& path, const std::filesystem::path& script_file, std::string_view funcName,
-			const std::function<void(lua_State*)>& lua_reg = {}) const override;
-		virtual std::string ToString(const std::string_view script, const std::string_view funcName,
-			const std::function<void(lua_State*)>& lua_reg = {}) const override;
-		virtual std::string ToString(const std::filesystem::path& script_file, const std::string_view funcName,
-			const std::function<void(lua_State*)>& lua_reg = {}) const override;
-		inline virtual GPoint operator[](size_t i)
-		{
-			return points_[i];
-		}
-	private:
-		std::vector<GPoint> points_;
-		OutPoints3 startPoint_;
-		GCodeUnits units_ = GCodeUnits::mm;
-	};
+class PointsPath : public IPath
+{
+public:
+    PointsPath(GCodeUnits units = GCodeUnits::mm, OutPoints3 p = {0.0, 0.0, 0.0});
+    void push_back(const GPoint& point);
+    virtual ~PointsPath() = default;
+    virtual void Save(const std::filesystem::path&) const override;
+    virtual void Save(const std::filesystem::path&, std::string_view script,
+                      const std::function<void(lua_State*)>& lua_reg = {}) const override;
+    virtual std::string ToString() const override;
+    virtual std::string ToString(std::string_view script,
+                                 const std::function<void(lua_State*)>& lua_reg = {}) const override;
+    virtual void Save(const std::filesystem::path& path, std::string_view script, std::string_view funcName,
+                      const std::function<void(lua_State*)>& lua_reg = {}) const override;
+    virtual void Save(const std::filesystem::path& path, const std::filesystem::path& script_file,
+                      std::string_view funcName, const std::function<void(lua_State*)>& lua_reg = {}) const override;
+    virtual std::string ToString(const std::string_view script, const std::string_view funcName,
+                                 const std::function<void(lua_State*)>& lua_reg = {}) const override;
+    virtual std::string ToString(const std::filesystem::path& script_file, const std::string_view funcName,
+                                 const std::function<void(lua_State*)>& lua_reg = {}) const override;
+    inline virtual GPoint operator[](size_t i) { return points_[i]; }
 
-} // namepace HsBa::Slicer
+private:
+    std::vector<GPoint> points_;
+    OutPoints3 startPoint_;
+    GCodeUnits units_ = GCodeUnits::mm;
+};
 
-#endif // !HSBA_SLICER_POINTS_PATH_HPP
+}  // namespace HsBa::Slicer
+
+#endif  // !HSBA_SLICER_POINTS_PATH_HPP

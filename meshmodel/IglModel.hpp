@@ -4,63 +4,65 @@
 
 #include "base/IModel.hpp"
 
-#include <boost/functional/hash.hpp>
 #include <Eigen/Dense>
+#include <boost/functional/hash.hpp>
 
 namespace HsBa::Slicer
 {
-    class IglModel final : public IModel
-    {
-    public:
-        IglModel() = default;
-        IglModel(const Eigen::MatrixXf& vertices, const Eigen::MatrixXi& faces, bool calcNormals = true);
-        IglModel(const Eigen::MatrixXf& vertices, const Eigen::MatrixXi& faces, const Eigen::MatrixXf& normals);
-        IglModel(Eigen::MatrixXf&& vertices, Eigen::MatrixXi&& faces, bool calcNormals = true);
-        IglModel(Eigen::MatrixXf&& vertices, Eigen::MatrixXi&& faces, Eigen::MatrixXf&& normals);
-        IglModel(const IglModel& o) = default;
-        IglModel& operator=(const IglModel& o) = default;
-        IglModel(IglModel&& o) = default;
-        IglModel& operator=(IglModel&& o) = default;
-        ~IglModel() = default;
-        bool Load(std::string_view fileName) override; // load the model from a file
-        bool Save(std::string_view fileName,const ModelFormat format) const override; // save the model to a file
+class IglModel final : public IModel
+{
+public:
+    IglModel() = default;
+    IglModel(const Eigen::MatrixXf& vertices, const Eigen::MatrixXi& faces, bool calcNormals = true);
+    IglModel(const Eigen::MatrixXf& vertices, const Eigen::MatrixXi& faces, const Eigen::MatrixXf& normals);
+    IglModel(Eigen::MatrixXf&& vertices, Eigen::MatrixXi&& faces, bool calcNormals = true);
+    IglModel(Eigen::MatrixXf&& vertices, Eigen::MatrixXi&& faces, Eigen::MatrixXf&& normals);
+    IglModel(const IglModel& o) = default;
+    IglModel& operator=(const IglModel& o) = default;
+    IglModel(IglModel&& o) = default;
+    IglModel& operator=(IglModel&& o) = default;
+    ~IglModel() = default;
+    bool Load(std::string_view fileName) override;                                  // load the model from a file
+    bool Save(std::string_view fileName, const ModelFormat format) const override;  // save the model to a file
 
-        void Translate(const Eigen::Vector3f& translation) override; // translate the model
-        void Rotate(const Eigen::Quaternionf& rotation) override; // rotate the model
-        void Scale(const float scale) override;
-        void Scale(const Eigen::Vector3f& scale) override; // scale the model
-        void Transform(const Eigen::Isometry3f& transform) override; // transform the model
-        void Transform(const Eigen::Matrix4f& transform) override; // transform the model
-        void Transform(const Eigen::Transform<float, 3, Eigen::Affine>& transform) override; // transform the model
+    void Translate(const Eigen::Vector3f& translation) override;  // translate the model
+    void Rotate(const Eigen::Quaternionf& rotation) override;     // rotate the model
+    void Scale(const float scale) override;
+    void Scale(const Eigen::Vector3f& scale) override;                                    // scale the model
+    void Transform(const Eigen::Isometry3f& transform) override;                          // transform the model
+    void Transform(const Eigen::Matrix4f& transform) override;                            // transform the model
+    void Transform(const Eigen::Transform<float, 3, Eigen::Affine>& transform) override;  // transform the model
 
-        void BoundingBox(Eigen::Vector3f& min, Eigen::Vector3f& max) const override; // get the AA bounding box of the model
-        
-        std::pair<Eigen::MatrixXf,Eigen::MatrixXi> TriangleMesh() const override; //get igl style trianglemesh
-        float Volume() const override; //get the volume of the model
+    void BoundingBox(Eigen::Vector3f& min,
+                     Eigen::Vector3f& max) const override;  // get the AA bounding box of the model
 
-        void ComputeNormals();//compute face normals
-        Eigen::MatrixXf ComputeVertexNormals() const;//compute vertex normals
-        Eigen::MatrixXf ComputeFaceNormals() const;//compute face normals
+    std::pair<Eigen::MatrixXf, Eigen::MatrixXi> TriangleMesh() const override;  // get igl style trianglemesh
+    float Volume() const override;                                              // get the volume of the model
 
-        friend IglModel Union(const IglModel& left, const IglModel& right);
-        friend IglModel Intersection(const IglModel& left, const IglModel& right);
-        friend IglModel Difference(const IglModel& left, const IglModel& right);
-        friend IglModel Xor(const IglModel& left, const IglModel& right);
+    void ComputeNormals();                         // compute face normals
+    Eigen::MatrixXf ComputeVertexNormals() const;  // compute vertex normals
+    Eigen::MatrixXf ComputeFaceNormals() const;    // compute face normals
 
-		static IglModel CreateBox(const Eigen::Vector3f& size);
-		static IglModel CreateSphere(const float radius, const int subdivisions = 3);
-		static IglModel CreateCylinder(const float radius, const float height, const int segments = 32);
-		static IglModel CreateCone(const float radius, const float height, const int segments = 32);
-		static IglModel CreateTorus(const float majorRadius, const float minorRadius, const int majorSegments = 32, const int minorSegments = 16);
+    friend IglModel Union(const IglModel& left, const IglModel& right);
+    friend IglModel Intersection(const IglModel& left, const IglModel& right);
+    friend IglModel Difference(const IglModel& left, const IglModel& right);
+    friend IglModel Xor(const IglModel& left, const IglModel& right);
+
+    static IglModel CreateBox(const Eigen::Vector3f& size);
+    static IglModel CreateSphere(const float radius, const int subdivisions = 3);
+    static IglModel CreateCylinder(const float radius, const float height, const int segments = 32);
+    static IglModel CreateCone(const float radius, const float height, const int segments = 32);
+    static IglModel CreateTorus(const float majorRadius, const float minorRadius, const int majorSegments = 32,
+                                const int minorSegments = 16);
 
 
-    private:
-        Eigen::MatrixXf vertices_ = Eigen::MatrixXf{};
-        Eigen::MatrixXi faces_ = Eigen::MatrixXi{};
-        Eigen::MatrixXf normals_ = Eigen::MatrixXf{};
-        std::string fileName_;
-        friend struct std::hash<IglModel>;
-    };
-}// namespace HsBa::Slicer
+private:
+    Eigen::MatrixXf vertices_ = Eigen::MatrixXf{};
+    Eigen::MatrixXi faces_ = Eigen::MatrixXi{};
+    Eigen::MatrixXf normals_ = Eigen::MatrixXf{};
+    std::string fileName_;
+    friend struct std::hash<IglModel>;
+};
+}  // namespace HsBa::Slicer
 
-#endif // HSBA_SLICER_IGLMODEL_HPP
+#endif  // HSBA_SLICER_IGLMODEL_HPP

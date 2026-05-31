@@ -10,41 +10,56 @@
 namespace HsBa::Slicer
 {
 
-    //convert to string
-    inline const char* ToString(ModelFormat format)
+// convert to string
+inline const char* ToString(ModelFormat format)
+{
+    switch (format)
     {
-        switch (format)
-        {
-        case ModelFormat::UnknownPLY:return "PLY";
-        case ModelFormat::BinaryPLY: return "BinaryPLY";
-        case ModelFormat::ASCIIPLY:return "ASCIIPLY";
-        case ModelFormat::OBJ: return "OBJ";
-        case ModelFormat::UnknownSTL: return "STL";
-        case ModelFormat::BinarySTL: return "BinarySTL";
-        case ModelFormat::ASCIISTL: return "ASCIISTL";
-        case ModelFormat::OFF: return "OFF";
-        case ModelFormat::VRML: return "VRML";
-        case ModelFormat::STEP: return "STEP";
-        case ModelFormat::IGES: return "IGES";
-		case ModelFormat::SLDPRT: return "SLDPRT";
-		case ModelFormat::CATPART: return "CATPART";
-        case ModelFormat::XYZ: return "XYZ";
-        default: return "Unknown";
-        }
+    case ModelFormat::UnknownPLY:
+        return "PLY";
+    case ModelFormat::BinaryPLY:
+        return "BinaryPLY";
+    case ModelFormat::ASCIIPLY:
+        return "ASCIIPLY";
+    case ModelFormat::OBJ:
+        return "OBJ";
+    case ModelFormat::UnknownSTL:
+        return "STL";
+    case ModelFormat::BinarySTL:
+        return "BinarySTL";
+    case ModelFormat::ASCIISTL:
+        return "ASCIISTL";
+    case ModelFormat::OFF:
+        return "OFF";
+    case ModelFormat::VRML:
+        return "VRML";
+    case ModelFormat::STEP:
+        return "STEP";
+    case ModelFormat::IGES:
+        return "IGES";
+    case ModelFormat::SLDPRT:
+        return "SLDPRT";
+    case ModelFormat::CATPART:
+        return "CATPART";
+    case ModelFormat::XYZ:
+        return "XYZ";
+    default:
+        return "Unknown";
     }
+}
 
-    std::string GetExtName(const std::string& file_name);
+std::string GetExtName(const std::string& file_name);
 
-    ModelFormat ModelTypeFromExtName(const std::string& file_name);
+ModelFormat ModelTypeFromExtName(const std::string& file_name);
 
-    bool IsMeshFormat(ModelFormat format);
-    bool IsBrepFormat(ModelFormat format);
-	bool IsCSGFormat(ModelFormat format);
-    bool IsPointCloudFormat(ModelFormat format);
+bool IsMeshFormat(ModelFormat format);
+bool IsBrepFormat(ModelFormat format);
+bool IsCSGFormat(ModelFormat format);
+bool IsPointCloudFormat(ModelFormat format);
 
-    bool IsMeshFormat(const std::string& file_name);
-    bool IsBrepFormat(const std::string& file_name);
-	bool IsCSGFormat(const std::string& file_name);
-    bool IsPointCloudFormat(const std::string& file_name);
-}// namespace HsBa::Slicer
-#endif // !HSBA_SLICER_MODELFORMAT_HPP
+bool IsMeshFormat(const std::string& file_name);
+bool IsBrepFormat(const std::string& file_name);
+bool IsCSGFormat(const std::string& file_name);
+bool IsPointCloudFormat(const std::string& file_name);
+}  // namespace HsBa::Slicer
+#endif  // !HSBA_SLICER_MODELFORMAT_HPP

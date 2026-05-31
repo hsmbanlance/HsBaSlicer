@@ -31,19 +31,32 @@ PolygonOperations.dumpPolygons(poly, "__FILENAME2__")
     std::string script = lua_code;
     std::string filename1 = dump_path1.string();
     std::string filename2 = dump_path2.string();
-    auto EscapeForLua = [](const std::string& in){
+    auto EscapeForLua = [](const std::string& in)
+    {
         std::string out;
-        out.reserve(in.size()*2);
+        out.reserve(in.size() * 2);
         for (char c : in)
         {
             switch (c)
             {
-            case '\\': out += "\\\\"; break;
-            case '"': out += "\\\""; break;
-            case '\n': out += "\\n"; break;
-            case '\r': out += "\\r"; break;
-            case '\t': out += "\\t"; break;
-            default: out += c; break;
+            case '\\':
+                out += "\\\\";
+                break;
+            case '"':
+                out += "\\\"";
+                break;
+            case '\n':
+                out += "\\n";
+                break;
+            case '\r':
+                out += "\\r";
+                break;
+            case '\t':
+                out += "\\t";
+                break;
+            default:
+                out += c;
+                break;
             }
         }
         return out;

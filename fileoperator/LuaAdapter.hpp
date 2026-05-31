@@ -4,27 +4,27 @@
 
 #include <lua.hpp>
 
-#include "zipper.hpp"
-#include "unzipper.hpp"
-#include "bit7z_zipper.hpp"
-#include "bit7z_unzipper.hpp"
-#include "sql_adapter.hpp"
 #include "base/template_helper.hpp"
+#include "bit7z_unzipper.hpp"
+#include "bit7z_zipper.hpp"
+#include "sql_adapter.hpp"
+#include "unzipper.hpp"
 #include "utils/LuaNewObject.hpp"
+#include "zipper.hpp"
 
 namespace HsBa::Slicer
 {
-	void PushAnyToLua(lua_State* L, const std::any& value);
-	void RegisterLuaZipper(lua_State* L);
-	void RegisterLuaSQLiteAdapter(lua_State* L);
+void PushAnyToLua(lua_State* L, const std::any& value);
+void RegisterLuaZipper(lua_State* L);
+void RegisterLuaSQLiteAdapter(lua_State* L);
 #ifdef HSBA_USE_MYSQL
-	void RegisterLuaMySQLAdapter(lua_State* L);
-#endif // HSBA_USE_MYSQL
+void RegisterLuaMySQLAdapter(lua_State* L);
+#endif  // HSBA_USE_MYSQL
 #ifdef HSBA_USE_PGSQL
-	void RegisterLuaPostgreSQLAdapter(lua_State* L);
-#endif // HSBA_USE_PGSQL
+void RegisterLuaPostgreSQLAdapter(lua_State* L);
+#endif  // HSBA_USE_PGSQL
 #ifdef HSBA_USE_BIT7Z
-	void RegisterLuaBit7zZipper(lua_State* L);
-#endif // HSBA_USE_BIT7Z
-}// namespace HsBa::Slicer
-#endif // FILEOPERATOR_LUAADAPTER_HPP
+void RegisterLuaBit7zZipper(lua_State* L);
+#endif  // HSBA_USE_BIT7Z
+}  // namespace HsBa::Slicer
+#endif  // FILEOPERATOR_LUAADAPTER_HPP

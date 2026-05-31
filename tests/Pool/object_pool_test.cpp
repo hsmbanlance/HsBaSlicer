@@ -1,8 +1,8 @@
 ﻿#define BOOST_TEST_MODULE object_pool_test
 #include <boost/test/included/unit_test.hpp>
 
-#include "base/object_pool.hpp"
 #include "base/memory_pool.hpp"
+#include "base/object_pool.hpp"
 
 BOOST_AUTO_TEST_SUITE(object_pool)
 
@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(object_pool_raii)
         BOOST_CHECK(pool.size() == 1);
         BOOST_CHECK(pool.ActiveCount() == 1);
         BOOST_CHECK(pool.InactiveCount() == 0);
-    } // ptr1 goes out of scope here
+    }  // ptr1 goes out of scope here
 
     // After cleanup, the object should be inactive
     BOOST_CHECK(pool.Contains("temp"));
@@ -127,7 +127,7 @@ BOOST_AUTO_TEST_CASE(object_pool_capacity_limits)
     BOOST_CHECK_THROW(smallPool.emplace("obj3", 3), HsBa::Slicer::RuntimeError);
 
     // After making one inactive, should be able to add again
-    ptr1.reset(); // Make obj1 inactive
+    ptr1.reset();  // Make obj1 inactive
     BOOST_CHECK(smallPool.ActiveCount() == 1);
     BOOST_CHECK(smallPool.InactiveCount() == 1);
 

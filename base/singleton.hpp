@@ -2,45 +2,47 @@
 #ifndef HSBA_SLICER_SINGLETON_HPP
 #define HSBA_SLICER_SINGLETON_HPP
 
-#include <shared_mutex>
-#include <mutex>
 #include <memory>
+#include <mutex>
+#include <shared_mutex>
 
 namespace HsBa::Slicer::Utils
 {
-	template <typename T>
-	class Singleton
-	{
-	protected:
-		struct Protected {};
-	public:
-		template<typename... Args>
-			requires std::constructible_from<T,Protected,Args...>
-		static std::shared_ptr<T> GetInstance(Args&& ...args)
-		{
-			std::call_once(instance_flag_, [&]() {
-				instance_ = std::make_shared<T>(Protected{},std::forward<Args>(args)...);
-			});
-			return instance_;
-		}
-		Singleton(const Singleton&) = delete;
-		Singleton& operator=(const Singleton&) = delete;
-		Singleton(Singleton&&) = delete;
-		Singleton& operator=(Singleton&&) = delete;
-	protected:
-		Singleton() = default;
-		~Singleton() = default;
-		static std::shared_ptr<T> instance_;
-		static std::shared_mutex mutex_;
-		static std::once_flag instance_flag_;
-	};
+template <typename T>
+class Singleton
+{
+protected:
+    struct Protected
+    {
+    };
 
-	template <typename T>
-	std::shared_ptr<T> Singleton<T>::instance_ = nullptr;
-	template <typename T>
-	std::shared_mutex Singleton<T>::mutex_;
-	template <typename T>
-	std::once_flag Singleton<T>::instance_flag_;
-} // namespace HsBa::Slicer::Utils
+public:
+    template <typename... Args>
+    requires std::constructible_from<T, Protected, Args...> static std::shared_ptr<T> GetInstance(Args&&... args)
+    {
+        std::call_once(instance_flag_,
+                       [&]() { instance_ = std::make_shared<T>(Protected{}, std::forward<Args>(args)...); });
+        return instance_;
+    }
+    Singleton(const Singleton&) = delete;
+    Singleton& operator=(const Singleton&) = delete;
+    Singleton(Singleton&&) = delete;
+    Singleton& operator=(Singleton&&) = delete;
 
-#endif // !HSBA_SLICER_SINGLETON_HPP
+protected:
+    Singleton() = default;
+    ~Singleton() = default;
+    static std::shared_ptr<T> instance_;
+    static std::shared_mutex mutex_;
+    static std::once_flag instance_flag_;
+};
+
+template <typename T>
+std::shared_ptr<T> Singleton<T>::instance_ = nullptr;
+template <typename T>
+std::shared_mutex Singleton<T>::mutex_;
+template <typename T>
+std::once_flag Singleton<T>::instance_flag_;
+}  // namespace HsBa::Slicer::Utils
+
+#endif  // !HSBA_SLICER_SINGLETON_HPP

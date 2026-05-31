@@ -2,127 +2,126 @@
 #ifndef HSBA_SLICER_IUNZIPPER_HPP
 #define HSBA_SLICER_IUNZIPPER_HPP
 
+#include <any>
+#include <fstream>
+#include <istream>
+#include <memory>
+#include <sstream>
 #include <string>
 #include <string_view>
-#include <istream>
 #include <variant>
-#include <fstream>
-#include <sstream>
-#include <memory>
-#include <any>
 
 #include "base/error.hpp"
 #include "base/template_helper.hpp"
 
 namespace HsBa::Slicer
 {
-	class UnzipperStream : public std::istream
-	{
-	public:
-		UnzipperStream() : std::istream{ nullptr }
-		{
-			rdbuf(nullptr);
-		}
-		UnzipperStream(std::string_view fileName, std::ios_base::openmode openmode):
-			std::istream{nullptr}, stream_{std::ifstream(fileName.data(),openmode)}
-		{ 
-			if(std::get_if<std::ifstream>(&stream_)->fail())
-			{
-				throw IOError("Failed to open file");
-			}
-			rdbuf(std::get<std::ifstream>(stream_).rdbuf());
-		}
-		UnzipperStream(std::string_view data):
-			std::istream{ nullptr }, stream_{ std::istringstream{std::string{data}} }
-		{
-			rdbuf(std::get<std::istringstream>(stream_).rdbuf());
-		}
-		UnzipperStream(const UnzipperStream&) = delete;
-		UnzipperStream& operator=(const UnzipperStream&) = delete;
-		UnzipperStream(UnzipperStream&& o) noexcept :std::istream{nullptr}
-		{
-			stream_ = std::move(o.stream_);
-			rdbuf(o.rdbuf());
-			o.rdbuf(nullptr);
-		}
-		UnzipperStream& operator=(UnzipperStream&& o) noexcept
-		{
-			if (this != &o)
-			{
-				stream_ = std::move(o.stream_);
-				rdbuf(o.rdbuf());
-				o.rdbuf(nullptr);
-			}
-			return *this;
-		}
-		~UnzipperStream()
-		{
-			std::visit(Utils::Overloaded{
-				[](std::ifstream& ifs) {
-					if (ifs.is_open()) {
-						ifs.close();
-					}
-				},
-				[](std::istringstream&){}
-			}, stream_);
-		}
-		struct Buffer {
-			Buffer() = default;
-			Buffer(size_t size)
-			{
-				data = std::make_shared<char[]>(size);
-				this -> size = size;
-			}
-			std::shared_ptr<char[]> data = nullptr;
-			size_t size{ 0 };
-		};
+class UnzipperStream : public std::istream
+{
+public:
+    UnzipperStream() : std::istream{nullptr} { rdbuf(nullptr); }
+    UnzipperStream(std::string_view fileName, std::ios_base::openmode openmode)
+        : std::istream{nullptr}, stream_{std::ifstream(fileName.data(), openmode)}
+    {
+        if (std::get_if<std::ifstream>(&stream_)->fail())
+        {
+            throw IOError("Failed to open file");
+        }
+        rdbuf(std::get<std::ifstream>(stream_).rdbuf());
+    }
+    UnzipperStream(std::string_view data) : std::istream{nullptr}, stream_{std::istringstream{std::string{data}}}
+    {
+        rdbuf(std::get<std::istringstream>(stream_).rdbuf());
+    }
+    UnzipperStream(const UnzipperStream&) = delete;
+    UnzipperStream& operator=(const UnzipperStream&) = delete;
+    UnzipperStream(UnzipperStream&& o) noexcept : std::istream{nullptr}
+    {
+        stream_ = std::move(o.stream_);
+        rdbuf(o.rdbuf());
+        o.rdbuf(nullptr);
+    }
+    UnzipperStream& operator=(UnzipperStream&& o) noexcept
+    {
+        if (this != &o)
+        {
+            stream_ = std::move(o.stream_);
+            rdbuf(o.rdbuf());
+            o.rdbuf(nullptr);
+        }
+        return *this;
+    }
+    ~UnzipperStream()
+    {
+        std::visit(Utils::Overloaded{[](std::ifstream& ifs)
+                                     {
+                                         if (ifs.is_open())
+                                         {
+                                             ifs.close();
+                                         }
+                                     },
+                                     [](std::istringstream&) {}},
+                   stream_);
+    }
+    struct Buffer
+    {
+        Buffer() = default;
+        Buffer(size_t size)
+        {
+            data = std::make_shared<char[]>(size);
+            this->size = size;
+        }
+        std::shared_ptr<char[]> data = nullptr;
+        size_t size{0};
+    };
 
-		using BufferOrFile = std::variant<Buffer, std::string>;
+    using BufferOrFile = std::variant<Buffer, std::string>;
 
-		inline static std::shared_ptr<UnzipperStream> MakeUnzipperStream(const BufferOrFile& data)
-		{
-			auto res = std::visit(Utils::Overloaded{
-				[](const Buffer& buff) -> std::shared_ptr<UnzipperStream> {
-					return std::make_shared<UnzipperStream>(std::string{ buff.data.get(),buff.size });
-				},
-				[](const std::string& str) -> std::shared_ptr<UnzipperStream> {
-					return std::make_shared<UnzipperStream>(str, std::ios_base::binary | std::ios_base::in);
-				}
-			}, data);
-			return res;
-		}
-		template<typename T>
-		void SetFrom(std::shared_ptr<T> ptr)
-		{
-			unzipper_ = ptr;
-		}
-	private:
-		std::variant<std::ifstream, std::istringstream> stream_;
-		// Removed CloseStream and MakeOperator structs since they're now replaced with Overloaded lambdas
-		std::any unzipper_;
-	};
+    inline static std::shared_ptr<UnzipperStream> MakeUnzipperStream(const BufferOrFile& data)
+    {
+        auto res = std::visit(
+            Utils::Overloaded{
+                [](const Buffer& buff) -> std::shared_ptr<UnzipperStream>
+                { return std::make_shared<UnzipperStream>(std::string{buff.data.get(), buff.size}); },
+                [](const std::string& str) -> std::shared_ptr<UnzipperStream>
+                { return std::make_shared<UnzipperStream>(str, std::ios_base::binary | std::ios_base::in); }},
+            data);
+        return res;
+    }
+    template <typename T>
+    void SetFrom(std::shared_ptr<T> ptr)
+    {
+        unzipper_ = ptr;
+    }
 
-	template<typename Derived>
-	class IUnzipper 
-	{
-	public:
-		void ReadFromFile(std::string_view path,bool reopen = false)
-		{
-			static_cast<Derived*>(this)->ReadFromFileImpl(path,reopen);
-		}
-		std::shared_ptr<UnzipperStream> GetStream(std::string_view part_file)
-		{
-			return static_cast<Derived*>(this)->GetStreamImpl(part_file);
-		}
-		IUnzipper(const IUnzipper&) = delete;
-		IUnzipper& operator=(const IUnzipper) = delete;
-		IUnzipper(IUnzipper&&) = delete;
-		IUnzipper& operator=(IUnzipper&&) = delete;
-	protected:
-		IUnzipper() = default;
-		~IUnzipper() = default;
-	};
+private:
+    std::variant<std::ifstream, std::istringstream> stream_;
+    // Removed CloseStream and MakeOperator structs since they're now replaced with Overloaded lambdas
+    std::any unzipper_;
+};
 
-} // namespace HsBa::Slicer
+template <typename Derived>
+class IUnzipper
+{
+public:
+    void ReadFromFile(std::string_view path, bool reopen = false)
+    {
+        static_cast<Derived*>(this)->ReadFromFileImpl(path, reopen);
+    }
+    std::shared_ptr<UnzipperStream> GetStream(std::string_view part_file)
+    {
+        return static_cast<Derived*>(this)->GetStreamImpl(part_file);
+    }
+    IUnzipper(const IUnzipper&) = delete;
+    IUnzipper& operator=(const IUnzipper) = delete;
+    IUnzipper(IUnzipper&&) = delete;
+    IUnzipper& operator=(IUnzipper&&) = delete;
 
-#endif // !HSBA_SLICER_IUNZIPPER_HPP
+protected:
+    IUnzipper() = default;
+    ~IUnzipper() = default;
+};
+
+}  // namespace HsBa::Slicer
+
+#endif  // !HSBA_SLICER_IUNZIPPER_HPP

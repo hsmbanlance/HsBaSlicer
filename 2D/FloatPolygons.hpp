@@ -11,67 +11,57 @@
 
 namespace HsBa::Slicer
 {
-	using Point2D = Clipper2Lib::PointD;
-	using PolygonD = Clipper2Lib::PathD;
-	using PolygonsD = Clipper2Lib::PathsD;
+using Point2D = Clipper2Lib::PointD;
+using PolygonD = Clipper2Lib::PathD;
+using PolygonsD = Clipper2Lib::PathsD;
 
-	PolygonsD MakeSimple(const PolygonD& p, double epsilon = 1e-6);
-	PolygonsD MakeSimple(const PolygonsD& ps, double epsilon = 1e-6);
+PolygonsD MakeSimple(const PolygonD& p, double epsilon = 1e-6);
+PolygonsD MakeSimple(const PolygonsD& ps, double epsilon = 1e-6);
 
-	PolygonsD Union(const PolygonD& left, const PolygonD& right,
-		Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd
-	);
-	PolygonsD Intersection(const PolygonD& left, const PolygonD& right,
-		Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd
-	);
-	PolygonsD Difference(const PolygonD& left, const PolygonD& right,
-		Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd
-	);
-	PolygonsD Xor(const PolygonD& left, const PolygonD& right,
-		Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd
-	);
+PolygonsD Union(const PolygonD& left, const PolygonD& right,
+                Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd);
+PolygonsD Intersection(const PolygonD& left, const PolygonD& right,
+                       Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd);
+PolygonsD Difference(const PolygonD& left, const PolygonD& right,
+                     Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd);
+PolygonsD Xor(const PolygonD& left, const PolygonD& right,
+              Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd);
 
-	PolygonsD Union(const PolygonsD& left, const PolygonsD& right,
-		Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd
-	);
-	PolygonsD Intersection(const PolygonsD& left, const PolygonsD& right,
-		Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd
-	);
-	PolygonsD Difference(const PolygonsD& left, const PolygonsD& right,
-		Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd
-	);
-	PolygonsD Xor(const PolygonsD& left, const PolygonsD& right,
-		Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd
-	);
+PolygonsD Union(const PolygonsD& left, const PolygonsD& right,
+                Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd);
+PolygonsD Intersection(const PolygonsD& left, const PolygonsD& right,
+                       Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd);
+PolygonsD Difference(const PolygonsD& left, const PolygonsD& right,
+                     Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd);
+PolygonsD Xor(const PolygonsD& left, const PolygonsD& right,
+              Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd);
 
-	double Area(const PolygonD& p);
-	double Area(const PolygonsD& ps);
+double Area(const PolygonD& p);
+double Area(const PolygonsD& ps);
 
-	// Image IO functions are declared in ImageToPolygons.hpp
+// Image IO functions are declared in ImageToPolygons.hpp
 
-	Polygon Integerization(const PolygonD& poly);
-	Polygons Integerization(const PolygonsD& polys);
+Polygon Integerization(const PolygonD& poly);
+Polygons Integerization(const PolygonsD& polys);
 
-	PolygonD UnIntegerization(const Polygon& poly);
-	PolygonsD UnIntegerization(const Polygons& polys);
+PolygonD UnIntegerization(const Polygon& poly);
+PolygonsD UnIntegerization(const Polygons& polys);
 
 #ifdef HSBA_POLYGON_DUMP
-	void DumpPolygon(const PolygonD& p, std::string_view filename, bool close_path = true);
-	void DumpPolygons(const PolygonsD& ps, std::string_view filename, bool close_path = true);
+void DumpPolygon(const PolygonD& p, std::string_view filename, bool close_path = true);
+void DumpPolygons(const PolygonsD& ps, std::string_view filename, bool close_path = true);
 #endif
-}// namespace HsBa::Slicer
-#endif // !HSBA_SLICER_FLOATPOLYGONS_HPP
+}  // namespace HsBa::Slicer
+#endif  // !HSBA_SLICER_FLOATPOLYGONS_HPP
 
-template<>
+template <>
 struct std::hash<HsBa::Slicer::PolygonD>
 {
-	std::size_t operator()(const HsBa::Slicer::PolygonD& p) const;
+    std::size_t operator()(const HsBa::Slicer::PolygonD& p) const;
 };
 
-template<>
+template <>
 struct std::hash<HsBa::Slicer::PolygonsD>
 {
-	std::size_t operator()(const HsBa::Slicer::PolygonsD& p) const;
+    std::size_t operator()(const HsBa::Slicer::PolygonsD& p) const;
 };
-
-

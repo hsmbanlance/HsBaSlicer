@@ -7,8 +7,8 @@ using namespace HsBa::Slicer;
 
 BOOST_AUTO_TEST_CASE(create_box_and_normals)
 {
-    auto box = IglModel::CreateBox(Eigen::Vector3f{1.0f,1.0f,1.0f});
-    auto [v,f] = box.TriangleMesh();
+    auto box = IglModel::CreateBox(Eigen::Vector3f{1.0f, 1.0f, 1.0f});
+    auto [v, f] = box.TriangleMesh();
     BOOST_CHECK(v.rows() > 0);
     BOOST_CHECK(f.rows() > 0);
     auto normals = box.ComputeFaceNormals();
@@ -29,9 +29,9 @@ BOOST_AUTO_TEST_CASE(volume_and_transform)
 #ifndef DISABLE_BOOLEAN_OPERATIONS_TESTS
 BOOST_AUTO_TEST_CASE(boolean_operations)
 {
-    auto a = IglModel::CreateBox(Eigen::Vector3f{1.0f,1.0f,1.0f});
-    auto b = IglModel::CreateBox(Eigen::Vector3f{1.0f,1.0f,1.0f});
-    b.Translate(Eigen::Vector3f{0.3f,0.0f,0.0f});
+    auto a = IglModel::CreateBox(Eigen::Vector3f{1.0f, 1.0f, 1.0f});
+    auto b = IglModel::CreateBox(Eigen::Vector3f{1.0f, 1.0f, 1.0f});
+    b.Translate(Eigen::Vector3f{0.3f, 0.0f, 0.0f});
     auto u = Union(a, b);
     auto inter = Intersection(a, b);
     auto diff = Difference(a, b);
@@ -41,26 +41,37 @@ BOOST_AUTO_TEST_CASE(boolean_operations)
     auto [dv, dF] = diff.TriangleMesh();
     auto [xv, xF] = xr.TriangleMesh();
 
-    if (uv.rows() > 0) {
+    if (uv.rows() > 0)
+    {
         BOOST_CHECK(uv.rows() > 0);
-    } else {
+    }
+    else
+    {
         BOOST_TEST_MESSAGE("IGL Union produced empty mesh (operation may not be supported for these inputs);");
     }
-    if (iv.rows() > 0) {
+    if (iv.rows() > 0)
+    {
         BOOST_CHECK(iv.rows() >= 0);
-    } else {
+    }
+    else
+    {
         BOOST_TEST_MESSAGE("IGL Intersection produced empty mesh (possible, acceptable result);");
     }
-    if (dv.rows() > 0) {
+    if (dv.rows() > 0)
+    {
         BOOST_CHECK(dv.rows() >= 0);
-    } else {
+    }
+    else
+    {
         BOOST_TEST_MESSAGE("IGL Difference produced empty mesh (possible, acceptable result);");
     }
-    if (xv.rows() > 0) {
+    if (xv.rows() > 0)
+    {
         BOOST_CHECK(xv.rows() > 0);
-    } else {
+    }
+    else
+    {
         BOOST_TEST_MESSAGE("IGL Xor produced empty mesh (operation may not be supported for these inputs);");
     }
 }
 #endif
-

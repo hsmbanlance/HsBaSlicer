@@ -6,7 +6,8 @@
 
 #if __cplusplus
 extern "C"
-#endif // __cplusplus
-HSBA_SLICER_API void initialize();
+#endif  // __cplusplus
+    HSBA_SLICER_API void
+    initialize();
 
-#endif // !HSBA_SLICER_INITIALIZE_H
+#endif  // !HSBA_SLICER_INITIALIZE_H

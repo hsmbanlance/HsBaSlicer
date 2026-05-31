@@ -7,17 +7,18 @@
 
 namespace HsBa::Slicer
 {
-	class AppConfigSingletone
-	{
-		static AppConfigSingletone& GetInstance();
-		static void DeleteInstance();
-		std::string GetSevenZPath() const;
-	private:
-		static std::shared_mutex mutex_;
-		static AppConfigSingletone* instance_;
-		std::string sevenZ_path_;
-		AppConfigSingletone();
-	};
-} // namespace HsBa::Slicer
+class AppConfigSingletone
+{
+    static AppConfigSingletone& GetInstance();
+    static void DeleteInstance();
+    std::string GetSevenZPath() const;
 
-#endif // !HSBA_SLICER_APP_CONFIG_HPP
+private:
+    static std::shared_mutex mutex_;
+    static AppConfigSingletone* instance_;
+    std::string sevenZ_path_;
+    AppConfigSingletone();
+};
+}  // namespace HsBa::Slicer
+
+#endif  // !HSBA_SLICER_APP_CONFIG_HPP
