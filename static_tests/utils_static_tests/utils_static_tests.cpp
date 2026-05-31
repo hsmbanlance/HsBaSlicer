@@ -97,7 +97,9 @@ void LuaNewObjectTests()
 void LuaAnyObjectTests()
 {
 	auto luaState = HsBa::Slicer::MakeUniqueLuaState();
-	using AnyIntCast = HsBa::Slicer::LuaAnyObjectNewCastImpl<int, "int">;
-	HsBa::Slicer::RegisterAnyObject(luaState.get(), { new AnyIntCast() });
+	HsBa::Slicer::LuaInt intType;
+	HsBa::Slicer::LuaDouble doubleType;
+	std::vector<HsBa::Slicer::LuaAnyObjectNewCastBase*> addedTypes = { &intType, &doubleType };
+	HsBa::Slicer::RegisterAnyObject(luaState.get(), addedTypes);
 }
 

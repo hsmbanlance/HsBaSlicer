@@ -126,10 +126,6 @@ namespace HsBa::Slicer
                 {
                     // Handle exception in task but still decrement active_tasks
                 }
-                catch (...) 
-                {
-                    // Handle unknown exception but still decrement active_tasks
-                }
                 {
                     std::unique_lock<std::mutex> lock(queue_mutex_);
                     --active_tasks_;

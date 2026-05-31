@@ -14,6 +14,75 @@ enum msg_technology_type
     techt_Unknown=7;//unknown
 }
 
+enum msg_fff_material
+{
+    mat_fff_Pla=0;// pla
+    mat_fff_Abs=1;// abs
+    mat_fff_Petg=2;// petg
+    mat_fff_Nylon=3;// nylon
+    mat_fff_Tpu=4;// tpu
+    mat_fff_Unknown=5;//unknown
+}
+
+enum msg_sla_material
+{
+    mat_sla_Resin=0;// resin
+    mat_sla_Unknown=1;//unknown
+}
+
+enum msg_sla_light
+{
+    light_sla_Uv=0;// uv light
+    light_sla_Unknown=1;//unknown
+}
+
+enum msg_slm_material
+{
+    mat_slm_Iron=0;// iron
+    mat_slm_Aluminum=1;// aluminum
+    mat_slm_Titanium=2;// titanium
+    mat_slm_Unknown=3;//unknown
+}
+
+enum msg_slm_light
+{
+    light_slm_Laser=0;// laser
+    light_slm_ElectronBeam=1;// electron beam
+    light_slm_Unknown=2;//unknown
+}
+
+enum msg_waam_material
+{
+    mat_waam_Steel=0;// steel
+    mat_waam_Aluminum=1;// aluminum
+    mat_waam_Titanium=2;// titanium
+    mat_waam_Copper=3;// copper
+    mat_waam_Unknown=4;//unknown
+}
+
+enum msg_waam_welding
+{
+    weld_waam_Arc=0;// arc welding
+    weld_waam_Laser=1;// laser welding
+    weld_waam_Unknown=2;//unknown
+}
+
+enum msg_waam_protection
+{
+    prot_waam_ShieldGas=0;// shield gas
+    prot_waam_Vacuum=1;// vacuum
+    prot_waam_Unknown=2;//unknown
+}
+
+enum msg_metal_protect_gas
+{
+    gas_metal_Argon=0;// argon
+    gas_metal_Helium=1;// helium
+    gas_metal_N2 = 2;// nitrogen
+    gas_metal_Co2=3;// co2
+    gas_metal_Unknown=4;//unknown
+}
+
 enum msg_output_type
 {
     outt_Gcode=0;// gcode file as .gcode or .nc
