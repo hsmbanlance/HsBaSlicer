@@ -402,8 +402,7 @@ problems-*
 *report*
 
 # AI Kiwi
-.qoder
-.gemini
+repowiki
 
 # needed ai skills
 -*skills.md
@@ -411,5 +410,8 @@ problems-*
 -*skills.yaml
 -*skills.yml
 -*skills.json
+-*/skills/*
+-*/agent/*
+-*/agents/*
 
 # Add testing obj 3D models as necessary
