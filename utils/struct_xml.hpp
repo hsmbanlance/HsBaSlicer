@@ -25,12 +25,8 @@ namespace HsBa::Slicer::Utils
 template <typename T>
 concept TinyXmlConvertible = requires(const T& value, tinyxml2::XMLElement* element, tinyxml2::XMLDocument* doc)
 {
-    {
-        value.to_xml(element, doc)
-    } -> std::same_as<void>;
-    {
-        T::from_xml(element)
-    } -> std::same_as<T>;
+    {value.to_xml(element, doc)}->std::same_as<void>;
+    {T::from_xml(element)}->std::same_as<T>;
 };
 
 namespace detail

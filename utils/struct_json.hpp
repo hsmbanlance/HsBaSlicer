@@ -27,12 +27,8 @@ template <typename T>
 concept RapidJsonValueConvertible =
     requires(const T& value, rapidjson::Value& json, rapidjson::Document::AllocatorType& doc)
 {
-    {
-        value.to_json(json, doc)
-    } -> std::same_as<void>;
-    {
-        T::from_json(json)
-    } -> std::same_as<T>;
+    {value.to_json(json, doc)}->std::same_as<void>;
+    {T::from_json(json)}->std::same_as<T>;
 };
 
 

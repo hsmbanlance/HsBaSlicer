@@ -27,12 +27,8 @@ namespace HsBa::Slicer::Utils
 template <typename T>
 concept YAMLValueConvertible = requires(const T& value, YAML::Node& node)
 {
-    {
-        value.to_yaml(node)
-    } -> std::same_as<void>;
-    {
-        T::from_yaml(node)
-    } -> std::same_as<T>;
+    {value.to_yaml(node)}->std::same_as<void>;
+    {T::from_yaml(node)}->std::same_as<T>;
 };
 
 

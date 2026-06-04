@@ -259,6 +259,65 @@ constexpr auto EnumFromName(std::string_view name)
     }
 }
 
+constexpr std::array<std::string_view, 4> UnknownEnumNames = {"Unknown", "UNKNOWN", "unknown", "UnKnown"};
+constexpr std::array<std::string_view, 4> UnDefinedEnumNames = {"Undefined", "UNDEFINED", "undefined", "UnDefined"};
+constexpr std::array<std::string_view, 4> InvalidEnumNames = {"Invalid", "INVALID", "invalid", "InValid"};
+constexpr std::array<std::string_view, 4> NoneEnumNames = {"None", "NONE", "none", "NoNe"};
+constexpr std::array<std::string_view, 3> MinEnumNames = {"Min", "MIN", "min"};
+constexpr std::array<std::string_view, 3> MaxEnumNames = {"Max", "MAX", "max"};
+
+template <typename T, int64_t Min = 0x00, int64_t Max = 0xff>
+    requires Enum<T> && (Min <= Max) constexpr auto MakeEnumValidTable()
+{
+    std::array<bool, static_cast<size_t>(Max - Min + 1)> table{};
+    constexpr auto enumEntries = magic_enum::enum_entries<T>();
+    constexpr auto stringviewEndOf = [](std::string_view str, std::string_view suffix) -> bool
+    { return str.size() >= suffix.size() && str.substr(str.size() - suffix.size(), suffix.size()) == suffix; };
+    for (const auto& [value, _] : enumEntries)
+    {
+        auto intValue = static_cast<int64_t>(value);
+        std::string_view name = magic_enum::enum_name<T>(value);
+        // for invalid/undefined/unknown/min/max name, if the name contains any of the keyword, it will be considered as
+        // invalid, this is to avoid the case where the enum value is valid but has a name that contains the keyword,
+        // which can cause confusion
+        {
+            if (std::ranges::any_of(UnknownEnumNames, [&](auto& n) { return stringviewEndOf(name, n); }) ||
+                std::ranges::any_of(UnDefinedEnumNames, [&](auto& n) { return stringviewEndOf(name, n); }) ||
+                std::ranges::any_of(InvalidEnumNames, [&](auto& n) { return stringviewEndOf(name, n); }) ||
+                std::ranges::any_of(NoneEnumNames, [&](auto& n) { return stringviewEndOf(name, n); }) ||
+                std::ranges::any_of(MinEnumNames, [&](auto& n) { return stringviewEndOf(name, n); }) ||
+                std::ranges::any_of(MaxEnumNames, [&](auto& n) { return stringviewEndOf(name, n); }))
+            {
+                continue;
+            }
+        }
+        if (intValue >= Min && intValue <= Max)
+        {
+            table[static_cast<size_t>(intValue - Min)] = true;
+        }
+    }
+    return table;
+}
+
+template <typename T, int64_t Min = 0x00, int64_t Max = 0xff, typename Fn, typename... Args>
+    requires Enum<T> && (Min <= Max) constexpr auto AllValidEnum(T value, Fn&& fn, Args&&... args)
+{
+    using ReturnType = std::invoke_result_t<Fn, Args...>;
+    constexpr auto validTable = MakeEnumValidTable<T, Min, Max>();
+    auto intValue = static_cast<int64_t>(value);
+    if (intValue >= Min && intValue <= Max)
+    {
+        if (validTable[static_cast<size_t>(intValue - Min)])
+        {
+            return std::forward<Fn>(fn)(std::forward<Args>(args)...);
+        }
+    }
+    if constexpr (!std::is_void_v<ReturnType>)
+    {
+        return ReturnType{};
+    }
+}
+
 template <typename T, typename... Us>
 struct AllTheSame
 {
@@ -268,6 +327,24 @@ struct AllTheSame
 
 template <typename... Us>
 constexpr bool HasVoidV = (std::is_void_v<Us> || ...);
+
+template <typename T, int64_t Min = 0x00, int64_t Max = 0xff, typename Fn, typename DefaultFn, typename... Args>
+    requires Enum<T> &&
+    (Min <= Max) constexpr auto AllValidEnum(T value, Fn&& fn, DefaultFn&& defaultFn, Args&&... args)
+{
+    using ReturnType = AllTheSame<std::invoke_result_t<Fn, Args...>, std::invoke_result_t<DefaultFn, Args...>>::type;
+    constexpr auto validTable = MakeEnumValidTable<T, Min, Max>();
+    auto intValue = static_cast<int64_t>(value);
+    if (intValue >= Min && intValue <= Max)
+    {
+        if (validTable[static_cast<size_t>(intValue - Min)])
+        {
+            return std::forward<Fn>(fn)(std::forward<Args>(args)...);
+        }
+    }
+    return std::forward<DefaultFn>(defaultFn)(std::forward<Args>(args)...);
+}
+
 
 template <TemplateString th, typename T>
 struct NamedRawPtr

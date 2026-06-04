@@ -9,6 +9,23 @@ enum class Enum
     Third
 };
 
+enum class EnumWithInvidValue
+{
+    Invalid = -1,
+    Unknown = 0,
+    First = 1,
+    Second = 2,
+    Third = 3,
+    UnDefined = 255,
+};
+
+template <>
+struct magic_enum::customize::enum_range<EnumWithInvidValue>
+{
+    static constexpr int min = static_cast<int>(EnumWithInvidValue::Unknown);
+    static constexpr int max = static_cast<int>(EnumWithInvidValue::UnDefined);
+};
+
 static_assert(HsBa::Slicer::Utils::EnumName<Enum::First>() == "First");
 static_assert(HsBa::Slicer::Utils::EnumName<Enum::Second>() == "Second");
 static_assert(HsBa::Slicer::Utils::EnumName<Enum::Third>() == "Third");
@@ -43,6 +60,23 @@ void TemplateHelperTests()
     HsBa::Slicer::Utils::template_call<"abc">([](std::string_view, int) {}, 1);
 
     HsBa::Slicer::Utils::MakeNonCopyableArray<NonCopyable, 3>(1);
+
+    constexpr auto result =
+        HsBa::Slicer::Utils::AllValidEnum<EnumWithInvidValue>(EnumWithInvidValue::First, [] { return 42; });
+    static_assert(result == 42);
+    constexpr auto resultInvalid =
+        HsBa::Slicer::Utils::AllValidEnum<EnumWithInvidValue>(EnumWithInvidValue::Invalid, [] { return 42; });
+    static_assert(resultInvalid == 0);
+    HsBa::Slicer::Utils::AllValidEnum<EnumWithInvidValue>(EnumWithInvidValue::Second, [] { static_assert(true); });
+    HsBa::Slicer::Utils::AllValidEnum<EnumWithInvidValue>(EnumWithInvidValue::UnDefined, [] { static_assert(true); });
+    HsBa::Slicer::Utils::AllValidEnum<EnumWithInvidValue>(
+        EnumWithInvidValue::Invalid, [] { static_assert(true); }, [] { static_assert(true); });
+    constexpr auto resultWithDefault = HsBa::Slicer::Utils::AllValidEnum<EnumWithInvidValue>(
+        EnumWithInvidValue::Invalid, [] { return 42; }, [] { return -1; });
+    static_assert(resultWithDefault == -1);
+    constexpr auto resultWithDefaultValid = HsBa::Slicer::Utils::AllValidEnum<EnumWithInvidValue>(
+        EnumWithInvidValue::Second, [] { return 42; }, [] { return -1; });
+    static_assert(resultWithDefaultValid == 42);
 }
 
 // static any visit tests

@@ -36,12 +36,8 @@ concept WCharStream = requires(T t, std::wostream& os, std::wistream& is)
 template <typename T, typename Tran>
 concept StrTranslator = requires(T t, std::string str, Tran tr)
 {
-    {
-        tr.put_value(t)
-    } -> std::convertible_to<std::string>;
-    {
-        tr.get_value(str)
-    } -> std::same_as<T>;
+    {tr.put_value(t)}->std::convertible_to<std::string>;
+    {tr.get_value(str)}->std::same_as<T>;
 };
 
 /**
@@ -67,29 +63,17 @@ concept PointerOrIt = requires(T t)
 template <typename T>
 concept PointerLike = requires(T t)
 {
-    {
-        t.operator->()
-    } -> std::same_as<T*>;
-    {
-        t.operator*()
-    } -> std::same_as<T&>;
-    {
-        t.operator bool()
-    } -> std::convertible_to<bool>;
+    {t.operator->()}->std::same_as<T*>;
+    {t.operator*()}->std::same_as<T&>;
+    {t.operator bool()}->std::convertible_to<bool>;
 };
 
 template <typename T>
 concept OptionalLike = requires(T t)
 {
-    {
-        t.has_value()
-    } -> std::convertible_to<bool>;
-    {
-        *t
-    } -> std::same_as<typename T::value_type&>;
-    {
-        t.value()
-    } -> std::same_as<typename T::value_type&>;
+    {t.has_value()}->std::convertible_to<bool>;
+    {*t}->std::same_as<typename T::value_type&>;
+    {t.value()}->std::same_as<typename T::value_type&>;
 };
 
 /**
@@ -132,9 +116,7 @@ concept CStypleUnion = std::is_union_v<T>;
 template <typename T>
 concept StdHash = requires(T t, std::hash<T> hasher)
 {
-    {
-        hasher(t)
-    } -> std::convertible_to<size_t>;
+    {hasher(t)}->std::convertible_to<size_t>;
 };
 /**
  * @brief Hasher is T hasher, like std::hash
@@ -142,9 +124,7 @@ concept StdHash = requires(T t, std::hash<T> hasher)
 template <typename T, typename Hasher>
 concept Hash = requires(T t, Hasher hasher)
 {
-    {
-        hasher(t)
-    } -> std::convertible_to<size_t>;
+    {hasher(t)}->std::convertible_to<size_t>;
 };
 /**
  * @brief has std::hash and operator==
@@ -190,9 +170,7 @@ concept StringView =
 template <typename T, typename Allocator>
 concept TAllocator = requires(Allocator alloc, std::size_t n, T* p)
 {
-    {
-        alloc.allocate(n)
-    } -> std::same_as<T*>;
+    {alloc.allocate(n)}->std::same_as<T*>;
     {alloc.deallocate(p, n)};
     requires std::is_constructible_v<Allocator>;
     requires std::is_destructible_v<Allocator>;
@@ -213,33 +191,25 @@ concept CharType = std::is_same_v<T, char> || std::is_same_v<T, wchar_t> || std:
 template <typename T>
 concept Addable = requires(T t, T u)
 {
-    {
-        t + u
-    } -> std::same_as<T>;
+    {t + u}->std::same_as<T>;
 };
 
 template <typename T>
 concept Subtractable = requires(T t, T u)
 {
-    {
-        t - u
-    } -> std::same_as<T>;
+    {t - u}->std::same_as<T>;
 };
 
 template <typename T>
 concept Multipliable = requires(T t, T u)
 {
-    {
-        t* u
-    } -> std::same_as<T>;
+    {t * u}->std::same_as<T>;
 };
 
 template <typename T>
 concept Dividable = requires(T t, T u)
 {
-    {
-        t / u
-    } -> std::same_as<T>;
+    {t / u}->std::same_as<T>;
 };
 }  // namespace HsBa::Slicer
 

@@ -1030,10 +1030,8 @@ private:
 
 template <typename Arg, template <typename> typename Container, typename Callback>
     requires std::invocable<Callback, Arg> &&
-    (std::ranges::range<Container<Arg>> &&
-     !std::same_as<Container<Arg>, std::vector<bool>>)inline auto GeneratorInvoke(Callback&& callback,
-                                                                                  const Container<Arg>& arg)
-        -> Generator<std::invoke_result_t<Callback, Arg>>
+    (std::ranges::range<Container<Arg>> && !std::same_as<Container<Arg>, std::vector<bool>>)inline auto
+    GeneratorInvoke(Callback&& callback, const Container<Arg>& arg) -> Generator<std::invoke_result_t<Callback, Arg>>
 {
     for (const auto& i : arg)
     {
@@ -1046,10 +1044,8 @@ template <typename Arg, template <typename> typename Container, typename Callbac
 
 template <typename Arg, template <typename> typename Container, typename Callback>
     requires std::invocable<Callback, Arg> &&
-    (std::ranges::range<Container<Arg>> &&
-     !std::same_as<Container<Arg>, std::vector<bool>>)inline auto GeneratorInvoke(Callback&& callback,
-                                                                                  const Container<Arg>& arg)
-        -> Container<std::invoke_result_t<Callback, Arg>>
+    (std::ranges::range<Container<Arg>> && !std::same_as<Container<Arg>, std::vector<bool>>)inline auto
+    GeneratorInvoke(Callback&& callback, const Container<Arg>& arg) -> Container<std::invoke_result_t<Callback, Arg>>
 {
     using R = std::invoke_result_t<Callback, Arg>;
     Container<R> ret;

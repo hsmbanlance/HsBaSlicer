@@ -39,7 +39,9 @@ public:
     static std::shared_ptr<LoggerSingletone> GetInstance();
 
 private:
-    struct HSBA_SLICER_LOG_API Private{};
+    struct HSBA_SLICER_LOG_API Private
+    {
+    };
 
     bool use_log_file_;
     std::string log_path_;
