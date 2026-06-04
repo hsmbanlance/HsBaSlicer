@@ -14,6 +14,14 @@ enum msg_technology_type
     techt_Unknown=7;//unknown
 }
 
+enum msg_support_type
+{
+    stype_Plane=0;// plane support
+    stype_Tree=1;// tree support
+    stype_Honeycomb=2;// honeycomb support
+    stype_Unknown=3;//unknown
+}
+
 enum msg_fff_material
 {
     mat_fff_Pla=0;// pla
@@ -24,10 +32,23 @@ enum msg_fff_material
     mat_fff_Unknown=5;//unknown
 }
 
+enum msg_fff_support
+{
+    supp_fff_Pva=0;// pva
+    supp_fff_Hips=1;// hips
+    supp_fff_Unknown=2;//unknown
+}
+
 enum msg_sla_material
 {
     mat_sla_Resin=0;// resin
     mat_sla_Unknown=1;//unknown
+}
+
+enum msg_sla_support
+{
+    supp_sla_Sacrificial=0;// sacrificial support
+    supp_sla_Unknown=1;//unknown
 }
 
 enum msg_sla_light
