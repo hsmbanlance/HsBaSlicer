@@ -1,4 +1,9 @@
-﻿#pragma once
+﻿/**@file eigen_translator.hpp
+ * @brief A header file containing the definition of Eigen translators.
+ * @author HsBa
+ * @date 2024-06-01
+ */
+#pragma once
 #ifndef HSBA_SLICER_EIGEN_TRANSLATOR_HPP
 #define HSBA_SLICER_EIGEN_TRANSLATOR_HPP
 

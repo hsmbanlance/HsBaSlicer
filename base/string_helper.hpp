@@ -1,4 +1,11 @@
-﻿#pragma once
+﻿/** @file string_helper.hpp
+ * @brief A collection of string utilities and helper functions for the HsBa Slicer project.
+ * This file includes various functions for string manipulation and comparison, designed to facilitate common
+ * programming tasks and improve code readability and maintainability within the project.
+ * @author HsBa
+ * @date 2024-06
+ */
+#pragma once
 #ifndef HSBA_SLICER_STRING_HELPER_HPP
 #define HSBA_SLICER_STRING_HELPER_HPP
 
@@ -59,7 +66,12 @@ std::basic_string<CharT> _trim_right(std::basic_string_view<CharT> str)
 
 }  // namespace detail
 
-
+/** @brief Converts a string to lowercase.
+ * @tparam StringViewT The type of the string view.
+ * @param str The string to convert.
+ * @param loc The locale to use for the conversion.
+ * @return The lowercase version of the string.
+ */
 template <typename StringViewT>
 auto to_lower(StringViewT str, std::locale loc = std::locale()) -> std::basic_string<typename StringViewT::value_type>
 {
@@ -67,6 +79,12 @@ auto to_lower(StringViewT str, std::locale loc = std::locale()) -> std::basic_st
     return detail::_to_lower<CharT>(str, loc);
 }
 
+/** @brief Converts a string to uppercase.
+ * @tparam StringViewT The type of the string view.
+ * @param str The string to convert.
+ * @param loc The locale to use for the conversion.
+ * @return The uppercase version of the string.
+ */
 template <typename StringViewT>
 auto to_upper(StringViewT str, std::locale loc = std::locale()) -> std::basic_string<typename StringViewT::value_type>
 {
@@ -74,6 +92,13 @@ auto to_upper(StringViewT str, std::locale loc = std::locale()) -> std::basic_st
     return detail::_to_upper<CharT>(str, loc);
 }
 
+/** @brief Splits a string by a delimiter.
+ * @tparam StringViewT The type of the string view.
+ * @tparam Container The type of the container to store the split parts.
+ * @param str The string to split.
+ * @param delimiter The delimiter to split by.
+ * @return A container containing the split parts.
+ */
 template <typename StringViewT, template <typename> typename Container = std::vector>
 constexpr Container<StringViewT> split(StringViewT str, StringViewT delimiter)
 {
@@ -86,6 +111,13 @@ constexpr Container<StringViewT> split(StringViewT str, StringViewT delimiter)
     return result;
 }
 
+/** @brief Splits a string by a regular expression.
+ * @tparam StringViewT The type of the string view.
+ * @tparam Container The type of the container to store the split parts.
+ * @param str The string to split.
+ * @param re The regular expression to split by.
+ * @return A container containing the split parts.
+ */
 template <typename StringViewT, template <typename> typename Container = std::vector>
 auto regex_split(StringViewT str, StringViewT re) -> Container<std::basic_string<typename StringViewT::value_type>>
 {
@@ -108,7 +140,11 @@ auto regex_split(StringViewT str, StringViewT re) -> Container<std::basic_string
     }
 }
 
-
+/** @brief Trims whitespace from both ends of a string.
+ * @tparam StringViewT The type of the string view.
+ * @param str The string to trim.
+ * @return The trimmed version of the string.
+ */
 template <typename StringViewT>
 auto trim(StringViewT str) -> std::basic_string<typename StringViewT::value_type>
 {
@@ -116,6 +152,11 @@ auto trim(StringViewT str) -> std::basic_string<typename StringViewT::value_type
     return detail::_trim<CharT>(str);
 }
 
+/** @brief Trims whitespace from the left end of a string.
+ * @tparam StringViewT The type of the string view.
+ * @param str The string to trim.
+ * @return The trimmed version of the string.
+ */
 template <typename StringViewT>
 auto trim_left(StringViewT str) -> std::basic_string<typename StringViewT::value_type>
 {
@@ -123,6 +164,11 @@ auto trim_left(StringViewT str) -> std::basic_string<typename StringViewT::value
     return detail::_trim_left<CharT>(str);
 }
 
+/** @brief Trims whitespace from the right end of a string.
+ * @tparam StringViewT The type of the string view.
+ * @param str The string to trim.
+ * @return The trimmed version of the string.
+ */
 template <typename StringViewT>
 auto trim_right(StringViewT str) -> std::basic_string<typename StringViewT::value_type>
 {

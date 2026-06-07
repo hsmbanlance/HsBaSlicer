@@ -1,4 +1,9 @@
-﻿#pragma once
+﻿/** @file any_object.hpp
+ * @brief A header file containing the definition of the AnyObject class.
+ * @author HsBa
+ * @date 2024-06
+ */
+#pragma once
 #ifndef HSBA_SLICER_ANY_OBJECT_HPP
 
 #include <cstdint>
@@ -16,6 +21,8 @@
 namespace HsBa::Slicer::Utils
 {
 class AnyObject;
+/** @brief A structure containing type information for AnyObject instances.
+ */
 struct TypeInfo
 {
     std::string_view Name;
@@ -28,10 +35,17 @@ struct TypeInfo
     std::unordered_map<std::string_view, Field> fields;
     std::unordered_map<std::string_view, Method> methods;
 };
-
+/** @brief Get the type info for type T.
+ * @tparam T The type for which to get info.
+ * @return A pointer to the type info.
+ */
 template <typename T>
 TypeInfo* GetTypeInfo();
-
+/** @brief Create an AnyObject instance of type T.
+ * @tparam T The type of the instance to create.
+ * @param value The value to initialize the instance with.
+ * @return The created AnyObject instance.
+ */
 class AnyObject
 {
 public:

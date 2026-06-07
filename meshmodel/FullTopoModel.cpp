@@ -18,8 +18,8 @@
 
 namespace HsBa::Slicer
 {
-FullTopoModel::FullTopoModel(const std::vector<Eigen::Vector3f>& vertices, const std::vector<std::array<int, 3>>& triangles,
-                  bool use_normals)
+FullTopoModel::FullTopoModel(const std::vector<Eigen::Vector3f>& vertices,
+                             const std::vector<std::array<int, 3>>& triangles, bool use_normals)
 {
     BuildTopo(vertices, triangles, use_normals);
 }
@@ -42,8 +42,7 @@ FullTopoModel::FullTopoModel(const IModel& model, bool use_normals)
 }
 
 void FullTopoModel::BuildTopo(const std::vector<Eigen::Vector3f>& vertices,
-                              const std::vector<std::array<int, 3>>& triangles,
-                              bool use_normals)
+                              const std::vector<std::array<int, 3>>& triangles, bool use_normals)
 {
     vertices_.clear();
     edges_.clear();
@@ -59,10 +58,7 @@ void FullTopoModel::BuildTopo(const std::vector<Eigen::Vector3f>& vertices,
     edge_map.reserve(triangles.size() * 2);
 
     auto make_edge_key = [](int index0, int index1) -> std::pair<int, int>
-    {
-        return index0 < index1 ? std::pair<int, int>{index0, index1}
-                               : std::pair<int, int>{index1, index0};
-    };
+    { return index0 < index1 ? std::pair<int, int>{index0, index1} : std::pair<int, int>{index1, index0}; };
 
     for (int face_index = 0; face_index < static_cast<int>(triangles.size()); ++face_index)
     {
@@ -70,7 +66,8 @@ void FullTopoModel::BuildTopo(const std::vector<Eigen::Vector3f>& vertices,
         int v0 = triangle[0];
         int v1 = triangle[1];
         int v2 = triangle[2];
-        if (v0 < 0 || v1 < 0 || v2 < 0 || v0 >= static_cast<int>(vertices_.size()) || v1 >= static_cast<int>(vertices_.size()) || v2 >= static_cast<int>(vertices_.size()))
+        if (v0 < 0 || v1 < 0 || v2 < 0 || v0 >= static_cast<int>(vertices_.size()) ||
+            v1 >= static_cast<int>(vertices_.size()) || v2 >= static_cast<int>(vertices_.size()))
         {
             continue;
         }
@@ -241,7 +238,7 @@ int FullTopoModel::EulerCharacteristic() const
 }
 
 bool FullTopoModel::Intersection(const Eigen::Vector3f& v1, const Eigen::Vector3f& v2, const float height,
-                                Eigen::Vector3f& intersection)
+                                 Eigen::Vector3f& intersection)
 {
     // 不相交的情况
     if (v1.z() > height && v2.z() > height)

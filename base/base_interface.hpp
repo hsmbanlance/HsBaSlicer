@@ -1,4 +1,9 @@
-﻿#pragma once
+﻿/**
+ * @file base_interface.hpp
+ * @author HsBa
+ * @date 2024-06-01
+ */
+#pragma once
 #ifndef HSBA_SLICER_BASE_INTERFACE_HPP
 #define HSBA_SLICER_BASE_INTERFACE_HPP
 
@@ -6,10 +11,10 @@
 
 namespace HsBa::Slicer::Utils
 {
-/// <summary>
-/// translator interface used in boost::ptree
-/// </summary>
-/// <typeparam name="T"></typeparam>
+/**
+ * @brief A translator interface for converting between a type and its string representation.
+ * @tparam T The type to be translated.
+ */
 template <typename T>
 class ITranslator
 {

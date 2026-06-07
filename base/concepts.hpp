@@ -12,6 +12,7 @@ namespace HsBa::Slicer
 /**
  * @brief streamable type,which can be used in stream operator,include input and output streamstreamable type,which can
  * be used in stream operator,include input and output stream
+ * @tparam T The type to check.
  */
 template <typename T>
 concept CharStream = requires(T t, std::ostream& os, std::istream& is)
@@ -22,6 +23,7 @@ concept CharStream = requires(T t, std::ostream& os, std::istream& is)
 
 /**
  * @brief wstreamable type,which can be used in stream operator,include input and output stream
+ * @tparam T The type to check.
  */
 template <typename T>
 concept WCharStream = requires(T t, std::wostream& os, std::wistream& is)
@@ -32,6 +34,8 @@ concept WCharStream = requires(T t, std::wostream& os, std::wistream& is)
 
 /**
  * @brief put_value and get_value member function,for boost::ptree
+ * @tparam T The type to check.
+ * @tparam Tran The translator type.
  */
 template <typename T, typename Tran>
 concept StrTranslator = requires(T t, std::string str, Tran tr)
@@ -42,17 +46,20 @@ concept StrTranslator = requires(T t, std::string str, Tran tr)
 
 /**
  * @brief is enumeration type
+ * @tparam T The type to check.
  */
 template <typename T>
 concept Enum = std::is_enum_v<T>;
 
 /**
  * @brief is c style pointer
+ * @tparam T The type to check.
  */
 template <typename T>
 concept CStylePointer = std::is_pointer_v<T>;
 /**
  * @brief can be dereferenced
+ * @tparam T The type to check.
  */
 template <typename T>
 concept PointerOrIt = requires(T t)
@@ -60,6 +67,9 @@ concept PointerOrIt = requires(T t)
     {*t};
 };
 
+/** @brief A concept for types that behave like pointers.
+ * @tparam T The type to check.
+ */
 template <typename T>
 concept PointerLike = requires(T t)
 {
@@ -68,6 +78,10 @@ concept PointerLike = requires(T t)
     {t.operator bool()}->std::convertible_to<bool>;
 };
 
+/**
+ * @brief optional like type,which has has_value and operator* or value member function
+ * @tparam T The type to check.
+ */
 template <typename T>
 concept OptionalLike = requires(T t)
 {
@@ -78,40 +92,47 @@ concept OptionalLike = requires(T t)
 
 /**
  * @brief is c style array
+ * @tparam T The type to check.
  */
 template <typename T>
 concept CStyleArray = std::is_array_v<T>;
 
 /**
  * @brief left value reference
+ * @tparam T The type to check.
  */
 template <typename T>
 concept LvalueRef = std::is_lvalue_reference_v<T>;
 /**
  * @brief right value reference
+ * @tparam T The type to check.
  */
 template <typename T>
 concept RvalueRef = std::is_rvalue_reference_v<T>;
 /**
  * @brief is reference
+ * @tparam T The type to check.
  */
 template <typename T>
 concept Ref = std::is_reference_v<T>;
 
 /**
  * @brief is standard arithmetic type
+ * @tparam T The type to check.
  */
 template <typename T>
 concept StandardArithmetic = std::is_arithmetic_v<T>;
 
 /**
  * @brief is c style union
+ * @tparam T The type to check.
  */
 template <typename T>
 concept CStypleUnion = std::is_union_v<T>;
 
 /**
  * @brief has std::hash
+ * @tparam T The type to check.
  */
 template <typename T>
 concept StdHash = requires(T t, std::hash<T> hasher)
@@ -120,6 +141,7 @@ concept StdHash = requires(T t, std::hash<T> hasher)
 };
 /**
  * @brief Hasher is T hasher, like std::hash
+ * @tparam T The type to check.
  */
 template <typename T, typename Hasher>
 concept Hash = requires(T t, Hasher hasher)
@@ -128,23 +150,28 @@ concept Hash = requires(T t, Hasher hasher)
 };
 /**
  * @brief has std::hash and operator==
+ * @tparam T The type to check.
  */
 template <typename T>
 concept EqualAndStdHash = std::equality_comparable<T> && StdHash<T>;
 /**
  * @brief T has operator== and Hasher is T hasher, like std::hash
+ * @tparam T The type to check.
+ * @tparam Hasher The hasher type to check.
  */
 template <typename T, typename Hasher>
 concept EqualAndHash = std::equality_comparable<T> && Hash<T, Hasher>;
 
 /**
  * @brief std string cotainer
+ * @tparam T The type to check.
  */
 template <typename T>
 concept StdString = std::same_as<T, std::string> || std::same_as<T, std::wstring> || std::same_as<T, std::u16string> ||
                     std::same_as<T, std::u32string> || std::same_as<T, std::u8string>;
 /**
  * @brief const char* or const wchar_t* or const char16_t* or const char32_t* or const char8_t*
+ * @tparam T The type to check.
  */
 template <typename T>
 concept CStyleString =
@@ -152,12 +179,14 @@ concept CStyleString =
     std::same_as<T, const char32_t*> || std::same_as<T, const char8_t*>;
 /**
  * @brief std string container or c style string
+ * @tparam T The type to check.
  */
 template <typename T>
 concept String = StdString<T> || CStyleString<T>;
 
 /**
  * @brief std string view
+ * @tparam T The type to check.
  */
 template <typename T>
 concept StringView =
@@ -166,6 +195,8 @@ concept StringView =
 
 /**
  * @brief allocator for T
+ * @tparam T The type to check.
+ * @tparam Allocator The allocator type to check.
  */
 template <typename T, typename Allocator>
 concept TAllocator = requires(Allocator alloc, std::size_t n, T* p)
@@ -176,6 +207,9 @@ concept TAllocator = requires(Allocator alloc, std::size_t n, T* p)
     requires std::is_destructible_v<Allocator>;
 };
 
+/** @brief A concept for allocators that have no state.
+ * @tparam Allocator The allocator type to check.
+ */
 template <typename Allocator>
 concept NoStateAllocator = std::is_empty_v<Allocator> && requires
 {
@@ -183,29 +217,44 @@ concept NoStateAllocator = std::is_empty_v<Allocator> && requires
     requires std::allocator_traits<Allocator>::is_always_equal::value;
 };
 
+/** @brief A concept for character types.
+ * @tparam T The type to check.
+ */
 template <typename T>
 concept CharType = std::is_same_v<T, char> || std::is_same_v<T, wchar_t> || std::is_same_v<T, signed char> ||
                    std::is_same_v<T, unsigned char> || std::is_same_v<T, char16_t> || std::is_same_v<T, char32_t> ||
                    std::is_same_v<T, char8_t>;
 
+/** @brief A concept for types that support addition.
+ * @tparam T The type to check.
+ */
 template <typename T>
 concept Addable = requires(T t, T u)
 {
     {t + u}->std::same_as<T>;
 };
 
+/** @brief A concept for types that support subtraction.
+ * @tparam T The type to check.
+ */
 template <typename T>
 concept Subtractable = requires(T t, T u)
 {
     {t - u}->std::same_as<T>;
 };
 
+/** @brief A concept for types that support multiplication.
+ * @tparam T The type to check.
+ */
 template <typename T>
 concept Multipliable = requires(T t, T u)
 {
     {t * u}->std::same_as<T>;
 };
 
+/** @brief A concept for types that support division.
+ * @tparam T The type to check.
+ */
 template <typename T>
 concept Dividable = requires(T t, T u)
 {

@@ -317,3 +317,39 @@ int main() {
 - 概念约束用于编译期类型检查，提高代码安全性
 - 命名指针通过基于名称区分指针来提供类型安全性
 - YCombinator 在C++23之前的版本中启用lambda中的递归，无需显式自引用
+
+## 12. AllValidEnum（枚举有效性检查）
+
+`AllValidEnum` 提供了一种安全处理枚举值的方式：仅在枚举值被认为有效时执行回调。它还有一个重载版本，接受无效时的回退回调。
+
+特性：
+- 基于编译期生成的有效性表验证枚举值（跳过 Unknown/Invalid/Min/Max 等占位符项）。
+- 提供两种形式：一种在无效时返回默认构造值，另一种在无效时调用 `defaultFn`。
+
+使用示例：
+
+```cpp
+#include "base/template_helper.hpp"
+#include <iostream>
+
+enum class Status { Unknown = -1, Ok = 0, Error = 1, MaxStatus };
+
+int main() {
+    Status s = Status::Ok;
+
+    // 简单形式：仅在有效时调用
+    HsBa::Slicer::Utils::AllValidEnum<Status>(s, [](){
+        std::cout << "Status 有效" << std::endl;
+    });
+
+    // 带回退的形式：返回 fn 或 defaultFn 的结果
+    auto result = HsBa::Slicer::Utils::AllValidEnum<Status>(s,
+        [](){ return 1; },
+        [](){ return 0; }
+    );
+
+    std::cout << "结果: " << result << std::endl;
+}
+```
+
+符号引用: #sym:AllValidEnum

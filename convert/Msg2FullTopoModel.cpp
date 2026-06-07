@@ -19,7 +19,8 @@ FullTopoModel MsgTopoTrimeshes2FullTopoModel(const HsbaProto::msg_topo_trimeshes
         int p0 = static_cast<int>(triangle_msg.p0());
         int p1 = static_cast<int>(triangle_msg.p1());
         int p2 = static_cast<int>(triangle_msg.p2());
-        if (p0 < 0 || p1 < 0 || p2 < 0 || p0 >= static_cast<int>(vertices.size()) || p1 >= static_cast<int>(vertices.size()) || p2 >= static_cast<int>(vertices.size()))
+        if (p0 < 0 || p1 < 0 || p2 < 0 || p0 >= static_cast<int>(vertices.size()) ||
+            p1 >= static_cast<int>(vertices.size()) || p2 >= static_cast<int>(vertices.size()))
         {
             continue;
         }

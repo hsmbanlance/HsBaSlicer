@@ -1,4 +1,9 @@
-﻿#pragma once
+﻿/** @file units.hpp
+ * @brief A header file containing the definition of units and their conversions.
+ * This file defines various units and their conversions using the Boost.Units library.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_UNITS_HPP
 #define HSBA_SLICER_UNITS_HPP
 
@@ -53,76 +58,148 @@ using jpy_unit = jpy_base_unit::unit_type;
 
 inline namespace literals
 {
+/** @brief Create a quantity with the specified value and USD unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and USD unit.
+ */
 inline auto operator"" _USD(long double value)
 {
     return boost::multiprecision::cpp_dec_float_50(value) * usd_unit();
 }
+/** @brief Create a quantity with the specified value and USD unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and USD unit.
+ */
 inline auto operator"" _USD(unsigned long long value)
 {
     return boost::multiprecision::cpp_dec_float_50(value) * usd_unit();
 }
+/** @brief Create a quantity with the specified value and EUR unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and EUR unit.
+ */
 inline auto operator"" _EUR(long double value)
 {
     return boost::multiprecision::cpp_dec_float_50(value) * eur_unit();
 }
+/** @brief Create a quantity with the specified value and EUR unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and EUR unit.
+ */
 inline auto operator"" _EUR(unsigned long long value)
 {
     return boost::multiprecision::cpp_dec_float_50(value) * eur_unit();
 }
+/** @brief Create a quantity with the specified value and CNY unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and CNY unit.
+ */
 inline auto operator"" _CNY(long double value)
 {
     return boost::multiprecision::cpp_dec_float_50(value) * cny_unit();
 }
+/** @brief Create a quantity with the specified value and CNY unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and CNY unit.
+ */
 inline auto operator"" _CNY(unsigned long long value)
 {
     return boost::multiprecision::cpp_dec_float_50(value) * cny_unit();
 }
+/** @brief Create a quantity with the specified value and JPY unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and JPY unit.
+ */
 inline auto operator"" _JPY(long double value)
 {
     return boost::multiprecision::cpp_dec_float_50(value) * jpy_unit();
 }
+/** @brief Create a quantity with the specified value and JPY unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and JPY unit.
+ */
 inline auto operator"" _JPY(unsigned long long value)
 {
     return boost::multiprecision::cpp_dec_float_50(value) * jpy_unit();
 }
 
+/** @brief Create a quantity with the specified value and kilogram unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and kilogram unit.
+ */
 constexpr auto operator"" _kg(long double value)
 {
     return value * boost::units::si::kilogram;
 }
+/** @brief Create a quantity with the specified value and kilogram unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and kilogram unit.
+ */
 constexpr auto operator"" _kg(unsigned long long value)
 {
     return static_cast<long double>(value) * boost::units::si::kilogram;
 }
+/** @brief Create a quantity with the specified value and meter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and meter unit.
+ */
 constexpr auto operator"" _m(long double value)
 {
     return value * boost::units::si::meter;
 }
+/** @brief Create a quantity with the specified value and meter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and meter unit.
+ */
 constexpr auto operator"" _m(unsigned long long value)
 {
     return static_cast<long double>(value) * boost::units::si::meter;
 }
+/** @brief Create a quantity with the specified value and cubic meter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and cubic meter unit.
+ */
 constexpr auto operator"" _m3(long double value)
 {
     return value * boost::units::si::cubic_meter;
 }
+/** @brief Create a quantity with the specified value and cubic meter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and cubic meter unit.
+ */
 constexpr auto operator"" _m3(unsigned long long value)
 {
     return static_cast<long double>(value) * boost::units::si::cubic_meter;
 }
 
+/** @brief Create a quantity with the specified value and liter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and liter unit.
+ */
 constexpr auto operator"" _L(long double value)
 {
     return value * MULTIPLIER_MILLI * boost::units::si::cubic_meter;
 }
+/** @brief Create a quantity with the specified value and liter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and liter unit.
+ */
 constexpr auto operator"" _L(unsigned long long value)
 {
     return static_cast<long double>(value) * MULTIPLIER_MILLI * boost::units::si::cubic_meter;
 }
+/** @brief Create a quantity with the specified value and milliliter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and milliliter unit.
+ */
 constexpr auto operator"" _mL(long double value)
 {
     return value * MULTIPLIER_MICRO * boost::units::si::cubic_meter;
 }
+/** @brief Create a quantity with the specified value and milliliter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and milliliter unit.
+ */
 constexpr auto operator"" _mL(unsigned long long value)
 {
     return static_cast<long double>(value) * MULTIPLIER_MICRO * boost::units::si::cubic_meter;
@@ -131,182 +208,354 @@ constexpr auto operator"" _mm(long double value)
 {
     return value * MULTIPLIER_MILLI * boost::units::si::meter;
 }
+/** @brief Create a quantity with the specified value and millimeter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and millimeter unit.
+ */
 constexpr auto operator"" _mm(unsigned long long value)
 {
     return static_cast<long double>(value) * MULTIPLIER_MILLI * boost::units::si::meter;
 }
+/** @brief Create a quantity with the specified value and centimeter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and centimeter unit.
+ */
 constexpr auto operator"" _cm(long double value)
 {
     return value * MULTIPLIER_CENTI * boost::units::si::meter;
 }
+/** @brief Create a quantity with the specified value and centimeter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and centimeter unit.
+ */
 constexpr auto operator"" _cm(unsigned long long value)
 {
     return static_cast<long double>(value) * MULTIPLIER_CENTI * boost::units::si::meter;
 }
+/** @brief Create a quantity with the specified value and kilometer unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and kilometer unit.
+ */
 constexpr auto operator"" _km(long double value)
 {
     return value * MULTIPLIER_KILO * boost::units::si::meter;
 }
+/** @brief Create a quantity with the specified value and kilometer unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and kilometer unit.
+ */
 constexpr auto operator"" _km(unsigned long long value)
 {
     return static_cast<long double>(value) * MULTIPLIER_KILO * boost::units::si::meter;
 }
+/** @brief Create a quantity with the specified value and gram unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and gram unit.
+ */
 constexpr auto operator"" _g(long double value)
 {
     return value * MULTIPLIER_MILLI * boost::units::si::kilogram;
 }
+/** @brief Create a quantity with the specified value and gram unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and gram unit.
+ */
 constexpr auto operator"" _g(unsigned long long value)
 {
     return static_cast<long double>(value) * MULTIPLIER_MILLI * boost::units::si::kilogram;
 }
+/** @brief Create a quantity with the specified value and milligram unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and milligram unit.
+ */
 constexpr auto operator"" _mg(long double value)
 {
     return value * MULTIPLIER_MICRO * boost::units::si::kilogram;
 }
+/** @brief Create a quantity with the specified value and milligram unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and milligram unit.
+ */
 constexpr auto operator"" _mg(unsigned long long value)
 {
     return static_cast<long double>(value) * MULTIPLIER_MICRO * boost::units::si::kilogram;
 }
 
+/** @brief Create a quantity with the specified value and kilogram per cubic meter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and kilogram per cubic meter unit.
+ */
 constexpr auto operator"" _kg_per_m3(long double value)
 {
     return value * boost::units::si::kilogram / boost::units::si::cubic_meter;
 }
+/** @brief Create a quantity with the specified value and kilogram per cubic meter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and kilogram per cubic meter unit.
+ */
 constexpr auto operator"" _kg_per_m3(unsigned long long value)
 {
     return static_cast<long double>(value) * boost::units::si::kilogram / boost::units::si::cubic_meter;
 }
+/** @brief Create a quantity with the specified value and gram per cubic centimeter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and gram per cubic centimeter unit.
+ */
 constexpr auto operator"" _g_per_cm3(long double value)
 {
     return value * MULTIPLIER_KILO * boost::units::si::kilogram / boost::units::si::cubic_meter;
 }
+/** @brief Create a quantity with the specified value and gram per cubic centimeter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and gram per cubic centimeter unit.
+ */
 constexpr auto operator"" _g_per_cm3(unsigned long long value)
 {
     return static_cast<long double>(value) * MULTIPLIER_KILO * boost::units::si::kilogram /
            boost::units::si::cubic_meter;
 }
+/** @brief Create a quantity with the specified value and kilogram per liter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and kilogram per liter unit.
+ */
 constexpr auto operator"" _kg_per_L(long double value)
 {
     return value * MULTIPLIER_KILO * boost::units::si::kilogram / boost::units::si::cubic_meter;
 }
+/** @brief Create a quantity with the specified value and kilogram per liter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and kilogram per liter unit.
+ */
 constexpr auto operator"" _kg_per_L(unsigned long long value)
 {
     return static_cast<long double>(value) * MULTIPLIER_KILO * boost::units::si::kilogram /
            boost::units::si::cubic_meter;
 }
 
+/** @brief Create a quantity with the specified value and Celsius degree unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and Celsius degree unit.
+ */
 constexpr auto operator"" _C(long double value)
 {
     return value * boost::units::celsius::degrees;
 }
+/** @brief Create a quantity with the specified value and Celsius degree unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and Celsius degree unit.
+ */
 constexpr auto operator"" _C(unsigned long long value)
 {
     return static_cast<long double>(value) * boost::units::celsius::degrees;
 }
+/** @brief Create a quantity with the specified value and Fahrenheit degree unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and Fahrenheit degree unit.
+ */
 constexpr auto operator"" _F(long double value)
 {
     return value * boost::units::fahrenheit::degrees;
 }
+/** @brief Create a quantity with the specified value and Fahrenheit degree unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and Fahrenheit degree unit.
+ */
 constexpr auto operator"" _F(unsigned long long value)
 {
     return static_cast<long double>(value) * boost::units::fahrenheit::degrees;
 }
+/** @brief Create a quantity with the specified value and Kelvin degree unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and Kelvin degree unit.
+ */
 constexpr auto operator"" _K(long double value)
 {
     return value * boost::units::si::kelvin;
 }
+/** @brief Create a quantity with the specified value and Kelvin degree unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and Kelvin degree unit.
+ */
 constexpr auto operator"" _K(unsigned long long value)
 {
     return static_cast<long double>(value) * boost::units::si::kelvin;
 }
 
+/** @brief Create a quantity with the specified value and USD per kilogram unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and USD per kilogram unit.
+ */
 inline auto operator"" _USD_per_kg(long double value)
 {
     return value * usd_unit() / boost::units::si::kilogram;
 }
+/** @brief Create a quantity with the specified value and USD per kilogram unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and USD per kilogram unit.
+ */
 inline auto operator"" _USD_per_kg(unsigned long long value)
 {
     return static_cast<long double>(value) * usd_unit() / boost::units::si::kilogram;
 }
+/** @brief Create a quantity with the specified value and EUR per kilogram unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and EUR per kilogram unit.
+ */
 inline auto operator"" _EUR_per_kg(long double value)
 {
     return value * eur_unit() / boost::units::si::kilogram;
 }
+/** @brief Create a quantity with the specified value and EUR per kilogram unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and EUR per kilogram unit.
+ */
 inline auto operator"" _EUR_per_kg(unsigned long long value)
 {
     return static_cast<long double>(value) * eur_unit() / boost::units::si::kilogram;
 }
+/** @brief Create a quantity with the specified value and CNY per kilogram unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and CNY per kilogram unit.
+ */
 inline auto operator"" _CNY_per_kg(long double value)
 {
     return value * cny_unit() / boost::units::si::kilogram;
 }
+/** @brief Create a quantity with the specified value and CNY per kilogram unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and CNY per kilogram unit.
+ */
 inline auto operator"" _CNY_per_kg(unsigned long long value)
 {
     return static_cast<long double>(value) * cny_unit() / boost::units::si::kilogram;
 }
+/** @brief Create a quantity with the specified value and JPY per kilogram unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and JPY per kilogram unit.
+ */
 inline auto operator"" _JPY_per_kg(long double value)
 {
     return value * jpy_unit() / boost::units::si::kilogram;
 }
+/** @brief Create a quantity with the specified value and JPY per kilogram unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and JPY per kilogram unit.
+ */
 inline auto operator"" _JPY_per_kg(unsigned long long value)
 {
     return static_cast<long double>(value) * jpy_unit() / boost::units::si::kilogram;
 }
 
+/** @brief Create a quantity with the specified value and second unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and second unit.
+ */
 constexpr auto operator"" _s(long double value)
 {
     return value * boost::units::si::second;
 }
+/** @brief Create a quantity with the specified value and second unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and second unit.
+ */
 constexpr auto operator"" _s(unsigned long long value)
 {
     return static_cast<long double>(value) * boost::units::si::second;
 }
+/** @brief Create a quantity with the specified value and minute unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and minute unit.
+ */
 constexpr auto operator"" _min(long double value)
 {
     return value * MULTIPLIER_MINUTE * boost::units::si::second;
 }
+/** @brief Create a quantity with the specified value and minute unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and minute unit.
+ */
 constexpr auto operator"" _min(unsigned long long value)
 {
     return static_cast<long double>(value) * MULTIPLIER_MINUTE * boost::units::si::second;
 }
+/** @brief Create a quantity with the specified value and hour unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and hour unit.
+ */
 constexpr auto operator"" _h(long double value)
 {
     return value * MULTIPLIER_HOUR * boost::units::si::second;
 }
+/** @brief Create a quantity with the specified value and hour unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and hour unit.
+ */
 constexpr auto operator"" _h(unsigned long long value)
 {
     return static_cast<long double>(value) * MULTIPLIER_HOUR * boost::units::si::second;
 }
+/** @brief Create a quantity with the specified value and millisecond unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and millisecond unit.
+ */
 constexpr auto operator"" _ms(long double value)
 {
     return value * MULTIPLIER_MILLI * boost::units::si::second;
 }
+/** @brief Create a quantity with the specified value and millisecond unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and millisecond unit.
+ */
 constexpr auto operator"" _ms(unsigned long long value)
 {
     return static_cast<long double>(value) * MULTIPLIER_MILLI * boost::units::si::second;
 }
 
+/** @brief Create a quantity with the specified value and joule unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and joule unit.
+ */
 constexpr auto operator"" _J(long double value)
 {
     return value * boost::units::si::joule;
 }
+/** @brief Create a quantity with the specified value and joule unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and joule unit.
+ */
 constexpr auto operator"" _J(unsigned long long value)
 {
     return static_cast<long double>(value) * boost::units::si::joule;
 }
+/** @brief Create a quantity with the specified value and kilojoule unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and kilojoule unit.
+ */
 constexpr auto operator"" _kJ(long double value)
 {
     return value * MULTIPLIER_KILO * boost::units::si::joule;
 }
+/** @brief Create a quantity with the specified value and kilojoule unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and kilojoule unit.
+ */
 constexpr auto operator"" _kJ(unsigned long long value)
 {
     return static_cast<long double>(value) * MULTIPLIER_KILO * boost::units::si::joule;
 }
 
+/** @brief Create a quantity with the specified value and kilowatt-hour unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and kilowatt-hour unit.
+ */
 constexpr auto operator"" _kWh(long double value)
 {
     return value * MULTIPLIER_KWH_TO_JOULE * boost::units::si::joule;
 }
+/** @brief Create a quantity with the specified value and kilowatt-hour unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and kilowatt-hour unit.
+ */
 constexpr auto operator"" _kWh(unsigned long long value)
 {
     return static_cast<long double>(value) * MULTIPLIER_KWH_TO_JOULE * boost::units::si::joule;

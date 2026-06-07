@@ -88,7 +88,7 @@ public:
 
     // 线和Z方向平面的交点
     static bool Intersection(const Eigen::Vector3f& v1, const Eigen::Vector3f& v2, const float height,
-                            Eigen::Vector3f& intersection);
+                             Eigen::Vector3f& intersection);
 
     // Z方向切片，实际上常见的切片算法有相同的时间复杂度，除非不计算拓扑重建的时间复杂度
     // 因为构造FullTopoModel已经重建拓扑关系，不需要重建拓扑关系

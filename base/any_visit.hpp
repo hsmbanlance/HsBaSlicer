@@ -1,4 +1,11 @@
-﻿#pragma once
+﻿/** @file any_visit.hpp
+ * @brief A collection of utilities for visiting std::any and boost::any values.
+ * This file provides functions to safely visit and process values stored in std::any and boost::any containers,
+ * allowing for type-safe operations without the need for explicit type checking.
+ * @author HsBa
+ * @date 2024-06
+ */
+#pragma once
 #ifndef HSBA_SLICER_ANY_VISIT_HPP
 #define HSBA_SLICER_ANY_VISIT_HPP
 

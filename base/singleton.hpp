@@ -1,3 +1,8 @@
+/** @file singleton.hpp
+ * @brief A header file containing the definition of the Singleton class template.
+ * @author HsBa
+ * @date 2024-06-01
+ */
 #pragma once
 #ifndef HSBA_SLICER_SINGLETON_HPP
 #define HSBA_SLICER_SINGLETON_HPP
@@ -8,6 +13,11 @@
 
 namespace HsBa::Slicer::Utils
 {
+/**
+ * @brief A thread-safe singleton class template that ensures only one instance of the class is created and provides
+ * global access to that instance.
+ * @tparam T The type of the singleton class.
+ */
 template <typename T>
 class Singleton
 {
@@ -17,6 +27,11 @@ protected:
     };
 
 public:
+    /** @brief Gets the singleton instance.
+     * @tparam Args The argument types for the singleton constructor.
+     * @param args The arguments for the singleton constructor.
+     * @return A shared pointer to the singleton instance.
+     */
     template <typename... Args>
     requires std::constructible_from<T, Protected, Args...> static std::shared_ptr<T> GetInstance(Args&&... args)
     {

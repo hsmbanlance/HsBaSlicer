@@ -317,3 +317,39 @@ int main() {
 - Concept constraints are used for compile-time type checking to improve code safety
 - Named pointers provide type safety by distinguishing pointers based on their names
 - The YCombinator enables recursion in lambdas without explicit self-reference in C++ versions before C++23
+
+## 12. AllValidEnum
+
+`AllValidEnum` provides a safe way to handle enum values by executing a callback only when the enum value is considered valid. It also has an overload that accepts a fallback callback for invalid values.
+
+Features:
+- Validates enum values against a compile-time generated table (skipping placeholder entries like Unknown/Invalid/Min/Max).
+- Two overloads: one that returns a default-constructed return value when invalid, and one that invokes a provided `defaultFn`.
+
+Usage:
+
+```cpp
+#include "base/template_helper.hpp"
+#include <iostream>
+
+enum class Status { Unknown = -1, Ok = 0, Error = 1, MaxStatus };
+
+int main() {
+    Status s = Status::Ok;
+
+    // simple form: only invoked when valid
+    HsBa::Slicer::Utils::AllValidEnum<Status>(s, [](){
+        std::cout << "Status is valid" << std::endl;
+    });
+
+    // form with fallback: returns result of either fn or defaultFn
+    auto result = HsBa::Slicer::Utils::AllValidEnum<Status>(s,
+        [](){ return 1; },
+        [](){ return 0; }
+    );
+
+    std::cout << "Result: " << result << std::endl;
+}
+```
+
+Symbol: #sym:AllValidEnum

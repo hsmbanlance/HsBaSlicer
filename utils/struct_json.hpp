@@ -1,4 +1,10 @@
-﻿#pragma once
+﻿/**
+ * @file struct_json.hpp
+ * @brief JSON serialization support for reflectable structs.
+ */
+
+
+#pragma once
 #ifndef HSBA_SLICER_STRUCT_JSON_HPP
 #define HSBA_SLICER_STRUCT_JSON_HPP
 

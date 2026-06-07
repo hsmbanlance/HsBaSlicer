@@ -1,3 +1,11 @@
+/** @file coroutine.hpp
+ * @brief A collection of utilities for working with C++20 coroutines.
+ * This file provides a set of classes and functions to facilitate the use of C++20 coroutines, including task
+ * management, custom executors, and generators. It abstracts away the complexities of coroutine handling and provides a
+ * more user-friendly interface for asynchronous programming.
+ * @author HsBa
+ * @date 2024-06
+ */
 #pragma once
 #ifndef HSBA_SLICER_COROUTINE_HPP
 #define HSBA_SLICER_COROUTINE_HPP

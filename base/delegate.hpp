@@ -1,3 +1,9 @@
+/** @file delegate.hpp
+ * @brief A collection of utilities for working with delegates.
+ * This file provides a delegate class that can hold and invoke multiple callbacks with a specific signature.
+ * @author HsBa
+ * @date 2024-06
+ */
 #pragma once
 #ifndef HSBA_SLICER_DELEGATE_HPP
 
@@ -24,12 +30,19 @@ class Delegate
 public:
     using Callback = std::function<R(Args...)>;
     Delegate() = default;
+    /** @brief Adds a callback to the delegate.
+     * @tparam CallbackType The type of the callback.
+     * @param callback The callback to add.
+     */
     template <typename CallbackType>
     requires std::invocable<CallbackType, Args...> void Add(CallbackType&& callback)
     {
         std::lock_guard lock(mutex_);
         callbacks_.emplace_back(std::forward<CallbackType>(callback));
     }
+    /** @brief Removes a callback from the delegate.
+     * @param callback The callback to remove.
+     */
     [[deprecated("std::functional has not operator== function")]]
     void Remove(const Callback& callback)
     {
@@ -41,6 +54,10 @@ public:
             callbacks_.erase(it, callbacks_.end());
         }
     }
+    /** @brief Invokes all callbacks in the delegate.
+     * @param args The arguments to pass to each callback.
+     * @return The result of the invocation.
+     */
     R Invoke(Args&&... args)
     {
         std::vector<std::function<R(Args...)>> callbacks;
@@ -75,16 +92,23 @@ public:
             return result;
         }
     }
+    /** @brief Checks if the delegate has any callbacks.
+     * @return true if the delegate has no callbacks, false otherwise.
+     */
     bool empty() const
     {
         std::shared_lock lock(mutex_);
         return callbacks_.empty();
     }
+    /** @brief Clears all callbacks from the delegate. */
     void Clear()
     {
         std::lock_guard lock(mutex_);
         callbacks_.clear();
     }
+    /** @brief Returns the number of callbacks in the delegate.
+     * @return The number of callbacks in the delegate.
+     */
     size_t size() const
     {
         std::shared_lock lock(mutex_);
@@ -94,24 +118,43 @@ public:
     Delegate& operator=(const Delegate&) = delete;
     Delegate(Delegate&&) = default;
     Delegate& operator=(Delegate&&) = default;
+    /** @brief Adds a callback to the delegate using the += operator.
+     * @tparam CallbackType The type of the callback.
+     * @param callback The callback to add.
+     * @return A reference to the delegate.
+     */
     template <typename CallbackType>
     requires std::invocable<CallbackType, Args...> Delegate& operator+=(CallbackType&& callback)
     {
         Add(callback);
         return *this;
     }
+    /** @brief Removes a callback from the delegate using the -= operator.
+     * @param callback The callback to remove.
+     * @return A reference to the delegate.
+     */
     [[deprecated]]
     Delegate& operator-=(const Callback& callback)
     {
         Remove(callback);
         return *this;
     }
+    /** @brief Invokes the delegate with the given arguments.
+     * @param args The arguments to pass to each callback.
+     * @return The result of the invocation.
+     */
     R operator()(Args&&... args) { return Invoke(std::forward<Args>(args)...); }
+    /** @brief Returns an iterator to the beginning of the callbacks in the delegate.
+     * @return An iterator to the beginning of the callbacks in the delegate.
+     */
     auto begin() const
     {
         std::shared_lock lock(mutex_);
         return callbacks_.begin();
     }
+    /** @brief Returns an iterator to the end of the callbacks in the delegate.
+     * @return An iterator to the end of the callbacks in the delegate.
+     */
     auto end() const
     {
         std::shared_lock lock(mutex_);
@@ -123,6 +166,10 @@ private:
     std::vector<Callback> callbacks_;
 };
 
+/** @brief A class representing an event that can be raised and handled by multiple listeners.
+ * @tparam R The return type of the event.
+ * @tparam Args The argument types of the event.
+ */
 template <typename R, typename... Args>
 requires(sizeof...(Args) > 0) class Event final
 {
@@ -142,25 +189,46 @@ private:
     R Invoke(Args... args) { return delegate_.Invoke(std::forward<Args>(args)...); }
 };
 
-template <typename Devired, typename R, typename... Args>
+/** @brief A class representing a source of events that can be raised and handled by multiple listeners.
+ * @tparam Derived The derived class type.
+ * @tparam R The return type of the event.
+ * @tparam Args The argument types of the event.
+ */
+template <typename Derived, typename R, typename... Args>
 class EventSource
 {
 public:
+    /** @brief Adds a callback to the event source.
+     * @tparam CallbackType The type of the callback.
+     * @param callback The callback to add.
+     */
     template <typename CallbackType>
     requires std::invocable<CallbackType, Args...> void Add(CallbackType&& callback)
     {
         event_.delegate_.Add(std::forward<CallbackType>(callback));
     }
+    /** @brief Removes a callback from the event source.
+     * @param callback The callback to remove.
+     */
     [[deprecated("std::functional has not operator== function")]]
     void Remove(const typename Event<R, Args...>::Callback& callback)
     {
         event_.delegate_.Remove(callback);
     }
+    /** @brief Adds a callback to the event source using the += operator.
+     * @tparam CallbackType The type of the callback.
+     * @param callback The callback to add.
+     * @return A reference to the event source.
+     */
     template <typename CallbackType>
     requires std::invocable<CallbackType, Args...> void operator+=(CallbackType&& callback)
     {
         Add(callback);
     }
+    /** @brief Removes a callback from the event source using the -= operator.
+     * @param callback The callback to remove.
+     * @return A reference to the event source.
+     */
     [[deprecated]]
     void operator-=(const typename Event<R, Args...>::Callback& callback)
     {

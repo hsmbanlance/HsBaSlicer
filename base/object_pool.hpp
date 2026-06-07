@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/**  @file object_pool.hpp
+ * @brief A header file containing the definition of a named object pool.
+ * @author HsBa 
+ */
+#pragma once
 #ifndef HSBA_SLICER_OBJECT_POOL_HPP
 #define HSBA_SLICER_OBJECT_POOL_HPP
 
@@ -11,16 +15,22 @@
 
 namespace HsBa::Slicer
 {
+/** @brief A named object pool for managing a collection of shared objects.
+* @tparam T The type of objects to manage.
+* @tparam MaxSize The maximum number of objects that can be stored in the pool.
+*/
 template <typename T, std::size_t MaxSize>
 class NamedObjectPool
 {
 public:
+    /* @brief The type of objects managed by the pool. */
     using ObjectType = T;
+    /* @brief A shared pointer to an object of type T. */
     using ObjectPtr = std::shared_ptr<T>;
+    /* @brief A weak pointer to an object of type T. */
     using WeakPtr = std::weak_ptr<T>;
-
+    /* @brief The maximum number of objects that can be stored in the pool. */
     static constexpr std::size_t max_size = MaxSize;
-
 
     struct PooledObject
     {
@@ -46,7 +56,12 @@ public:
         std::unique_lock<std::shared_mutex> lock(mutex_);
         objects_.clear();
     }
-
+    /** @brief Create and add an object to the pool.
+     * @tparam Args The types of the arguments for the object constructor.
+     * @param name The name of the object.
+     * @param args The arguments for the object constructor.
+     * @return A shared pointer to the created object.
+     */
     template <typename... Args>
     ObjectPtr emplace(const std::string& name, Args&&... args)
     {
@@ -75,6 +90,14 @@ public:
         return ptr;
     }
 
+    /** @brief Allocate and add an object to the pool.
+     * @tparam Allocator The type of the allocator.
+     * @tparam Args The types of the arguments for the object constructor.
+     * @param name The name of the object.
+     * @param alloc The allocator to use for memory allocation.
+     * @param args The arguments for the object constructor.
+     * @return A shared pointer to the allocated object.
+     */
     template <typename Allocator, typename... Args>
     ObjectPtr allocate(const std::string& name, Allocator&& alloc, Args&&... args)
     {
@@ -98,7 +121,10 @@ public:
         return ptr;
     }
 
-
+    /** @brief Get an object from the pool by name.
+     * @param name The name of the object to retrieve.
+     * @return A shared pointer to the object if found, or nullptr if not found.
+     */
     ObjectPtr get(const std::string& name)
     {
         std::shared_lock<std::shared_mutex> lock(mutex_);
@@ -111,24 +137,34 @@ public:
         }
         return nullptr;
     }
-
+    /** @brief Get an object from the pool by name using the subscript operator.
+     * @param name The name of the object to retrieve.
+     * @return A shared pointer to the object if found, or nullptr if not found.
+     */
     ObjectPtr operator[](const std::string& name) { return get(name); }
 
-
+    /** @brief Check if the pool contains an object with the specified name.
+     * @param name The name of the object to check for.
+     * @return true if the object exists in the pool, false otherwise.
+     */
     bool Contains(const std::string& name) const
     {
         std::shared_lock<std::shared_mutex> lock(mutex_);
         return objects_.find(name) != objects_.end();
     }
 
-
+    /** @brief Get the number of objects in the pool.
+     * @return The number of objects in the pool.
+     */
     std::size_t size() const
     {
         std::shared_lock<std::shared_mutex> lock(mutex_);
         return objects_.size();
     }
 
-
+    /** @brief Get the number of inactive objects in the pool.
+     * @return The number of inactive objects in the pool.
+     */
     std::size_t InactiveCount() const
     {
         std::shared_lock<std::shared_mutex> lock(mutex_);
@@ -143,16 +179,22 @@ public:
         return count;
     }
 
-
+    /** @brief Get the number of active objects in the pool.
+     * @return The number of active objects in the pool.
+     */
     std::size_t ActiveCount() const { return size() - InactiveCount(); }
 
-
+    /** @brief Clean up inactive objects in the pool.
+     * @return The number of inactive objects that were cleaned up.
+     */
     std::size_t Cleanup()
     {
         std::unique_lock<std::shared_mutex> lock(mutex_);
         return CleanupInactiveObjects();
     }
-
+    /** @brief Get a list of all object names in the pool.
+     * @return A vector containing the names of all objects in the pool.
+     */
     std::vector<std::string> GetNames() const
     {
         std::shared_lock<std::shared_mutex> lock(mutex_);
