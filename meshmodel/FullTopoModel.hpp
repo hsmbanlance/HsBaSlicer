@@ -63,6 +63,8 @@ public:
 
     FullTopoModel(const IModel& model, bool use_normals = false);
     FullTopoModel(IModel&& model, bool use_normals = false) = delete;
+    FullTopoModel(const std::vector<Eigen::Vector3f>& vertices, const std::vector<std::array<int, 3>>& triangles,
+                  bool use_normals = false);
     ~FullTopoModel() = default;
 
     // 检查拓扑完整性，拓扑不完整的模型一般不是拓扑流形，因此会影响一些算法
@@ -85,7 +87,7 @@ public:
     int EulerCharacteristic() const;
 
     // 线和Z方向平面的交点
-    static bool Intersetion(const Eigen::Vector3f& v1, const Eigen::Vector3f& v2, const float height,
+    static bool Intersection(const Eigen::Vector3f& v1, const Eigen::Vector3f& v2, const float height,
                             Eigen::Vector3f& intersection);
 
     // Z方向切片，实际上常见的切片算法有相同的时间复杂度，除非不计算拓扑重建的时间复杂度
@@ -95,6 +97,9 @@ public:
     Polygons Slice(const float height) const;
     // 不安全切片，包含不封闭轮廓
     UnSafePolygons UnSafeSlice(const float height) const;
+
+    // 快速切片，依赖拓扑信息直接构造切片结果，先检查拓扑完整性，若失败直接抛出异常
+    Polygons SliceFast(const float height) const;
 
     // Run a custom Lua script to produce polygons from vertex/edge/face data.
     // The script receives globals: V (1-based array of {x,y,z}),
@@ -112,6 +117,9 @@ public:
 
 
 private:
+    void BuildTopo(const std::vector<Eigen::Vector3f>& vertices, const std::vector<std::array<int, 3>>& triangles,
+                   bool use_normals = false);
+
     std::vector<Vertex> vertices_;
     std::vector<Edge> edges_;
     std::vector<Face> faces_;
