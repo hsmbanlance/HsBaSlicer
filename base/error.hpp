@@ -1,7 +1,9 @@
 ﻿/** @file error.hpp
  * @brief A header file containing the definition of custom error classes for the HsBa Slicer project.
  * This file defines a set of custom exception classes that inherit from std::runtime_error. These
- * classes represent various types of errors that can occur within the HsBa Slicer project, such as runtime errors, out of range errors, invalid argument errors, and more. Each class provides constructors for creating instances with error messages and inherits the what() method from std::runtime_error for retrieving the error message.
+ * classes represent various types of errors that can occur within the HsBa Slicer project, such as runtime errors, out
+ * of range errors, invalid argument errors, and more. Each class provides constructors for creating instances with
+ * error messages and inherits the what() method from std::runtime_error for retrieving the error message.
  * @author HsBa
  */
 #pragma once

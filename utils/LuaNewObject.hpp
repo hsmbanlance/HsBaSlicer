@@ -8,6 +8,16 @@
 
 namespace HsBa::Slicer
 {
+/**
+ * @brief Allocate a new object in Lua userdata and assign it a metatable.
+ *
+ * @tparam T Type of object to construct.
+ * @tparam Args Constructor argument types.
+ * @param L Lua state.
+ * @param mt Metatable name.
+ * @param args Constructor arguments.
+ * @return T* Pointer to the newly constructed object stored in Lua userdata.
+ */
 template <typename T, typename... Args>
 inline T* NewLuaObject(lua_State* L, const char* mt, Args&&... args)
 {
@@ -18,6 +28,16 @@ inline T* NewLuaObject(lua_State* L, const char* mt, Args&&... args)
     return obj;
 }
 
+/**
+ * @brief Allocate a new object in Lua userdata using a compile-time metatable name.
+ *
+ * @tparam T Type of object to construct.
+ * @tparam TName Compile-time metatable identifier.
+ * @tparam Args Constructor argument types.
+ * @param L Lua state.
+ * @param args Constructor arguments.
+ * @return T* Pointer to the newly constructed object stored in Lua userdata.
+ */
 template <typename T, Utils::TemplateString TName, typename... Args>
 inline T* NewLuaObject(lua_State* L, Args&&... args)
 {
@@ -28,6 +48,14 @@ inline T* NewLuaObject(lua_State* L, Args&&... args)
     return obj;
 }
 
+/**
+ * @brief Garbage-collect a Lua userdata object by calling its destructor.
+ *
+ * @tparam T Type of object stored in userdata.
+ * @param L Lua state.
+ * @param mt Metatable name associated with the userdata.
+ * @return int Always returns 0 for Lua finalizers.
+ */
 template <typename T>
 int LuaGC(lua_State* L, const char* mt) noexcept
 {
@@ -37,6 +65,14 @@ int LuaGC(lua_State* L, const char* mt) noexcept
     return 0;
 }
 
+/**
+ * @brief Garbage-collect a Lua userdata object using a compile-time metatable name.
+ *
+ * @tparam T Type of object stored in userdata.
+ * @tparam TName Compile-time metatable identifier.
+ * @param L Lua state.
+ * @return int Always returns 0 for Lua finalizers.
+ */
 template <typename T, Utils::TemplateString TName>
 int LuaGC(lua_State* L) noexcept
 {
@@ -46,6 +82,9 @@ int LuaGC(lua_State* L) noexcept
     return 0;
 }
 
+/**
+ * @brief Custom deleter for Lua states stored in unique_ptr.
+ */
 struct LuaStateDeleter
 {
     void operator()(lua_State* L) const noexcept
@@ -55,8 +94,16 @@ struct LuaStateDeleter
     }
 };
 
+/**
+ * @brief Unique pointer alias for managing Lua state lifetime.
+ */
 using UniqueLua = std::unique_ptr<lua_State, LuaStateDeleter>;
 
+/**
+ * @brief Create a unique Lua state wrapped in a smart pointer.
+ *
+ * @return UniqueLua Managed Lua state.
+ */
 inline UniqueLua MakeUniqueLuaState()
 {
     lua_State* L = luaL_newstate();

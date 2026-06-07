@@ -1,6 +1,9 @@
 ﻿/** @file IModel.hpp
  * @brief A header file containing the definition of the IModel interface for the HsBa Slicer project.
- * This file defines the IModel interface, which represents a 3D model in the HsBa Slicer project. The interface provides methods for loading and saving models, applying transformations (translation, rotation, scaling), calculating bounding boxes and volumes, and retrieving triangle mesh data. The IModel interface serves as a base class for different types of 3D models that can be used in the slicing process.
+ * This file defines the IModel interface, which represents a 3D model in the HsBa Slicer project. The interface
+ * provides methods for loading and saving models, applying transformations (translation, rotation, scaling),
+ * calculating bounding boxes and volumes, and retrieving triangle mesh data. The IModel interface serves as a base
+ * class for different types of 3D models that can be used in the slicing process.
  * @author HsBa
  */
 #pragma once
@@ -65,7 +68,7 @@ enum class ModelFormat : uint32_t
     BinaryPLY,
     /** @brief OBJ format. */
     OBJ,
-    /** @brief Unknown STL format. */ 
+    /** @brief Unknown STL format. */
     UnknownSTL,
     /** @brief ASCII STL format. */
     BinarySTL,
@@ -99,17 +102,17 @@ class IModel
 public:
     virtual ~IModel() = default;
     /** @brief Load the model from a file. */
-    virtual bool Load(std::string_view fileName) = 0;                                  // load the model from a file
+    virtual bool Load(std::string_view fileName) = 0;  // load the model from a file
     /** @brief Save the model to a file. */
     virtual bool Save(std::string_view fileName, const ModelFormat format) const = 0;  // save the model to a file
 
     /** @brief Translate the model. */
     virtual void Translate(const Eigen::Vector3f& translation) = 0;  // translate the model
     /** @brief Rotate the model. */
-    virtual void Rotate(const Eigen::Quaternionf& rotation) = 0;     // rotate the model
+    virtual void Rotate(const Eigen::Quaternionf& rotation) = 0;  // rotate the model
     /** @brief Scale the model. */
     virtual void Scale(const float scale) = 0;
-    virtual void Scale(const Eigen::Vector3f& scale) = 0;                                    // scale the model
+    virtual void Scale(const Eigen::Vector3f& scale) = 0;  // scale the model
     /** @brief Transform the model. */
     virtual void Transform(const Eigen::Isometry3f& transform) = 0;                          // transform the model
     virtual void Transform(const Eigen::Matrix4f& transform) = 0;                            // transform the model
@@ -119,7 +122,7 @@ public:
     virtual void BoundingBox(Eigen::Vector3f& min,
                              Eigen::Vector3f& max) const = 0;  // get the AA bounding box of the model
     /** @brief Get the volume of the model. */
-    virtual float Volume() const = 0;                          // get the volume of the model
+    virtual float Volume() const = 0;  // get the volume of the model
     /** @brief Get the triangle mesh representation of the model. */
     virtual std::pair<Eigen::MatrixXf, Eigen::MatrixXi> TriangleMesh() const = 0;  // get igl style trianglemesh
 };

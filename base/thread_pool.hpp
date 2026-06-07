@@ -1,7 +1,9 @@
 ﻿/** @file thread_pool.hpp
  * @brief A header file containing the definition of a thread pool class.
  * This file defines a ThreadPool class that manages a pool of worker threads to execute tasks concurrently
- * The ThreadPool class provides methods for submitting tasks, waiting for all tasks to complete, and querying the number of pending and active tasks. It also includes an optional executor interface for integrating with C++20 coroutines.
+ * The ThreadPool class provides methods for submitting tasks, waiting for all tasks to complete, and querying the
+ * number of pending and active tasks. It also includes an optional executor interface for integrating with C++20
+ * coroutines.
  * @author HsBa
  */
 #pragma once
@@ -22,15 +24,16 @@
 
 namespace HsBa::Slicer
 {
-/** @brief A class that manages a pool of worker threads to execute tasks concurrently.   
+/** @brief A class that manages a pool of worker threads to execute tasks concurrently.
  */
 class ThreadPool
 {
 public:
     /** @brief Construct a ThreadPool with a specified number of worker threads.
-     * @param num_threads The number of worker threads to create in the pool. If set to 0, the number of threads will be equal to the hardware concurrency of the system.
+     * @param num_threads The number of worker threads to create in the pool. If set to 0, the number of threads will be
+     * equal to the hardware concurrency of the system.
      * @throws InvalidArgumentError if num_threads is 0.
-    */
+     */
     explicit ThreadPool(size_t num_threads = std::thread::hardware_concurrency()) : stop_(false), active_tasks_(0)
     {
         if (num_threads == 0)

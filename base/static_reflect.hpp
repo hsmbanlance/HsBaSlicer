@@ -3,7 +3,9 @@
  * @author HsBa
  * @brief A header file containing utilities for static reflection in C++.
  * This file defines a set of templates and concepts for implementing static reflection in C++. It includes
- * structures for representing field and method information, as well as a reflector class for accessing this information at compile time. The static reflection utilities allow for introspection of class members without the need for runtime type information, enabling more efficient and type-safe code. 
+ * structures for representing field and method information, as well as a reflector class for accessing this information
+ * at compile time. The static reflection utilities allow for introspection of class members without the need for
+ * runtime type information, enabling more efficient and type-safe code.
  */
 #pragma once
 

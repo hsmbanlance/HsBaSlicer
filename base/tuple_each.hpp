@@ -1,6 +1,9 @@
 ﻿/** @file tuple_each.hpp
- * @brief A header file containing the definition of a utility function for applying a function to each element of a tuple.
- * This file defines a utility function `TupleEach` that allows you to apply a given function to each element of a tuple. The function can be used with tuples of any size and can handle functions that return void or non-void types. The implementation uses C++20 features such as fold expressions and index sequences to achieve this functionality in a concise and efficient manner.
+ * @brief A header file containing the definition of a utility function for applying a function to each element of a
+ * tuple. This file defines a utility function `TupleEach` that allows you to apply a given function to each element of
+ * a tuple. The function can be used with tuples of any size and can handle functions that return void or non-void
+ * types. The implementation uses C++20 features such as fold expressions and index sequences to achieve this
+ * functionality in a concise and efficient manner.
  * @author HsBa
  */
 #pragma once

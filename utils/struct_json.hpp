@@ -29,6 +29,15 @@
 namespace HsBa::Slicer::Utils
 {
 
+/**
+ * @brief Concept for types that support RapidJSON conversion APIs.
+ *
+ * Types satisfying this concept must implement a member function
+ * `to_json(rapidjson::Value&, rapidjson::Document::AllocatorType&)` and a
+ * static function `from_json(const rapidjson::Value&)`.
+ *
+ * @tparam T Candidate type.
+ */
 template <typename T>
 concept RapidJsonValueConvertible =
     requires(const T& value, rapidjson::Value& json, rapidjson::Document::AllocatorType& doc)
@@ -459,6 +468,13 @@ void from_json_impl(const rapidjson::Value& json, T& value)
 }
 }  // namespace detail
 
+/**
+ * @brief Serialize an aggregate type to a RapidJSON document.
+ *
+ * @tparam T Aggregate type to serialize.
+ * @param value Value to serialize.
+ * @return rapidjson::Document The resulting JSON document.
+ */
 template <Aggregte T>
 requires(!Reflectable<T>) rapidjson::Document to_json(const T& value)
 {
@@ -468,6 +484,13 @@ requires(!Reflectable<T>) rapidjson::Document to_json(const T& value)
     return doc;
 }
 
+/**
+ * @brief Serialize a reflectable type to a RapidJSON document.
+ *
+ * @tparam T Reflectable type to serialize.
+ * @param value Value to serialize.
+ * @return rapidjson::Document The resulting JSON document.
+ */
 // Reflectable public to_json overloads
 template <Reflectable T>
 rapidjson::Document to_json(const T& value)
@@ -478,6 +501,14 @@ rapidjson::Document to_json(const T& value)
     return doc;
 }
 
+/**
+ * @brief Serialize a reflectable type to a RapidJSON document with a custom allocator.
+ *
+ * @tparam T Reflectable type to serialize.
+ * @param value Value to serialize.
+ * @param allocator Allocator used by the document.
+ * @return rapidjson::Document The resulting JSON document.
+ */
 template <Reflectable T>
 rapidjson::Document to_json(const T& value, rapidjson::Document::AllocatorType& allocator)
 {
@@ -487,6 +518,14 @@ rapidjson::Document to_json(const T& value, rapidjson::Document::AllocatorType& 
     return doc;
 }
 
+/**
+ * @brief Serialize an aggregate type to a RapidJSON document with a custom allocator.
+ *
+ * @tparam T Aggregate type to serialize.
+ * @param value Value to serialize.
+ * @param allocator Allocator used by the document.
+ * @return rapidjson::Document The resulting JSON document.
+ */
 template <Aggregte T>
 requires(!Reflectable<T>) rapidjson::Document to_json(const T& value, rapidjson::Document::AllocatorType& allocator)
 {
@@ -496,6 +535,13 @@ requires(!Reflectable<T>) rapidjson::Document to_json(const T& value, rapidjson:
     return doc;
 }
 
+/**
+ * @brief Serialize a custom RapidJson-convertible type to a RapidJSON document.
+ *
+ * @tparam T Type implementing RapidJsonValueConvertible.
+ * @param value Value to serialize.
+ * @return rapidjson::Document The resulting JSON document.
+ */
 template <RapidJsonValueConvertible T>
 rapidjson::Document to_json(const T& value)
 {
@@ -505,6 +551,14 @@ rapidjson::Document to_json(const T& value)
     return doc;
 }
 
+/**
+ * @brief Serialize a custom RapidJson-convertible type to a RapidJSON document with a custom allocator.
+ *
+ * @tparam T Type implementing RapidJsonValueConvertible.
+ * @param value Value to serialize.
+ * @param allocator Allocator used by the document.
+ * @return rapidjson::Document The resulting JSON document.
+ */
 template <RapidJsonValueConvertible T>
 rapidjson::Document to_json(const T& value, rapidjson::Document::AllocatorType& allocator)
 {
@@ -514,6 +568,13 @@ rapidjson::Document to_json(const T& value, rapidjson::Document::AllocatorType& 
     return doc;
 }
 
+/**
+ * @brief Deserialize an aggregate type from a RapidJSON value.
+ *
+ * @tparam T Aggregate type to deserialize.
+ * @param json JSON value representing the object.
+ * @return T Deserialized object.
+ */
 template <Aggregte T>
 requires(!Reflectable<T>) T from_json(const rapidjson::Value& json)
 {
@@ -527,6 +588,13 @@ requires(!Reflectable<T>) T from_json(const rapidjson::Value& json)
 }
 
 // Reflectable public from_json overloads
+/**
+ * @brief Deserialize a reflectable type from a RapidJSON value.
+ *
+ * @tparam T Reflectable type to deserialize.
+ * @param json JSON value representing the object.
+ * @return T Deserialized object.
+ */
 template <Reflectable T>
 T from_json(const rapidjson::Value& json)
 {
@@ -539,6 +607,13 @@ T from_json(const rapidjson::Value& json)
     return value;
 }
 
+/**
+ * @brief Deserialize an aggregate type from a RapidJSON document.
+ *
+ * @tparam T Aggregate type to deserialize.
+ * @param doc JSON document representing the object.
+ * @return T Deserialized object.
+ */
 template <Aggregte T>
 requires(!Reflectable<T>) T from_json(const rapidjson::Document& doc)
 {
@@ -549,6 +624,13 @@ requires(!Reflectable<T>) T from_json(const rapidjson::Document& doc)
     return from_json<T>(static_cast<const rapidjson::Value&>(doc));
 }
 
+/**
+ * @brief Deserialize a reflectable type from a RapidJSON document.
+ *
+ * @tparam T Reflectable type to deserialize.
+ * @param doc JSON document representing the object.
+ * @return T Deserialized object.
+ */
 template <Reflectable T>
 T from_json(const rapidjson::Document& doc)
 {
@@ -559,6 +641,13 @@ T from_json(const rapidjson::Document& doc)
     return from_json<T>(static_cast<const rapidjson::Value&>(doc));
 }
 
+/**
+ * @brief Deserialize a custom RapidJson-convertible type from a RapidJSON value.
+ *
+ * @tparam T Type implementing RapidJsonValueConvertible.
+ * @param json JSON value representing the object.
+ * @return T Deserialized object.
+ */
 template <RapidJsonValueConvertible T>
 T from_json(const rapidjson::Value& json)
 {
@@ -570,6 +659,13 @@ T from_json(const rapidjson::Value& json)
     return T::from_json(json);
 }
 
+/**
+ * @brief Deserialize a custom RapidJson-convertible type from a RapidJSON document.
+ *
+ * @tparam T Type implementing RapidJsonValueConvertible.
+ * @param doc JSON document representing the object.
+ * @return T Deserialized object.
+ */
 template <RapidJsonValueConvertible T>
 T from_json(const rapidjson::Document& doc)
 {
@@ -580,6 +676,14 @@ T from_json(const rapidjson::Document& doc)
     return from_json<T>(static_cast<const rapidjson::Value&>(doc));
 }
 
+/**
+ * @brief Write a value to a stream as compact JSON.
+ *
+ * @tparam T Type of value to serialize.
+ * @param os Output stream.
+ * @param value Value to serialize.
+ * @return std::ostream& Reference to the output stream.
+ */
 template <typename T>
 std::ostream& write_json(std::ostream& os, const T& value)
 {
@@ -591,6 +695,14 @@ std::ostream& write_json(std::ostream& os, const T& value)
     return os;
 }
 
+/**
+ * @brief Write a value to a stream as pretty-printed JSON.
+ *
+ * @tparam T Type of value to serialize.
+ * @param os Output stream.
+ * @param value Value to serialize.
+ * @return std::ostream& Reference to the output stream.
+ */
 template <typename T>
 std::ostream& write_pretty_json(std::ostream& os, const T& value)
 {
@@ -602,6 +714,13 @@ std::ostream& write_pretty_json(std::ostream& os, const T& value)
     return os;
 }
 
+/**
+ * @brief Serialize a value to a compact JSON string.
+ *
+ * @tparam T Type of value to serialize.
+ * @param value Value to serialize.
+ * @return std::string JSON string.
+ */
 template <typename T>
 std::string write_json(const T& value)
 {
@@ -612,6 +731,13 @@ std::string write_json(const T& value)
     return buffer.GetString();
 }
 
+/**
+ * @brief Serialize a value to a pretty-printed JSON string.
+ *
+ * @tparam T Type of value to serialize.
+ * @param value Value to serialize.
+ * @return std::string JSON string.
+ */
 template <typename T>
 std::string write_pretty_json(const T& value)
 {
@@ -622,6 +748,13 @@ std::string write_pretty_json(const T& value)
     return buffer.GetString();
 }
 
+/**
+ * @brief Write a value as compact JSON to a file.
+ *
+ * @tparam T Type of value to serialize.
+ * @param path File path.
+ * @param value Value to serialize.
+ */
 template <typename T>
 void write_json(std::string_view path, const T& value)
 {
@@ -634,6 +767,13 @@ void write_json(std::string_view path, const T& value)
     ofs.close();
 }
 
+/**
+ * @brief Write a value as pretty-printed JSON to a file.
+ *
+ * @tparam T Type of value to serialize.
+ * @param path File path.
+ * @param value Value to serialize.
+ */
 template <typename T>
 void write_pretty_json(std::string_view path, const T& value)
 {
@@ -646,6 +786,13 @@ void write_pretty_json(std::string_view path, const T& value)
     ofs.close();
 }
 
+/**
+ * @brief Read a value from a stream containing JSON.
+ *
+ * @tparam T Type to deserialize.
+ * @param is Input stream.
+ * @return T Deserialized object.
+ */
 template <typename T>
 T read_json(std::istream& is)
 {
@@ -659,6 +806,13 @@ T read_json(std::istream& is)
     return from_json<T>(doc);
 }
 
+/**
+ * @brief Read a value from a file containing JSON.
+ *
+ * @tparam T Type to deserialize.
+ * @param path File path.
+ * @return T Deserialized object.
+ */
 template <typename T>
 T read_json_from_file(std::string_view path)
 {
@@ -672,6 +826,13 @@ T read_json_from_file(std::string_view path)
     return value;
 }
 
+/**
+ * @brief Read a value from a JSON string.
+ *
+ * @tparam T Type to deserialize.
+ * @param json_str JSON string.
+ * @return T Deserialized object.
+ */
 template <typename T>
 T read_json_from_string(const std::string& json_str)
 {

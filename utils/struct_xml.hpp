@@ -21,7 +21,15 @@
 
 namespace HsBa::Slicer::Utils
 {
-
+/**
+ * @brief Concept for types that support TinyXML conversion APIs.
+ *
+ * Types satisfying this concept must implement a member function
+ * `to_xml(XMLElement*, XMLDocument*)` and a static function
+ * `from_xml(const XMLElement*)`.
+ *
+ * @tparam T Candidate type.
+ */
 template <typename T>
 concept TinyXmlConvertible = requires(const T& value, tinyxml2::XMLElement* element, tinyxml2::XMLDocument* doc)
 {
@@ -525,6 +533,14 @@ void from_xml_impl(const tinyxml2::XMLElement* element, T& value)
 }
 }  // namespace detail
 
+/**
+ * @brief Convert an aggregate type to an XML document.
+ *
+ * @tparam T Aggregate type to serialize.
+ * @param value The value to serialize.
+ * @param root_name Name of the XML root element.
+ * @return std::unique_ptr<tinyxml2::XMLDocument> Generated XML document.
+ */
 template <Aggregte T>
 requires(!Reflectable<T>) std::unique_ptr<tinyxml2::XMLDocument> to_xml(const T& value, const char* root_name = "root")
 {
@@ -536,6 +552,14 @@ requires(!Reflectable<T>) std::unique_ptr<tinyxml2::XMLDocument> to_xml(const T&
 }
 
 // Reflectable public to_xml overloads
+/**
+ * @brief Convert a reflectable type to an XML document.
+ *
+ * @tparam T Reflectable type to serialize.
+ * @param value The value to serialize.
+ * @param root_name Name of the XML root element.
+ * @return std::unique_ptr<tinyxml2::XMLDocument> Generated XML document.
+ */
 template <Reflectable T>
 std::unique_ptr<tinyxml2::XMLDocument> to_xml(const T& value, const char* root_name = "root")
 {
@@ -546,6 +570,14 @@ std::unique_ptr<tinyxml2::XMLDocument> to_xml(const T& value, const char* root_n
     return doc;
 }
 
+/**
+ * @brief Convert a TinyXml-convertible type to an XML document.
+ *
+ * @tparam T Type implementing TinyXmlConvertible.
+ * @param value The value to serialize.
+ * @param root_name Name of the XML root element.
+ * @return std::unique_ptr<tinyxml2::XMLDocument> Generated XML document.
+ */
 template <TinyXmlConvertible T>
 std::unique_ptr<tinyxml2::XMLDocument> to_xml(const T& value, const char* root_name = "root")
 {
@@ -556,6 +588,14 @@ std::unique_ptr<tinyxml2::XMLDocument> to_xml(const T& value, const char* root_n
     return doc;
 }
 
+/**
+ * @brief Convert a range of items to an XML document.
+ *
+ * @tparam Range Range type to serialize.
+ * @param rng The range of items.
+ * @param root_name Name of the XML root element.
+ * @return std::unique_ptr<tinyxml2::XMLDocument> Generated XML document.
+ */
 template <std::ranges::range Range>
 requires(!std::is_same_v<Range, std::string>) std::unique_ptr<tinyxml2::XMLDocument> to_xml(
     const Range& rng, const char* root_name = "root")
@@ -605,6 +645,13 @@ requires(!std::is_same_v<Range, std::string>) std::unique_ptr<tinyxml2::XMLDocum
     return doc;
 }
 
+/**
+ * @brief Deserialize an XML element into an aggregate type.
+ *
+ * @tparam T Aggregate type to construct.
+ * @param element The XML element to deserialize.
+ * @return T Deserialized aggregate value.
+ */
 template <Aggregte T>
 requires(!Reflectable<T>) T from_xml(const tinyxml2::XMLElement* element)
 {
@@ -614,6 +661,13 @@ requires(!Reflectable<T>) T from_xml(const tinyxml2::XMLElement* element)
 }
 
 // Reflectable public from_xml overloads
+/**
+ * @brief Deserialize a reflectable type from an XML element.
+ *
+ * @tparam T Reflectable type to construct.
+ * @param element The XML element to deserialize.
+ * @return T Deserialized reflectable value.
+ */
 template <Reflectable T>
 T from_xml(const tinyxml2::XMLElement* element)
 {
@@ -622,6 +676,14 @@ T from_xml(const tinyxml2::XMLElement* element)
     return value;
 }
 
+/**
+ * @brief Deserialize an aggregate type from an XML document.
+ *
+ * @tparam T Aggregate type to construct.
+ * @param doc XML document to parse.
+ * @return T Deserialized aggregate value.
+ * @throws InvalidArgumentError if the document has no root element.
+ */
 template <Aggregte T>
 requires(!Reflectable<T>) T from_xml(const tinyxml2::XMLDocument& doc)
 {
@@ -633,6 +695,14 @@ requires(!Reflectable<T>) T from_xml(const tinyxml2::XMLDocument& doc)
     return from_xml<T>(root);
 }
 
+/**
+ * @brief Deserialize a reflectable type from an XML document.
+ *
+ * @tparam T Reflectable type to construct.
+ * @param doc XML document to parse.
+ * @return T Deserialized reflectable value.
+ * @throws InvalidArgumentError if the document has no root element.
+ */
 template <Reflectable T>
 T from_xml(const tinyxml2::XMLDocument& doc)
 {
@@ -644,12 +714,27 @@ T from_xml(const tinyxml2::XMLDocument& doc)
     return from_xml<T>(root);
 }
 
+/**
+ * @brief Deserialize a TinyXml-convertible type from an XML element.
+ *
+ * @tparam T Type implementing TinyXmlConvertible.
+ * @param element The XML element to deserialize.
+ * @return T Deserialized value.
+ */
 template <TinyXmlConvertible T>
 T from_xml(const tinyxml2::XMLElement* element)
 {
     return T::from_xml(element);
 }
 
+/**
+ * @brief Deserialize a TinyXml-convertible type from an XML document.
+ *
+ * @tparam T Type implementing TinyXmlConvertible.
+ * @param doc The XML document to deserialize.
+ * @return T Deserialized value.
+ * @throws InvalidArgumentError if the document has no root element.
+ */
 template <TinyXmlConvertible T>
 T from_xml(const tinyxml2::XMLDocument& doc)
 {
@@ -661,6 +746,14 @@ T from_xml(const tinyxml2::XMLDocument& doc)
     return from_xml<T>(root);
 }
 
+/**
+ * @brief Deserialize a range from an XML document.
+ *
+ * @tparam Range Range type to construct.
+ * @param doc XML document containing an <array> element.
+ * @return Range Deserialized range.
+ * @throws InvalidArgumentError if the document has no root or array element.
+ */
 template <std::ranges::range Range>
 requires(!std::is_same_v<Range, std::string>) Range from_xml(const tinyxml2::XMLDocument& doc)
 {
@@ -731,6 +824,15 @@ requires(!std::is_same_v<Range, std::string>) Range from_xml(const tinyxml2::XML
 }
 
 
+/**
+ * @brief Write a value to a YAML text stream.
+ *
+ * @tparam T Type of value to serialize.
+ * @param os Output stream.
+ * @param value Value to serialize.
+ * @param root_name Name of the XML root element.
+ * @return std::ostream& Reference to the output stream.
+ */
 template <typename T>
 std::ostream& write_xml(std::ostream& os, const T& value, const char* root_name = "root")
 {
@@ -741,6 +843,14 @@ std::ostream& write_xml(std::ostream& os, const T& value, const char* root_name 
     return os;
 }
 
+/**
+ * @brief Write a value to an XML string.
+ *
+ * @tparam T Type of value to serialize.
+ * @param value Value to serialize.
+ * @param root_name Name of the XML root element.
+ * @return std::string XML string representation.
+ */
 template <typename T>
 std::string write_xml(const T& value, const char* root_name = "root")
 {
@@ -750,6 +860,14 @@ std::string write_xml(const T& value, const char* root_name = "root")
     return printer.CStr();
 }
 
+/**
+ * @brief Write a value to an XML file.
+ *
+ * @tparam T Type of value to serialize.
+ * @param path File path to write XML content.
+ * @param value Value to serialize.
+ * @param root_name Name of the XML root element.
+ */
 template <typename T>
 void write_xml(std::string_view path, const T& value, const char* root_name = "root")
 {
@@ -762,6 +880,13 @@ void write_xml(std::string_view path, const T& value, const char* root_name = "r
     ofs.close();
 }
 
+/**
+ * @brief Read a value from an XML input stream.
+ *
+ * @tparam T Type to deserialize.
+ * @param is Input stream containing XML text.
+ * @return T Deserialized value.
+ */
 template <typename T>
 T read_xml(std::istream& is)
 {
@@ -774,6 +899,13 @@ T read_xml(std::istream& is)
     return from_xml<T>(doc);
 }
 
+/**
+ * @brief Read a value from an XML file.
+ *
+ * @tparam T Type to deserialize.
+ * @param path File path containing XML text.
+ * @return T Deserialized value.
+ */
 template <typename T>
 T read_xml_from_file(std::string_view path)
 {
@@ -787,6 +919,13 @@ T read_xml_from_file(std::string_view path)
     return value;
 }
 
+/**
+ * @brief Read a value from an XML string.
+ *
+ * @tparam T Type to deserialize.
+ * @param xml_str String containing XML text.
+ * @return T Deserialized value.
+ */
 template <typename T>
 T read_xml_from_string(const std::string& xml_str)
 {

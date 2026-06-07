@@ -1,6 +1,9 @@
 ﻿/** @file filename_check.hpp
- * @brief A header file containing functions for checking the validity of filenames and paths in the HsBa Slicer project.
- * This file defines a set of functions that check whether a given string can be used as a valid filename or path. The functions check for the presence of invalid characters, ensure that the filename is not empty, and verify that the string contains only ASCII characters if required. These checks help ensure that filenames and paths used in the HsBa Slicer project are valid and do not cause issues when creating or accessing files.
+ * @brief A header file containing functions for checking the validity of filenames and paths in the HsBa Slicer
+ * project. This file defines a set of functions that check whether a given string can be used as a valid filename or
+ * path. The functions check for the presence of invalid characters, ensure that the filename is not empty, and verify
+ * that the string contains only ASCII characters if required. These checks help ensure that filenames and paths used in
+ * the HsBa Slicer project are valid and do not cause issues when creating or accessing files.
  * @author HsBa
  */
 #pragma once

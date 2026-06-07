@@ -8,10 +8,27 @@
 #include "LuaNewObject.hpp"
 #include "base/any_object.hpp"
 
+/**
+ * @file LuaAnyObject.hpp
+ * @brief Helpers to expose `AnyObject` values into Lua and convert between AnyObject and Lua types.
+ *
+ * This header provides adapter types and registration utilities to create and cast
+ * `Utils::AnyObject` values from Lua and to push native values back to Lua.
+ */
+
 namespace HsBa::Slicer
 {
+/**
+ * @brief Metatable/type name used for wrapped `AnyObject` instances in Lua.
+ */
 constexpr Utils::TemplateString AnyObjectTypeName = "AnyObject";
 
+/**
+ * @brief Base interface providing new/cast function pairs for exposing types to Lua.
+ *
+ * Implementations provide two Lua-callable functions: one to create a new Lua value
+ * from a native object and one to cast an `AnyObject` back to the native type.
+ */
 class LuaAnyObjectNewCastBase
 {
 public:
@@ -26,6 +43,11 @@ public:
     virtual ~LuaAnyObjectNewCastBase() = default;
 };
 
+/**
+ * @brief CRTP helper that implements common plumbing for new/cast function retrieval.
+ *
+ * @tparam Derived Concrete implementation providing `type_name_impl`, `new_func_impl` and `cast_func_impl`.
+ */
 template <typename Derived>
 class LuaAnyObjectNewCastAbstract : public LuaAnyObjectNewCastBase
 {
@@ -41,6 +63,12 @@ public:
     LuaFuncPair GetCastFuncPair() const override { return {"cast_" + std::string(type_name()), cast_func()}; }
 };
 
+/**
+ * @brief Default implementation adapter that bridges a native type `T` and a Lua representation.
+ *
+ * @tparam T Native type.
+ * @tparam TypeName Compile-time string used as the Lua-visible type name.
+ */
 template <typename T, Utils::TemplateString TypeName>
 class LuaAnyObjectNewCastImpl : public LuaAnyObjectNewCastAbstract<LuaAnyObjectNewCastImpl<T, TypeName>>
 {
@@ -84,6 +112,9 @@ public:
 };
 
 // Specializations for basic Lua types
+/**
+ * @brief Convenience aliases for common Lua/native type adapters.
+ */
 using LuaInt = LuaAnyObjectNewCastImpl<int, "int">;
 using LuaLongLong = LuaAnyObjectNewCastImpl<long long, "longlong">;
 using LuaLong = LuaAnyObjectNewCastImpl<long, "long">;
@@ -478,6 +509,15 @@ public:
     }
 };
 
+/**
+ * @brief Register provided AnyObject new/cast adapters in the given Lua state.
+ *
+ * This registers the adapter functions so Lua code can create native values from
+ * `AnyObject` instances and vice versa.
+ *
+ * @param L Lua state to register into.
+ * @param added_types List of type adapters to register.
+ */
 void RegisterAnyObject(lua_State* L, const std::vector<LuaAnyObjectNewCastBase*>& added_types);
 }  // namespace HsBa::Slicer
 #endif  // HSBA_SLICER_LUA_ANY_OBJECT_HPP

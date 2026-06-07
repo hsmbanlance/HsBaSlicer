@@ -1,6 +1,9 @@
 ﻿/** @file memory_pool.hpp
  * @brief A header file containing the definition of a memory pool allocator.
- * This file defines a custom memory pool allocator that can be used with standard library containers to manage memory more efficiently. The allocator maintains a fixed-size pool of memory and provides allocation and deallocation functions that operate within this pool. It also includes a static memory pool variant for use cases where a shared memory pool is desired across multiple instances of the allocator.
+ * This file defines a custom memory pool allocator that can be used with standard library containers to manage memory
+ * more efficiently. The allocator maintains a fixed-size pool of memory and provides allocation and deallocation
+ * functions that operate within this pool. It also includes a static memory pool variant for use cases where a shared
+ * memory pool is desired across multiple instances of the allocator.
  * @author HsBa
  */
 #pragma once
@@ -15,10 +18,13 @@
 
 namespace HsBa::Slicer
 {
-/** @brief A struct to hold the state of the memory pool. 
- * This struct contains a character array that serves as the memory pool, a boolean array to track which parts of the pool are currently in use, and a count of how many bytes are currently allocated. The struct is aligned to the maximum alignment requirement of any type to ensure that it can be used to allocate memory for any type without violating alignment requirements.
+/** @brief A struct to hold the state of the memory pool.
+ * This struct contains a character array that serves as the memory pool, a boolean array to track which parts of the
+ * pool are currently in use, and a count of how many bytes are currently allocated. The struct is aligned to the
+ * maximum alignment requirement of any type to ensure that it can be used to allocate memory for any type without
+ * violating alignment requirements.
  * @tparam PoolSize The size of the memory pool in bytes.
-*/
+ */
 template <size_t PoolSize>
 struct MemoryPoolState
 {
@@ -27,7 +33,10 @@ struct MemoryPoolState
     size_t used_count = 0;
 };
 /** @brief A class to implement a memory pool allocator.
- * This class provides a custom memory pool allocator that can be used with standard library containers to manage memory more efficiently. The allocator maintains a fixed-size pool of memory and provides allocation and deallocation functions that operate within this pool. It also includes a static memory pool variant for use cases where a shared memory pool is desired across multiple instances of the allocator.
+ * This class provides a custom memory pool allocator that can be used with standard library containers to manage memory
+ * more efficiently. The allocator maintains a fixed-size pool of memory and provides allocation and deallocation
+ * functions that operate within this pool. It also includes a static memory pool variant for use cases where a shared
+ * memory pool is desired across multiple instances of the allocator.
  * @tparam T The type of elements for which to allocate memory.
  * @tparam PoolSize The size of the memory pool in bytes.
  */
@@ -53,10 +62,12 @@ public:
     using propagate_on_container_move_assignment = std::false_type;
     using propagate_on_container_swap = std::false_type;
     using is_always_equal = std::false_type;
-    /** @brief A struct to rebind the allocator for a different type. 
-     * This struct allows the allocator to be used with different types by providing a way to create a new allocator instance that is compatible with the new type. The rebind struct contains a single member, `other`, which is an alias for a MemoryPool instance that allocates memory for the new type U while maintaining the same pool size.
+    /** @brief A struct to rebind the allocator for a different type.
+     * This struct allows the allocator to be used with different types by providing a way to create a new allocator
+     * instance that is compatible with the new type. The rebind struct contains a single member, `other`, which is an
+     * alias for a MemoryPool instance that allocates memory for the new type U while maintaining the same pool size.
      * @tparam U The new type for which to create a compatible allocator.
-    */
+     */
     template <typename U>
     struct rebind
     {
@@ -87,9 +98,13 @@ public:
         return *this;
     }
     /** @brief Allocate memory for a specified number of elements.
-     * This function attempts to allocate memory for n elements of type T from the memory pool. It checks if there is enough free space in the pool to accommodate the requested allocation and if so, it marks the corresponding bytes in the pool as used and returns a pointer to the allocated memory. If there is not enough free space, it throws a std::bad_alloc exception.
+     * This function attempts to allocate memory for n elements of type T from the memory pool. It checks if there is
+     * enough free space in the pool to accommodate the requested allocation and if so, it marks the corresponding bytes
+     * in the pool as used and returns a pointer to the allocated memory. If there is not enough free space, it throws a
+     * std::bad_alloc exception.
      * @param n The number of elements to allocate.
-     * @param hint A pointer that can be used as a hint for where to allocate the memory (not used in this implementation).
+     * @param hint A pointer that can be used as a hint for where to allocate the memory (not used in this
+     * implementation).
      * @return A pointer to the allocated memory.
      * @throws std::bad_alloc If there is not enough free space in the pool to accommodate the requested allocation.
      */
@@ -131,7 +146,9 @@ public:
     {
     }
     /** @brief Deallocate memory for a specified number of elements.
-     * This function deallocates memory for n elements of type T from the memory pool. It checks if the pointer p is valid and if the deallocation is within the bounds of the pool, and if so, it marks the corresponding bytes in the pool as free.
+     * This function deallocates memory for n elements of type T from the memory pool. It checks if the pointer p is
+     * valid and if the deallocation is within the bounds of the pool, and if so, it marks the corresponding bytes in
+     * the pool as free.
      * @param p A pointer to the memory to deallocate.
      * @param n The number of elements to deallocate.
      * @throws std::invalid_argument If the pointer is out of bounds or invalid.
@@ -185,7 +202,8 @@ private:
     std::mutex mutex_;
 };
 /** @brief A static memory pool implementation.
- * This class provides a memory pool with a fixed size that can be used to allocate and deallocate memory for objects of type T.
+ * This class provides a memory pool with a fixed size that can be used to allocate and deallocate memory for objects of
+ * type T.
  * @tparam T The type of objects for which to allocate memory.
  * @tparam PoolSize The size of the memory pool in bytes.
  */
@@ -233,7 +251,8 @@ public:
     {
     }
     /** @brief Allocate memory for a specified number of elements.
-     * This function allocates memory for n elements of type T from the memory pool. It checks if the allocation is within the bounds of the pool, and if so, it marks the corresponding bytes in the pool as allocated.
+     * This function allocates memory for n elements of type T from the memory pool. It checks if the allocation is
+     * within the bounds of the pool, and if so, it marks the corresponding bytes in the pool as allocated.
      * @param n The number of elements to allocate.
      * @param hint A hint for the allocation.
      * @return A pointer to the allocated memory.
@@ -271,7 +290,9 @@ public:
         throw std::bad_alloc();
     }
     /** @brief Deallocate memory for a specified number of elements.
-     * This function deallocates memory for n elements of type T from the memory pool. It checks if the pointer p is valid and if the deallocation is within the bounds of the pool, and if so, it marks the corresponding bytes in the pool as free.
+     * This function deallocates memory for n elements of type T from the memory pool. It checks if the pointer p is
+     * valid and if the deallocation is within the bounds of the pool, and if so, it marks the corresponding bytes in
+     * the pool as free.
      * @param p A pointer to the memory to deallocate.
      * @param n The number of elements to deallocate.
      * @throws std::invalid_argument If the pointer is out of bounds or invalid.

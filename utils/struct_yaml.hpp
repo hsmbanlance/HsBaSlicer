@@ -23,7 +23,22 @@
 
 namespace HsBa::Slicer::Utils
 {
+/**
+ * @brief Utilities for YAML serialization and deserialization.
+ *
+ * This module provides generic helpers to convert aggregate types,
+ * reflectable types, optional-like values, and YAML-aware custom types
+ * to and from yaml-cpp nodes.
+ */
 
+/**
+ * @brief Concept for types that support YAML conversion APIs.
+ *
+ * Types satisfying this concept must implement a member function
+ * `to_yaml(YAML::Node&)` and a static function `from_yaml(const YAML::Node&)`.
+ *
+ * @tparam T Candidate type.
+ */
 template <typename T>
 concept YAMLValueConvertible = requires(const T& value, YAML::Node& node)
 {
@@ -432,6 +447,13 @@ void from_yaml_impl(const YAML::Node& node, T& value)
 }
 }  // namespace detail
 
+/**
+ * @brief Convert an aggregate type to a YAML node.
+ *
+ * @tparam T Aggregate type to serialize.
+ * @param value The aggregate type instance.
+ * @return YAML::Node The resulting YAML node.
+ */
 template <Aggregte T>
 requires(!Reflectable<T>) YAML::Node to_yaml(const T& value)
 {
@@ -440,6 +462,13 @@ requires(!Reflectable<T>) YAML::Node to_yaml(const T& value)
     return node;
 }
 
+/**
+ * @brief Convert a reflectable type to a YAML node.
+ *
+ * @tparam T Reflectable type to serialize.
+ * @param value The reflectable type instance.
+ * @return YAML::Node The resulting YAML node.
+ */
 // Reflectable public to_yaml overloads
 template <Reflectable T>
 YAML::Node to_yaml(const T& value)
@@ -449,6 +478,13 @@ YAML::Node to_yaml(const T& value)
     return node;
 }
 
+/**
+ * @brief Convert a YAML value convertible type to a YAML node.
+ *
+ * @tparam T Type implementing YAML conversion helpers.
+ * @param value The value convertible instance.
+ * @return YAML::Node The resulting YAML node.
+ */
 template <YAMLValueConvertible T>
 YAML::Node to_yaml(const T& value)
 {
@@ -457,6 +493,14 @@ YAML::Node to_yaml(const T& value)
     return node;
 }
 
+/**
+ * @brief Deserialize a YAML node into an aggregate type.
+ *
+ * @tparam T Aggregate type to construct.
+ * @param node The YAML node to deserialize.
+ * @return T Deserialized aggregate.
+ * @throws InvalidArgumentError if the YAML node is not a map.
+ */
 template <Aggregte T>
 requires(!Reflectable<T>) T from_yaml(const YAML::Node& node)
 {
@@ -469,6 +513,14 @@ requires(!Reflectable<T>) T from_yaml(const YAML::Node& node)
     return value;
 }
 
+/**
+ * @brief Deserialize a YAML node into a reflectable type.
+ *
+ * @tparam T Reflectable type to construct.
+ * @param node The YAML node to deserialize.
+ * @return T Deserialized reflectable.
+ * @throws InvalidArgumentError if the YAML node is not a map.
+ */
 // Reflectable public from_yaml overloads
 template <Reflectable T>
 T from_yaml(const YAML::Node& node)
@@ -482,6 +534,14 @@ T from_yaml(const YAML::Node& node)
     return value;
 }
 
+/**
+ * @brief Deserialize a YAML node into a YAML value convertible type.
+ *
+ * @tparam T Type implementing YAML conversion helpers.
+ * @param node The YAML node to deserialize.
+ * @return T Deserialized value.
+ * @throws InvalidArgumentError if the YAML node is not a map.
+ */
 template <YAMLValueConvertible T>
 T from_yaml(const YAML::Node& node)
 {
@@ -492,6 +552,14 @@ T from_yaml(const YAML::Node& node)
     return T::from_yaml(node);
 }
 
+/**
+ * @brief Serialize a value to a YAML text stream.
+ *
+ * @tparam T Type of value to serialize.
+ * @param os Output stream to write YAML text to.
+ * @param value Value to serialize.
+ * @return std::ostream& The output stream.
+ */
 template <typename T>
 std::ostream& write_yaml(std::ostream& os, const T& value)
 {
@@ -506,6 +574,13 @@ std::ostream& write_yaml(std::ostream& os, const T& value)
     return os;
 }
 
+/**
+ * @brief Serialize a value to a YAML string.
+ *
+ * @tparam T Type of value to serialize.
+ * @param value Value to serialize.
+ * @return std::string YAML string representation.
+ */
 template <typename T>
 std::string write_yaml(const T& value)
 {
@@ -519,6 +594,13 @@ std::string write_yaml(const T& value)
     return std::string(emitter.c_str());
 }
 
+/**
+ * @brief Write a value to a YAML file.
+ *
+ * @tparam T Type of value to serialize.
+ * @param path File path to write YAML content.
+ * @param value Value to serialize.
+ */
 template <typename T>
 void write_yaml(std::string_view path, const T& value)
 {
@@ -531,6 +613,13 @@ void write_yaml(std::string_view path, const T& value)
     ofs.close();
 }
 
+/**
+ * @brief Read a value from a YAML input stream.
+ *
+ * @tparam T Type to deserialize.
+ * @param is Input stream containing YAML text.
+ * @return T Deserialized value.
+ */
 template <typename T>
 T read_yaml(std::istream& is)
 {
@@ -539,6 +628,13 @@ T read_yaml(std::istream& is)
     return from_yaml<T>(node);
 }
 
+/**
+ * @brief Read a value from a YAML file.
+ *
+ * @tparam T Type to deserialize.
+ * @param path File path to load YAML from.
+ * @return T Deserialized value.
+ */
 template <typename T>
 T read_yaml_from_file(std::string_view path)
 {
@@ -552,6 +648,13 @@ T read_yaml_from_file(std::string_view path)
     return value;
 }
 
+/**
+ * @brief Read a value from a YAML string.
+ *
+ * @tparam T Type to deserialize.
+ * @param yaml_str String containing YAML text.
+ * @return T Deserialized value.
+ */
 template <typename T>
 T read_yaml_from_string(const std::string& yaml_str)
 {

@@ -1,5 +1,6 @@
 #pragma once
 #ifndef HSBA_LUADLLLOADER_HPP
+#define HSBA_LUADLLLOADER_HPP
 
 #ifndef HSBA_NO_DLL_LOADER
 
@@ -8,18 +9,47 @@
 #include "LuaAnyObject.hpp"
 #include "LuaNewObject.hpp"
 
+/**
+ * @file LuaDllLoader.hpp
+ * @brief Lua DLL loader helpers for runtime function resolution and invocation.
+ */
+
 namespace HsBa::Slicer
 {
+/**
+ * @brief Runtime DLL loader wrapper for native function lookup.
+ */
 class DllLoader
 {
 public:
+    /**
+     * @brief Construct the loader for a DLL file path.
+     *
+     * @param dllPath Path to the DLL to load.
+     */
     DllLoader(std::string_view dllPath) : m_dll(dllPath.data()) {}
 
+    /**
+     * @brief Retrieve a function symbol from the loaded DLL.
+     *
+     * @tparam T Function pointer or callable type.
+     * @param functionName Name of the symbol to resolve.
+     * @return auto Resolved function object.
+     */
     template <typename T>
     auto GetFunction(const std::string& functionName) const
     {
         return m_dll.get<T>(functionName);
     }
+
+    /**
+     * @brief Call a void-returning function from the loaded DLL.
+     *
+     * @tparam Args Argument types for the target function.
+     * @param functionName Name of the symbol to resolve.
+     * @param args Arguments to pass to the function.
+     * @return auto Result of the function call.
+     */
     template <typename... Args>
     auto CallFunction(const std::string& functionName, Args&&... args) const
     {
@@ -27,8 +57,16 @@ public:
         return func(std::forward<Args>(args)...);
     }
 
+    /**
+     * @brief Reload a new DLL into the loader.
+     *
+     * @param dllPath New DLL file path.
+     */
     void Reload(std::string_view dllPath) { m_dll.load(dllPath.data()); }
 
+    /**
+     * @brief Unload the currently loaded DLL.
+     */
     void Unload() { m_dll.unload(); }
 
 private:
@@ -39,9 +77,31 @@ class DllGetFunctionAbstract
 {
 public:
     using LuaResisterFunction = int (*)(lua_State* L);
+
+    /**
+     * @brief Virtual destructor.
+     */
     virtual ~DllGetFunctionAbstract() = default;
+
+    /**
+     * @brief Get the Lua registration function for resolving DLL functions.
+     *
+     * @return LuaResisterFunction Lua C function pointer.
+     */
     virtual LuaResisterFunction GetLuaDllGetFuction() const = 0;
+
+    /**
+     * @brief Get the Lua registration function for calling DLL functions.
+     *
+     * @return LuaResisterFunction Lua C function pointer.
+     */
     virtual LuaResisterFunction GetLuaDllCallFuction() const = 0;
+
+    /**
+     * @brief Get the name identifier for this function registration.
+     *
+     * @return std::string_view Registration name.
+     */
     virtual std::string_view Name() const = 0;
 };
 
@@ -142,6 +202,13 @@ public:
     virtual std::string_view Name() const override { return TName; }
 };
 }  // namespace detail
+
+/**
+ * @brief Register DLL loader helper functions in a Lua state.
+ *
+ * @param L Lua state where the functions will be registered.
+ * @param get_function_registers Collection of DLL function registration helpers.
+ */
 void RegisterLuaDllLoader(lua_State* L, std::vector<std::unique_ptr<DllGetFunctionAbstract>>&& get_function_registers);
 }  // namespace HsBa::Slicer
 

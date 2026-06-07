@@ -1,6 +1,6 @@
 ﻿/**  @file object_pool.hpp
  * @brief A header file containing the definition of a named object pool.
- * @author HsBa 
+ * @author HsBa
  */
 #pragma once
 #ifndef HSBA_SLICER_OBJECT_POOL_HPP
@@ -16,9 +16,9 @@
 namespace HsBa::Slicer
 {
 /** @brief A named object pool for managing a collection of shared objects.
-* @tparam T The type of objects to manage.
-* @tparam MaxSize The maximum number of objects that can be stored in the pool.
-*/
+ * @tparam T The type of objects to manage.
+ * @tparam MaxSize The maximum number of objects that can be stored in the pool.
+ */
 template <typename T, std::size_t MaxSize>
 class NamedObjectPool
 {

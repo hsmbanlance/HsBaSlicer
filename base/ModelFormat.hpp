@@ -1,6 +1,7 @@
 ﻿/** @file ModelFormat.hpp
- * @brief A header file containing the definition of model format enums and related functions for the HsBa Slicer project.
- * This file defines an enum for representing different model formats and provides functions for converting between format identifiers and their string representations.
+ * @brief A header file containing the definition of model format enums and related functions for the HsBa Slicer
+ * project. This file defines an enum for representing different model formats and provides functions for converting
+ * between format identifiers and their string representations.
  * @author HsBa
  */
 #pragma once
@@ -76,7 +77,7 @@ bool IsMeshFormat(ModelFormat format);
 /** @brief Check if a model format is a BRep format.
  * @param format The model format to check.
  * @return true if the format is a BRep format, false otherwise.
-  */
+ */
 bool IsBrepFormat(ModelFormat format);
 /** @brief Check if a model format is a CSG format.
  * @param format The model format to check.
@@ -98,7 +99,7 @@ bool IsMeshFormat(const std::string& file_name);
  * @param file_name The file name to check.
  * @return true if the file name corresponds to a BRep format, false otherwise.
  */
-bool IsBrepFormat(const std::string& file_name); 
+bool IsBrepFormat(const std::string& file_name);
 bool IsCSGFormat(const std::string& file_name);
 /** @brief Check if a file name corresponds to a point cloud format.
  * @param file_name The file name to check.
