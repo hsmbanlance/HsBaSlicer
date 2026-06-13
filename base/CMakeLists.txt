@@ -26,6 +26,7 @@
     object_pool.hpp
     thread_pool.hpp
     memory_pool.hpp
+    InplaceVector.hpp
     )
 
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)

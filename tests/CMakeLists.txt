@@ -372,6 +372,34 @@ if(HSBA_RUN_TESTS_AFTER_BUILD)
   )
 endif()
 
+# remote executor test
+add_executable(remote_executor_test
+	FilesOperator/remote_executor_test.cpp
+)
+
+target_link_libraries(remote_executor_test
+	HsBaSlicerBase
+	HsBaSlicerFileOperator
+	Boost::unit_test_framework
+)
+
+target_compile_definitions(remote_executor_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME remote_executor_test
+  COMMAND $<TARGET_FILE:remote_executor_test>
+  )
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET remote_executor_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R remote_executor_test
+  )
+endif()
+
 #json convert test
 #test for json convert
 add_executable(json_convert_test
