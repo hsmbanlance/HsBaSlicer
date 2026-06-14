@@ -132,6 +132,93 @@ int l_area(lua_State* L)
     return 1;  // return the area
 }
 
+int l_makeRectangle(lua_State* L)
+{
+    if (lua_gettop(L) != 4 || !lua_isnumber(L, 1) || !lua_isnumber(L, 2) ||
+        !lua_isnumber(L, 3) || !lua_isnumber(L, 4))
+        l_booleanError(L, "makeRectangle", "Expected x, y, width, height");
+    double x = lua_tonumber(L, 1);
+    double y = lua_tonumber(L, 2);
+    double width = lua_tonumber(L, 3);
+    double height = lua_tonumber(L, 4);
+    PolygonD result = MakeRectangle(x, y, width, height);
+    PushPolygonsDToLua(L, PolygonsD{result});
+    return 1;
+}
+
+int l_makeCircle(lua_State* L)
+{
+    if (lua_gettop(L) < 3 || !lua_isnumber(L, 1) || !lua_isnumber(L, 2) || !lua_isnumber(L, 3))
+        l_booleanError(L, "makeCircle", "Expected cx, cy, radius [, segments]");
+    double cx = lua_tonumber(L, 1);
+    double cy = lua_tonumber(L, 2);
+    double radius = lua_tonumber(L, 3);
+    int segments = 64;
+    if (lua_gettop(L) >= 4)
+        segments = static_cast<int>(lua_tointeger(L, 4));
+    PolygonD result = MakeCircle(cx, cy, radius, segments);
+    PushPolygonsDToLua(L, PolygonsD{result});
+    return 1;
+}
+
+int l_makeEllipse(lua_State* L)
+{
+    if (lua_gettop(L) < 4 || !lua_isnumber(L, 1) || !lua_isnumber(L, 2) ||
+        !lua_isnumber(L, 3) || !lua_isnumber(L, 4))
+        l_booleanError(L, "makeEllipse", "Expected cx, cy, rx, ry [, segments [, rotation]]");
+    double cx = lua_tonumber(L, 1);
+    double cy = lua_tonumber(L, 2);
+    double rx = lua_tonumber(L, 3);
+    double ry = lua_tonumber(L, 4);
+    int segments = 64;
+    double rotation = 0.0;
+    if (lua_gettop(L) >= 5)
+        segments = static_cast<int>(lua_tointeger(L, 5));
+    if (lua_gettop(L) >= 6)
+        rotation = lua_tonumber(L, 6);
+    PolygonD result = MakeEllipse(cx, cy, rx, ry, segments, rotation);
+    PushPolygonsDToLua(L, PolygonsD{result});
+    return 1;
+}
+
+int l_makeRegularPolygon(lua_State* L)
+{
+    if (lua_gettop(L) < 4 || !lua_isnumber(L, 1) || !lua_isnumber(L, 2) ||
+        !lua_isnumber(L, 3) || !lua_isnumber(L, 4))
+        l_booleanError(L, "makeRegularPolygon", "Expected cx, cy, radius, sides [, rotation]");
+    double cx = lua_tonumber(L, 1);
+    double cy = lua_tonumber(L, 2);
+    double radius = lua_tonumber(L, 3);
+    int sides = static_cast<int>(lua_tointeger(L, 4));
+    double rotation = 0.0;
+    if (lua_gettop(L) >= 5)
+        rotation = lua_tonumber(L, 5);
+    PolygonD result = MakeRegularPolygon(cx, cy, radius, sides, rotation);
+    PushPolygonsDToLua(L, PolygonsD{result});
+    return 1;
+}
+
+int l_textToPolygons(lua_State* L)
+{
+    if (lua_gettop(L) < 3 || !lua_isstring(L, 1) || !lua_isstring(L, 2) || !lua_isnumber(L, 3))
+        l_booleanError(L, "textToPolygons", "Expected text, font_file, font_size [, x [, y [, curve_segments]]]");
+    std::string text = lua_tostring(L, 1);
+    std::string font_file = lua_tostring(L, 2);
+    double font_size = lua_tonumber(L, 3);
+    double x = 0.0;
+    double y = 0.0;
+    int curve_segments = 8;
+    if (lua_gettop(L) >= 4)
+        x = lua_tonumber(L, 4);
+    if (lua_gettop(L) >= 5)
+        y = lua_tonumber(L, 5);
+    if (lua_gettop(L) >= 6)
+        curve_segments = static_cast<int>(lua_tointeger(L, 6));
+    PolygonsD result = TextToPolygons(text, font_file, font_size, x, y, curve_segments);
+    PushPolygonsDToLua(L, result);
+    return 1;
+}
+
 #ifdef HSBA_POLYGON_DUMP
 int l_dumpPolygon(lua_State* L)
 {
@@ -169,6 +256,11 @@ const luaL_Reg booleanLib[] = {{"booleanOperation", l_booleanOperation},
                                {"convexHullOperation", l_convexHullOperation},
                                {"concaveHullOperation", l_concaveHullOperation},
                                {"area", l_area},
+                               {"makeRectangle", l_makeRectangle},
+                               {"makeCircle", l_makeCircle},
+                               {"makeEllipse", l_makeEllipse},
+                               {"makeRegularPolygon", l_makeRegularPolygon},
+                               {"textToPolygons", l_textToPolygons},
 #ifdef HSBA_POLYGON_DUMP
                                {"dumpPolygon", l_dumpPolygon},
                                {"dumpPolygons", l_dumpPolygons},

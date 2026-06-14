@@ -6,6 +6,15 @@
 #include <iomanip>
 #include <sstream>
 #include <string_view>
+#include <numbers>
+
+#include "base/error.hpp"
+
+#ifdef HSBA_HAVE_FREETYPE
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include FT_OUTLINE_H
+#endif // HSBA_HAVE_FREETYPE
 
 namespace HsBa::Slicer
 {
@@ -198,7 +207,205 @@ PolygonsD UnIntegerization(const Polygons& polys)
     }
     return res;
 }
+namespace
+{
+struct OutlineBuilder
+{
+    PolygonsD polygons;
+    PolygonD current;
+    int curveSegments = 8;
 
+    static Point2D ToPointD(const FT_Vector& v)
+    {
+        return Point2D{static_cast<double>(v.x) / 64.0, static_cast<double>(v.y) / 64.0};
+    }
+
+    void CloseContour()
+    {
+        if (!current.empty())
+        {
+            if (current.front().x != current.back().x || current.front().y != current.back().y)
+                current.push_back(current.front());
+            polygons.push_back(std::move(current));
+            current.clear();
+        }
+    }
+
+    static int MoveTo(const FT_Vector* to, void* user)
+    {
+        auto* self = static_cast<OutlineBuilder*>(user);
+        self->CloseContour();
+        self->current.emplace_back(ToPointD(*to));
+        return 0;
+    }
+
+    static int LineTo(const FT_Vector* to, void* user)
+    {
+        auto* self = static_cast<OutlineBuilder*>(user);
+        self->current.emplace_back(ToPointD(*to));
+        return 0;
+    }
+
+    static int ConicTo(const FT_Vector* control, const FT_Vector* to, void* user)
+    {
+        auto* self = static_cast<OutlineBuilder*>(user);
+        if (self->current.empty())
+            return 0;
+        Point2D p0 = self->current.back();
+        Point2D p1 = ToPointD(*control);
+        Point2D p2 = ToPointD(*to);
+        for (int step = 1; step <= self->curveSegments; ++step)
+        {
+            double t = static_cast<double>(step) / self->curveSegments;
+            double u = 1.0 - t;
+            double x = u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x;
+            double y = u * u * p0.y + 2 * u * t * p1.y + t * t * p2.y;
+            self->current.emplace_back(Point2D{ x, y });
+        }
+        return 0;
+    }
+
+    static int CubicTo(const FT_Vector* control1, const FT_Vector* control2, const FT_Vector* to, void* user)
+    {
+        auto* self = static_cast<OutlineBuilder*>(user);
+        if (self->current.empty())
+            return 0;
+        Point2D p0 = self->current.back();
+        Point2D p1 = ToPointD(*control1);
+        Point2D p2 = ToPointD(*control2);
+        Point2D p3 = ToPointD(*to);
+        for (int step = 1; step <= self->curveSegments; ++step)
+        {
+            double t = static_cast<double>(step) / self->curveSegments;
+            double u = 1.0 - t;
+            double x = u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x;
+            double y = u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y;
+            self->current.emplace_back(Point2D{ x, y });
+        }
+        return 0;
+    }
+};
+
+
+PolygonD MakeEllipsePath(double cx, double cy, double rx, double ry, int segments, double rotation)
+{
+    PolygonD poly;
+    poly.reserve(segments + 1);
+    double angle_step = 2.0 * std::numbers::pi / segments;
+    for (int i = 0; i < segments; ++i)
+    {
+        double angle = i * angle_step;
+        double px = rx * std::cos(angle);
+        double py = ry * std::sin(angle);
+        double rxp = std::cos(rotation) * px - std::sin(rotation) * py;
+        double ryp = std::sin(rotation) * px + std::cos(rotation) * py;
+        poly.emplace_back(Point2D{cx + rxp, cy + ryp});
+    }
+    if (!poly.empty())
+        poly.push_back(poly.front());
+    return poly;
+}
+}  // namespace
+
+PolygonD MakeRectangle(double x, double y, double width, double height)
+{
+    return PolygonD{
+        Point2D{x, y},
+        Point2D{x + width, y},
+        Point2D{x + width, y + height},
+        Point2D{x, y + height},
+        Point2D{x, y}
+    };
+}
+
+PolygonD MakeCircle(double cx, double cy, double radius, int segments)
+{
+    return MakeEllipsePath(cx, cy, radius, radius, std::max(3, segments), 0.0);
+}
+
+PolygonD MakeEllipse(double cx, double cy, double rx, double ry, int segments, double rotation)
+{
+    return MakeEllipsePath(cx, cy, rx, ry, std::max(3, segments), rotation);
+}
+
+PolygonD MakeRegularPolygon(double cx, double cy, double radius, int sides, double rotation)
+{
+    PolygonD poly;
+    if (sides < 3)
+        return poly;
+    double angle_step = 2.0 * std::numbers::pi / sides;
+    poly.reserve(sides + 1);
+    for (int i = 0; i < sides; ++i)
+    {
+        double angle = rotation + i * angle_step;
+        poly.emplace_back(Point2D{cx + radius * std::cos(angle), cy + radius * std::sin(angle)});
+    }
+    poly.push_back(poly.front());
+    return poly;
+}
+
+PolygonsD TextToPolygons(const std::string& utf8_text, const std::string& font_file,
+                        double font_size, double x, double y, int curve_segments)
+{
+
+#ifndef HSBA_HAVE_FREETYPE
+    throw NotSupportedError("Need FreeType support");
+#else
+    FT_Library library;
+    if (FT_Init_FreeType(&library) != 0)
+        throw RuntimeError("Failed to initialize FreeType library");
+
+    FT_Face face;
+    if (FT_New_Face(library, font_file.c_str(), 0, &face) != 0)
+    {
+        FT_Done_FreeType(library);
+        throw RuntimeError("Failed to load font file: " + font_file);
+    }
+
+    FT_Set_Char_Size(face, 0, static_cast<FT_F26Dot6>(font_size * 64.0), 0, 0);
+
+    double penX = x;
+    double penY = y;
+    PolygonsD result;
+    OutlineBuilder builder;
+    builder.curveSegments = std::max(1, curve_segments);
+
+    FT_Outline_Funcs funcs;
+    funcs.move_to = OutlineBuilder::MoveTo;
+    funcs.line_to = OutlineBuilder::LineTo;
+    funcs.conic_to = OutlineBuilder::ConicTo;
+    funcs.cubic_to = OutlineBuilder::CubicTo;
+    funcs.shift = 0;
+    funcs.delta = 0;
+
+    for (unsigned char c : utf8_text)
+    {
+        FT_UInt glyph_index = FT_Get_Char_Index(face, c);
+        if (FT_Load_Glyph(face, glyph_index, FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING) != 0)
+        {
+            continue;
+        }
+
+        if (face->glyph->format == FT_GLYPH_FORMAT_OUTLINE)
+        {
+            FT_Outline* outline = &face->glyph->outline;
+            FT_Outline_Translate(outline, static_cast<FT_Pos>(penX * 64.0), static_cast<FT_Pos>(penY * 64.0));
+            builder.current.clear();
+            builder.polygons.clear();
+            FT_Outline_Decompose(outline, &funcs, &builder);
+            builder.CloseContour();
+            for (auto& poly : builder.polygons)
+                result.push_back(std::move(poly));
+        }
+
+        penX += static_cast<double>(face->glyph->advance.x) / 64.0;
+    }
+
+    FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    return result;
+#endif // HSBA_HAVE_FREETYPE
+}
 
 }  // namespace HsBa::Slicer
 
