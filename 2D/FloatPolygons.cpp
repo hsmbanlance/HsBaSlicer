@@ -4,9 +4,9 @@
 #include <boost/container_hash/hash.hpp>
 #include <fstream>
 #include <iomanip>
+#include <numbers>
 #include <sstream>
 #include <string_view>
-#include <numbers>
 
 #include "base/error.hpp"
 
@@ -14,7 +14,7 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_OUTLINE_H
-#endif // HSBA_HAVE_FREETYPE
+#endif  // HSBA_HAVE_FREETYPE
 
 namespace HsBa::Slicer
 {
@@ -260,7 +260,7 @@ struct OutlineBuilder
             double u = 1.0 - t;
             double x = u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x;
             double y = u * u * p0.y + 2 * u * t * p1.y + t * t * p2.y;
-            self->current.emplace_back(Point2D{ x, y });
+            self->current.emplace_back(Point2D{x, y});
         }
         return 0;
     }
@@ -280,7 +280,7 @@ struct OutlineBuilder
             double u = 1.0 - t;
             double x = u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x;
             double y = u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y;
-            self->current.emplace_back(Point2D{ x, y });
+            self->current.emplace_back(Point2D{x, y});
         }
         return 0;
     }
@@ -309,13 +309,8 @@ PolygonD MakeEllipsePath(double cx, double cy, double rx, double ry, int segment
 
 PolygonD MakeRectangle(double x, double y, double width, double height)
 {
-    return PolygonD{
-        Point2D{x, y},
-        Point2D{x + width, y},
-        Point2D{x + width, y + height},
-        Point2D{x, y + height},
-        Point2D{x, y}
-    };
+    return PolygonD{Point2D{x, y}, Point2D{x + width, y}, Point2D{x + width, y + height}, Point2D{x, y + height},
+                    Point2D{x, y}};
 }
 
 PolygonD MakeCircle(double cx, double cy, double radius, int segments)
@@ -344,8 +339,8 @@ PolygonD MakeRegularPolygon(double cx, double cy, double radius, int sides, doub
     return poly;
 }
 
-PolygonsD TextToPolygons(const std::string& utf8_text, const std::string& font_file,
-                        double font_size, double x, double y, int curve_segments)
+PolygonsD TextToPolygons(const std::string& utf8_text, const std::string& font_file, double font_size, double x,
+                         double y, int curve_segments)
 {
 
 #ifndef HSBA_HAVE_FREETYPE
@@ -404,7 +399,7 @@ PolygonsD TextToPolygons(const std::string& utf8_text, const std::string& font_f
     FT_Done_Face(face);
     FT_Done_FreeType(library);
     return result;
-#endif // HSBA_HAVE_FREETYPE
+#endif  // HSBA_HAVE_FREETYPE
 }
 
 }  // namespace HsBa::Slicer

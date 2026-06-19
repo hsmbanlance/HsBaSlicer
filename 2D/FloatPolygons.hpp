@@ -41,15 +41,12 @@ double Area(const PolygonsD& ps);
 
 PolygonD MakeRectangle(double x, double y, double width, double height);
 PolygonD MakeCircle(double cx, double cy, double radius, int segments = 64);
-PolygonD MakeEllipse(double cx, double cy, double rx, double ry, int segments = 64,
-                     double rotation = 0.0);
-PolygonD MakeRegularPolygon(double cx, double cy, double radius, int sides,
-                            double rotation = 0.0);
+PolygonD MakeEllipse(double cx, double cy, double rx, double ry, int segments = 64, double rotation = 0.0);
+PolygonD MakeRegularPolygon(double cx, double cy, double radius, int sides, double rotation = 0.0);
 
 
-PolygonsD TextToPolygons(const std::string& utf8_text, const std::string& font_file,
-                        double font_size, double x = 0.0, double y = 0.0,
-                        int curve_segments = 8);
+PolygonsD TextToPolygons(const std::string& utf8_text, const std::string& font_file, double font_size, double x = 0.0,
+                         double y = 0.0, int curve_segments = 8);
 
 
 // Image IO functions are declared in ImageToPolygons.hpp

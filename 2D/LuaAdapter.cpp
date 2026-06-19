@@ -134,8 +134,7 @@ int l_area(lua_State* L)
 
 int l_makeRectangle(lua_State* L)
 {
-    if (lua_gettop(L) != 4 || !lua_isnumber(L, 1) || !lua_isnumber(L, 2) ||
-        !lua_isnumber(L, 3) || !lua_isnumber(L, 4))
+    if (lua_gettop(L) != 4 || !lua_isnumber(L, 1) || !lua_isnumber(L, 2) || !lua_isnumber(L, 3) || !lua_isnumber(L, 4))
         l_booleanError(L, "makeRectangle", "Expected x, y, width, height");
     double x = lua_tonumber(L, 1);
     double y = lua_tonumber(L, 2);
@@ -163,8 +162,7 @@ int l_makeCircle(lua_State* L)
 
 int l_makeEllipse(lua_State* L)
 {
-    if (lua_gettop(L) < 4 || !lua_isnumber(L, 1) || !lua_isnumber(L, 2) ||
-        !lua_isnumber(L, 3) || !lua_isnumber(L, 4))
+    if (lua_gettop(L) < 4 || !lua_isnumber(L, 1) || !lua_isnumber(L, 2) || !lua_isnumber(L, 3) || !lua_isnumber(L, 4))
         l_booleanError(L, "makeEllipse", "Expected cx, cy, rx, ry [, segments [, rotation]]");
     double cx = lua_tonumber(L, 1);
     double cy = lua_tonumber(L, 2);
@@ -183,8 +181,7 @@ int l_makeEllipse(lua_State* L)
 
 int l_makeRegularPolygon(lua_State* L)
 {
-    if (lua_gettop(L) < 4 || !lua_isnumber(L, 1) || !lua_isnumber(L, 2) ||
-        !lua_isnumber(L, 3) || !lua_isnumber(L, 4))
+    if (lua_gettop(L) < 4 || !lua_isnumber(L, 1) || !lua_isnumber(L, 2) || !lua_isnumber(L, 3) || !lua_isnumber(L, 4))
         l_booleanError(L, "makeRegularPolygon", "Expected cx, cy, radius, sides [, rotation]");
     double cx = lua_tonumber(L, 1);
     double cy = lua_tonumber(L, 2);
