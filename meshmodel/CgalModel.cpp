@@ -7,6 +7,8 @@
 #include <CGAL/Boolean_set_operations_2.h>
 #include <CGAL/IO/io.h>
 #include <CGAL/Polyhedron_3.h>
+#include <CGAL/Polyhedron_incremental_builder_3.h>
+#include <CGAL/Simple_cartesian.h>
 #include <CGAL/boost/graph/IO/polygon_mesh_io.h>
 #include <CGAL/boost/graph/generators.h>
 #include <CGAL/polygon_mesh_processing.h>
@@ -354,6 +356,345 @@ CgalModel CgalModel::CreateTorus(const float majorRadius, const float minorRadiu
     for (size_t i = 0; i < faces.size(); ++i)
         f.row((int)i) = faces[i];
     return CgalModel(v, f);
+}
+
+// ========== 辅助 Builder 类 ==========
+
+class PrismBuilder : public CGAL::Modifier_base<CgalModel::Polyhedron_3::HalfedgeDS>
+{
+public:
+    using Point_3 = CgalModel::Point_3;
+
+    PrismBuilder(const std::vector<std::array<int, 3>>& bottom_tris, const std::vector<Eigen::Vector2f>& verts_2d,
+                 const Eigen::Vector3f& dir)
+        : bottom_tris_(bottom_tris), verts_2d_(verts_2d), dir_(dir)
+    {
+    }
+
+    void operator()(CgalModel::Polyhedron_3::HalfedgeDS& hds) override
+    {
+        const int n = static_cast<int>(verts_2d_.size());
+        const int n_bottom = static_cast<int>(bottom_tris_.size());
+        const int n_side = 2 * n;
+
+        CGAL::Polyhedron_incremental_builder_3<CgalModel::Polyhedron_3::HalfedgeDS> builder(hds, true);
+        builder.begin_surface(2 * n, 2 * n_bottom + n_side);
+
+        // 底面顶点 (z = 0)
+        for (int i = 0; i < n; ++i)
+        {
+            builder.add_vertex(Point_3(verts_2d_[i].x(), verts_2d_[i].y(), 0.0));
+        }
+
+        // 顶面顶点
+        for (int i = 0; i < n; ++i)
+        {
+            builder.add_vertex(Point_3(verts_2d_[i].x() + dir_.x(), verts_2d_[i].y() + dir_.y(), dir_.z()));
+        }
+
+        // 底面（法向朝下）
+        for (const auto& tri : bottom_tris_)
+        {
+            builder.begin_facet();
+            builder.add_vertex_to_facet(tri[0]);
+            builder.add_vertex_to_facet(tri[2]);
+            builder.add_vertex_to_facet(tri[1]);
+            builder.end_facet();
+        }
+
+        // 顶面（法向朝上）
+        for (const auto& tri : bottom_tris_)
+        {
+            builder.begin_facet();
+            builder.add_vertex_to_facet(tri[0] + n);
+            builder.add_vertex_to_facet(tri[1] + n);
+            builder.add_vertex_to_facet(tri[2] + n);
+            builder.end_facet();
+        }
+
+        // 侧面
+        for (int i = 0; i < n; ++i)
+        {
+            int j = (i + 1) % n;
+            int v0 = i, v1 = j, v2 = j + n, v3 = i + n;
+
+            builder.begin_facet();
+            builder.add_vertex_to_facet(v0);
+            builder.add_vertex_to_facet(v1);
+            builder.add_vertex_to_facet(v2);
+            builder.end_facet();
+
+            builder.begin_facet();
+            builder.add_vertex_to_facet(v0);
+            builder.add_vertex_to_facet(v2);
+            builder.add_vertex_to_facet(v3);
+            builder.end_facet();
+        }
+
+        builder.end_surface();
+        if (builder.error())
+        {
+            throw std::runtime_error("Polyhedron construction failed");
+        }
+    }
+
+private:
+    const std::vector<std::array<int, 3>>& bottom_tris_;
+    const std::vector<Eigen::Vector2f>& verts_2d_;
+    const Eigen::Vector3f dir_;
+};
+
+class MultiPathPrismBuilder : public CGAL::Modifier_base<CgalModel::Polyhedron_3::HalfedgeDS>
+{
+public:
+    using Point_3 = CgalModel::Point_3;
+
+    MultiPathPrismBuilder(const std::vector<std::array<int, 3>>& bottom_tris,
+                          const std::vector<std::array<int, 2>>& side_edges,
+                          const std::vector<Eigen::Vector2f>& verts_2d, const Eigen::Vector3f& dir)
+        : bottom_tris_(bottom_tris), side_edges_(side_edges), verts_2d_(verts_2d), dir_(dir)
+    {
+    }
+
+    void operator()(CgalModel::Polyhedron_3::HalfedgeDS& hds) override
+    {
+        const int n = static_cast<int>(verts_2d_.size());
+        const int n_bottom = static_cast<int>(bottom_tris_.size());
+        const int n_side = 2 * static_cast<int>(side_edges_.size());
+
+        CGAL::Polyhedron_incremental_builder_3<CgalModel::Polyhedron_3::HalfedgeDS> builder(hds, true);
+        builder.begin_surface(2 * n, 2 * n_bottom + n_side);
+
+        // 底面顶点
+        for (int i = 0; i < n; ++i)
+        {
+            builder.add_vertex(Point_3(verts_2d_[i].x(), verts_2d_[i].y(), 0.0));
+        }
+
+        // 顶面顶点
+        for (int i = 0; i < n; ++i)
+        {
+            builder.add_vertex(Point_3(verts_2d_[i].x() + dir_.x(), verts_2d_[i].y() + dir_.y(), dir_.z()));
+        }
+
+        // 底面
+        for (const auto& tri : bottom_tris_)
+        {
+            builder.begin_facet();
+            builder.add_vertex_to_facet(tri[0]);
+            builder.add_vertex_to_facet(tri[2]);
+            builder.add_vertex_to_facet(tri[1]);
+            builder.end_facet();
+        }
+
+        // 顶面
+        for (const auto& tri : bottom_tris_)
+        {
+            builder.begin_facet();
+            builder.add_vertex_to_facet(tri[0] + n);
+            builder.add_vertex_to_facet(tri[1] + n);
+            builder.add_vertex_to_facet(tri[2] + n);
+            builder.end_facet();
+        }
+
+        // 侧面
+        for (const auto& edge : side_edges_)
+        {
+            int v0 = edge[0], v1 = edge[1];
+            int v2 = v1 + n, v3 = v0 + n;
+
+            builder.begin_facet();
+            builder.add_vertex_to_facet(v0);
+            builder.add_vertex_to_facet(v1);
+            builder.add_vertex_to_facet(v2);
+            builder.end_facet();
+
+            builder.begin_facet();
+            builder.add_vertex_to_facet(v0);
+            builder.add_vertex_to_facet(v2);
+            builder.add_vertex_to_facet(v3);
+            builder.end_facet();
+        }
+
+        builder.end_surface();
+        if (builder.error())
+        {
+            throw RuntimeError("Polyhedron construction failed");
+        }
+    }
+
+private:
+    const std::vector<std::array<int, 3>>& bottom_tris_;
+    const std::vector<std::array<int, 2>>& side_edges_;
+    const std::vector<Eigen::Vector2f>& verts_2d_;
+    const Eigen::Vector3f dir_;
+};
+
+// ========== 实现 ==========
+
+CgalModel CgalModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& direction)
+{
+    const size_t n = poly.size();
+    if (n < 3)
+    {
+        throw InvalidArgumentError("Polygon must have at least 3 points");
+    }
+
+    Clipper2Lib::PathsD paths_in{poly};
+    Clipper2Lib::PathsD triangles;
+
+    auto result = Clipper2Lib::Triangulate(paths_in, 0, triangles, true);
+    if (result != Clipper2Lib::TriangulateResult::success)
+    {
+        throw RuntimeError("Triangulation failed");
+    }
+
+    auto findIndex = [&](const Clipper2Lib::PointD& p) -> int
+    {
+        for (int i = 0; i < static_cast<int>(n); ++i)
+        {
+            if (std::abs(poly[i].x - p.x) < 1e-9 && std::abs(poly[i].y - p.y) < 1e-9)
+            {
+                return i;
+            }
+        }
+        return -1;
+    };
+
+    std::vector<std::array<int, 3>> bottom_tris;
+    bottom_tris.reserve(triangles.size());
+
+    for (const auto& tri : triangles)
+    {
+        if (tri.size() != 3)
+            continue;
+        std::array<int, 3> idx;
+        for (int i = 0; i < 3; ++i)
+        {
+            idx[i] = findIndex(tri[i]);
+            if (idx[i] < 0)
+            {
+                throw RuntimeError("Triangulation produced unexpected vertex");
+            }
+        }
+        bottom_tris.push_back(idx);
+    }
+
+    std::vector<Eigen::Vector2f> verts_2d;
+    verts_2d.reserve(n);
+    for (const auto& pt : poly)
+    {
+        verts_2d.push_back({static_cast<float>(pt.x), static_cast<float>(pt.y)});
+    }
+
+    CgalModel model;
+    PrismBuilder builder(bottom_tris, verts_2d, direction);
+    model.mesh_.delegate(builder);
+
+    if (!model.mesh_.is_valid() || !model.mesh_.is_closed())
+    {
+        throw RuntimeError("Invalid or open polyhedron");
+    }
+
+    return model;
+}
+
+CgalModel CgalModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& direction)
+{
+    if (paths.empty())
+    {
+        throw InvalidArgumentError("Paths must not be empty");
+    }
+
+    Clipper2Lib::PathsD triangles;
+    auto result = Clipper2Lib::Triangulate(paths, 0, triangles, true);
+    if (result != Clipper2Lib::TriangulateResult::success)
+    {
+        throw RuntimeError("Triangulation failed");
+    }
+
+    std::vector<Eigen::Vector2f> unique_verts;
+    auto findOrAdd = [&](const Clipper2Lib::PointD& p) -> int
+    {
+        for (int i = 0; i < static_cast<int>(unique_verts.size()); ++i)
+        {
+            if (std::abs(unique_verts[i].x() - static_cast<float>(p.x)) < 1e-6f &&
+                std::abs(unique_verts[i].y() - static_cast<float>(p.y)) < 1e-6f)
+            {
+                return i;
+            }
+        }
+        unique_verts.push_back({static_cast<float>(p.x), static_cast<float>(p.y)});
+        return static_cast<int>(unique_verts.size()) - 1;
+    };
+
+    for (const auto& path : paths)
+    {
+        for (const auto& pt : path)
+        {
+            findOrAdd(pt);
+        }
+    }
+
+    for (const auto& tri : triangles)
+    {
+        for (const auto& pt : tri)
+        {
+            findOrAdd(pt);
+        }
+    }
+
+    const int n = static_cast<int>(unique_verts.size());
+
+    std::vector<std::array<int, 3>> bottom_tris;
+    bottom_tris.reserve(triangles.size());
+
+    for (const auto& tri : triangles)
+    {
+        if (tri.size() != 3)
+            continue;
+        std::array<int, 3> idx;
+        for (int i = 0; i < 3; ++i)
+        {
+            idx[i] = findOrAdd(tri[i]);
+        }
+        bottom_tris.push_back(idx);
+    }
+
+    std::vector<std::array<int, 2>> side_edges;
+    auto findVertIdx = [&](const Clipper2Lib::PointD& p) -> int
+    {
+        for (int i = 0; i < n; ++i)
+        {
+            if (std::abs(unique_verts[i].x() - static_cast<float>(p.x)) < 1e-6f &&
+                std::abs(unique_verts[i].y() - static_cast<float>(p.y)) < 1e-6f)
+            {
+                return i;
+            }
+        }
+        throw RuntimeError("Vertex not found");
+    };
+
+    for (const auto& path : paths)
+    {
+        const size_t m = path.size();
+        for (size_t i = 0; i < m; ++i)
+        {
+            size_t j = (i + 1) % m;
+            side_edges.push_back({findVertIdx(path[i]), findVertIdx(path[j])});
+        }
+    }
+
+    CgalModel model;
+    MultiPathPrismBuilder builder(bottom_tris, side_edges, unique_verts, direction);
+    model.mesh_.delegate(builder);
+
+    if (!model.mesh_.is_valid() || !model.mesh_.is_closed())
+    {
+        throw RuntimeError("Invalid or open polyhedron");
+    }
+
+    return model;
 }
 }  // namespace HsBa::Slicer
 

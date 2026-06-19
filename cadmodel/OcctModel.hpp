@@ -9,6 +9,7 @@
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Shape.hxx>
 
+#include "2D/FloatPolygons.hpp"
 #include "base/IModel.hpp"
 
 namespace HsBa::Slicer
@@ -63,6 +64,8 @@ public:
     static OcctModel CreateCone(const float radius, const float height, const int segments = 32);
     static OcctModel CreateTorus(const float majorRadius, const float minorRadius, const int majorSegments = 32,
                                  const int minorSegments = 16);
+    static OcctModel CreatePrime(const PolygonD& poly, const Eigen::Vector3f& direction);
+    static OcctModel CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& direction);
 
     friend struct std::hash<OcctModel>;
 

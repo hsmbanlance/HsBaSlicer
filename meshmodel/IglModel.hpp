@@ -7,6 +7,8 @@
 #include <Eigen/Dense>
 #include <boost/functional/hash.hpp>
 
+#include "2D/FloatPolygons.hpp"
+
 namespace HsBa::Slicer
 {
 class IglModel final : public IModel
@@ -54,6 +56,10 @@ public:
     static IglModel CreateCone(const float radius, const float height, const int segments = 32);
     static IglModel CreateTorus(const float majorRadius, const float minorRadius, const int majorSegments = 32,
                                 const int minorSegments = 16);
+
+    static IglModel CreatePrime(const PolygonD& poly, const Eigen::Vector3f& direction);
+
+    static IglModel CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& direction);
 
 
 private:

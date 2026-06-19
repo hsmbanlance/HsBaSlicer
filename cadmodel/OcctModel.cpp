@@ -32,12 +32,14 @@
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakePolygon.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepOffsetAPI_MakeThickSolid.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepPrimAPI_MakeCone.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
+#include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepPrimAPI_MakeSphere.hxx>
 #include <BRepPrimAPI_MakeTorus.hxx>
 
@@ -449,6 +451,129 @@ OcctModel ThickSolid(const OcctModel& model, const std::vector<std::vector<Eigen
     }
     maker.MakeThickSolidByJoin(model.shape_, remove_shape, thickness, tolerance);
     return OcctModel(maker.Shape());
+}
+
+OcctModel OcctModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& direction)
+{
+    const size_t n = poly.size();
+    if (n < 3)
+    {
+        throw InvalidArgumentError("Polygon must have at least 3 points");
+    }
+
+    // 构建闭合 wire
+    BRepBuilderAPI_MakePolygon polygonMaker;
+    for (const auto& pt : poly)
+    {
+        polygonMaker.Add(gp_Pnt(pt.x, pt.y, 0.0));
+    }
+    polygonMaker.Close();
+
+    if (!polygonMaker.IsDone())
+    {
+        throw RuntimeError("Failed to create polygon");
+    }
+
+    TopoDS_Wire wire = polygonMaker.Wire();
+
+    // 构建 face
+    BRepBuilderAPI_MakeFace faceMaker(wire);
+    if (!faceMaker.IsDone())
+    {
+        throw RuntimeError("Failed to create face");
+    }
+
+    // 拉伸
+    gp_Vec vec(direction.x(), direction.y(), direction.z());
+    BRepPrimAPI_MakePrism prism(faceMaker.Face(), vec);
+    if (!prism.IsDone())
+    {
+        throw RuntimeError("Failed to create prism");
+    }
+
+    OcctModel model;
+    model.shape_ = prism.Shape();
+    return model;
+}
+
+// ========== 多路径版本（外轮廓 + 洞） ==========
+OcctModel OcctModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& direction)
+{
+    if (paths.empty())
+    {
+        throw InvalidArgumentError("Paths must not be empty");
+    }
+
+    // 第一个路径是外轮廓，其余是洞
+    const auto& outer = paths[0];
+    if (outer.size() < 3)
+    {
+        throw InvalidArgumentError("Outer polygon must have at least 3 points");
+    }
+
+    // 构建外轮廓 wire
+    BRepBuilderAPI_MakePolygon outerMaker;
+    for (const auto& pt : outer)
+    {
+        outerMaker.Add(gp_Pnt(pt.x, pt.y, 0.0));
+    }
+    outerMaker.Close();
+
+    if (!outerMaker.IsDone())
+    {
+        throw RuntimeError("Failed to create outer polygon");
+    }
+
+    TopoDS_Wire outerWire = outerMaker.Wire();
+
+    // 构建外轮廓 face
+    BRepBuilderAPI_MakeFace faceMaker(outerWire);
+    if (!faceMaker.IsDone())
+    {
+        throw RuntimeError("Failed to create face from outer wire");
+    }
+
+    // 添加洞
+    for (size_t i = 1; i < paths.size(); ++i)
+    {
+        const auto& hole = paths[i];
+        if (hole.size() < 3)
+            continue;
+
+        BRepBuilderAPI_MakePolygon holeMaker;
+        for (const auto& pt : hole)
+        {
+            holeMaker.Add(gp_Pnt(pt.x, pt.y, 0.0));
+        }
+        holeMaker.Close();
+
+        if (!holeMaker.IsDone())
+        {
+            continue;  // 跳过无效的洞
+        }
+
+        TopoDS_Wire holeWire = holeMaker.Wire();
+        faceMaker.Add(holeWire);
+    }
+
+    if (!faceMaker.IsDone())
+    {
+        throw RuntimeError("Failed to create face with holes");
+    }
+
+    TopoDS_Face face = faceMaker.Face();
+
+    // 拉伸
+    gp_Vec vec(direction.x(), direction.y(), direction.z());
+    BRepPrimAPI_MakePrism prism(face, vec);
+    if (!prism.IsDone())
+    {
+        throw RuntimeError("Failed to create prism");
+    }
+
+    OcctModel model;
+    model.shape_ = prism.Shape();
+    return model;
 }
 }  // namespace HsBa::Slicer
 

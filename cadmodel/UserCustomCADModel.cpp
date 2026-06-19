@@ -72,6 +72,24 @@ UserCustomCADDll::SetThicknessFunc UserCustomCADDll::GetSetThicknessFunc() const
     return nullptr;
 }
 
+UserCustomCADDll::CreatePrismFunc UserCustomCADDll::GetCreatePrismFunc() const
+{
+    if (impl_->dll_.has(impl_->addedFunName_ + "_create_prism"))
+    {
+        return impl_->dll_.get<CreatePrismFunc>(impl_->addedFunName_ + "_create_prism");
+    }
+    return nullptr;
+}
+
+UserCustomCADDll::CreatePrismExFunc UserCustomCADDll::GetCreatePrismExFunc() const
+{
+    if (impl_->dll_.has(impl_->addedFunName_ + "_create_prism_ex"))
+    {
+        return impl_->dll_.get<CreatePrismExFunc>(impl_->addedFunName_ + "_create_prism_ex");
+    }
+    return nullptr;
+}
+
 UserCustomCADDll::DestroyModelFunc UserCustomCADDll::GetDestroyModelFunc() const
 {
     if (impl_->dll_.has(impl_->addedFunName_ + "_destroy_model"))

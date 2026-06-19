@@ -13,6 +13,7 @@
 #include <CGAL/Polygon_mesh_processing/corefinement.h>
 #include <CGAL/Polyhedron_3.h>
 
+#include "2D/FloatPolygons.hpp"
 #include "base/IModel.hpp"
 
 namespace HsBa::Slicer
@@ -64,6 +65,8 @@ public:
     static CgalModel CreateCone(const float radius, const float height, const int segments = 32);
     static CgalModel CreateTorus(const float majorRadius, const float minorRadius, const int majorSegments = 32,
                                  const int minorSegments = 16);
+    static CgalModel CreatePrime(const PolygonD& paths, const Eigen::Vector3f& direction);
+    static CgalModel CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& direction);
 
 private:
     CGAL::Polyhedron_3<EpicKernel> mesh_;

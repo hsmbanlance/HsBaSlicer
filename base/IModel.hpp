@@ -52,6 +52,12 @@ extern "C"
         HsBaVector2f_t* vertices;
         size_t vertexCount;
     } HsBaPoly2D_t;
+    /** @brief A 2D polygons with float components. */
+    typedef struct HsBaPolys2D
+    {
+        HsBaPoly2D_t* polygons;
+        size_t vertexCount;
+    } HsBaPolys2D_t;
 }
 
 namespace HsBa::Slicer

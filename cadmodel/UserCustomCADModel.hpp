@@ -23,7 +23,8 @@ public:
     typedef IModel* (*CreateSphere)(float radius, int subdivisions);
     typedef IModel* (*CreateCylinder)(float radius, float height, int segments);
     typedef void (*SetThicknessFunc)(IModel*, float thickness);
-    virtual ~IUserCustomCAD() = default;
+    typedef IModel* (*CreatePrismFunc)(HsBaPoly2D_t, HsBaVector3f_t);
+    typedef IModel* (*CreatePrismExFunc)(HsBaPolys2D_t, HsBaVector3f_t);
     virtual CreateModelFunc GetCreateModelFunc() const = 0;
     virtual DestroyModelFunc GetDestroyModelFunc() const = 0;
     virtual BooleanOperationFunc GetBooleanOperationFunc() const = 0;
@@ -31,6 +32,8 @@ public:
     virtual CreateSphere GetCreateSphereFunc() const = 0;
     virtual CreateCylinder GetCreateCylinderFunc() const = 0;
     virtual SetThicknessFunc GetSetThicknessFunc() const = 0;
+    virtual CreatePrismFunc GetCreatePrismFunc() const = 0;
+    virtual CreatePrismExFunc GetCreatePrismExFunc() const = 0;
 };
 class UserCustomCADDll final : public IUserCustomCAD
 {
@@ -44,6 +47,8 @@ public:
     CreateSphere GetCreateSphereFunc() const override;
     CreateCylinder GetCreateCylinderFunc() const override;
     SetThicknessFunc GetSetThicknessFunc() const override;
+    CreatePrismFunc GetCreatePrismFunc() const override;
+    CreatePrismExFunc GetCreatePrismExFunc() const override;
     ~UserCustomCADDll();
 
 private:
