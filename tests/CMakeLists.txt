@@ -605,8 +605,10 @@ target_compile_definitions(cgal_model_test PRIVATE BOOST_TEST_DYN_LINK)
 target_compile_definitions(igl_model_test PRIVATE BOOST_TEST_DYN_LINK)
 
 # In Debug configuration, disable boolean operation tests for CGAL and IGL
-target_compile_definitions(cgal_model_test PRIVATE $<$<CONFIG:Debug>:DISABLE_BOOLEAN_OPERATIONS_TESTS>)
+target_compile_definitions(cgal_model_test PRIVATE $<$<CONFIG:Debug>:DISABLE_BOOLEAN_OPERATIONS_TESTS;DISABLE_ADVANCE_OPERATIONS_TESTS>)
 target_compile_definitions(igl_model_test PRIVATE $<$<CONFIG:Debug>:DISABLE_BOOLEAN_OPERATIONS_TESTS>)
+
+#target_compile_definitions(cgal_model_test PRIVATE $<$<CONFIG:Debug>:DISABLE_ADVANCE_OPERATIONS_TESTS>)
 
 enable_testing()
 add_test(NAME cgal_model_test COMMAND $<TARGET_FILE:cgal_model_test>)

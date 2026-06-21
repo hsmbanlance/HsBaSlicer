@@ -624,7 +624,7 @@ IglModel IglModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& dire
 
     IglModel model;
     model.vertices_ = V;
-    model.faces_ = F;
+    model.faces_ = F.topRows(f);  // Only use the actually filled rows
     return model;
 }
 

@@ -19,6 +19,7 @@
 #include "base/ModelFormat.hpp"
 #include "base/encoding_convert.hpp"
 #include "base/error.hpp"
+#include "IglModel.hpp"
 
 
 namespace HsBa::Slicer
@@ -29,7 +30,72 @@ CgalModel::CgalModel(const Polyhedron_3& o) : mesh_{o}
 
 CgalModel::CgalModel(const Eigen::MatrixXf& v, const Eigen::MatrixXi& f)
 {
-    igl::copyleft::cgal::mesh_to_polyhedron(v, f, mesh_);
+    if (v.rows() == 0 || f.rows() == 0)
+    {
+        throw RuntimeError("Empty mesh provided to CgalModel constructor");
+    }
+    
+    // Try direct conversion first
+    bool success = igl::copyleft::cgal::mesh_to_polyhedron(v, f, mesh_);
+    
+    if (!success)
+    {
+        // Try to repair the mesh using CGAL's Polygon Mesh Processing
+        try {
+            // Step 1: Create a polygon soup from the input mesh
+            std::vector<Point_3> points;
+            std::vector<std::vector<std::size_t>> polygons;
+            
+            // Convert vertices
+            for (int i = 0; i < v.rows(); ++i)
+            {
+                points.emplace_back(v(i, 0), v(i, 1), v(i, 2));
+            }
+            
+            // Convert faces
+            for (int i = 0; i < f.rows(); ++i)
+            {
+                std::vector<std::size_t> face;
+                for (int j = 0; j < 3; ++j)
+                {
+                    face.push_back(static_cast<std::size_t>(f(i, j)));
+                }
+                polygons.push_back(std::move(face));
+            }
+            
+            // Step 2: Orient the polygon soup consistently
+            CGAL::Polygon_mesh_processing::orient_polygon_soup(points, polygons);
+            
+            // Step 3: Merge duplicate vertices and build a proper mesh
+            try {
+                CGAL::Polygon_mesh_processing::polygon_soup_to_polygon_mesh(
+                    points, polygons, mesh_);
+                success = true;  // If no exception thrown, assume success
+                
+                // Additional validation and fix face orientation if needed
+                if (mesh_.is_valid()) {
+                    // Check volume sign and flip faces if needed
+                    double vol = CGAL::Polygon_mesh_processing::volume(mesh_);
+                    if (vol < 0.0) {
+                        CGAL::Polygon_mesh_processing::reverse_face_orientations(mesh_);
+                    }
+                } else {
+                    success = false;
+                }
+            } catch (const std::exception& e) {
+                // CGAL operations may throw std::exception or derived types
+                success = false;
+            }
+        } catch (const std::exception& e) {
+            // Outer exception handler for polygon soup construction
+            success = false;
+        }
+        
+        if (!success)
+        {
+            throw RuntimeError("mesh_to_polyhedron conversion failed even after repair attempts");
+        }
+    }
 }
 
 bool CgalModel::Load(std::string_view filePath)
@@ -392,32 +458,35 @@ public:
             builder.add_vertex(Point_3(verts_2d_[i].x() + dir_.x(), verts_2d_[i].y() + dir_.y(), dir_.z()));
         }
 
-        // 底面（法向朝下）
+        // 底面（法向朝下，-Z方向）
         for (const auto& tri : bottom_tris_)
         {
             builder.begin_facet();
+            // Reverse winding for bottom face
             builder.add_vertex_to_facet(tri[0]);
             builder.add_vertex_to_facet(tri[2]);
             builder.add_vertex_to_facet(tri[1]);
             builder.end_facet();
         }
 
-        // 顶面（法向朝上）
+        // 顶面（法向朝上，+Z方向）
         for (const auto& tri : bottom_tris_)
         {
             builder.begin_facet();
+            // Keep CCW winding for top face
             builder.add_vertex_to_facet(tri[0] + n);
             builder.add_vertex_to_facet(tri[1] + n);
             builder.add_vertex_to_facet(tri[2] + n);
             builder.end_facet();
         }
 
-        // 侧面
+        // 侧面（法向朝外）
         for (int i = 0; i < n; ++i)
         {
             int j = (i + 1) % n;
             int v0 = i, v1 = j, v2 = j + n, v3 = i + n;
 
+            // Match IglModel's vertex order exactly
             builder.begin_facet();
             builder.add_vertex_to_facet(v0);
             builder.add_vertex_to_facet(v1);
@@ -477,7 +546,7 @@ public:
             builder.add_vertex(Point_3(verts_2d_[i].x() + dir_.x(), verts_2d_[i].y() + dir_.y(), dir_.z()));
         }
 
-        // 底面
+        // 底面（法向朝下，-Z方向）
         for (const auto& tri : bottom_tris_)
         {
             builder.begin_facet();
@@ -487,7 +556,7 @@ public:
             builder.end_facet();
         }
 
-        // 顶面
+        // 顶面（法向朝上，+Z方向）
         for (const auto& tri : bottom_tris_)
         {
             builder.begin_facet();
@@ -497,12 +566,13 @@ public:
             builder.end_facet();
         }
 
-        // 侧面
+        // 侧面（法向朝外）
         for (const auto& edge : side_edges_)
         {
             int v0 = edge[0], v1 = edge[1];
             int v2 = v1 + n, v3 = v0 + n;
 
+            // Match IglModel's vertex order exactly
             builder.begin_facet();
             builder.add_vertex_to_facet(v0);
             builder.add_vertex_to_facet(v1);
@@ -580,23 +650,52 @@ CgalModel CgalModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& di
         bottom_tris.push_back(idx);
     }
 
-    std::vector<Eigen::Vector2f> verts_2d;
-    verts_2d.reserve(n);
-    for (const auto& pt : poly)
+    // Build using IglModel first, then convert to CgalModel
+    const Eigen::Vector3f dir(direction.x(), direction.y(), direction.z());
+    
+    // Build vertices
+    Eigen::MatrixXf V(2 * n, 3);
+    for (size_t i = 0; i < n; ++i)
     {
-        verts_2d.push_back({static_cast<float>(pt.x), static_cast<float>(pt.y)});
+        V.row(i) << static_cast<float>(poly[i].x), static_cast<float>(poly[i].y), 0.0f;
+        V.row(i + n) = V.row(i) + dir.transpose();
     }
 
-    CgalModel model;
-    PrismBuilder builder(bottom_tris, verts_2d, direction);
-    model.mesh_.delegate(builder);
+    // Build faces
+    const int n_bottom = static_cast<int>(bottom_tris.size());
+    const int n_side = 2 * static_cast<int>(n);
+    Eigen::MatrixXi F(2 * n_bottom + n_side, 3);
+    int f = 0;
 
-    if (!model.mesh_.is_valid() || !model.mesh_.is_closed())
+    // Bottom face (reversed winding)
+    for (const auto& tri : bottom_tris)
     {
-        throw RuntimeError("Invalid or open polyhedron");
+        F.row(f++) << tri[0], tri[2], tri[1];
     }
 
-    return model;
+    // Top face
+    for (const auto& tri : bottom_tris)
+    {
+        F.row(f++) << tri[0] + n, tri[1] + n, tri[2] + n;
+    }
+
+    // Side faces
+    for (size_t i = 0; i < n; ++i)
+    {
+        size_t j = (i + 1) % n;
+        int v0 = static_cast<int>(i);
+        int v1 = static_cast<int>(j);
+        int v2 = v1 + static_cast<int>(n);
+        int v3 = v0 + static_cast<int>(n);
+
+        F.row(f++) << v0, v1, v2;
+        F.row(f++) << v0, v2, v3;
+    }
+
+    // Create IglModel and convert to CgalModel
+    IglModel igl_model(V, F.topRows(f), false);
+    auto [v, fa] = igl_model.TriangleMesh();
+    return CgalModel(v, fa);
 }
 
 CgalModel CgalModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& direction)
@@ -661,7 +760,41 @@ CgalModel CgalModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
         bottom_tris.push_back(idx);
     }
 
-    std::vector<std::array<int, 2>> side_edges;
+    // ========== 4. 构建 3D 顶点 ==========
+    const Eigen::Vector3f dir(direction.x(), direction.y(), direction.z());
+    Eigen::MatrixXf V(2 * n, 3);
+    for (int i = 0; i < n; ++i)
+    {
+        V.row(i) << unique_verts[i].x(), unique_verts[i].y(), 0.0f;
+        V.row(i + n) = V.row(i) + dir.transpose();
+    }
+
+    // ========== 5. 构建面 ==========
+    const int n_bottom = static_cast<int>(bottom_tris.size());
+
+    // 侧面：基于原始 paths 的每条边
+    int n_side_tris = 0;
+    for (const auto& path : paths)
+    {
+        n_side_tris += 2 * static_cast<int>(path.size());
+    }
+
+    Eigen::MatrixXi F(2 * n_bottom + n_side_tris, 3);
+    int f = 0;
+
+    // 底面：法向朝下（-Z），反转 winding
+    for (const auto& tri : bottom_tris)
+    {
+        F.row(f++) << tri[0], tri[2], tri[1];
+    }
+
+    // 顶面：法向朝上（+Z），保持 CCW winding
+    for (const auto& tri : bottom_tris)
+    {
+        F.row(f++) << tri[0] + n, tri[1] + n, tri[2] + n;
+    }
+
+    // 侧面：基于原始 paths 的边
     auto findVertIdx = [&](const Clipper2Lib::PointD& p) -> int
     {
         for (int i = 0; i < n; ++i)
@@ -681,20 +814,26 @@ CgalModel CgalModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
         for (size_t i = 0; i < m; ++i)
         {
             size_t j = (i + 1) % m;
-            side_edges.push_back({findVertIdx(path[i]), findVertIdx(path[j])});
+            int v0 = findVertIdx(path[i]);
+            int v1 = findVertIdx(path[j]);
+            int v2 = v1 + n;
+            int v3 = v0 + n;
+
+            F.row(f++) << v0, v1, v2;
+            F.row(f++) << v0, v2, v3;
         }
     }
 
-    CgalModel model;
-    MultiPathPrismBuilder builder(bottom_tris, side_edges, unique_verts, direction);
-    model.mesh_.delegate(builder);
-
-    if (!model.mesh_.is_valid() || !model.mesh_.is_closed())
+    // Create IglModel and convert to CgalModel
+    IglModel igl_model(V, F.topRows(f), false);
+    auto [v, fa] = igl_model.TriangleMesh();
+    
+    if (v.rows() == 0 || fa.rows() == 0)
     {
-        throw RuntimeError("Invalid or open polyhedron");
+        throw RuntimeError("IglModel TriangleMesh returned empty result for multi-path");
     }
-
-    return model;
+    
+    return CgalModel(v, fa);
 }
 }  // namespace HsBa::Slicer
 
