@@ -55,7 +55,8 @@ BOOST_AUTO_TEST_CASE(create_prime_single_polygon)
     triangle.push_back({1.0, 0.0});
     triangle.push_back({0.5, 1.0});
 
-    try {
+    try
+    {
         // Extrude along Z axis with height 2.0
         auto prism = CgalModel::CreatePrime(triangle, Eigen::Vector3f{0.0f, 0.0f, 2.0f});
 
@@ -66,7 +67,7 @@ BOOST_AUTO_TEST_CASE(create_prime_single_polygon)
 
         // Check volume
         float vol = prism.Volume();
-        
+
         // Just verify it's positive and reasonable
         BOOST_CHECK(vol > 0.0f);
         BOOST_CHECK(vol < 3.0f);
@@ -76,14 +77,16 @@ BOOST_AUTO_TEST_CASE(create_prime_single_polygon)
         prism.BoundingBox(mn, mx);
         BOOST_CHECK_CLOSE(mn.z(), 0.0f, 0.01);
         BOOST_CHECK_CLOSE(mx.z(), 2.0f, 0.01);
-    } catch (const std::exception& e) {
+    }
+    catch (const std::exception& e)
+    {
         std::cout << "Exception caught: " << e.what() << std::endl;
         BOOST_FAIL("CreatePrime failed for simple triangle");
     }
 }
 
 
-// use cgal 
+// use cgal
 BOOST_AUTO_TEST_CASE(create_prime_polygon_with_hole)
 {
     // Outer square
@@ -104,7 +107,8 @@ BOOST_AUTO_TEST_CASE(create_prime_polygon_with_hole)
     paths.push_back(outer);
     paths.push_back(hole);
 
-    try {
+    try
+    {
         // Extrude with height 1.5
         auto prism = CgalModel::CreatePrime(paths, Eigen::Vector3f{0.0f, 0.0f, 1.5f});
 
@@ -115,11 +119,13 @@ BOOST_AUTO_TEST_CASE(create_prime_polygon_with_hole)
 
         // Volume calculation for polygon with holes
         float vol = prism.Volume();
-        
+
         // Just verify it's positive and reasonable
         BOOST_CHECK(vol > 0.0f);
         BOOST_CHECK(vol < 10.0f);  // Allow wide margin
-    } catch (const std::exception& e) {
+    }
+    catch (const std::exception& e)
+    {
         std::cout << "Exception in create_prime_polygon_with_hole: " << e.what() << std::endl;
         BOOST_FAIL("CreatePrime failed for polygon with hole");
     }
@@ -146,7 +152,7 @@ BOOST_AUTO_TEST_CASE(create_prime_complex_polygon)
 
     // L-shape area = 2*1 + 1*1 = 3.0, volume = 3.0 * 3.0 = 9.0
     float vol = prism.Volume();
-    
+
     // The actual volume may differ due to triangulation
     // Just verify it's positive and reasonable
     BOOST_CHECK(vol > 0.0f);

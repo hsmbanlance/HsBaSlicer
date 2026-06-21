@@ -313,6 +313,7 @@ add_subdirectory("convert")
 add_subdirectory("LibHsBaSlicer")
 add_subdirectory("DllHsBaSlicer")
 add_subdirectory ("HsBaSlicer")
+add_subdirectory("version")
 
 #test
 option(HSBA_SLICER_USE_TESTS "use tests" ON)

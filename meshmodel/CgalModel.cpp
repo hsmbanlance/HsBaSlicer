@@ -16,10 +16,10 @@
 #include <igl/copyleft/cgal/mesh_to_polyhedron.h>
 #include <igl/copyleft/cgal/polyhedron_to_mesh.h>
 
+#include "IglModel.hpp"
 #include "base/ModelFormat.hpp"
 #include "base/encoding_convert.hpp"
 #include "base/error.hpp"
-#include "IglModel.hpp"
 
 
 namespace HsBa::Slicer
@@ -34,24 +34,25 @@ CgalModel::CgalModel(const Eigen::MatrixXf& v, const Eigen::MatrixXi& f)
     {
         throw RuntimeError("Empty mesh provided to CgalModel constructor");
     }
-    
+
     // Try direct conversion first
     bool success = igl::copyleft::cgal::mesh_to_polyhedron(v, f, mesh_);
-    
+
     if (!success)
     {
         // Try to repair the mesh using CGAL's Polygon Mesh Processing
-        try {
+        try
+        {
             // Step 1: Create a polygon soup from the input mesh
             std::vector<Point_3> points;
             std::vector<std::vector<std::size_t>> polygons;
-            
+
             // Convert vertices
             for (int i = 0; i < v.rows(); ++i)
             {
                 points.emplace_back(v(i, 0), v(i, 1), v(i, 2));
             }
-            
+
             // Convert faces
             for (int i = 0; i < f.rows(); ++i)
             {
@@ -62,35 +63,43 @@ CgalModel::CgalModel(const Eigen::MatrixXf& v, const Eigen::MatrixXi& f)
                 }
                 polygons.push_back(std::move(face));
             }
-            
+
             // Step 2: Orient the polygon soup consistently
             CGAL::Polygon_mesh_processing::orient_polygon_soup(points, polygons);
-            
+
             // Step 3: Merge duplicate vertices and build a proper mesh
-            try {
-                CGAL::Polygon_mesh_processing::polygon_soup_to_polygon_mesh(
-                    points, polygons, mesh_);
+            try
+            {
+                CGAL::Polygon_mesh_processing::polygon_soup_to_polygon_mesh(points, polygons, mesh_);
                 success = true;  // If no exception thrown, assume success
-                
+
                 // Additional validation and fix face orientation if needed
-                if (mesh_.is_valid()) {
+                if (mesh_.is_valid())
+                {
                     // Check volume sign and flip faces if needed
                     double vol = CGAL::Polygon_mesh_processing::volume(mesh_);
-                    if (vol < 0.0) {
+                    if (vol < 0.0)
+                    {
                         CGAL::Polygon_mesh_processing::reverse_face_orientations(mesh_);
                     }
-                } else {
+                }
+                else
+                {
                     success = false;
                 }
-            } catch (const std::exception& e) {
+            }
+            catch (const std::exception& e)
+            {
                 // CGAL operations may throw std::exception or derived types
                 success = false;
             }
-        } catch (const std::exception& e) {
+        }
+        catch (const std::exception& e)
+        {
             // Outer exception handler for polygon soup construction
             success = false;
         }
-        
+
         if (!success)
         {
             throw RuntimeError("mesh_to_polyhedron conversion failed even after repair attempts");
@@ -652,7 +661,7 @@ CgalModel CgalModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& di
 
     // Build using IglModel first, then convert to CgalModel
     const Eigen::Vector3f dir(direction.x(), direction.y(), direction.z());
-    
+
     // Build vertices
     Eigen::MatrixXf V(2 * n, 3);
     for (size_t i = 0; i < n; ++i)
@@ -827,12 +836,12 @@ CgalModel CgalModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
     // Create IglModel and convert to CgalModel
     IglModel igl_model(V, F.topRows(f), false);
     auto [v, fa] = igl_model.TriangleMesh();
-    
+
     if (v.rows() == 0 || fa.rows() == 0)
     {
         throw RuntimeError("IglModel TriangleMesh returned empty result for multi-path");
     }
-    
+
     return CgalModel(v, fa);
 }
 }  // namespace HsBa::Slicer

@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(create_prime_polygon_with_hole)
     // The actual volume may vary based on triangulation and boolean operations
     float vol = prism.Volume();
     BOOST_CHECK(vol > 0.0f);  // Just verify it's positive
-    
+
     // Expected: if hole is properly handled, volume should be between 3.0 and 6.0
     BOOST_CHECK(vol >= 3.0f && vol <= 6.0f);
 

@@ -15,6 +15,8 @@ jobs:
         run: |
           brew update
           brew install cmake ninja python autoconf automake libtool autoconf-archive
+          # Install PowerShell for version generation script
+          brew install --cask powershell
 
       - name: Clone vcpkg and bootstrap
         shell: bash

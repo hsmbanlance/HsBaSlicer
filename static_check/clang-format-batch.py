@@ -142,6 +142,9 @@ def collect_cpp_files(repo_root: Path, parser: GitIgnoreParser) -> List[Path]:
             #ignore encoding_convert.cpp
             if rel_file.name == "encoding_convert.cpp":
                 continue
+
+            if rel_file.name == "version.cpp":
+                continue
             
             files.append(rel_file)
 

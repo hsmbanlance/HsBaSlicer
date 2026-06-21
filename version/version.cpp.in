@@ -1,0 +1,25 @@
+#include "version.hpp"
+
+namespace HsBa::Slicer::Version
+{
+VersionInfo GetVersionInfo()
+{
+    VersionInfo info;
+    info.librariesName = "HsBaSlicer";
+    info.license = "AGPL-3.0-or-later";
+    info.version = "1.0.0";
+    info.buildType = "@CMAKE_BUILD_TYPE@";
+    info.buildPlatform = "@PLATFORM_NAME@";
+    info.configureTime = "@CONFIGURE_TIME@";
+    info.vcpkgTargetTriplet = "@VCPKG_TARGET_TRIPLET@";
+    
+    // Manually add third-party library information from vcpkg.json
+    // Example:
+    // info.thirdLibraries.push_back({"Boost", "BSL-1.0", "https://www.boost.org/"});
+    // info.thirdLibraries.push_back({"CGAL", "GPL-3.0-or-later", "https://www.cgal.org/"});
+    // info.thirdLibraries.push_back({"Eigen3", "MPL-2.0", "https://eigen.tuxfamily.org/"});
+    info.thirdLibraries.clear();
+    
+    return info;
+}
+}  // namespace HsBa::Slicer::Version

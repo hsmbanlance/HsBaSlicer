@@ -94,7 +94,7 @@ BOOST_AUTO_TEST_CASE(create_prime_single_polygon)
 
     // Check volume: triangle area = 0.5, height = 2.0, volume = 1.0
     float vol = prism.Volume();
-    
+
     // The actual volume may differ due to triangulation and face orientation
     // Just verify it's positive and reasonable
     BOOST_CHECK(vol > 0.0f);
@@ -142,7 +142,7 @@ BOOST_AUTO_TEST_CASE(create_prime_polygon_with_hole)
     // Volume calculation for polygon with holes
     // The actual volume depends on how Clipper2 handles the triangulation
     float vol = prism.Volume();
-    
+
     // Just verify it's positive and reasonable
     // Expected range: if hole is properly subtracted, should be around 4.5
     // But may vary based on triangulation
@@ -171,7 +171,7 @@ BOOST_AUTO_TEST_CASE(create_prime_complex_polygon)
 
     // L-shape area = 2*1 + 1*1 = 3.0, volume = 3.0 * 3.0 = 9.0
     float vol = prism.Volume();
-    
+
     // The actual volume may differ due to triangulation
     // Just verify it's positive and reasonable
     BOOST_CHECK(vol > 0.0f);

@@ -17,6 +17,12 @@ jobs:
           sudo apt-get install -y openjdk-11-jdk wget unzip
           sudo apt-get install -y ninja-build
           sudo apt-get install -y autoconf autoconf-archive automake libtool
+          # Install PowerShell for version generation script
+          sudo apt-get install -y wget apt-transport-https software-properties-common
+          wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb
+          sudo dpkg -i packages-microsoft-prod.deb
+          sudo apt-get update
+          sudo apt-get install -y powershell
 
       - name: Install Android command line tools and SDK packages
         shell: bash
