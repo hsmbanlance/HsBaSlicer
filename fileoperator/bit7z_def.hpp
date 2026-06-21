@@ -6,6 +6,7 @@
 namespace HsBa::Slicer
 {
 #ifdef HSBA_USE_BIT7Z
+/** @brief Default path to 7z DLL/shared library (platform-dependent). */
 #if _WIN32
 constexpr Utils::TemplateString HSBA_7Z_DLL = "C:/Program Files/7-Zip/7z.dll";
 #elif __APPLE__
@@ -16,6 +17,7 @@ constexpr Utils::TemplateString HSBA_7Z_DLL = "/usr/lib/7z.so";
 constexpr Utils::TemplateString HSBA_7Z_DLL = "";
 #endif
 
+/** @brief Default path to 7za DLL/shared library (platform-dependent). */
 #if _WIN32
 constexpr Utils::TemplateString HSBA_7ZA_DLL = "C:/Program Files/7-Zip/7za.dll";
 #elif __APPLE__

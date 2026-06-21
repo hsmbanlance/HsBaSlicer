@@ -17,6 +17,12 @@ namespace HsBa::Slicer
 {
 #ifdef HSBA_USE_BIT7Z
 
+/**
+ * @brief Bit7z-based archive extractor implementation.
+ *
+ * This class provides archive extraction functionality using the Bit7z library,
+ * supporting various formats (ZIP, 7Z, RAR, etc.) with password protection and caching.
+ */
 class Bit7ZUnzipper : public IUnzipper<Bit7ZUnzipper>,
                       public std::enable_shared_from_this<Bit7ZUnzipper>,
                       public Utils::EventSource<Bit7ZUnzipper, void, std::string_view, std::string_view>
@@ -26,12 +32,23 @@ class Bit7ZUnzipper : public IUnzipper<Bit7ZUnzipper>,
     };
 
 public:
+    /**
+     * @brief Factory method to create a Bit7ZUnzipper instance.
+     * @param dll_path Path to the 7z DLL/shared library.
+     * @return Shared pointer to created instance.
+     */
     static std::shared_ptr<Bit7ZUnzipper> Create(const std::string& dll_path)
     {
         return std::make_shared<Bit7ZUnzipper>(Private{}, dll_path);
     }
-    inline static constexpr size_t MB_SIZE = 1024 * 1024;
-    inline static constexpr size_t GB_SIZE = 1024 * 1024 * 1024;
+
+    inline static constexpr size_t MB_SIZE = 1024 * 1024;       ///< 1 MB in bytes
+    inline static constexpr size_t GB_SIZE = 1024 * 1024 * 1024;///< 1 GB in bytes
+
+    /**
+     * @brief Set password for encrypted archives.
+     * @param password Archive password.
+     */
     void SetPassword(std::string_view password)
     {
         password_ = password;
@@ -40,9 +57,21 @@ public:
             archiver_->setPassword(password_);
         }
     }
+
+    /**
+     * @brief Set maximum memory usage for extraction.
+     * @param size Maximum memory size in bytes (default: 1GB).
+     */
     inline static void SetMaxMemSize(size_t size = GB_SIZE) { max_mem_size_ = size; }
+
     ~Bit7ZUnzipper();
     friend class IUnzipper<Bit7ZUnzipper>;
+
+    /**
+     * @brief Construct a new Bit7ZUnzipper.
+     * @param Private Tag parameter for controlled construction.
+     * @param dll_path Path to the 7z DLL/shared library (default: HSBA_7Z_DLL).
+     */
     Bit7ZUnzipper(Private, const std::string& dll_path = HSBA_7Z_DLL) : dll_path_{dll_path} {}
 
 private:

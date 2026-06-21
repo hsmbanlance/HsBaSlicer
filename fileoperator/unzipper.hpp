@@ -12,6 +12,12 @@
 
 namespace HsBa::Slicer
 {
+/**
+ * @brief Miniz-based archive extractor implementation.
+ *
+ * This class provides ZIP archive extraction using the miniz library,
+ * with support for memory caching and temporary file extraction.
+ */
 class Unzipper : public IUnzipper<Unzipper>,
                  public std::enable_shared_from_this<Unzipper>,
                  public Utils::EventSource<Unzipper, void, std::string_view, std::string_view>
@@ -21,13 +27,28 @@ class Unzipper : public IUnzipper<Unzipper>,
     };
 
 public:
+    /**
+     * @brief Factory method to create an Unzipper instance.
+     * @return Shared pointer to created instance.
+     */
     static std::shared_ptr<Unzipper> Create() { return std::make_shared<Unzipper>(Private{}); }
 
-    inline static constexpr size_t MB_SIZE = 1024 * 1024;         // 1MB大小
-    inline static constexpr size_t GB_SIZE = 1024 * 1024 * 1024;  // 1GB大小
+    inline static constexpr size_t MB_SIZE = 1024 * 1024;         ///< 1 MB in bytes
+    inline static constexpr size_t GB_SIZE = 1024 * 1024 * 1024;  ///< 1 GB in bytes
+
     ~Unzipper();
     friend class IUnzipper<Unzipper>;
+
+    /**
+     * @brief Set maximum memory usage for extraction.
+     * @param size Maximum memory size in bytes (default: 1GB).
+     */
     inline static void SetMaxMemSize(size_t size = GB_SIZE) { max_mem_size_ = size; }
+
+    /**
+     * @brief Construct a new Unzipper.
+     * @param Private Tag parameter for controlled construction.
+     */
     Unzipper(Private) {}
 
 private:
