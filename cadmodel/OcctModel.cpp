@@ -1,10 +1,10 @@
 ﻿#include "OcctModel.hpp"
 
+#include <fstream>
 #include <BRepBndLib.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
 #include <Standard_Failure.hxx>
-#include <TopTools_ListOfShape.hxx>
 #include <TopoDS.hxx>
 #include <gp_Quaternion.hxx>
 #include <gp_Trsf.hxx>
@@ -23,6 +23,9 @@
 #include <STEPControl_Reader.hxx>
 #include <STEPControl_Writer.hxx>
 #include <StepData_ReadWriteModule.hxx>
+#include <VrmlAPI.hxx>
+#include <VrmlData_Scene.hxx>
+#include <VrmlData_ShapeConvert.hxx>
 
 #include <BRepGProp.hxx>
 #include <GProp_GProps.hxx>
@@ -48,6 +51,7 @@
 #include "base/error.hpp"
 #include "meshmodel/IglModel.hpp"
 #include <BRepAdaptor_Surface.hxx>
+#include "OcctTypeAliases.hpp"
 
 namespace HsBa::Slicer
 {
@@ -97,6 +101,45 @@ void OcctModel::ReadIGES(const std::string& path)
         builder.Add(shape_, reader.Shape(i));
     }
 }
+
+void OcctModel::ReadVRML(const std::string& path)
+{
+    try
+    {
+        // VRML读取需要使用VrmlData_Scene
+        VrmlData_Scene scene;
+        
+        // 使用operator<<从文件流读取VRML
+        std::ifstream file(path, std::ios::in);
+        if (!file.is_open())
+        {
+            throw IOError("Cannot open VRML file");
+        }
+        scene << file;
+        file.close();
+        
+        // 直接将Scene转换为Shape（通过operator TopoDS_Shape()）
+        shape_ = static_cast<TopoDS_Shape>(scene);
+    }
+    catch (const Standard_Failure& e)
+    {
+        throw IOError(std::string("Read VRML File Error: ") + e.what());
+    }
+}
+
+void OcctModel::ReadBRep(const std::string& path)
+{
+    BRep_Builder builder;
+    shape_.Nullify();
+    try
+    {
+        BRepTools::Read(shape_, path.c_str(), builder);
+    }
+    catch (const Standard_Failure& e)
+    {
+        throw IOError(std::string("Read BRep File Error: ") + e.what());
+    }
+}
 bool OcctModel::WriteStep(const std::string& path) const
 {
     STEPControl_Writer writer;
@@ -113,6 +156,32 @@ bool OcctModel::WriteIGES(const std::string& path) const
     IGESControl_Writer writer;
     writer.AddShape(shape_);
     return writer.Write(path.c_str());
+}
+
+bool OcctModel::WriteVRML(const std::string& path) const
+{
+    try
+    {
+        VrmlAPI::Write(shape_, path.c_str());
+        return true;
+    }
+    catch (const Standard_Failure& e)
+    {
+        throw IOError(std::string("Write VRML File Error: ") + e.what());
+    }
+}
+
+bool OcctModel::WriteBRep(const std::string& path) const
+{
+    try
+    {
+        BRepTools::Write(shape_, path.c_str());
+        return true;
+    }
+    catch (const Standard_Failure& e)
+    {
+        throw IOError(std::string("Write BRep File Error: ") + e.what());
+    }
 }
 
 void OcctModel::AddShape(const OcctModel& o)
@@ -149,6 +218,12 @@ bool OcctModel::Load(std::string_view fileName)
     case HsBa::Slicer::ModelFormat::IGES:
         ReadIGES(path);
         break;
+    case HsBa::Slicer::ModelFormat::VRML:
+        ReadVRML(path);
+        break;
+    case HsBa::Slicer::ModelFormat::BREP:
+        ReadBRep(path);
+        break;
     default:
         throw NotSupportedError("Unsupported Model Format");
         break;
@@ -158,7 +233,7 @@ bool OcctModel::Load(std::string_view fileName)
 bool OcctModel::Save(std::string_view fileName, const ModelFormat format) const
 {
     auto path = utf8_to_local(std::string{fileName});
-    Standard_Boolean succeed = false;
+    OcctTypes::Boolean succeed = false;
     switch (format)
     {
     case HsBa::Slicer::ModelFormat::STEP:
@@ -166,6 +241,12 @@ bool OcctModel::Save(std::string_view fileName, const ModelFormat format) const
         break;
     case HsBa::Slicer::ModelFormat::IGES:
         succeed = WriteIGES(path);
+        break;
+    case HsBa::Slicer::ModelFormat::VRML:
+        succeed = WriteVRML(path);
+        break;
+    case HsBa::Slicer::ModelFormat::BREP:
+        succeed = WriteBRep(path);
         break;
     default:
         if (IsMeshFormat(format))
@@ -279,7 +360,7 @@ std::pair<Eigen::MatrixXf, Eigen::MatrixXi> OcctModel::TriangleMesh() const
             continue;
         }
         gp_Trsf aTrsf = aLoc.Transformation();
-        for (Standard_Integer aNodeIter = 1; aNodeIter <= aTriangulation->NbNodes(); ++aNodeIter)
+        for (OcctTypes::Integer aNodeIter = 1; aNodeIter <= aTriangulation->NbNodes(); ++aNodeIter)
         {
             gp_Pnt aPnt = aTriangulation->Node(aNodeIter);
             aPnt.Transform(aTrsf);
@@ -287,11 +368,11 @@ std::pair<Eigen::MatrixXf, Eigen::MatrixXi> OcctModel::TriangleMesh() const
                 {static_cast<float>(aPnt.X()), static_cast<float>(aPnt.Y()), static_cast<float>(aPnt.Z())});
         }
         const TopAbs_Orientation anOrientation = anExpSF.Current().Orientation();
-        for (Standard_Integer aTriIter = 1; aTriIter <= aTriangulation->NbTriangles(); ++aTriIter)
+        for (OcctTypes::Integer aTriIter = 1; aTriIter <= aTriangulation->NbTriangles(); ++aTriIter)
         {
             Poly_Triangle aTri = aTriangulation->Triangle(aTriIter);
 
-            Standard_Integer anId[3]{0, 0, 0};
+            OcctTypes::Integer anId[3]{0, 0, 0};
             aTri.Get(anId[0], anId[1], anId[2]);
             if (anOrientation == TopAbs_REVERSED)
                 std::swap(anId[1], anId[2]);
@@ -425,12 +506,12 @@ OcctModel ThickSolid(const OcctModel& model, const std::vector<std::vector<Eigen
         double distance = distSS.Value();
         const auto& trsf_l = l.Location().Transformation();
         const auto& trsf_r = r.Location().Transformation();
-        Standard_Real trace_l = trsf_l.Value(0, 0) + trsf_l.Value(1, 1) + trsf_l.Value(2, 2);
-        Standard_Real trace_r = trsf_r.Value(0, 0) + trsf_r.Value(1, 1) + trsf_r.Value(2, 2);
+        OcctTypes::Real trace_l = trsf_l.Value(0, 0) + trsf_l.Value(1, 1) + trsf_l.Value(2, 2);
+        OcctTypes::Real trace_r = trsf_r.Value(0, 0) + trsf_r.Value(1, 1) + trsf_r.Value(2, 2);
         return distance <= tolerance && abs(trace_l - trace_r) <= tolerance;
     };
-    // add faces into TopTools_ListOfShape
-    TopTools_ListOfShape remove_shape;
+    // add faces into Collection_List<TopoDS_Shape>
+    NCollection_List<TopoDS_Shape> remove_shape;
     BRepOffsetAPI_MakeThickSolid maker;
     for (TopExp_Explorer anExpSF(model.shape_, TopAbs_FACE); anExpSF.More(); anExpSF.Next())
     {

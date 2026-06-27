@@ -1,6 +1,7 @@
 ﻿add_library(HsBaSlicerCADModel STATIC
 	OcctModel.hpp
 	OcctModel.cpp
+	OcctTypeAliases.hpp
 	UserCustomCADModel.hpp
 	UserCustomCADModel.cpp)
 

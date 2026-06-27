@@ -46,6 +46,8 @@ inline const char* ToString(ModelFormat format)
         return "STEP";
     case ModelFormat::IGES:
         return "IGES";
+    case ModelFormat::BREP:
+        return "BREP";
     case ModelFormat::SLDPRT:
         return "SLDPRT";
     case ModelFormat::CATPART:

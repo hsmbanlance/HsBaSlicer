@@ -19,11 +19,13 @@ class ExtRegexMatch
     bool MatchOFF(const std::string& ext) { return std::regex_match(ext, off_match); }
     // BRep
     const std::regex step_match{"\\.?ste?p", std::regex_constants::icase};
-    const std::regex vrml_match{"\\.?vrml", std::regex_constants::icase};
+    const std::regex vrml_match{"\\.?(vrml|wrl)", std::regex_constants::icase};
     const std::regex iges_match{"\\.?iges", std::regex_constants::icase};
+    const std::regex brep_match{"\\.?brep", std::regex_constants::icase};
     bool MatchSTEP(const std::string& ext) { return std::regex_match(ext, step_match); }
     bool MatchVRML(const std::string& ext) { return std::regex_match(ext, vrml_match); }
     bool MatchIGES(const std::string& ext) { return std::regex_match(ext, iges_match); }
+    bool MatchBRep(const std::string& ext) { return std::regex_match(ext, brep_match); }
     // csg
     const std::regex sldprt_match{"\\.?sldprt", std::regex_constants::icase};
     const std::regex catpart_match{"\\.?catpart", std::regex_constants::icase};
@@ -64,6 +66,10 @@ public:
         else if (MatchIGES(ext))
         {
             return ModelFormat::IGES;
+        }
+        else if (MatchBRep(ext))
+        {
+            return ModelFormat::BREP;
         }
         else if (MatchXYZ(ext))
         {
@@ -113,6 +119,7 @@ bool IsBrepFormat(ModelFormat format)
     case ModelFormat::VRML:
     case ModelFormat::STEP:
     case ModelFormat::IGES:
+    case ModelFormat::BREP:
         return true;
     default:
         return false;

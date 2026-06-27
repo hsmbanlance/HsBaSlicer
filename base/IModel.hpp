@@ -89,6 +89,8 @@ enum class ModelFormat : uint32_t
     STEP,
     /** @brief IGES format. */
     IGES,
+    /** @brief BRep format (OpenCASCADE native format). */
+    BREP,
     // csg
     //  SolidWorksPart,
     /** @brief SLDPRT is the file extension for SolidWorks part files. */

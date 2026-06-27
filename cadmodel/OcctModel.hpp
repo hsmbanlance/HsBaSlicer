@@ -11,6 +11,7 @@
 
 #include "2D/FloatPolygons.hpp"
 #include "base/IModel.hpp"
+#include "OcctTypeAliases.hpp"
 
 namespace HsBa::Slicer
 {
@@ -72,8 +73,12 @@ public:
 private:
     void ReadStep(const std::string& path);
     void ReadIGES(const std::string& path);
+    void ReadVRML(const std::string& path);
+    void ReadBRep(const std::string& path);
     bool WriteStep(const std::string& path) const;
     bool WriteIGES(const std::string& path) const;
+    bool WriteVRML(const std::string& path) const;
+    bool WriteBRep(const std::string& path) const;
     TopoDS_Shape shape_ = TopoDS_Shape{};
     std::string fileName_;
 };
