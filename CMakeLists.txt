@@ -3,6 +3,9 @@
 #
 cmake_minimum_required (VERSION 3.21)
 
+# All static libraries linked into shared libraries (DllHsBaSlicer.so) require -fPIC
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # b1e15efef6758eaa0beb0a8732cfa66f6a68a81d
 
 #force utf-8
@@ -226,6 +229,13 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   message("Boolean operations may be slow and cause high memory usage in Debug mode.")
 endif()
 
+# Model object pool size: 10 when CGAL is available, 1 otherwise
+if(NOT IOS AND NOT HSBA_GAME_CONSOLE)
+  add_compile_definitions(HSBA_MODEL_POOL_SIZE=10)
+else()
+  add_compile_definitions(HSBA_MODEL_POOL_SIZE=1)
+endif()
+
 #CAD_kernel
 #OpenCascade
 #disable if andoird and IOS
@@ -309,6 +319,8 @@ add_subdirectory("meshmodel")
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
   add_subdirectory("cadmodel")
 endif()
+add_subdirectory("preprocess")
+add_subdirectory("support")
 add_subdirectory("convert")
 add_subdirectory("LibHsBaSlicer")
 add_subdirectory("DllHsBaSlicer")

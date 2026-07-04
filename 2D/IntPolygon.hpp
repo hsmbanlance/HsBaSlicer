@@ -189,7 +189,6 @@ void DumpPolygons(const Polygons& ps, std::string_view filename, bool close_path
 #endif
 
 }  // namespace HsBa::Slicer
-#endif  // !HSBA_SLICER_INTPOLYGON_HPP
 
 /**
  * @brief Hash specialization for Polygon.
@@ -218,3 +217,4 @@ struct std::hash<HsBa::Slicer::Polygons>
      */
     std::size_t operator()(const HsBa::Slicer::Polygons& p) const;
 };
+#endif  // !HSBA_SLICER_INTPOLYGON_HPP

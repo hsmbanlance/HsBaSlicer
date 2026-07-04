@@ -234,7 +234,6 @@ void DumpPolygon(const PolygonD& p, std::string_view filename, bool close_path =
 void DumpPolygons(const PolygonsD& ps, std::string_view filename, bool close_path = true);
 #endif
 }  // namespace HsBa::Slicer
-#endif  // !HSBA_SLICER_FLOATPOLYGONS_HPP
 
 /**
  * @brief Hash specialization for PolygonD.
@@ -263,3 +262,5 @@ struct std::hash<HsBa::Slicer::PolygonsD>
      */
     std::size_t operator()(const HsBa::Slicer::PolygonsD& p) const;
 };
+
+#endif  // !HSBA_SLICER_FLOATPOLYGONS_HPP

@@ -263,6 +263,8 @@ set(ALL_TEST_TARGETS
   polygon_fill_test
   image_polygons_test
   static_reflect_test
+  support_test
+  model_loader_test
 )
 
 if(TARGET HsBaSlicerCADModel)
@@ -755,6 +757,66 @@ add_test(
 if(HSBA_RUN_TESTS_AFTER_BUILD)
   add_custom_command(TARGET static_reflect_test POST_BUILD
     COMMAND ${CMAKE_CTEST_COMMAND} -V -R static_reflect_test
+  )
+endif()
+
+## Support tests
+add_executable(support_test
+    "Support/support_test.cpp"
+)
+
+target_link_libraries(support_test
+    HsBaSupport
+    Boost::unit_test_framework
+    ${LUA_LIBRARIES}
+)
+
+target_compile_definitions(support_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+target_include_directories(support_test PRIVATE ${LUA_INCLUDE_DIR})
+
+enable_testing()
+add_test(
+  NAME support_test
+  COMMAND $<TARGET_FILE:support_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET support_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R support_test
+  )
+endif()
+
+## ModelLoader (preprocess) tests
+add_executable(model_loader_test
+    "Preprocess/model_loader_test.cpp"
+)
+
+target_link_libraries(model_loader_test
+    HsBaPreprocess
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(model_loader_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+# In Debug configuration, skip boolean operation tests (CGAL boolean ops are slow in Debug)
+target_compile_definitions(model_loader_test PRIVATE $<$<CONFIG:Debug>:DISABLE_BOOLEAN_OPERATIONS_TESTS>)
+
+enable_testing()
+add_test(
+  NAME model_loader_test
+  COMMAND $<TARGET_FILE:model_loader_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET model_loader_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R model_loader_test
   )
 endif()
 

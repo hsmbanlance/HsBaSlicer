@@ -90,6 +90,39 @@ public:
         return ptr;
     }
 
+    /** @brief Insert an already-constructed object into the pool.
+     * @param name The name of the object.
+     * @param ptr A shared pointer to the object to insert.
+     * @return The same shared pointer.
+     */
+    ObjectPtr insert(const std::string& name, ObjectPtr ptr)
+    {
+        std::unique_lock<std::shared_mutex> lock(mutex_);
+        if (objects_.find(name) != objects_.end())
+        {
+            throw InvalidArgumentError("Object with name '" + name + "' already exists in pool");
+        }
+        if (objects_.size() >= MaxSize)
+            CleanupInactiveObjects();
+        if (objects_.size() >= MaxSize)
+        {
+            throw RuntimeError("Pool is full (max size: " + std::to_string(MaxSize) +
+                               ") and no inactive objects available");
+        }
+        objects_.emplace(name, PooledObject{ptr});
+        return ptr;
+    }
+
+    /** @brief Remove an object from the pool by name.
+     * @param name The name of the object to remove.
+     * @return true if the object was found and removed, false otherwise.
+     */
+    bool remove(const std::string& name)
+    {
+        std::unique_lock<std::shared_mutex> lock(mutex_);
+        return objects_.erase(name) > 0;
+    }
+
     /** @brief Allocate and add an object to the pool.
      * @tparam Allocator The type of the allocator.
      * @tparam Args The types of the arguments for the object constructor.
@@ -137,11 +170,24 @@ public:
         }
         return nullptr;
     }
+
+    const ObjectPtr get(const std::string& name) const
+    {
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        auto it = objects_.find(name);
+        if (it != objects_.end())
+        {
+            return it->second.shared_ref;
+        }
+        return nullptr;
+    }
     /** @brief Get an object from the pool by name using the subscript operator.
      * @param name The name of the object to retrieve.
      * @return A shared pointer to the object if found, or nullptr if not found.
      */
     ObjectPtr operator[](const std::string& name) { return get(name); }
+
+    const ObjectPtr operator[](const std::string& name) const { return get(name); }
 
     /** @brief Check if the pool contains an object with the specified name.
      * @param name The name of the object to check for.

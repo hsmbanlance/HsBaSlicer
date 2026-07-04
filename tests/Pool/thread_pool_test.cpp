@@ -39,6 +39,9 @@ BOOST_AUTO_TEST_CASE(thread_pool_normal)
 #ifdef HSBA_ENABLE_THREAD_POOL_COROUTINE
 BOOST_AUTO_TEST_CASE(thread_pool_coroutine)
 {
+    ThreadPool pool(2);
+    ThreadPoolExecutor::SetDefaultPool(&pool);
+
     auto task = []() -> Task<int, ThreadPoolExecutor>
     {
         co_await[]()->Task<void, ThreadPoolExecutor>
@@ -50,6 +53,8 @@ BOOST_AUTO_TEST_CASE(thread_pool_coroutine)
     }();
 
     BOOST_CHECK_EQUAL(task.get_result(), 123);
+    pool.WaitAll();
+    ThreadPoolExecutor::SetDefaultPool(nullptr);
 }
 
 BOOST_AUTO_TEST_CASE(thread_pool_mixed)

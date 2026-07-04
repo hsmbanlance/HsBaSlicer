@@ -3,12 +3,28 @@
     pch_headers.hpp
     Slice/mesh_slice.hpp
     Slice/mesh_slice.cpp
+    Preprocess/model_preprocess.hpp
+    Preprocess/model_preprocess.cpp
+    Support/fdm_support.hpp
+    Support/fdm_support.cpp
+    Fill/polygon_fill.hpp
+    Fill/polygon_fill.cpp
+    Path/path_generator.hpp
+    Path/path_generator.cpp
     )
 else()
     add_library(LibHsBaSlicer SHARED 
     pch_headers.hpp
     Slice/mesh_slice.hpp
     Slice/mesh_slice.cpp
+    Preprocess/model_preprocess.hpp
+    Preprocess/model_preprocess.cpp
+    Support/fdm_support.hpp
+    Support/fdm_support.cpp
+    Fill/polygon_fill.hpp
+    Fill/polygon_fill.cpp
+    Path/path_generator.hpp
+    Path/path_generator.cpp
     )
     # Define the export macro for Windows
     target_compile_definitions(LibHsBaSlicer PRIVATE HSBA_SLICER_EXPORTS)
@@ -22,9 +38,16 @@ target_link_libraries(LibHsBaSlicer PRIVATE
 HsBaSlicerBase
 HsBaSlicerUtils
 HsBaSlicerMesh
-HsBaSlicerCADModel
 HsBaSlicer2D
+HsBaPreprocess
+HsBaSupport
+HsBaPaths
 )
+
+# OCCT / CAD kernel is not available on Android, iOS, or game consoles
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
+    target_link_libraries(LibHsBaSlicer PRIVATE HsBaSlicerCADModel)
+endif()
 
 target_precompile_headers(LibHsBaSlicer PRIVATE pch_headers.hpp)
 

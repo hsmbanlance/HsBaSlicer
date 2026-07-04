@@ -2,7 +2,13 @@
 #ifndef HSBA_SLICER_MESH_SLICE_HPP
 #define HSBA_SLICER_MESH_SLICE_HPP
 
+#include <string>
+
 #include "../export.h"
+#include "2D/FloatPolygons.hpp"
+#include "2D/IntPolygon.hpp"
+#include "base/IModel.hpp"
+#include "meshmodel/FullTopoModel.hpp"
 
 namespace HsBa::Slicer
 {
