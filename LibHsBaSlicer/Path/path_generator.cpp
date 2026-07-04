@@ -4,15 +4,16 @@
 
 namespace HsBa::Slicer
 {
-HSBA_SLICER_LIB_API std::vector<GPoint> PolygonsToGPoints(const PolygonsD& polys, float z,
-                                                           const FdmPathConfig& config, bool is_extrude)
+HSBA_SLICER_LIB_API std::vector<GPoint> PolygonsToGPoints(const PolygonsD& polys, float z, const FdmPathConfig& config,
+                                                          bool is_extrude)
 {
     std::vector<GPoint> points;
     points.reserve(polys.size() * 4);  // 预估
 
     for (const auto& poly : polys)
     {
-        if (poly.empty()) continue;
+        if (poly.empty())
+            continue;
 
         // 第一个点：空走到起点
         GPoint travel;
@@ -51,7 +52,7 @@ HSBA_SLICER_LIB_API std::vector<GPoint> PolygonsToGPoints(const PolygonsD& polys
 }
 
 HSBA_SLICER_LIB_API std::unique_ptr<PointsPath> GenerateGCodePath(const std::vector<LayerPathData>& layer_data,
-                                                                   const FdmPathConfig& config)
+                                                                  const FdmPathConfig& config)
 {
     auto path = std::make_unique<PointsPath>(config.units);
 

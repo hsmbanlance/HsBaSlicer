@@ -58,9 +58,9 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
  */
 enum class FillMode
 {
-    Line,           ///< Parallel line fill
-    SimpleZigzag,   ///< Simple zigzag fill
-    Zigzag          ///< Advanced zigzag fill
+    Line,          ///< Parallel line fill
+    SimpleZigzag,  ///< Simple zigzag fill
+    Zigzag         ///< Advanced zigzag fill
 };
 
 /**

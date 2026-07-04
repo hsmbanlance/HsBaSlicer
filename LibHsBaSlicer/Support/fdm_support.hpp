@@ -19,7 +19,7 @@ namespace HsBa::Slicer
  * @return 支撑截面多边形。
  */
 HSBA_SLICER_LIB_API PolygonsD GenerateFdmSupport(const PolygonsD& current_layer, const PolygonsD& prev_layer,
-                                                  float layer_height, const Support::FdmSupportConfig& config);
+                                                 float layer_height, const Support::FdmSupportConfig& config);
 
 /**
  * @brief 生成所有层的FDM支撑。
@@ -28,7 +28,7 @@ HSBA_SLICER_LIB_API PolygonsD GenerateFdmSupport(const PolygonsD& current_layer,
  * @return 每层的支撑截面多边形。
  */
 HSBA_SLICER_LIB_API std::vector<PolygonsD> GenerateAllFdmSupport(const std::vector<PolygonsD>& layers,
-                                                                  const Support::FdmSupportConfig& config);
+                                                                 const Support::FdmSupportConfig& config);
 
 }  // namespace HsBa::Slicer
 

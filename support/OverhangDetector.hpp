@@ -34,8 +34,7 @@ public:
      * @param config Support configuration (uses layer_height and overhang_angle_threshold).
      * @return Polygons representing overhang regions.
      */
-    static PolygonsD Detect(const PolygonsD& current_layer, const PolygonsD& prev_layer,
-                            const SupportConfig& config);
+    static PolygonsD Detect(const PolygonsD& current_layer, const PolygonsD& prev_layer, const SupportConfig& config);
 
     /**
      * @brief Compute the maximum horizontal bridge distance for a given angle and layer height.

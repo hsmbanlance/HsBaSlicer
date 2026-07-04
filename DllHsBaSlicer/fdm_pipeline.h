@@ -14,9 +14,9 @@ extern "C"
      */
     typedef enum HsBaFillMode
     {
-        HSBA_FILL_LINE = 0,          ///< 平行线填充
-        HSBA_FILL_SIMPLE_ZIGZAG = 1, ///< 简单锯齿填充
-        HSBA_FILL_ZIGZAG = 2         ///< 高级锯齿填充
+        HSBA_FILL_LINE = 0,           ///< 平行线填充
+        HSBA_FILL_SIMPLE_ZIGZAG = 1,  ///< 简单锯齿填充
+        HSBA_FILL_ZIGZAG = 2          ///< 高级锯齿填充
     } HsBaFillMode_t;
 
     /**
@@ -24,9 +24,9 @@ extern "C"
      */
     typedef enum HsBaSupportPattern
     {
-        HSBA_SUPPORT_PLANE = 0,    ///< 柱状支撑
-        HSBA_SUPPORT_TREE = 1,     ///< 树状支撑
-        HSBA_SUPPORT_HONEYCOMB = 2 ///< 蜂窝支撑
+        HSBA_SUPPORT_PLANE = 0,     ///< 柱状支撑
+        HSBA_SUPPORT_TREE = 1,      ///< 树状支撑
+        HSBA_SUPPORT_HONEYCOMB = 2  ///< 蜂窝支撑
     } HsBaSupportPattern_t;
 
     /**
@@ -35,37 +35,37 @@ extern "C"
     typedef struct HsBaFdmPipelineConfig
     {
         /* 模型配置 */
-        const char* model_name;       ///< 模型名称
-        const char* model_path;       ///< 模型文件路径
+        const char* model_name;  ///< 模型名称
+        const char* model_path;  ///< 模型文件路径
 
         /* 切片配置 */
-        float layer_height;           ///< 层高（mm），默认0.2
-        float first_layer_height;     ///< 首层层高（mm），默认0.25
+        float layer_height;        ///< 层高（mm），默认0.2
+        float first_layer_height;  ///< 首层层高（mm），默认0.25
 
         /* 填充配置 */
-        double fill_spacing;          ///< 填充间距（mm），默认0.4
-        HsBaFillMode_t fill_mode;     ///< 填充模式，默认HSBA_FILL_ZIGZAG
-        double fill_angle;            ///< 填充角度（度），默认45.0
-        int wall_count;               ///< 壁厚圈数，默认3
+        double fill_spacing;       ///< 填充间距（mm），默认0.4
+        HsBaFillMode_t fill_mode;  ///< 填充模式，默认HSBA_FILL_ZIGZAG
+        double fill_angle;         ///< 填充角度（度），默认45.0
+        int wall_count;            ///< 壁厚圈数，默认3
 
         /* 支撑配置 */
-        int enable_support;           ///< 是否启用支撑（0=false, 1=true），默认1
-        float overhang_angle;         ///< 悬垂角度阈值（度），默认45.0
-        float support_gap;            ///< 支撑与模型间距（mm），默认0.5
-        float support_diameter;       ///< 支撑柱直径（mm），默认2.0
-        float support_density;        ///< 支撑填充密度[0,1]，默认0.3
+        int enable_support;                    ///< 是否启用支撑（0=false, 1=true），默认1
+        float overhang_angle;                  ///< 悬垂角度阈值（度），默认45.0
+        float support_gap;                     ///< 支撑与模型间距（mm），默认0.5
+        float support_diameter;                ///< 支撑柱直径（mm），默认2.0
+        float support_density;                 ///< 支撑填充密度[0,1]，默认0.3
         HsBaSupportPattern_t support_pattern;  ///< 支撑模式，默认HSBA_SUPPORT_PLANE
-        int interface_layers;         ///< 接口层数，默认2
-        float interface_density;      ///< 接口层密度[0,1]，默认0.5
+        int interface_layers;                  ///< 接口层数，默认2
+        float interface_density;               ///< 接口层密度[0,1]，默认0.5
 
         /* 路径配置 */
-        float line_width;             ///< 线宽（mm），默认0.4
-        float print_speed;            ///< 打印速度（mm/s），默认50.0
-        float travel_speed;           ///< 空走速度（mm/s），默认100.0
-        float extrusion_multiplier;   ///< 挤出量倍率，默认1.0
+        float line_width;            ///< 线宽（mm），默认0.4
+        float print_speed;           ///< 打印速度（mm/s），默认50.0
+        float travel_speed;          ///< 空走速度（mm/s），默认100.0
+        float extrusion_multiplier;  ///< 挤出量倍率，默认1.0
 
         /* 输出配置 */
-        const char* output_path;      ///< 输出G-code文件路径（可为NULL）
+        const char* output_path;  ///< 输出G-code文件路径（可为NULL）
 
     } HsBaFdmPipelineConfig_t;
 
@@ -76,11 +76,11 @@ extern "C"
      */
     typedef struct HsBaFdmPipelineResult
     {
-        int success;                  ///< 是否成功（0=false, 1=true）
-        int total_layers;             ///< 总层数
-        char* gcode_content;          ///< G-code内容（UTF-8，需调用者释放）
-        char* error_message;          ///< 错误信息（UTF-8，需调用者释放）
-        double elapsed_seconds;       ///< 耗时（秒）
+        int success;             ///< 是否成功（0=false, 1=true）
+        int total_layers;        ///< 总层数
+        char* gcode_content;     ///< G-code内容（UTF-8，需调用者释放）
+        char* error_message;     ///< 错误信息（UTF-8，需调用者释放）
+        double elapsed_seconds;  ///< 耗时（秒）
     } HsBaFdmPipelineResult_t;
 
     /**
@@ -108,10 +108,8 @@ extern "C"
      * @param user_data 回调用户数据（可为NULL）。
      * @return 流水线结果，使用完毕后调用 HsBaFreePipelineResult 释放。
      */
-    HSBA_SLICER_API HsBaFdmPipelineResult_t HsBaRunFdmPipeline(
-        const HsBaFdmPipelineConfig_t* config,
-        HsBaProgressCallback callback,
-        void* user_data);
+    HSBA_SLICER_API HsBaFdmPipelineResult_t HsBaRunFdmPipeline(const HsBaFdmPipelineConfig_t* config,
+                                                               HsBaProgressCallback callback, void* user_data);
 
     /**
      * @brief 异步运行FDM全流程流水线（非阻塞）。
@@ -127,12 +125,9 @@ extern "C"
      */
     typedef void (*HsBaResultCallback)(HsBaFdmPipelineResult_t result, void* user_data);
 
-    HSBA_SLICER_API void HsBaRunFdmPipelineAsync(
-        const HsBaFdmPipelineConfig_t* config,
-        HsBaProgressCallback callback,
-        void* user_data,
-        HsBaResultCallback result_callback,
-        void* result_user_data);
+    HSBA_SLICER_API void HsBaRunFdmPipelineAsync(const HsBaFdmPipelineConfig_t* config, HsBaProgressCallback callback,
+                                                 void* user_data, HsBaResultCallback result_callback,
+                                                 void* result_user_data);
 
     /**
      * @brief 释放流水线结果中分配的内存。

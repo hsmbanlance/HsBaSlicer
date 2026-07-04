@@ -126,17 +126,15 @@ static std::shared_ptr<OcctModel> ToOcctModel(const std::shared_ptr<IModel>& mod
     // OcctModel does not have a direct mesh constructor, so we go through IglModel
     // and use the mesh data to build a compound of triangles via OCCT
     // For now, throw if conversion is needed
-    throw RuntimeError(
-        "Direct conversion from mesh to OcctModel is not yet supported. "
-        "Use OcctModel source for boolean operations.");
+    throw RuntimeError("Direct conversion from mesh to OcctModel is not yet supported. "
+                       "Use OcctModel source for boolean operations.");
 }
 #endif  // USE_OCCT
 
 // ---------------------------------------------------------------------------
 // ThickSolid
 // ---------------------------------------------------------------------------
-std::shared_ptr<IModel> ModelLoader::ThickSolidModel(const std::string& sourceName,
-                                                     const std::string& resultName,
+std::shared_ptr<IModel> ModelLoader::ThickSolidModel(const std::string& sourceName, const std::string& resultName,
                                                      float thickness)
 {
 #ifdef USE_OCCT
@@ -157,11 +155,9 @@ std::shared_ptr<IModel> ModelLoader::ThickSolidModel(const std::string& sourceNa
 #endif
 }
 
-std::shared_ptr<IModel> ModelLoader::ThickSolidModel(
-    const std::string& sourceName,
-    const std::string& resultName,
-    const std::vector<std::vector<Eigen::Vector3f>>& closingFaces,
-    float thickness)
+std::shared_ptr<IModel> ModelLoader::ThickSolidModel(const std::string& sourceName, const std::string& resultName,
+                                                     const std::vector<std::vector<Eigen::Vector3f>>& closingFaces,
+                                                     float thickness)
 {
 #ifdef USE_OCCT
     auto src = GetModel(sourceName);
@@ -184,14 +180,15 @@ std::shared_ptr<IModel> ModelLoader::ThickSolidModel(
 // ---------------------------------------------------------------------------
 // Boolean operations
 // ---------------------------------------------------------------------------
-std::shared_ptr<IModel> ModelLoader::BooleanUnion(const std::string& leftName,
-                                                  const std::string& rightName,
+std::shared_ptr<IModel> ModelLoader::BooleanUnion(const std::string& leftName, const std::string& rightName,
                                                   const std::string& resultName)
 {
     auto left = GetModel(leftName);
     auto right = GetModel(rightName);
-    if (!left) throw InvalidArgumentError("Left model '" + leftName + "' not found");
-    if (!right) throw InvalidArgumentError("Right model '" + rightName + "' not found");
+    if (!left)
+        throw InvalidArgumentError("Left model '" + leftName + "' not found");
+    if (!right)
+        throw InvalidArgumentError("Right model '" + rightName + "' not found");
 
 #ifdef USE_OCCT
     auto* occtL = dynamic_cast<OcctModel*>(left.get());
@@ -210,14 +207,15 @@ std::shared_ptr<IModel> ModelLoader::BooleanUnion(const std::string& leftName,
     return pool_.insert(resultName, std::static_pointer_cast<IModel>(result));
 }
 
-std::shared_ptr<IModel> ModelLoader::BooleanIntersection(const std::string& leftName,
-                                                         const std::string& rightName,
+std::shared_ptr<IModel> ModelLoader::BooleanIntersection(const std::string& leftName, const std::string& rightName,
                                                          const std::string& resultName)
 {
     auto left = GetModel(leftName);
     auto right = GetModel(rightName);
-    if (!left) throw InvalidArgumentError("Left model '" + leftName + "' not found");
-    if (!right) throw InvalidArgumentError("Right model '" + rightName + "' not found");
+    if (!left)
+        throw InvalidArgumentError("Left model '" + leftName + "' not found");
+    if (!right)
+        throw InvalidArgumentError("Right model '" + rightName + "' not found");
 
 #ifdef USE_OCCT
     auto* occtL = dynamic_cast<OcctModel*>(left.get());
@@ -235,14 +233,15 @@ std::shared_ptr<IModel> ModelLoader::BooleanIntersection(const std::string& left
     return pool_.insert(resultName, std::static_pointer_cast<IModel>(result));
 }
 
-std::shared_ptr<IModel> ModelLoader::BooleanDifference(const std::string& leftName,
-                                                       const std::string& rightName,
+std::shared_ptr<IModel> ModelLoader::BooleanDifference(const std::string& leftName, const std::string& rightName,
                                                        const std::string& resultName)
 {
     auto left = GetModel(leftName);
     auto right = GetModel(rightName);
-    if (!left) throw InvalidArgumentError("Left model '" + leftName + "' not found");
-    if (!right) throw InvalidArgumentError("Right model '" + rightName + "' not found");
+    if (!left)
+        throw InvalidArgumentError("Left model '" + leftName + "' not found");
+    if (!right)
+        throw InvalidArgumentError("Right model '" + rightName + "' not found");
 
 #ifdef USE_OCCT
     auto* occtL = dynamic_cast<OcctModel*>(left.get());
@@ -260,14 +259,15 @@ std::shared_ptr<IModel> ModelLoader::BooleanDifference(const std::string& leftNa
     return pool_.insert(resultName, std::static_pointer_cast<IModel>(result));
 }
 
-std::shared_ptr<IModel> ModelLoader::BooleanXor(const std::string& leftName,
-                                                const std::string& rightName,
+std::shared_ptr<IModel> ModelLoader::BooleanXor(const std::string& leftName, const std::string& rightName,
                                                 const std::string& resultName)
 {
     auto left = GetModel(leftName);
     auto right = GetModel(rightName);
-    if (!left) throw InvalidArgumentError("Left model '" + leftName + "' not found");
-    if (!right) throw InvalidArgumentError("Right model '" + rightName + "' not found");
+    if (!left)
+        throw InvalidArgumentError("Left model '" + leftName + "' not found");
+    if (!right)
+        throw InvalidArgumentError("Right model '" + rightName + "' not found");
 
 #ifdef USE_OCCT
     auto* occtL = dynamic_cast<OcctModel*>(left.get());

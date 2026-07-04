@@ -366,12 +366,12 @@ inline auto operator|(ISQLAdapter&& db, F&&) = delete;
  */
 struct SQLSelect
 {
-    std::string table;                                        ///< Table name to query
-    std::vector<std::string> columns;                         ///< Columns to select
-    std::unordered_map<std::string, std::any> where;          ///< WHERE clause conditions
-    std::optional<std::string> orderBy;                       ///< ORDER BY clause
-    int64_t limit = -1;                                       ///< Maximum rows (-1 for no limit)
-    int64_t offset = 0;                                       ///< Rows to skip
+    std::string table;                                ///< Table name to query
+    std::vector<std::string> columns;                 ///< Columns to select
+    std::unordered_map<std::string, std::any> where;  ///< WHERE clause conditions
+    std::optional<std::string> orderBy;               ///< ORDER BY clause
+    int64_t limit = -1;                               ///< Maximum rows (-1 for no limit)
+    int64_t offset = 0;                               ///< Rows to skip
 
     /**
      * @brief Construct SQLSelect with move semantics.
@@ -414,8 +414,8 @@ inline void operator|(ISQLAdapter&& db, const SQLSelect&) = delete;
  */
 struct SQLInsert
 {
-    std::string table;                                        ///< Table name
-    std::unordered_map<std::string, std::any> data;           ///< Column-value pairs to insert
+    std::string table;                               ///< Table name
+    std::unordered_map<std::string, std::any> data;  ///< Column-value pairs to insert
 
     /**
      * @brief Construct SQLInsert with move semantics.
@@ -452,8 +452,8 @@ inline void operator|(ISQLAdapter&& db, const SQLInsert& insert) = delete;
  */
 struct SQLDelete
 {
-    std::string table;                                        ///< Table name
-    std::unordered_map<std::string, std::any> data;           ///< WHERE clause conditions
+    std::string table;                               ///< Table name
+    std::unordered_map<std::string, std::any> data;  ///< WHERE clause conditions
 
     /**
      * @brief Construct SQLDelete with move semantics.
@@ -490,9 +490,9 @@ inline void operator|(ISQLAdapter&& db, const SQLDelete& del) = delete;
  */
 struct SQLUpdate
 {
-    std::string table;                                        ///< Table name
-    std::unordered_map<std::string, std::any> set;            ///< SET clause (column-value pairs)
-    std::unordered_map<std::string, std::any> where;          ///< WHERE clause conditions
+    std::string table;                                ///< Table name
+    std::unordered_map<std::string, std::any> set;    ///< SET clause (column-value pairs)
+    std::unordered_map<std::string, std::any> where;  ///< WHERE clause conditions
 
     /**
      * @brief Construct SQLUpdate with move semantics.
@@ -535,8 +535,8 @@ inline void operator|(ISQLAdapter&& db, const SQLUpdate& update) = delete;
  */
 struct SQLCreateTable
 {
-    std::string table;                                        ///< Table name
-    std::unordered_map<std::string, std::string> columns;     ///< Column definitions (name -> type)
+    std::string table;                                     ///< Table name
+    std::unordered_map<std::string, std::string> columns;  ///< Column definitions (name -> type)
 
     /**
      * @brief Construct SQLCreateTable with move semantics.
@@ -574,7 +574,7 @@ inline void operator|(ISQLAdapter&& db, const SQLCreateTable& create) = delete;
  */
 struct SQLRemoveTable
 {
-    std::string table;                                        ///< Table name to drop
+    std::string table;  ///< Table name to drop
 
     /**
      * @brief Construct SQLRemoveTable with move semantics.

@@ -89,12 +89,12 @@ private:
     {
     };
 
-    bool use_log_file_;              ///< Flag indicating whether to use log file
-    std::string log_path_;           ///< Path to the log file
-    int log_level_;                  ///< Current log level threshold
-    std::string log_datatime_format_;///< Format string for datetime in logs
+    bool use_log_file_;                ///< Flag indicating whether to use log file
+    std::string log_path_;             ///< Path to the log file
+    int log_level_;                    ///< Current log level threshold
+    std::string log_datatime_format_;  ///< Format string for datetime in logs
 #if defined(TARGET_OS_IOS) && TARGET_OS_IOS
-    os_log_t log_handle_;            ///< iOS logging handle
+    os_log_t log_handle_;  ///< iOS logging handle
 #endif
 public:
     /**

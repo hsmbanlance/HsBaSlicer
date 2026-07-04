@@ -223,17 +223,16 @@ int l_support_gc(lua_State* L)
     return 0;
 }
 
-static const luaL_Reg supportLib[] = {
-    {"new_plane", l_new_plane},
-    {"new_tree", l_new_tree},
-    {"new_honeycomb", l_new_honeycomb},
-    {"new_sla", l_new_sla},
-    {"new_lua", l_new_lua},
-    {"new_lua_file", l_new_lua_file},
-    {"generate", l_generate},
-    {"detect_overhang", l_detect_overhang},
-    {"default_config", l_default_config},
-    {nullptr, nullptr}};
+static const luaL_Reg supportLib[] = {{"new_plane", l_new_plane},
+                                      {"new_tree", l_new_tree},
+                                      {"new_honeycomb", l_new_honeycomb},
+                                      {"new_sla", l_new_sla},
+                                      {"new_lua", l_new_lua},
+                                      {"new_lua_file", l_new_lua_file},
+                                      {"generate", l_generate},
+                                      {"detect_overhang", l_detect_overhang},
+                                      {"default_config", l_default_config},
+                                      {nullptr, nullptr}};
 }  // namespace
 
 void RegisterLuaSupport(lua_State* L)

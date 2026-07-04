@@ -10,8 +10,8 @@
 #include <TopoDS_Shape.hxx>
 
 #include "2D/FloatPolygons.hpp"
-#include "base/IModel.hpp"
 #include "OcctTypeAliases.hpp"
+#include "base/IModel.hpp"
 
 namespace HsBa::Slicer
 {

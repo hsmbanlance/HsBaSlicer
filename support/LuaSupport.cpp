@@ -58,8 +58,8 @@ PolygonsD GetResultFromLua(lua_State* L)
     return LuaTableToPolygonsD(L, -1);
 }
 
-void SetupLuaEnvironment(lua_State* L, const PolygonsD& current_layer, const PolygonsD& prev_layer,
-                         float layer_height, const SupportConfig& config)
+void SetupLuaEnvironment(lua_State* L, const PolygonsD& current_layer, const PolygonsD& prev_layer, float layer_height,
+                         const SupportConfig& config)
 {
     luaL_openlibs(L);
 

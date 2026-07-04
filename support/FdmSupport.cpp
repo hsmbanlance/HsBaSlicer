@@ -45,8 +45,8 @@ PolygonsD FdmPlaneSupport::Generate(const PolygonsD& current_layer, const Polygo
                                     const SupportConfig& config)
 {
     // Detect overhang regions
-    PolygonsD overhang = OverhangDetector::Detect(current_layer, prev_layer, layer_height,
-                                                  config.overhang_angle_threshold);
+    PolygonsD overhang =
+        OverhangDetector::Detect(current_layer, prev_layer, layer_height, config.overhang_angle_threshold);
     if (overhang.empty())
         return {};
 
@@ -127,8 +127,8 @@ PolygonsD FdmTreeSupport::GenerateBranches(const PolygonsD& overhang, float laye
 PolygonsD FdmTreeSupport::Generate(const PolygonsD& current_layer, const PolygonsD& prev_layer, float layer_height,
                                    const SupportConfig& config)
 {
-    PolygonsD overhang = OverhangDetector::Detect(current_layer, prev_layer, layer_height,
-                                                  config.overhang_angle_threshold);
+    PolygonsD overhang =
+        OverhangDetector::Detect(current_layer, prev_layer, layer_height, config.overhang_angle_threshold);
     if (overhang.empty())
         return {};
 
@@ -189,8 +189,7 @@ PolygonsD FdmHoneycombSupport::GenerateHoneycomb(const PolygonsD& overhang, cons
             for (int i = 0; i < 6; ++i)
             {
                 const double angle = std::numbers::pi / 3.0 * static_cast<double>(i);
-                hex.emplace_back(x + cell_size * 0.5 * std::cos(angle),
-                                 y + cell_size * 0.5 * std::sin(angle));
+                hex.emplace_back(x + cell_size * 0.5 * std::cos(angle), y + cell_size * 0.5 * std::sin(angle));
             }
             hex_cells.push_back(std::move(hex));
         }
@@ -206,15 +205,14 @@ PolygonsD FdmHoneycombSupport::GenerateHoneycomb(const PolygonsD& overhang, cons
     for (auto& h : hex_cells)
         all_hex.push_back(std::move(h));
 
-    return IntersectD(UnionD(all_hex, Clipper2Lib::FillRule::NonZero),
-                      overhang, Clipper2Lib::FillRule::NonZero);
+    return IntersectD(UnionD(all_hex, Clipper2Lib::FillRule::NonZero), overhang, Clipper2Lib::FillRule::NonZero);
 }
 
-PolygonsD FdmHoneycombSupport::Generate(const PolygonsD& current_layer, const PolygonsD& prev_layer,
-                                        float layer_height, const SupportConfig& config)
+PolygonsD FdmHoneycombSupport::Generate(const PolygonsD& current_layer, const PolygonsD& prev_layer, float layer_height,
+                                        const SupportConfig& config)
 {
-    PolygonsD overhang = OverhangDetector::Detect(current_layer, prev_layer, layer_height,
-                                                  config.overhang_angle_threshold);
+    PolygonsD overhang =
+        OverhangDetector::Detect(current_layer, prev_layer, layer_height, config.overhang_angle_threshold);
     if (overhang.empty())
         return {};
 

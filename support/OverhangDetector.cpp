@@ -56,8 +56,7 @@ PolygonsD OverhangDetector::Detect(const PolygonsD& current_layer, const Polygon
     const double bridge_int = max_bridge * integerization;
 
     // Negative offset (erosion) with round join to smooth corners
-    const Polygons eroded =
-        Offset(diff_int, -bridge_int, Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
+    const Polygons eroded = Offset(diff_int, -bridge_int, Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
 
     if (eroded.empty())
         return {};

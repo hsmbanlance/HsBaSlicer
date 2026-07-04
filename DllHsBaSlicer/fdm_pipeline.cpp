@@ -63,7 +63,8 @@ struct OwnedCString
         if (!str.empty())
         {
             data = static_cast<char*>(std::malloc(str.size() + 1));
-            if (data) std::memcpy(data, str.c_str(), str.size() + 1);
+            if (data)
+                std::memcpy(data, str.c_str(), str.size() + 1);
         }
     }
 
@@ -90,15 +91,18 @@ struct OwnedCString
 int CalculateLayerCount(const ModelInfo& info, float layer_height, float first_layer_height)
 {
     float model_height = info.bbox_max.z() - info.bbox_min.z();
-    if (model_height <= 0.0f) return 0;
+    if (model_height <= 0.0f)
+        return 0;
     float remaining = model_height - first_layer_height;
-    if (remaining <= 0.0f) return 1;
+    if (remaining <= 0.0f)
+        return 1;
     return 1 + static_cast<int>(std::ceil(remaining / layer_height));
 }
 
 float GetLayerZ(int layer_index, float first_layer_height, float layer_height)
 {
-    if (layer_index == 0) return first_layer_height;
+    if (layer_index == 0)
+        return first_layer_height;
     return first_layer_height + layer_index * layer_height;
 }
 
@@ -239,8 +243,8 @@ Utils::Task<InternalResult> RunPipelineAsync(InternalConfig cfg)
             if (!layer_outlines[i].empty())
             {
                 Polygons int_polys = Integerization(layer_outlines[i]);
-                Polygons fill_result = FillWithBorder(int_polys, cfg.fill_spacing, cfg.wall_count,
-                                                       cfg.fill_mode, cfg.fill_angle);
+                Polygons fill_result =
+                    FillWithBorder(int_polys, cfg.fill_spacing, cfg.wall_count, cfg.fill_mode, cfg.fill_angle);
                 layer_fills[i] = UnIntegerization(fill_result);
             }
             int progress = 65 + (i * 20) / total_layers;
@@ -317,10 +321,8 @@ HSBA_SLICER_API HsBaFdmPipelineConfig_t HsBaCreateDefaultConfig(void)
     return cfg;
 }
 
-HSBA_SLICER_API HsBaFdmPipelineResult_t HsBaRunFdmPipeline(
-    const HsBaFdmPipelineConfig_t* config,
-    HsBaProgressCallback callback,
-    void* user_data)
+HSBA_SLICER_API HsBaFdmPipelineResult_t HsBaRunFdmPipeline(const HsBaFdmPipelineConfig_t* config,
+                                                           HsBaProgressCallback callback, void* user_data)
 {
     auto ic = HsBa::Slicer::Pipeline::BuildConfig(config, callback, user_data);
     auto task = HsBa::Slicer::Pipeline::RunPipelineAsync(std::move(ic));
@@ -328,28 +330,27 @@ HSBA_SLICER_API HsBaFdmPipelineResult_t HsBaRunFdmPipeline(
     return HsBa::Slicer::Pipeline::ToCResult(ir);
 }
 
-HSBA_SLICER_API void HsBaRunFdmPipelineAsync(
-    const HsBaFdmPipelineConfig_t* config,
-    HsBaProgressCallback callback,
-    void* user_data,
-    HsBaResultCallback result_callback,
-    void* result_user_data)
+HSBA_SLICER_API void HsBaRunFdmPipelineAsync(const HsBaFdmPipelineConfig_t* config, HsBaProgressCallback callback,
+                                             void* user_data, HsBaResultCallback result_callback,
+                                             void* result_user_data)
 {
     auto ic = HsBa::Slicer::Pipeline::BuildConfig(config, callback, user_data);
     auto task = HsBa::Slicer::Pipeline::RunPipelineAsync(std::move(ic));
-    task.then([result_callback, result_user_data](HsBa::Slicer::Pipeline::InternalResult ir)
-              {
-                  auto cr = HsBa::Slicer::Pipeline::ToCResult(ir);
-                  if (result_callback)
-                  {
-                      result_callback(cr, result_user_data);
-                  }
-              });
+    task.then(
+        [result_callback, result_user_data](HsBa::Slicer::Pipeline::InternalResult ir)
+        {
+            auto cr = HsBa::Slicer::Pipeline::ToCResult(ir);
+            if (result_callback)
+            {
+                result_callback(cr, result_user_data);
+            }
+        });
 }
 
 HSBA_SLICER_API void HsBaFreePipelineResult(HsBaFdmPipelineResult_t* result)
 {
-    if (!result) return;
+    if (!result)
+        return;
     std::free(std::exchange(result->gcode_content, nullptr));
     std::free(std::exchange(result->error_message, nullptr));
 }

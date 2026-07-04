@@ -91,8 +91,7 @@ public:
      * @return Shared pointer to the resulting model.
      * @throws RuntimeError if the source is not an OcctModel.
      */
-    std::shared_ptr<IModel> ThickSolidModel(const std::string& sourceName,
-                                            const std::string& resultName,
+    std::shared_ptr<IModel> ThickSolidModel(const std::string& sourceName, const std::string& resultName,
                                             float thickness);
 
     /** @brief Perform a thick-solid operation, excluding specified faces.
@@ -102,31 +101,25 @@ public:
      * @param thickness Shell thickness.
      * @return Shared pointer to the resulting model.
      */
-    std::shared_ptr<IModel> ThickSolidModel(
-        const std::string& sourceName,
-        const std::string& resultName,
-        const std::vector<std::vector<Eigen::Vector3f>>& closingFaces,
-        float thickness);
+    std::shared_ptr<IModel> ThickSolidModel(const std::string& sourceName, const std::string& resultName,
+                                            const std::vector<std::vector<Eigen::Vector3f>>& closingFaces,
+                                            float thickness);
 
     /** @brief Boolean union of two models. */
-    std::shared_ptr<IModel> BooleanUnion(const std::string& leftName,
-                                        const std::string& rightName,
-                                        const std::string& resultName);
+    std::shared_ptr<IModel> BooleanUnion(const std::string& leftName, const std::string& rightName,
+                                         const std::string& resultName);
 
     /** @brief Boolean intersection of two models. */
-    std::shared_ptr<IModel> BooleanIntersection(const std::string& leftName,
-                                               const std::string& rightName,
-                                               const std::string& resultName);
+    std::shared_ptr<IModel> BooleanIntersection(const std::string& leftName, const std::string& rightName,
+                                                const std::string& resultName);
 
     /** @brief Boolean difference of two models (left - right). */
-    std::shared_ptr<IModel> BooleanDifference(const std::string& leftName,
-                                             const std::string& rightName,
-                                             const std::string& resultName);
+    std::shared_ptr<IModel> BooleanDifference(const std::string& leftName, const std::string& rightName,
+                                              const std::string& resultName);
 
     /** @brief Boolean XOR of two models. */
-    std::shared_ptr<IModel> BooleanXor(const std::string& leftName,
-                                      const std::string& rightName,
-                                      const std::string& resultName);
+    std::shared_ptr<IModel> BooleanXor(const std::string& leftName, const std::string& rightName,
+                                       const std::string& resultName);
 #endif
 
 private:

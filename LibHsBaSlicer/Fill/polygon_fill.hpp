@@ -27,8 +27,8 @@ HSBA_SLICER_LIB_API Polygons FillPolygon(const Polygons& poly, double spacing, F
  * @param angle_deg 填充角度（度）。
  * @return 带边框的填充结果。
  */
-HSBA_SLICER_LIB_API Polygons FillWithBorder(const Polygons& poly, double spacing, int border_count,
-                                             FillMode fill_mode, double angle_deg);
+HSBA_SLICER_LIB_API Polygons FillWithBorder(const Polygons& poly, double spacing, int border_count, FillMode fill_mode,
+                                            double angle_deg);
 
 }  // namespace HsBa::Slicer
 

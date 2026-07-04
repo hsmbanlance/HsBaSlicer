@@ -25,8 +25,8 @@ struct SupportConfig
  */
 struct FdmSupportConfig : SupportConfig
 {
-    int interface_layers = 2;         ///< Number of interface layers between support and model
-    float interface_density = 0.5f;   ///< Interface layer fill density [0,1]
+    int interface_layers = 2;        ///< Number of interface layers between support and model
+    float interface_density = 0.5f;  ///< Interface layer fill density [0,1]
 };
 
 /**

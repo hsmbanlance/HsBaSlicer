@@ -1,11 +1,11 @@
 ﻿#include "OcctModel.hpp"
 
-#include <fstream>
 #include <BRepBndLib.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
 #include <Standard_Failure.hxx>
 #include <TopoDS.hxx>
+#include <fstream>
 #include <gp_Quaternion.hxx>
 #include <gp_Trsf.hxx>
 #include <gp_Vec.hxx>
@@ -46,12 +46,12 @@
 #include <BRepPrimAPI_MakeSphere.hxx>
 #include <BRepPrimAPI_MakeTorus.hxx>
 
+#include "OcctTypeAliases.hpp"
 #include "base/ModelFormat.hpp"
 #include "base/encoding_convert.hpp"
 #include "base/error.hpp"
 #include "meshmodel/IglModel.hpp"
 #include <BRepAdaptor_Surface.hxx>
-#include "OcctTypeAliases.hpp"
 
 namespace HsBa::Slicer
 {
@@ -108,7 +108,7 @@ void OcctModel::ReadVRML(const std::string& path)
     {
         // VRML读取需要使用VrmlData_Scene
         VrmlData_Scene scene;
-        
+
         // 使用operator<<从文件流读取VRML
         std::ifstream file(path, std::ios::in);
         if (!file.is_open())
@@ -117,7 +117,7 @@ void OcctModel::ReadVRML(const std::string& path)
         }
         scene << file;
         file.close();
-        
+
         // 直接将Scene转换为Shape（通过operator TopoDS_Shape()）
         shape_ = static_cast<TopoDS_Shape>(scene);
     }

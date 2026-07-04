@@ -42,8 +42,8 @@ public:
         return std::make_shared<Bit7ZUnzipper>(Private{}, dll_path);
     }
 
-    inline static constexpr size_t MB_SIZE = 1024 * 1024;       ///< 1 MB in bytes
-    inline static constexpr size_t GB_SIZE = 1024 * 1024 * 1024;///< 1 GB in bytes
+    inline static constexpr size_t MB_SIZE = 1024 * 1024;         ///< 1 MB in bytes
+    inline static constexpr size_t GB_SIZE = 1024 * 1024 * 1024;  ///< 1 GB in bytes
 
     /**
      * @brief Set password for encrypted archives.

@@ -17,12 +17,12 @@ namespace HsBa::Slicer
  */
 struct FdmPathConfig
 {
-    float layer_height = 0.2f;        ///< 层高（mm）
-    float line_width = 0.4f;          ///< 线宽（mm）
-    float print_speed = 50.0f;        ///< 打印速度（mm/s）
-    float travel_speed = 100.0f;      ///< 空走速度（mm/s）
-    float extrusion_multiplier = 1.0f;///< 挤出量倍率
-    GCodeUnits units = GCodeUnits::mm;///< 单位
+    float layer_height = 0.2f;          ///< 层高（mm）
+    float line_width = 0.4f;            ///< 线宽（mm）
+    float print_speed = 50.0f;          ///< 打印速度（mm/s）
+    float travel_speed = 100.0f;        ///< 空走速度（mm/s）
+    float extrusion_multiplier = 1.0f;  ///< 挤出量倍率
+    GCodeUnits units = GCodeUnits::mm;  ///< 单位
 };
 
 /**
@@ -30,10 +30,10 @@ struct FdmPathConfig
  */
 struct LayerPathData
 {
-    PolygonsD outlines;       ///< 轮廓路径
-    PolygonsD fills;          ///< 填充路径
-    PolygonsD supports;       ///< 支撑路径
-    float z_height = 0.0f;    ///< 层高度
+    PolygonsD outlines;     ///< 轮廓路径
+    PolygonsD fills;        ///< 填充路径
+    PolygonsD supports;     ///< 支撑路径
+    float z_height = 0.0f;  ///< 层高度
 };
 
 /**
@@ -43,7 +43,7 @@ struct LayerPathData
  * @return G-code路径对象。
  */
 HSBA_SLICER_LIB_API std::unique_ptr<PointsPath> GenerateGCodePath(const std::vector<LayerPathData>& layer_data,
-                                                                   const FdmPathConfig& config);
+                                                                  const FdmPathConfig& config);
 
 /**
  * @brief 将PolygonsD转换为G-point序列（辅助函数）。
@@ -53,8 +53,8 @@ HSBA_SLICER_LIB_API std::unique_ptr<PointsPath> GenerateGCodePath(const std::vec
  * @param is_extrude 是否挤出（true=打印，false=空走）。
  * @return GPoint序列。
  */
-HSBA_SLICER_LIB_API std::vector<GPoint> PolygonsToGPoints(const PolygonsD& polys, float z,
-                                                           const FdmPathConfig& config, bool is_extrude);
+HSBA_SLICER_LIB_API std::vector<GPoint> PolygonsToGPoints(const PolygonsD& polys, float z, const FdmPathConfig& config,
+                                                          bool is_extrude);
 
 }  // namespace HsBa::Slicer
 
