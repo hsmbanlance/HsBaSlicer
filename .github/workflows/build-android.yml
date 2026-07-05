@@ -78,7 +78,7 @@ jobs:
       - name: Configure CMake for Android
         shell: bash
         run: |
-          cmake -B build-android -S . -G Ninja \
+          cmake -B build-android -S "$GITHUB_WORKSPACE" -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
             -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \

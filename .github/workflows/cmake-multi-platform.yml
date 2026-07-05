@@ -211,6 +211,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+    - uses: actions/checkout@v6
+
     - name: Maximize build disk space
       if: runner.os == 'Linux'
       uses: easimon/maximize-build-space@v10
@@ -288,7 +290,7 @@ jobs:
       run: |
         echo "Configuring CMake for Android (arm64)"
         cmake -B build-android \
-          -S . \
+          -S "$GITHUB_WORKSPACE" \
           -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
