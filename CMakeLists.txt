@@ -350,12 +350,17 @@ include(CMakePackageConfigHelpers)
 
 # 安装库目标（RUNTIME → bin, LIBRARY → lib, ARCHIVE → lib）
 # 所有内部静态库必须加入导出集，否则 CMake 会报错
-install(TARGETS
+set(_HSBA_INSTALL_TARGETS
     DllHsBaSlicer LibHsBaSlicer HsBaSlicerLog
     HsBaSlicerBase HsBaSlicerUtils HsBaSlicerMesh
     HsBaSlicer2D HsBaPreprocess HsBaSupport HsBaPaths
-    HsBaSlicerFileOperator HsBaSlicerCADModel
+    HsBaSlicerFileOperator
     HsBaSlicerProto HsBaCipher
+)
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
+  list(APPEND _HSBA_INSTALL_TARGETS HsBaSlicerCADModel)
+endif()
+install(TARGETS ${_HSBA_INSTALL_TARGETS}
     EXPORT HsBaSlicerTargets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}      # DLLs (Windows) / exe
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}      # .so (Linux/macOS)

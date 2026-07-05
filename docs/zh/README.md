@@ -4,6 +4,121 @@
 
 ## 语言版本
 
+- [English Documentation](../en/) - English version of the documentation
+- [中文文档](./) - 中文版本的文档
+
+## 关于 HsBaSlicer
+
+HsBaSlicer 是一个面向 3D 打印切片领域的高性能 C++ 软件框架，提供模块化、跨平台的切片核心能力。
+
+## 模块概览
+
+### 基础层
+
+- **Base** - 基本类型、基础组件和接口定义（单例、模板辅助、委托、协程、对象池、线程池、静态反射等）
+- **Utils** - 扩展工具集（应用配置、Lua 绑定、结构化 JSON/YAML/XML 等）
+- **Logger** - 线程安全的单例日志系统
+
+### 文件与数据
+
+- **Cipher** - 加密、哈希和编解码工具（AES/3DES/RSA、MD5/SHA、Base64/Hex）
+- **FileOperator** - 文件和属性配置树操作，包含 ZIP 压缩/解压、SQLite 数据库、Lua 适配器等
+- **Proto** - Protobuf 消息定义（网格、切片配置、路径、点、变换等）
+- **Convert** - 切片过程中的类型与 Protobuf 消息的相互转换
+
+### 几何模型
+
+- **2D** - 二维多边形处理（整数/浮点多边形、凸包、图像转多边形、多边形填充）
+- **MeshModel** - 网格模型（CGAL / IGL / OpenCascade 三种后端）
+- **CADModel** - CAD 模型（基于 OpenCascade 的 B-Rep 建模与布尔运算）
+- **Preprocess** - 模型预处理与加载
+
+### 切片核心
+
+- **Paths** - 输出路径管理（层路径、点路径、图像路径、机器人路径）
+- **Support** - 支撑生成（FDM/SLA 支撑、悬垂检测、Lua 自定义支撑）
+- **[LibHsBaSlicer](./LibHsBaSlicer/)** - 底层 C++ 静态库，提供预处理、切片、支撑、填充、路径生成五大核心接口
+- **DllHsBaSlicer** - 上层 C 动态库，提供基于协程优化的 FDM 全流程 Pipeline 接口
+- **HsBaSlicer** - 最终应用程序入口
+
+### 其他
+
+- **Samples** - 使用示例（如 FDM 工艺流水线示例）
+- **Tests / Static Tests** - 单元测试与静态测试套件
+- **Android** - Android 平台工程
+- **Version** - 版本信息
+
+## 详细模块文档
+
+### 基础层
+
+- [Base 模块](./base/) - 单例、模板辅助、委托、协程、元组遍历、任意类型访问、静态反射、任意对象、对象池、内存池、线程池
+- [Utils 模块](./utils/) - 应用配置、结构化 JSON、Lua 绑定、预编译头、日志配置
+- [Logger 模块](./logger/) - 日志单例、日志状态
+
+### 文件与数据
+
+- [Cipher 模块](./cipher/) - 加密、哈希、编码
+- [FileOperator 模块](./fileoperator/) - 压缩、解压、数据库操作
+
+### 切片核心
+
+- [LibHsBaSlicer 模块](./LibHsBaSlicer/) - 预处理、切片、支撑、填充、路径生成
+# HsBaSlicer 文档
+
+欢迎来到 HsBaSlicer 文档。此仓库包含多种语言的文档。
+
+## 语言版本
+
+- [English Documentation](../en/) - English version of the documentation
+- [中文文档](./) - 中文版本的文档
+
+## 关于 HsBaSlicer
+
+HsBaSlicer 是一个面向 3D 打印切片领域的高性能 C++ 软件框架，提供模块化、跨平台的切片核心能力。
+
+## 模块概览
+
+### 基础层
+
+- **Base** - 基本类型、基础组件和接口定义（单例、模板辅助、委托、协程、对象池、线程池、静态反射等）
+- **Utils** - 扩展工具集（应用配置、Lua 绑定、结构化 JSON/YAML/XML 等）
+- **Logger** - 线程安全的单例日志系统
+
+### 文件与数据
+
+- **Cipher** - 加密、哈希和编解码工具（AES/3DES/RSA、MD5/SHA、Base64/Hex）
+- **FileOperator** - 文件和属性配置树操作，包含 ZIP 压缩/解压、SQLite 数据库、Lua 适配器等
+- **Proto** - Protobuf 消息定义（网格、切片配置、路径、点、变换等）
+- **Convert** - 切片过程中的类型与 Protobuf 消息的相互转换
+
+### 几何模型
+
+- **2D** - 二维多边形处理（整数/浮点多边形、凸包、图像转多边形、多边形填充）
+- **MeshModel** - 网格模型（CGAL / IGL / OpenCascade 三种后端）
+- **CADModel** - CAD 模型（基于 OpenCascade 的 B-Rep 建模与布尔运算）
+- **Preprocess** - 模型预处理与加载
+
+### 切片核心
+
+- **Paths** - 输出路径管理（层路径、点路径、图像路径、机器人路径）
+- **Support** - 支撑生成（FDM/SLA 支撑、悬垂检测、Lua 自定义支撑）
+- **LibHsBaSlicer** - 底层 C++ 静态库，提供预处理、切片、支撑、填充、路径生成五大核心接口
+- **DllHsBaSlicer** - 上层 C 动态库，提供基于协程优化的 FDM 全流程 Pipeline 接口
+- **HsBaSlicer** - 最终应用程序入口
+
+### 其他
+
+- **Samples** - 使用示例（如 FDM 工艺流水线示例）
+- **Tests / Static Tests** - 单元测试与静态测试套件
+- **Android** - Android 平台工程
+- **Version** - 版本信息
+# HsBaSlicer 文档
+
+欢迎来到 HsBaSlicer 文档。此仓库包含多种语言的文档。
+
+## 语言版本
+
 - [English Documentation](../en/) - 英文版本的文档
 - [中文文档](./) - 中文版本的文档
 
