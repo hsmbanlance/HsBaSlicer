@@ -48,8 +48,8 @@ public:
 
     NamedObjectPool(const NamedObjectPool&) = delete;
     NamedObjectPool& operator=(const NamedObjectPool&) = delete;
-    NamedObjectPool(NamedObjectPool&&) = delete;
-    NamedObjectPool& operator=(NamedObjectPool&&) = delete;
+    NamedObjectPool(NamedObjectPool&&) = default;
+    NamedObjectPool& operator=(NamedObjectPool&&) = default;
 
     ~NamedObjectPool()
     {

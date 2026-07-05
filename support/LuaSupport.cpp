@@ -3,6 +3,7 @@
 #include <lua.hpp>
 
 #include "2D/LuaAdapter.hpp"
+#include "LuaAdapter.hpp"
 #include "base/error.hpp"
 #include "utils/LuaNewObject.hpp"
 
@@ -65,6 +66,9 @@ void SetupLuaEnvironment(lua_State* L, const PolygonsD& current_layer, const Pol
 
     // Register polygon helper functions
     RegisterLuaPolygonOperations(L);
+
+    // Register Support module (new_plane, new_tree, generate, detect_overhang, etc.)
+    RegisterLuaSupport(L);
 
     // Push layer data as globals
     PushPolygonsDToLua(L, current_layer);

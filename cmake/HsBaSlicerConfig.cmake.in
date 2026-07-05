@@ -1,0 +1,15 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Public dependencies required by HsBaSlicer headers
+find_dependency(Eigen3)
+find_dependency(magic_enum)
+find_dependency(Clipper2)
+find_dependency(Lua)
+find_dependency(Protobuf)
+find_dependency(OpenSSL)
+
+include("${CMAKE_CURRENT_LIST_DIR}/HsBaSlicerTargets.cmake")
+
+check_required_components(HsBaSlicer)

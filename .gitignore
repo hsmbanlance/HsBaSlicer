@@ -415,3 +415,6 @@ repowiki
 -*/agents/*
 
 # Add testing obj 3D models as necessary
+
+# Downloaded sample models (not committed)
+samples/FDM/models/*.stl

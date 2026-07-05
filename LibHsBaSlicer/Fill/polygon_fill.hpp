@@ -9,23 +9,23 @@
 namespace HsBa::Slicer
 {
 /**
- * @brief 对多边形进行填充。
- * @param poly 输入多边形。
- * @param spacing 填充线间距。
- * @param mode 填充模式（Line/SimpleZigzag/Zigzag）。
- * @param angle_deg 填充角度（度）。
- * @return 填充结果多边形。
+ * @brief Fill a polygon.
+ * @param poly Input polygon.
+ * @param spacing Fill line spacing.
+ * @param mode Fill mode (Line/SimpleZigzag/Zigzag).
+ * @param angle_deg Fill angle (degrees).
+ * @return Filled result polygons.
  */
 HSBA_SLICER_LIB_API Polygons FillPolygon(const Polygons& poly, double spacing, FillMode mode, double angle_deg);
 
 /**
- * @brief 带边框的填充。
- * @param poly 输入多边形。
- * @param spacing 内部填充间距。
- * @param border_count 边框偏移圈数。
- * @param fill_mode 填充模式。
- * @param angle_deg 填充角度（度）。
- * @return 带边框的填充结果。
+ * @brief Fill with border offset.
+ * @param poly Input polygon.
+ * @param spacing Inner fill spacing.
+ * @param border_count Number of border offset loops.
+ * @param fill_mode Fill mode.
+ * @param angle_deg Fill angle (degrees).
+ * @return Fill result with border.
  */
 HSBA_SLICER_LIB_API Polygons FillWithBorder(const Polygons& poly, double spacing, int border_count, FillMode fill_mode,
                                             double angle_deg);

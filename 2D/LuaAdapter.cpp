@@ -83,7 +83,7 @@ int l_xor(lua_State* L)
 
 int l_offsetOperation(lua_State* L)
 {
-    if (lua_gettop(L) != 3 || !lua_istable(L, 1) || !lua_isnumber(L, 2))
+    if (lua_gettop(L) != 2 || !lua_istable(L, 1) || !lua_isnumber(L, 2))
         l_booleanError(L, "offsetOperation", "Expected a polygon table and a number offset");
     Polygons polys = LuaTableToPolygons(L, 1);
     double delta = lua_tonumber(L, 2);

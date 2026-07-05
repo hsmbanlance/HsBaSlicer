@@ -47,29 +47,19 @@ else()
   )
 endif()
 
-#find dlls and pdbs
+# ---------------------------------------------------------------------------
+# Windows: 复制项目 PDB 调试符号到可执行程序目录
+# vcpkg 第三方 DLL 由 vcpkg 的 applocal.ps1 自动部署。
+# ---------------------------------------------------------------------------
 if(WIN32)
-  file(GLOB_RECURSE dlls "${CMAKE_BINARY_DIR}/DllHsBaSlicer/*.dll")
-else()
-  file(GLOB_RECURSE dlls "${CMAKE_BINARY_DIR}/DllHsBaSlicer/*.so")
-endif()
-file(GLOB_RECURSE pdbs "${CMAKE_BINARY_DIR}/DllHsBaSlicer/*.pdb")
-
-# add post build event, copy dlls and pdbs to output directory
-if(dlls)
-add_custom_command(TARGET HsBaSlicer POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${dlls} ${CMAKE_BINARY_DIR}/HsBaSlicer/
-  COMMENT "Copying dlls to output directory"
-)
-else()
-  message(WARNING "No dlls to copy, please build DllHsBaSlicer first and run cmake again")
-endif()
-
-if(pdbs)
-add_custom_command(TARGET HsBaSlicer POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${pdbs} ${CMAKE_BINARY_DIR}/HsBaSlicer/
-  COMMENT "Copying pdbs to output directory"
-)
+    add_custom_command(TARGET HsBaSlicer POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            -DTARGET_BIN="$<TARGET_FILE:HsBaSlicer>"
+            -DPDB_FILES="$<TARGET_PDB_FILE:DllHsBaSlicer>;$<TARGET_PDB_FILE:HsBaSlicerLog>"
+            -P "${CMAKE_SOURCE_DIR}/cmake/deploy_dlls.cmake"
+        COMMENT "Deploying PDBs for HsBaSlicer"
+        COMMAND_EXPAND_LISTS
+    )
 endif()
 
 
