@@ -8,19 +8,15 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Cache vcpkg binary cache
-        uses: actions/cache@v4
-        with:
-          path: ~/vcpkg-cache
-          key: vcpkg-ios-${{ hashFiles('vcpkg.json') }}
+      - uses: actions/checkout@v6
 
       - name: Install build dependencies
         shell: bash
         run: |
           brew update
           brew install cmake ninja python autoconf automake libtool autoconf-archive
+          # Install PowerShell for version generation script
+          brew install --cask powershell@preview
 
       - name: Clone vcpkg and bootstrap
         shell: bash
@@ -31,6 +27,17 @@ jobs:
             ./vcpkg/vcpkg integrate install
           fi
           echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
+
+      - name: Set up vcpkg binary cache backend
+        shell: bash
+        run: |
+          echo "VCPKG_BINARY_SOURCES=clear;x-gha,readwrite" >> $GITHUB_ENV
+
+      - name: Cache vcpkg downloads cache
+        uses: actions/cache@v5
+        with:
+          path: ${env.VCPKG_ROOT}/downloads
+          key: vcpkg-ios-${{ hashFiles('vcpkg.json') }}
 
       - name: Configure CMake for iOS
         shell: bash

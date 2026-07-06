@@ -2,9 +2,9 @@
 // Use the header-only variant to provide the test runner (avoids linking issues)
 #include <boost/test/included/unit_test.hpp>
 
+#include "2D/IntPolygon.hpp"
 #include "base/IModel.hpp"
 #include "meshmodel/FullTopoModel.hpp"
-#include "2D/IntPolygon.hpp"
 
 using namespace HsBa::Slicer;
 
@@ -14,93 +14,85 @@ BOOST_AUTO_TEST_SUITE(full_topo_model_test)
 class SimpleCubeModel : public IModel
 {
 public:
-	SimpleCubeModel()
-	{
-		// 8 vertices
-		v_.resize(8, 3);
-		v_ << -1.0f, -1.0f, -1.0f,
-			1.0f, -1.0f, -1.0f,
-			1.0f, 1.0f, -1.0f,
-			-1.0f, 1.0f, -1.0f,
-			-1.0f, -1.0f, 1.0f,
-			1.0f, -1.0f, 1.0f,
-			1.0f, 1.0f, 1.0f,
-			-1.0f, 1.0f, 1.0f;
+    SimpleCubeModel()
+    {
+        // 8 vertices
+        v_.resize(8, 3);
+        v_ << -1.0f, -1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, -1.0f, -1.0f, 1.0f, -1.0f, -1.0f, -1.0f, 1.0f, 1.0f,
+            -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, -1.0f, 1.0f, 1.0f;
 
-		// 12 triangles (2 per face)
-		f_.resize(12, 3);
-		f_ << 4, 5, 6,
-			4, 6, 7,
-			0, 1, 2,
-			0, 2, 3,
-			0, 3, 7,
-			0, 7, 4,
-			1, 5, 6,
-			1, 6, 2,
-			3, 2, 6,
-			3, 6, 7,
-			0, 1, 5,
-			0, 5, 4;
-	}
+        // 12 triangles (2 per face)
+        f_.resize(12, 3);
+        f_ << 4, 5, 6, 4, 6, 7, 0, 1, 2, 0, 2, 3, 0, 3, 7, 0, 7, 4, 1, 5, 6, 1, 6, 2, 3, 2, 6, 3, 6, 7, 0, 1, 5, 0, 5,
+            4;
+    }
 
-	// IModel interface (minimal implementations)
-	bool Load(std::string_view) override { return false; }
-	bool Save(std::string_view, const ModelFormat) const override { return false; }
-	void Translate(const Eigen::Vector3f&) override {}
-	void Rotate(const Eigen::Quaternionf&) override {}
-	void Scale(const float) override {}
-	void Scale(const Eigen::Vector3f&) override {}
-	void Transform(const Eigen::Isometry3f&) override {}
-	void Transform(const Eigen::Matrix4f&) override {}
-	void Transform(const Eigen::Transform<float, 3, Eigen::Affine>&) override {}
-	void BoundingBox(Eigen::Vector3f& min, Eigen::Vector3f& max) const override { min = v_.colwise().minCoeff(); max = v_.colwise().maxCoeff(); }
-	float Volume() const override { return 0.0f; }
-	std::pair<Eigen::MatrixXf, Eigen::MatrixXi> TriangleMesh() const override { return { v_, f_ }; }
+    // IModel interface (minimal implementations)
+    bool Load(std::string_view) override { return false; }
+    bool Save(std::string_view, const ModelFormat) const override { return false; }
+    void Translate(const Eigen::Vector3f&) override {}
+    void Rotate(const Eigen::Quaternionf&) override {}
+    void Scale(const float) override {}
+    void Scale(const Eigen::Vector3f&) override {}
+    void Transform(const Eigen::Isometry3f&) override {}
+    void Transform(const Eigen::Matrix4f&) override {}
+    void Transform(const Eigen::Transform<float, 3, Eigen::Affine>&) override {}
+    void BoundingBox(Eigen::Vector3f& min, Eigen::Vector3f& max) const override
+    {
+        min = v_.colwise().minCoeff();
+        max = v_.colwise().maxCoeff();
+    }
+    float Volume() const override { return 0.0f; }
+    std::pair<Eigen::MatrixXf, Eigen::MatrixXi> TriangleMesh() const override { return {v_, f_}; }
 
 private:
-	Eigen::MatrixXf v_;
-	Eigen::MatrixXi f_;
+    Eigen::MatrixXf v_;
+    Eigen::MatrixXi f_;
 };
 
 BOOST_AUTO_TEST_CASE(slice_cube_at_zero)
 {
-	SimpleCubeModel model;
-	FullTopoModel topo(model);
+    SimpleCubeModel model;
+    FullTopoModel topo(model);
 
-	auto polys = topo.Slice(0.0f);
-	BOOST_CHECK(!polys.empty());
+    auto polys = topo.Slice(0.0f);
+    BOOST_CHECK(!polys.empty());
 
-	// Expect at least one closed polygon with >= 4 vertices (square)
-	bool found = false;
-	for (const auto& poly : polys)
-	{
-		if (poly.size() >= 4)
-		{
-			found = true;
-			double area = Area(poly);
-			BOOST_CHECK_GT(area, 0.0);
-			break;
-		}
-	}
-	BOOST_CHECK(found);
+    // Expect at least one closed polygon with >= 4 vertices (square)
+    bool found = false;
+    for (const auto& poly : polys)
+    {
+        if (poly.size() >= 4)
+        {
+            found = true;
+            double area = Area(poly);
+            BOOST_CHECK_GT(area, 0.0);
+            break;
+        }
+    }
+    BOOST_CHECK(found);
 
-	// Also test UnSafeSlice returns some closed polygon
-	auto ups = topo.UnSafeSlice(0.0f);
-	bool has_closed = false;
-	for (const auto& up : ups)
-	{
-		if (up.closed && up.path.size() >= 4) { has_closed = true; break; }
-	}
-	BOOST_CHECK(has_closed);
+    // Also test UnSafeSlice returns some closed polygon
+    auto ups = topo.UnSafeSlice(0.0f);
+    bool has_closed = false;
+    for (const auto& up : ups)
+    {
+        if (up.closed && up.path.size() >= 4)
+        {
+            has_closed = true;
+            break;
+        }
+    }
+    BOOST_CHECK(has_closed);
 }
 
 BOOST_AUTO_TEST_CASE(slice_cube_with_lua)
 {
-	SimpleCubeModel model;
-	FullTopoModel topo(model);
+    SimpleCubeModel model;
+    FullTopoModel topo(model);
 
-	// Lua script: compute intersection points from faces and return convex hull as single polygon
-	std::string script = R"lua(
+    // Lua script: compute intersection points from faces and return convex hull as single polygon
+    std::string script = R"lua(
 local function intersect_edge(a,b)
     local z1 = V[a].z
     local z2 = V[b].z
@@ -147,21 +139,30 @@ polys[1] = hull
 return polys
  )lua";
 
-	auto polys = topo.SliceLua(script, 0.0f);
-	BOOST_CHECK(!polys.empty());
-	bool ok = false;
-	for (const auto& poly : polys)
-	{
-		if (poly.size() >= 4) { ok = true; break; }
-	}
-	BOOST_CHECK(ok);
+    auto polys = topo.SliceLua(script, 0.0f);
+    BOOST_CHECK(!polys.empty());
+    bool ok = false;
+    for (const auto& poly : polys)
+    {
+        if (poly.size() >= 4)
+        {
+            ok = true;
+            break;
+        }
+    }
+    BOOST_CHECK(ok);
 
-	// test UnSafeSliceLua as well
-	auto ups = topo.UnSafeSliceLua(script, 0.0f);
-	BOOST_CHECK(!ups.empty());
-	bool has_closed = false;
-	for (const auto& up : ups) if (up.closed && up.path.size() >= 4) { has_closed = true; break; }
-	BOOST_CHECK(has_closed);
+    // test UnSafeSliceLua as well
+    auto ups = topo.UnSafeSliceLua(script, 0.0f);
+    BOOST_CHECK(!ups.empty());
+    bool has_closed = false;
+    for (const auto& up : ups)
+        if (up.closed && up.path.size() >= 4)
+        {
+            has_closed = true;
+            break;
+        }
+    BOOST_CHECK(has_closed);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

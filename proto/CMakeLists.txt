@@ -128,4 +128,7 @@ PROTOBUF_GENERATE_CPP(PROTOSRCS PROTOHDRS ${proto_files})
 include_directories(./proto)
 add_library(HsBaSlicerProto STATIC ${PROTOSRCS} ${PROTOHDRS}) 
 target_link_libraries(HsBaSlicerProto protobuf::libprotobuf) 
-target_include_directories(HsBaSlicerProto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(HsBaSlicerProto PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    $<INSTALL_INTERFACE:include/HsBaSlicer/proto>
+)

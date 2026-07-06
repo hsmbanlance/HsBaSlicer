@@ -15,6 +15,11 @@
 find_package(PNG REQUIRED)
 find_package(JPEG REQUIRED)
 find_package(Lua REQUIRED)
+find_package(Freetype)
+
+if(Freetype_FOUND)
+	target_compile_definitions(HsBaSlicer2D PUBLIC HSBA_HAVE_FREETYPE)
+endif()
 
 if(HSBA_DESKTOP)
  target_compile_definitions(HsBaSlicer2D PUBLIC HSBA_POLYGON_DUMP)
@@ -34,11 +39,18 @@ target_link_libraries(HsBaSlicer2D PUBLIC
 	${OpenCV_LIBRARIES}
 	${LUA_LIBRARIES}
 )
+
 else()
 target_include_directories(HsBaSlicer2D PRIVATE ${LUA_INCLUDE_DIR})
 target_link_libraries(HsBaSlicer2D PUBLIC 
 	HsBaSlicerBase
 	PkgConfig::Clipper2
 	${LUA_LIBRARIES}
+)
+endif()
+
+if(Freetype_FOUND)
+target_link_libraries(HsBaSlicer2D PUBLIC 
+	Freetype::Freetype
 )
 endif()

@@ -27,23 +27,45 @@ BOOST_AUTO_TEST_CASE(lua_polygon_operation_dump)
 local poly = { { { x = 0, y = 0 }, { x = 10, y = 0 }, { x = 10, y = 10 }, { x = 0, y = 10 } } }
 PolygonOperations.dumpPolygon(poly[1], "__FILENAME1__")
 PolygonOperations.dumpPolygons(poly, "__FILENAME2__")
+local rect = PolygonOperations.makeRectangle(0, 0, 10, 5)
+local circle = PolygonOperations.makeCircle(0, 0, 5, 16)
+local poly3 = PolygonOperations.makeRegularPolygon(0, 0, 5, 5)
+assert(type(rect) == "table")
+assert(type(circle) == "table")
+assert(type(poly3) == "table")
+assert(#rect == 1)
+assert(#circle == 1)
+assert(#poly3 == 1)
 )";
     std::string script = lua_code;
     std::string filename1 = dump_path1.string();
     std::string filename2 = dump_path2.string();
-    auto EscapeForLua = [](const std::string& in){
+    auto EscapeForLua = [](const std::string& in)
+    {
         std::string out;
-        out.reserve(in.size()*2);
+        out.reserve(in.size() * 2);
         for (char c : in)
         {
             switch (c)
             {
-            case '\\': out += "\\\\"; break;
-            case '"': out += "\\\""; break;
-            case '\n': out += "\\n"; break;
-            case '\r': out += "\\r"; break;
-            case '\t': out += "\\t"; break;
-            default: out += c; break;
+            case '\\':
+                out += "\\\\";
+                break;
+            case '"':
+                out += "\\\"";
+                break;
+            case '\n':
+                out += "\\n";
+                break;
+            case '\r':
+                out += "\\r";
+                break;
+            case '\t':
+                out += "\\t";
+                break;
+            default:
+                out += c;
+                break;
             }
         }
         return out;

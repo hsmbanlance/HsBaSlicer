@@ -7,17 +7,39 @@
 
 namespace HsBa::Slicer
 {
-	class AppConfigSingletone
-	{
-		static AppConfigSingletone& GetInstance();
-		static void DeleteInstance();
-		std::string GetSevenZPath() const;
-	private:
-		static std::shared_mutex mutex_;
-		static AppConfigSingletone* instance_;
-		std::string sevenZ_path_;
-		AppConfigSingletone();
-	};
-} // namespace HsBa::Slicer
+/**
+ * @brief Application configuration singleton.
+ *
+ * Provides access to shared application settings such as external tool paths.
+ */
+class AppConfigSingletone
+{
+public:
+    /**
+     * @brief Get the singleton instance.
+     *
+     * @return AppConfigSingletone& Reference to the singleton.
+     */
+    static AppConfigSingletone& GetInstance();
 
-#endif // !HSBA_SLICER_APP_CONFIG_HPP
+    /**
+     * @brief Destroy the singleton instance.
+     */
+    static void DeleteInstance();
+
+    /**
+     * @brief Get the configured 7-Zip executable path.
+     *
+     * @return std::string Path to the 7-Zip executable.
+     */
+    std::string GetSevenZPath() const;
+
+private:
+    static std::shared_mutex mutex_;
+    static AppConfigSingletone* instance_;
+    std::string sevenZ_path_;
+    AppConfigSingletone();
+};
+}  // namespace HsBa::Slicer
+
+#endif  // !HSBA_SLICER_APP_CONFIG_HPP

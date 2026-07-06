@@ -4,8 +4,9 @@
 
 #include <lua.hpp>
 
-namespace HsBa::Slicer::Cipher {
-    void RegisterLuaCipher(lua_State* L);
+namespace HsBa::Slicer::Cipher
+{
+void RegisterLuaCipher(lua_State* L);
 }
 
-#endif // CIPHER_LUAADAPTER_HPP
+#endif  // CIPHER_LUAADAPTER_HPP

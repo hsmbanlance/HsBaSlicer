@@ -1,10 +1,17 @@
-﻿#pragma once
+﻿/** @file any_visit.hpp
+ * @brief A collection of utilities for visiting std::any and boost::any values.
+ * This file provides functions to safely visit and process values stored in std::any and boost::any containers,
+ * allowing for type-safe operations without the need for explicit type checking.
+ * @author HsBa
+ * @date 2024-06
+ */
+#pragma once
 #ifndef HSBA_SLICER_ANY_VISIT_HPP
 #define HSBA_SLICER_ANY_VISIT_HPP
 
 #include <any>
-#include <variant>
 #include <type_traits>
+#include <variant>
 
 #include <boost/any.hpp>
 
@@ -13,110 +20,98 @@
 namespace HsBa::Slicer::Utils
 {
 
-    // visit any
-    // ref: https://codereview.stackexchange.com/questions/275440/visit-for-stdany
+// visit any
+// ref: https://codereview.stackexchange.com/questions/275440/visit-for-stdany
 
-    /**
-     * @brief  visit std::any 
-     * @tparam ...Ts visited types
-     * @tparam Callback 
-     * @tparam ...Args callback function
-     * @param callback other arguments
-     * @param any any
-     * @param ...args ther arguments
-     * @return return value of callback function, void if callback function returns void
-     */
-    template <typename... Ts, typename Callback, typename... Args>
-    inline auto Visit(Callback&& callback, const std::any& any, Args&&... args)
+/**
+ * @brief  visit std::any
+ * @tparam ...Ts visited types
+ * @tparam Callback
+ * @tparam ...Args callback function
+ * @param callback other arguments
+ * @param any any
+ * @param ...args ther arguments
+ * @return return value of callback function, void if callback function returns void
+ */
+template <typename... Ts, typename Callback, typename... Args>
+inline auto Visit(Callback&& callback, const std::any& any, Args&&... args)
+{
+    using R =
+        typename AllTheSame<decltype(std::declval<Callback>()(std::declval<Ts>(), std::declval<Args>()...))...>::type;
+    if constexpr (std::is_void_v<R>)  // callback returns void
     {
-        using R = typename AllTheSame<
-            decltype(std::declval<Callback>()(std::declval<Ts>(), std::declval<Args>()...))...
-        >::type;
-        if constexpr (std::is_void_v<R>) // callback returns void
-        {
-            int dummy[] = {
-            [&]() {
-                if (any.type() == typeid(Ts)) {
-                    std::forward<Callback>(callback)(
-                        std::any_cast<Ts>(any),
-                        std::forward<Args>(args)...
-                    );
-                }
-                return 0;
-            }() ...
-            };
-            (void)dummy;
-            return;
-        }
-        else
-        {
-            R ret{};
-            int dummy[] = {
-                [&]() {
-                    if (any.type() == typeid(Ts)) {
-                        ret = std::forward<Callback>(callback)(
-                            std::any_cast<Ts>(any),
-                            std::forward<Args>(args)...
-                        );
-                    }
-                    return 0;
-                }() ...
-            };
-            (void)dummy;
-            return ret;
-        }
+        int dummy[] = {[&]()
+                       {
+                           if (any.type() == typeid(Ts))
+                           {
+                               std::forward<Callback>(callback)(std::any_cast<Ts>(any), std::forward<Args>(args)...);
+                           }
+                           return 0;
+                       }()...};
+        (void)dummy;
+        return;
     }
-
-    /**
-     * @brief  visit boost::any
-     * @tparam ...Ts visited types
-     * @tparam Callback
-     * @tparam ...Args callback function
-     * @param callback other arguments
-     * @param any any
-     * @param ...args ther arguments
-     * @return return value of callback function, void if callback function returns void
-     */
-    template <typename... Ts, typename Callback, typename... Args>
-    inline auto Visit(Callback&& callback, const boost::any& any, Args&&... args)
+    else
     {
-        using R = typename AllTheSame<
-            decltype(std::declval<Callback>()(std::declval<Ts>(), std::declval<Args>()...))...
-        >::type;
-        if constexpr (std::is_void_v<R>) // callback returns void
-        {
-            int dummy[] = {
-            [&]() {
-                if (any.type() == typeid(Ts)) {
-                    std::forward<Callback>(callback)(
-                        boost::any_cast<Ts>(any),
-                        std::forward<Args>(args)...
-                    );
-                }
-                return 0;
-            }() ...
-            };
-            (void)dummy;
-            return;
-        }
-        else
-        {
-            R ret{};
-            int dummy[] = {
-                [&]() {
-                    if (any.type() == typeid(Ts)) {
-                        ret = std::forward<Callback>(callback)(
-                            boost::any_cast<Ts>(any),
-                            std::forward<Args>(args)...
-                        );
-                    }
-                    return 0;
-                }() ...
-            };
-            (void)dummy;
-            return ret;
-        }
+        R ret{};
+        int dummy[] = {[&]()
+                       {
+                           if (any.type() == typeid(Ts))
+                           {
+                               ret = std::forward<Callback>(callback)(std::any_cast<Ts>(any),
+                                                                      std::forward<Args>(args)...);
+                           }
+                           return 0;
+                       }()...};
+        (void)dummy;
+        return ret;
     }
-}// namespace HsBa::Slicer::Utils
+}
 
-#endif // !HSBA_SLICER_ANY_VISIT_HPP
+/**
+ * @brief  visit boost::any
+ * @tparam ...Ts visited types
+ * @tparam Callback
+ * @tparam ...Args callback function
+ * @param callback other arguments
+ * @param any any
+ * @param ...args ther arguments
+ * @return return value of callback function, void if callback function returns void
+ */
+template <typename... Ts, typename Callback, typename... Args>
+inline auto Visit(Callback&& callback, const boost::any& any, Args&&... args)
+{
+    using R =
+        typename AllTheSame<decltype(std::declval<Callback>()(std::declval<Ts>(), std::declval<Args>()...))...>::type;
+    if constexpr (std::is_void_v<R>)  // callback returns void
+    {
+        int dummy[] = {[&]()
+                       {
+                           if (any.type() == typeid(Ts))
+                           {
+                               std::forward<Callback>(callback)(boost::any_cast<Ts>(any), std::forward<Args>(args)...);
+                           }
+                           return 0;
+                       }()...};
+        (void)dummy;
+        return;
+    }
+    else
+    {
+        R ret{};
+        int dummy[] = {[&]()
+                       {
+                           if (any.type() == typeid(Ts))
+                           {
+                               ret = std::forward<Callback>(callback)(boost::any_cast<Ts>(any),
+                                                                      std::forward<Args>(args)...);
+                           }
+                           return 0;
+                       }()...};
+        (void)dummy;
+        return ret;
+    }
+}
+}  // namespace HsBa::Slicer::Utils
+
+#endif  // !HSBA_SLICER_ANY_VISIT_HPP

@@ -11,7 +11,8 @@
 find_package(Lua REQUIRED)
 
 target_include_directories(HsBaCipher PUBLIC
-	${LUA_INCLUDE_DIR}
+    $<BUILD_INTERFACE:${LUA_INCLUDE_DIR}>
+    $<INSTALL_INTERFACE:include>
 )
 
 target_link_libraries(HsBaCipher PUBLIC HsBaSlicerBase

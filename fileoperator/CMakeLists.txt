@@ -17,7 +17,9 @@
 	bit7z_unzipper.hpp
 	bit7z_unzipper.cpp
 	LuaAdapter.hpp
-	LuaAdapter.cpp)
+	LuaAdapter.cpp
+	RemoteExecutor.hpp
+	RemoteExecutor.cpp)
 
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
 	find_package(boost_log CONFIG REQUIRED)

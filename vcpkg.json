@@ -55,6 +55,7 @@
       "name": "libigl",
       "platform": "!windows & !linux & !osx & !android"
     },
+    "freetype",
     "miniz",
     {
       "name": "opencascade",

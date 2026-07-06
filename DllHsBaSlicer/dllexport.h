@@ -12,4 +12,4 @@
 #define HSBA_SLICER_API
 #endif
 
-#endif // !HSBA_SLICER_DLLEXPORT_H
+#endif  // !HSBA_SLICER_DLLEXPORT_H

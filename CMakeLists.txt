@@ -3,6 +3,9 @@
 #
 cmake_minimum_required (VERSION 3.21)
 
+# All static libraries linked into shared libraries (DllHsBaSlicer.so) require -fPIC
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # b1e15efef6758eaa0beb0a8732cfa66f6a68a81d
 
 #force utf-8
@@ -38,7 +41,7 @@ endif()
 set(CMAKE_DEBUG_POSTFIX "d")  
 set_target_properties(${TARGET_NAME} PROPERTIES DEBUG_POSTFIX "d") 
 
-project ("HsBaSlicer")
+project("HsBaSlicer" VERSION 1.0.0)
 
 include_directories(${CMAKE_SOURCE_DIR})
 
@@ -226,6 +229,13 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   message("Boolean operations may be slow and cause high memory usage in Debug mode.")
 endif()
 
+# Model object pool size: 10 when CGAL is available, 1 otherwise
+if(NOT IOS AND NOT HSBA_GAME_CONSOLE)
+  add_compile_definitions(HSBA_MODEL_POOL_SIZE=10)
+else()
+  add_compile_definitions(HSBA_MODEL_POOL_SIZE=1)
+endif()
+
 #CAD_kernel
 #OpenCascade
 #disable if andoird and IOS
@@ -263,8 +273,17 @@ option(HSBA_PROTOBUF_OUT "protobuf out source" ON)
 
 #Todo: if eigen3 version higher and has matrix hasher,add define eigen_std_hash
 
-#copy file to exe_dir
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/utils/logcfg.ini DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/HsBaSlicer)
+#copy logcfg.ini to exe output directory
+# Unify output directories on all platforms so that executables, shared libraries,
+# and resources end up in the same directory.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
+
+# file(COPY) runs at configure time, so use CMAKE_BUILD_TYPE (not $<CONFIG>)
+if(CMAKE_BUILD_TYPE)
+  file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/utils/logcfg.ini
+       DESTINATION "${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}")
+endif()
 
 # static or dynamic
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
@@ -309,10 +328,133 @@ add_subdirectory("meshmodel")
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
   add_subdirectory("cadmodel")
 endif()
+add_subdirectory("preprocess")
+add_subdirectory("support")
 add_subdirectory("convert")
 add_subdirectory("LibHsBaSlicer")
 add_subdirectory("DllHsBaSlicer")
 add_subdirectory ("HsBaSlicer")
+add_subdirectory("version")
+
+#samples
+option(HSBA_SLICER_BUILD_SAMPLES "Build samples" ON)
+if(HSBA_SLICER_BUILD_SAMPLES)
+  add_subdirectory("samples/FDM")
+endif()
+
+# ---------------------------------------------------------------------------
+# Install & Export
+# ---------------------------------------------------------------------------
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+# 安装库目标（RUNTIME → bin, LIBRARY → lib, ARCHIVE → lib）
+# 所有内部静态库必须加入导出集，否则 CMake 会报错
+set(_HSBA_INSTALL_TARGETS
+    DllHsBaSlicer LibHsBaSlicer HsBaSlicerLog
+    HsBaSlicerBase HsBaSlicerUtils HsBaSlicerMesh
+    HsBaSlicer2D HsBaPreprocess HsBaSupport HsBaPaths
+    HsBaSlicerFileOperator
+    HsBaSlicerProto HsBaCipher
+)
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
+  list(APPEND _HSBA_INSTALL_TARGETS HsBaSlicerCADModel)
+endif()
+install(TARGETS ${_HSBA_INSTALL_TARGETS}
+    EXPORT HsBaSlicerTargets
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}      # DLLs (Windows) / exe
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}      # .so (Linux/macOS)
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}      # .lib/.a (import lib)
+)
+
+# 安装公共头文件 —— DllHsBaSlicer C API
+install(FILES
+    DllHsBaSlicer/dllexport.h
+    DllHsBaSlicer/fdm_pipeline.h
+    DllHsBaSlicer/initialize.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer
+)
+
+# base
+install(FILES
+    base/IModel.hpp
+    base/singleton.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/base
+)
+
+# logger
+install(FILES
+    logger/logger.hpp
+    logger/export.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/logger
+)
+
+# LibHsBaSlicer 公开 API
+install(FILES
+    LibHsBaSlicer/export.h
+    LibHsBaSlicer/Slice/mesh_slice.hpp
+    LibHsBaSlicer/Preprocess/model_preprocess.hpp
+    LibHsBaSlicer/Support/fdm_support.hpp
+    LibHsBaSlicer/Fill/polygon_fill.hpp
+    LibHsBaSlicer/Path/path_generator.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/LibHsBaSlicer
+)
+
+# LibHsBaSlicer 公开 API 的传递依赖头文件
+install(FILES
+    2D/FloatPolygons.hpp
+    2D/IntPolygon.hpp
+    2D/PolygonFill.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/2D
+)
+
+install(FILES
+    meshmodel/FullTopoModel.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/meshmodel
+)
+
+install(FILES
+    support/SupportConfig.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/support
+)
+
+install(FILES
+    paths/IPath.hpp
+    paths/pointspath.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/paths
+)
+
+# proto 生成的头文件
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/proto/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/proto
+    FILES_MATCHING PATTERN "*.pb.h"
+)
+
+# 导出 CMake Targets 文件
+install(EXPORT HsBaSlicerTargets
+    FILE HsBaSlicerTargets.cmake
+    NAMESPACE HsBaSlicer::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HsBaSlicer
+)
+
+# 生成并安装 Config / Version 文件
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/HsBaSlicerConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/HsBaSlicerConfig.cmake"
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HsBaSlicer
+)
+
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/HsBaSlicerConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/HsBaSlicerConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/HsBaSlicerConfigVersion.cmake"
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HsBaSlicer
+)
 
 #test
 option(HSBA_SLICER_USE_TESTS "use tests" ON)

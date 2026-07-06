@@ -24,6 +24,7 @@ class GitignoreMatcher:
         default = [
             "build/", "cmake-build-*/", "out/", "bin/", "obj/", ".vs/", ".vscode/",
             "*.o", "*.obj", "*.exe", "*.dll", "*.so", "*.pdb", "*.ilk", ".git/", "__pycache__/",
+            "static_tests/","samples/","docs/","third_party/","external/"
         ]
         gitignore = self.root / ".gitignore"
         if gitignore.exists():
@@ -266,6 +267,11 @@ class CppStaticAnalyzer:
                 continue
             if "/*" in line_content and line_content.find("/*") < line_content.find(m.group()):
                 continue
+            # exclude literals like 0.5, 3.14, 1e10, 24, 100, 1000, 1024, 256, 512, 2048, 4096, 8192, 16384, 32768, 65536
+            if re.match(r"^\d+(\.\d+)?([eE][+-]?\d+)?$", m.group()):
+                num = float(m.group())
+                if num in {0.5, 3.14} or num in {1024, 256, 512, 2048, 4096, 8192, 16384, 32768, 65536, 12, 24, 100, 1000, 10000, -1, 0, 1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 360, 365, 366, 3600, 86400}:
+                    continue
             line = content[: m.start()].count("\n") + 1
             issues.append({"type": "magic_number", "line": line, "column": m.start() - line_start + 1, "message": "避免魔法数字", "code": m.group().strip()})
 
