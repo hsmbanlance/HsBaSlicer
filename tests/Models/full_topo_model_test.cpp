@@ -165,4 +165,26 @@ return polys
     BOOST_CHECK(has_closed);
 }
 
+BOOST_AUTO_TEST_CASE(slice_accepts_repeated_vertex_closure)
+{
+    std::vector<Eigen::Vector3f> vertices = {{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 0.0f},
+                                            {0.0f, 1.0f, 0.0f}, {0.5f, 0.5f, 1.0f}};
+    std::vector<std::array<int, 3>> triangles = {{{0, 1, 4}}, {{1, 2, 4}}, {{2, 3, 4}}, {{3, 0, 4}}};
+
+    FullTopoModel topo(vertices, triangles);
+    auto polys = topo.Slice(0.5f);
+
+    BOOST_CHECK(!polys.empty());
+    bool found = false;
+    for (const auto& poly : polys)
+    {
+        if (poly.size() >= 3)
+        {
+            found = true;
+            break;
+        }
+    }
+    BOOST_CHECK(found);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

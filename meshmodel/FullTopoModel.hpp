@@ -94,9 +94,9 @@ public:
     // 因为构造FullTopoModel已经重建拓扑关系，不需要重建拓扑关系
 
     // 安全切片，只包含封闭轮廓，不封闭轮廓会被丢弃
-    Polygons Slice(const float height) const;
+    Polygons Slice(const float height, double tolerance = 0.001) const;
     // 不安全切片，包含不封闭轮廓
-    UnSafePolygons UnSafeSlice(const float height) const;
+    UnSafePolygons UnSafeSlice(const float height, double tolerance = 0.001) const;
 
     // 快速切片，依赖拓扑信息直接构造切片结果，先检查拓扑完整性，若失败直接抛出异常
     Polygons SliceFast(const float height) const;

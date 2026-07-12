@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <numbers>
 
 #include "2D/LuaAdapter.hpp"
 #include <igl/per_face_normals.h>
@@ -317,10 +318,12 @@ void PushFullTopoModelToLua(lua_State* L, const FullTopoModel& model, float heig
     lua_setglobal(L, "height");
 }
 
-Polygons FullTopoModel::Slice(const float height) const
+/* ======================================================================= */
+
+Polygons FullTopoModel::Slice(const float height, double tolerance) const
 {
-    // Collect intersection segments (as integerized 2D points)
     using Key = std::pair<long long, long long>;
+
     auto make_key = [&](const Eigen::Vector3f& p) -> Key
     {
         long long xi = std::llround(p.x() * integerization);
@@ -328,8 +331,20 @@ Polygons FullTopoModel::Slice(const float height) const
         return {xi, yi};
     };
 
-    std::unordered_map<Key, std::vector<Key>, boost::hash<Key>> adj;
-    adj.reserve(faces_.size() * 2);
+    const long long coord_eps = std::max(1LL, std::llround(tolerance * integerization));
+
+    auto is_same_point = [&](const Key& a, const Key& b) -> bool
+    {
+        long long dx = a.first > b.first ? a.first - b.first : b.first - a.first;
+        long long dy = a.second > b.second ? a.second - b.second : b.second - a.second;
+        return dx <= coord_eps && dy <= coord_eps;
+    };
+
+    /* ============================================================
+       1. 构建原始邻接表（精确整数 Key）
+       ============================================================ */
+    std::unordered_map<Key, std::vector<Key>, boost::hash<Key>> raw_adj;
+    raw_adj.reserve(faces_.size() * 2);
 
     for (const auto& f : faces_)
     {
@@ -346,24 +361,167 @@ Polygons FullTopoModel::Slice(const float height) const
         if (Intersection(v2, v0, height, p))
             inters.push_back(p);
 
-        // keep unique points (by integerized key)
         std::vector<Key> keys;
         for (const auto& ip : inters)
         {
             Key k = make_key(ip);
-            if (keys.end() == std::find(keys.begin(), keys.end(), k))
-            {
+            if (std::find(keys.begin(), keys.end(), k) == keys.end())
                 keys.push_back(k);
-            }
         }
         if (keys.size() == 2)
         {
-            adj[keys[0]].push_back(keys[1]);
-            adj[keys[1]].push_back(keys[0]);
+            raw_adj[keys[0]].push_back(keys[1]);
+            raw_adj[keys[1]].push_back(keys[0]);
         }
     }
 
-    // traverse adjacency to build closed loops only
+    for (auto& kv : raw_adj)
+    {
+        auto& neis = kv.second;
+        std::sort(neis.begin(), neis.end());
+        neis.erase(std::unique(neis.begin(), neis.end()), neis.end());
+    }
+
+    /* ============================================================
+       2. 合并接近节点：网格哈希 + 并查集
+       ============================================================ */
+    struct UnionFind
+    {
+        std::unordered_map<Key, Key, boost::hash<Key>> parent;
+        Key find(Key k)
+        {
+            auto it = parent.find(k);
+            if (it == parent.end())
+            {
+                parent[k] = k;
+                return k;
+            }
+            if (it->second == k)
+                return k;
+            return it->second = find(it->second);
+        }
+        void unite(Key a, Key b)
+        {
+            Key pa = find(a);
+            Key pb = find(b);
+            if (pa != pb)
+                parent[pa] = pb;
+        }
+    };
+
+    UnionFind uf;
+    for (const auto& kv : raw_adj)
+        uf.parent[kv.first] = kv.first;
+
+    struct PairHash
+    {
+        size_t operator()(const std::pair<long long, long long>& p) const noexcept
+        {
+            return std::hash<long long>{}(p.first) ^ (std::hash<long long>{}(p.second) << 1);
+        }
+    };
+    std::unordered_map<std::pair<long long, long long>, std::vector<Key>, PairHash> grid;
+
+    for (const auto& kv : raw_adj)
+    {
+        const Key& k = kv.first;
+        long long gx = coord_eps != 0 ? k.first / coord_eps : 0;
+        long long gy = coord_eps != 0 ? k.second / coord_eps : 0;
+        grid[{gx, gy}].push_back(k);
+    }
+
+    for (const auto& kv : raw_adj)
+    {
+        const Key& k = kv.first;
+        long long gx = coord_eps != 0 ? k.first / coord_eps : 0;
+        long long gy = coord_eps != 0 ? k.second / coord_eps : 0;
+
+        for (long long dx = -1; dx <= 1; ++dx)
+        {
+            for (long long dy = -1; dy <= 1; ++dy)
+            {
+                auto it = grid.find({gx + dx, gy + dy});
+                if (it == grid.end())
+                    continue;
+                for (const Key& other : it->second)
+                {
+                    if (other == k)
+                        continue;
+                    if (is_same_point(k, other))
+                        uf.unite(k, other);
+                }
+            }
+        }
+    }
+
+    std::unordered_map<Key, Key, boost::hash<Key>> key_to_rep;
+    for (const auto& kv : raw_adj)
+        key_to_rep[kv.first] = uf.find(kv.first);
+
+    /* ============================================================
+       3. 构建合并后的拓扑邻接表
+       ============================================================ */
+    std::unordered_map<Key, std::vector<Key>, boost::hash<Key>> adj;
+    for (const auto& kv : raw_adj)
+    {
+        Key ru = key_to_rep[kv.first];
+        for (const Key& v : kv.second)
+        {
+            Key rv = key_to_rep[v];
+            if (ru != rv)
+                adj[ru].push_back(rv);
+        }
+    }
+    for (auto& kv : adj)
+    {
+        auto& neis = kv.second;
+        std::sort(neis.begin(), neis.end());
+        neis.erase(std::unique(neis.begin(), neis.end()), neis.end());
+    }
+
+    /* ============================================================
+       4. 遍历提取封闭环
+       ============================================================ */
+    auto pick_next = [](const Key& cur, const Key& prev, const std::vector<Key>& neis) -> Key
+    {
+        Key sentinel = {LLONG_MIN, LLONG_MIN};
+        Key next = sentinel;
+        double best_angle = std::numbers::pi * 2;
+
+        double in_dx = static_cast<double>(cur.first - prev.first);
+        double in_dy = static_cast<double>(cur.second - prev.second);
+        double in_angle = std::atan2(in_dy, in_dx);
+
+        for (const auto& n : neis)
+        {
+            if (n == prev)
+                continue;
+            double out_dx = static_cast<double>(n.first - cur.first);
+            double out_dy = static_cast<double>(n.second - cur.second);
+            double out_angle = std::atan2(out_dy, out_dx);
+
+            double diff = std::abs(out_angle - in_angle);
+            if (diff > std::numbers::pi)
+                diff = 2.0 * std::numbers::pi - diff;
+
+            if (diff < best_angle)
+            {
+                best_angle = diff;
+                next = n;
+            }
+        }
+        return next;
+    };
+
+    auto find_close_in_path = [&](const Key& target, const std::vector<Key>& path) -> size_t
+    {
+        size_t idx = path.size();
+        for (size_t i = 0; i < path.size(); ++i)
+            if (is_same_point(path[i], target))
+                idx = i;
+        return idx;
+    };
+
     Polygons result;
     std::unordered_set<Key, boost::hash<Key>> visited;
 
@@ -373,51 +531,75 @@ Polygons FullTopoModel::Slice(const float height) const
         if (visited.find(start) != visited.end())
             continue;
 
-        // follow path
         std::vector<Key> path;
         Key cur = start;
         Key prev = {LLONG_MIN, LLONG_MIN};
+
         while (true)
         {
             visited.insert(cur);
             path.push_back(cur);
-            auto& neis = adj[cur];
-            Key next = prev;
-            for (const auto& n : neis)
+
+            const auto& neis = adj[cur];
+            Key next = {LLONG_MIN, LLONG_MIN};
+            if (prev.first == LLONG_MIN)
             {
-                if (n == prev)
-                    continue;
-                next = n;
-                break;
-            }
-            if (next.first == LLONG_MIN)
-                break;  // dead end
-            if (next == start)
-            {
-                // closed loop
-                // form polygon
-                Polygon poly;
-                for (const auto& k : path)
+                for (const auto& n : neis)
                 {
-                    poly.emplace_back(Point2{k.first, k.second});
+                    next = n;
+                    break;
                 }
-                if (poly.size() >= 3)
+            }
+            else
+            {
+                next = pick_next(cur, prev, neis);
+            }
+
+            if (next.first == LLONG_MIN)
+                break;
+
+            if (next == start || is_same_point(next, start))
+            {
+                if (path.size() >= 3)
+                {
+                    Polygon poly;
+                    for (const auto& k : path)
+                        poly.emplace_back(Point2{k.first, k.second});
                     result.emplace_back(std::move(poly));
+                }
                 break;
             }
+
+            size_t sub_start = find_close_in_path(next, path);
+            if (sub_start != path.size())
+            {
+                if (path.size() - sub_start >= 3)
+                {
+                    Polygon poly;
+                    for (size_t i = sub_start; i < path.size(); ++i)
+                        poly.emplace_back(Point2{path[i].first, path[i].second});
+                    result.emplace_back(std::move(poly));
+                }
+                break;
+            }
+
+            if (visited.find(next) != visited.end())
+                break;
+
             prev = cur;
             cur = next;
-            if (visited.find(cur) != visited.end())
-                break;  // prevent infinite loop
         }
     }
 
     return result;
 }
 
-UnSafePolygons FullTopoModel::UnSafeSlice(const float height) const
+/* ======================================================================= */
+
+UnSafePolygons FullTopoModel::UnSafeSlice(const float height, double tolerance) const
 {
     using Key = std::pair<long long, long long>;
+
     auto make_key = [&](const Eigen::Vector3f& p) -> Key
     {
         long long xi = std::llround(p.x() * integerization);
@@ -425,8 +607,18 @@ UnSafePolygons FullTopoModel::UnSafeSlice(const float height) const
         return {xi, yi};
     };
 
-    std::unordered_map<Key, std::vector<Key>, boost::hash<Key>> adj;
-    adj.reserve(faces_.size() * 2);
+    const long long coord_eps = std::max(1LL, std::llround(tolerance * integerization));
+
+    auto is_same_point = [&](const Key& a, const Key& b) -> bool
+    {
+        long long dx = a.first > b.first ? a.first - b.first : b.first - a.first;
+        long long dy = a.second > b.second ? a.second - b.second : b.second - a.second;
+        return dx <= coord_eps && dy <= coord_eps;
+    };
+
+    /* 1. 原始邻接表 */
+    std::unordered_map<Key, std::vector<Key>, boost::hash<Key>> raw_adj;
+    raw_adj.reserve(faces_.size() * 2);
 
     for (const auto& f : faces_)
     {
@@ -447,17 +639,156 @@ UnSafePolygons FullTopoModel::UnSafeSlice(const float height) const
         for (const auto& ip : inters)
         {
             Key k = make_key(ip);
-            if (keys.end() == std::find(keys.begin(), keys.end(), k))
-            {
+            if (std::find(keys.begin(), keys.end(), k) == keys.end())
                 keys.push_back(k);
-            }
         }
         if (keys.size() == 2)
         {
-            adj[keys[0]].push_back(keys[1]);
-            adj[keys[1]].push_back(keys[0]);
+            raw_adj[keys[0]].push_back(keys[1]);
+            raw_adj[keys[1]].push_back(keys[0]);
         }
     }
+
+    for (auto& kv : raw_adj)
+    {
+        auto& neis = kv.second;
+        std::sort(neis.begin(), neis.end());
+        neis.erase(std::unique(neis.begin(), neis.end()), neis.end());
+    }
+
+    /* 2. 合并接近节点 */
+    struct UnionFind
+    {
+        std::unordered_map<Key, Key, boost::hash<Key>> parent;
+        Key find(Key k)
+        {
+            auto it = parent.find(k);
+            if (it == parent.end())
+            {
+                parent[k] = k;
+                return k;
+            }
+            if (it->second == k)
+                return k;
+            return it->second = find(it->second);
+        }
+        void unite(Key a, Key b)
+        {
+            Key pa = find(a);
+            Key pb = find(b);
+            if (pa != pb)
+                parent[pa] = pb;
+        }
+    };
+
+    UnionFind uf;
+    for (const auto& kv : raw_adj)
+        uf.parent[kv.first] = kv.first;
+
+    struct PairHash
+    {
+        size_t operator()(const std::pair<long long, long long>& p) const noexcept
+        {
+            return std::hash<long long>{}(p.first) ^ (std::hash<long long>{}(p.second) << 1);
+        }
+    };
+    std::unordered_map<std::pair<long long, long long>, std::vector<Key>, PairHash> grid;
+
+    for (const auto& kv : raw_adj)
+    {
+        const Key& k = kv.first;
+        long long gx = coord_eps != 0 ? k.first / coord_eps : 0;
+        long long gy = coord_eps != 0 ? k.second / coord_eps : 0;
+        grid[{gx, gy}].push_back(k);
+    }
+
+    for (const auto& kv : raw_adj)
+    {
+        const Key& k = kv.first;
+        long long gx = coord_eps != 0 ? k.first / coord_eps : 0;
+        long long gy = coord_eps != 0 ? k.second / coord_eps : 0;
+
+        for (long long dx = -1; dx <= 1; ++dx)
+        {
+            for (long long dy = -1; dy <= 1; ++dy)
+            {
+                auto it = grid.find({gx + dx, gy + dy});
+                if (it == grid.end())
+                    continue;
+                for (const Key& other : it->second)
+                {
+                    if (other == k)
+                        continue;
+                    if (is_same_point(k, other))
+                        uf.unite(k, other);
+                }
+            }
+        }
+    }
+
+    std::unordered_map<Key, Key, boost::hash<Key>> key_to_rep;
+    for (const auto& kv : raw_adj)
+        key_to_rep[kv.first] = uf.find(kv.first);
+
+    /* 3. 合并后邻接表 */
+    std::unordered_map<Key, std::vector<Key>, boost::hash<Key>> adj;
+    for (const auto& kv : raw_adj)
+    {
+        Key ru = key_to_rep[kv.first];
+        for (const Key& v : kv.second)
+        {
+            Key rv = key_to_rep[v];
+            if (ru != rv)
+                adj[ru].push_back(rv);
+        }
+    }
+    for (auto& kv : adj)
+    {
+        auto& neis = kv.second;
+        std::sort(neis.begin(), neis.end());
+        neis.erase(std::unique(neis.begin(), neis.end()), neis.end());
+    }
+
+    /* 4. 遍历 */
+    auto pick_next = [](const Key& cur, const Key& prev, const std::vector<Key>& neis) -> Key
+    {
+        Key sentinel = {LLONG_MIN, LLONG_MIN};
+        Key next = sentinel;
+        double best_angle = std::numbers::pi * 2;
+
+        double in_dx = static_cast<double>(cur.first - prev.first);
+        double in_dy = static_cast<double>(cur.second - prev.second);
+        double in_angle = std::atan2(in_dy, in_dx);
+
+        for (const auto& n : neis)
+        {
+            if (n == prev)
+                continue;
+            double out_dx = static_cast<double>(n.first - cur.first);
+            double out_dy = static_cast<double>(n.second - cur.second);
+            double out_angle = std::atan2(out_dy, out_dx);
+
+            double diff = std::abs(out_angle - in_angle);
+            if (diff > std::numbers::pi)
+                diff = 2.0 * std::numbers::pi - diff;
+
+            if (diff < best_angle)
+            {
+                best_angle = diff;
+                next = n;
+            }
+        }
+        return next;
+    };
+
+    auto find_close_in_path = [&](const Key& target, const std::vector<Key>& path) -> size_t
+    {
+        size_t idx = path.size();
+        for (size_t i = 0; i < path.size(); ++i)
+            if (is_same_point(path[i], target))
+                idx = i;
+        return idx;
+    };
 
     UnSafePolygons result;
     std::unordered_set<Key, boost::hash<Key>> visited;
@@ -472,36 +803,58 @@ UnSafePolygons FullTopoModel::UnSafeSlice(const float height) const
         Key cur = start;
         Key prev = {LLONG_MIN, LLONG_MIN};
         bool closed = false;
+
         while (true)
         {
             visited.insert(cur);
             path.push_back(cur);
-            auto& neis = adj[cur];
-            Key next = prev;
-            for (const auto& n : neis)
+
+            const auto& neis = adj[cur];
+            Key next = {LLONG_MIN, LLONG_MIN};
+            if (prev.first == LLONG_MIN)
             {
-                if (n == prev)
-                    continue;
-                next = n;
-                break;
+                for (const auto& n : neis)
+                {
+                    next = n;
+                    break;
+                }
             }
+            else
+            {
+                next = pick_next(cur, prev, neis);
+            }
+
             if (next.first == LLONG_MIN)
-                break;  // dead end
-            if (next == start)
+                break;
+
+            if (next == start || is_same_point(next, start))
             {
                 closed = true;
                 break;
             }
+
+            size_t sub_start = find_close_in_path(next, path);
+            if (sub_start != path.size())
+            {
+                if (path.size() - sub_start >= 3)
+                {
+                    path.erase(path.begin(), path.begin() + sub_start);
+                    closed = true;
+                }
+                break;
+            }
+
+            if (visited.find(next) != visited.end())
+                break;
+
             prev = cur;
             cur = next;
-            if (visited.find(cur) != visited.end())
-                break;
         }
+
         Polygon poly;
         for (const auto& k : path)
-        {
             poly.emplace_back(Point2{k.first, k.second});
-        }
+
         if (poly.size() >= 2)
         {
             UnSafePolygon up;
@@ -574,6 +927,46 @@ Polygons FullTopoModel::SliceFast(const float height) const
         }
     }
 
+    // Deduplicate adjacency to remove duplicate edges
+    for (auto& kv : adj)
+    {
+        auto& neis = kv.second;
+        std::sort(neis.begin(), neis.end());
+        neis.erase(std::unique(neis.begin(), neis.end()), neis.end());
+    }
+
+    // Pick neighbor forming smallest angle with incoming direction
+    auto pick_next = [](const Key& cur, const Key& prev, const std::vector<Key>& neis) -> Key
+    {
+        Key sentinel = {LLONG_MIN, LLONG_MIN};
+        Key next = sentinel;
+        double best_angle = std::numbers::pi * 2;
+
+        double in_dx = static_cast<double>(cur.first - prev.first);
+        double in_dy = static_cast<double>(cur.second - prev.second);
+        double in_angle = std::atan2(in_dy, in_dx);
+
+        for (const auto& n : neis)
+        {
+            if (n == prev)
+                continue;
+            double out_dx = static_cast<double>(n.first - cur.first);
+            double out_dy = static_cast<double>(n.second - cur.second);
+            double out_angle = std::atan2(out_dy, out_dx);
+
+            double diff = std::abs(out_angle - in_angle);
+            if (diff > std::numbers::pi)
+                diff = 2.0 * std::numbers::pi - diff;
+
+            if (diff < best_angle)
+            {
+                best_angle = diff;
+                next = n;
+            }
+        }
+        return next;
+    };
+
     Polygons result;
     std::unordered_set<Key, boost::hash<Key>> visited;
     for (const auto& kv : adj)
@@ -590,17 +983,24 @@ Polygons FullTopoModel::SliceFast(const float height) const
             visited.insert(cur);
             path.push_back(cur);
             const auto& neis = adj[cur];
-            Key next = prev;
-            for (const auto& n : neis)
+            Key next;
+            if (prev.first == LLONG_MIN)
             {
-                if (n == prev)
-                    continue;
-                next = n;
-                break;
+                next = {LLONG_MIN, LLONG_MIN};
+                for (const auto& n : neis)
+                {
+                    next = n;
+                    break;
+                }
+            }
+            else
+            {
+                next = pick_next(cur, prev, neis);
             }
             if (next.first == LLONG_MIN)
                 break;
-            if (next == start)
+            const bool loop_closed = next == start || (path.size() >= 3 && visited.find(next) != visited.end());
+            if (loop_closed)
             {
                 Polygon poly;
                 for (const auto& k : path)

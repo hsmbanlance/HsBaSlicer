@@ -3,6 +3,7 @@
 
 #include <filesystem>
 
+#undef Polygon
 #include "2D/IntPolygon.hpp"
 #include "2D/PolygonFill.hpp"
 
@@ -53,6 +54,22 @@ BOOST_AUTO_TEST_CASE(line_and_zigzag_fill_basic)
             auto res = PointInPolygons(pv, poly);
             BOOST_CHECK(res != Clipper2Lib::PointInPolygonResult::IsOutside);
         }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(normalize_self_intersecting_polygon)
+{
+    HsBa::Slicer::Polygon poly;
+    poly.emplace_back(HsBa::Slicer::Point2{0, 0});
+    poly.emplace_back(HsBa::Slicer::Point2{10000, 10000});
+    poly.emplace_back(HsBa::Slicer::Point2{0, 10000});
+    poly.emplace_back(HsBa::Slicer::Point2{10000, 0});
+
+    auto simple_polys = HsBa::Slicer::NormalizeToSimplePolygons(poly);
+    BOOST_CHECK(!simple_polys.empty());
+    for (const auto& simple_poly : simple_polys)
+    {
+        BOOST_CHECK_GE(simple_poly.size(), 3);
     }
 }
 

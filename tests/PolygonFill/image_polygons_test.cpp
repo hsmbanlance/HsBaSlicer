@@ -6,6 +6,7 @@
 #include <opencv2/opencv.hpp>
 #endif
 #include <filesystem>
+#include <fstream>
 
 using namespace HsBa::Slicer;
 
@@ -71,6 +72,29 @@ BOOST_AUTO_TEST_CASE(fromimage_and_toimage_roundtrip)
 #else
     BOOST_TEST_MESSAGE("OpenCV not available, skipping fromimage_and_toimage_roundtrip test");
 #endif
+}
+
+BOOST_AUTO_TEST_CASE(to_image_normalizes_polygon_coordinates)
+{
+    PolygonsD poly;
+    PolygonD p;
+    p.emplace_back(Point2D{100.0, 200.0});
+    p.emplace_back(Point2D{120.0, 200.0});
+    p.emplace_back(Point2D{120.0, 220.0});
+    p.emplace_back(Point2D{100.0, 220.0});
+    poly.push_back(p);
+
+    auto outSvg = std::filesystem::temp_directory_path() / "hsbaslicer_translate.svg";
+    bool ok = ToImage(poly, 100, 100, 1.0, outSvg.string());
+    BOOST_CHECK(ok);
+
+    std::ifstream ifs(outSvg);
+    std::string svg((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+    BOOST_CHECK(svg.find("0.5,0.5") != std::string::npos);
+    BOOST_CHECK(svg.find("100.5,100.5") == std::string::npos);
+
+    std::error_code ec;
+    std::filesystem::remove(outSvg, ec);
 }
 
 BOOST_AUTO_TEST_CASE(lua_to_image)
