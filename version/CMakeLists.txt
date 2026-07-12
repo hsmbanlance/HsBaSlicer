@@ -50,4 +50,4 @@ add_library(HsBaVersion STATIC
 )
 
 target_include_directories(HsBaVersion PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(HsBaVersion public HsBaSlicerBase)
+target_link_libraries(HsBaVersion PUBLIC HsBaSlicerBase)

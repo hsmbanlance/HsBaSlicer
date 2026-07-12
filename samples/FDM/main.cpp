@@ -8,7 +8,9 @@
  * 支持平台: Windows / Linux / macOS / Android / iOS
  */
 
+#include <filesystem>
 #include <format>
+#include <fstream>
 #include <string>
 #include <string_view>
 
@@ -52,6 +54,8 @@ static int RunBasicPipeline()
 {
     LogMsg("=== 示例 1: 基本流水线 ===");
 
+    std::filesystem::create_directories("output");
+
     // 1. 获取默认配置
     HsBaFdmPipelineConfig_t cfg = HsBaCreateDefaultConfig();
 
@@ -66,7 +70,20 @@ static int RunBasicPipeline()
     // 4. 检查结果
     if (result.success)
     {
-        LogMsg(std::format("切片成功! 总层数: {}, 耗时: {:.2f} 秒", result.total_layers, result.elapsed_seconds));
+        std::filesystem::path out_path = "output/stanford_bunny_basic.gcode";
+        std::ofstream ofs(out_path, std::ios::binary);
+        if (ofs)
+        {
+            ofs << (result.gcode_content ? result.gcode_content : "");
+            ofs.close();
+            LogMsg(std::format("切片成功! 总层数: {}, 耗时: {:.2f} 秒，G-code 已写入 {}",
+                               result.total_layers, result.elapsed_seconds, out_path.string()));
+        }
+        else
+        {
+            LogMsg(std::format("切片成功! 总层数: {}, 耗时: {:.2f} 秒，但写入 G-code 失败",
+                               result.total_layers, result.elapsed_seconds));
+        }
     }
     else
     {
@@ -126,8 +143,20 @@ static int RunCustomPipeline()
 
     if (result.success)
     {
-        LogMsg(std::format("自定义切片完成! 层数: {}, 耗时: {:.2f} 秒",
-                           result.total_layers, result.elapsed_seconds));
+        std::filesystem::path out_path = "output/stanford_bunny_custom.gcode";
+        std::ofstream ofs(out_path, std::ios::binary);
+        if (ofs)
+        {
+            ofs << (result.gcode_content ? result.gcode_content : "");
+            ofs.close();
+            LogMsg(std::format("自定义切片完成! 层数: {}, 耗时: {:.2f} 秒，G-code 已写入 {}",
+                               result.total_layers, result.elapsed_seconds, out_path.string()));
+        }
+        else
+        {
+            LogMsg(std::format("自定义切片完成! 层数: {}, 耗时: {:.2f} 秒，但写入 G-code 失败",
+                               result.total_layers, result.elapsed_seconds));
+        }
     }
     else
     {
@@ -172,7 +201,20 @@ static int RunLuaCustomPipeline()
 
     if (result.success)
     {
-        LogMsg(std::format("Lua 自定义切片完成! 层数: {}", result.total_layers));
+        std::filesystem::path out_path = "output/stanford_bunny_lua.gcode";
+        std::ofstream ofs(out_path, std::ios::binary);
+        if (ofs)
+        {
+            ofs << (result.gcode_content ? result.gcode_content : "");
+            ofs.close();
+            LogMsg(std::format("Lua 自定义切片完成! 层数: {}，G-code 已写入 {}",
+                               result.total_layers, out_path.string()));
+        }
+        else
+        {
+            LogMsg(std::format("Lua 自定义切片完成! 层数: {}，但写入 G-code 失败",
+                               result.total_layers));
+        }
     }
     else
     {

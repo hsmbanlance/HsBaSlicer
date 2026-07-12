@@ -5,6 +5,10 @@ initialize.h
 initialize.cpp
 fdm_pipeline.h
 fdm_pipeline.cpp
+sla_pipeline.h
+sla_pipeline.cpp
+version_info.h
+version_info.cpp
 )
 
 target_compile_definitions(DllHsBaSlicer PRIVATE HSBA_SLICER_EXPORTS)
@@ -17,4 +21,6 @@ HsBaSlicer2D
 HsBaPreprocess
 HsBaSupport
 HsBaPaths
+HsBaSlicerFileOperator
+HsBaVersion
 )

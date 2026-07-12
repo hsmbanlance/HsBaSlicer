@@ -1,4 +1,8 @@
-﻿#include <string_view>
+﻿#pragma once
+#ifndef HSBA_SLICER_VERSION_HPP
+#define HSBA_SLICER_VERSION_HPP
+
+#include <string_view>
 
 #include "base/InplaceVector.hpp"
 
@@ -25,3 +29,5 @@ struct VersionInfo
 
 VersionInfo GetVersionInfo();
 }  // namespace HsBa::Slicer::Version
+
+#endif  // !HSBA_SLICER_VERSION_HPP

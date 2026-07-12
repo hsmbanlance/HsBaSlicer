@@ -112,9 +112,9 @@ void add_member(YAML::Node& parent, std::string_view name, const FieldType& fiel
         to_yaml_impl(field, field_node);
         parent[name.data()] = field_node;
     }
-    else if constexpr (std::is_same_v<FieldType, std::string>)
+    else if constexpr (std::is_same_v<FieldType, std::string> || std::is_same_v<FieldType, std::string_view>)
     {
-        parent[name.data()] = field;
+        parent[name.data()] = std::string(field);
     }
     else if constexpr (std::is_arithmetic_v<FieldType>)
     {
@@ -127,8 +127,9 @@ void add_member(YAML::Node& parent, std::string_view name, const FieldType& fiel
 }
 
 template <std::ranges::range Range>
-requires(!std::is_same_v<Range, std::string>) void add_member(YAML::Node& parent, std::string_view name,
-                                                              const Range& rng)
+requires(!std::is_same_v<Range, std::string> && !std::is_same_v<Range, std::string_view>)
+void add_member(YAML::Node& parent, std::string_view name,
+                const Range& rng)
 {
     YAML::Node array_node(YAML::NodeType::Sequence);
     for (const auto& item : rng)
