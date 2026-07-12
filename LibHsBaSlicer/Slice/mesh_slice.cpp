@@ -2,15 +2,15 @@
 
 namespace HsBa::Slicer
 {
-HSBA_SLICER_LIB_API Polygons Slice(const IModel& model, const float height)
+HSBA_SLICER_LIB_API Polygons Slice(const IModel& model, const float height, double tolerance)
 {
     auto topo_mesh = std::make_unique<FullTopoModel>(FullTopoModel(model));
-    return topo_mesh->Slice(height);
+    return topo_mesh->Slice(height, tolerance);
 }
-HSBA_SLICER_LIB_API UnSafePolygons UnSafeSlice(const IModel& model, const float height)
+HSBA_SLICER_LIB_API UnSafePolygons UnSafeSlice(const IModel& model, const float height, double tolerance)
 {
     auto topo_mesh = std::make_unique<FullTopoModel>(FullTopoModel(model));
-    return topo_mesh->UnSafeSlice(height);
+    return topo_mesh->UnSafeSlice(height, tolerance);
 }
 
 HSBA_SLICER_LIB_API Polygons SliceLua(const IModel& model, const std::string& script, const float height)

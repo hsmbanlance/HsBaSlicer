@@ -11,6 +11,8 @@
     Fill/polygon_fill.cpp
     Path/path_generator.hpp
     Path/path_generator.cpp
+    Floor/sla_floor.hpp
+    Floor/sla_floor.cpp
     )
 else()
     add_library(LibHsBaSlicer SHARED 
@@ -25,6 +27,8 @@ else()
     Fill/polygon_fill.cpp
     Path/path_generator.hpp
     Path/path_generator.cpp
+    Floor/sla_floor.hpp
+    Floor/sla_floor.cpp
     )
     # Define the export macro for Windows
     target_compile_definitions(LibHsBaSlicer PRIVATE HSBA_SLICER_EXPORTS)

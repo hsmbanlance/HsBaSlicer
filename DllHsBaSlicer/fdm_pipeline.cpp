@@ -129,12 +129,19 @@ void ReportProgress(const InternalConfig& cfg, int percent, const std::string& s
 PolygonsD UnSafePolygonsToPolygonsD(const UnSafePolygons& unsafe_polys)
 {
     Polygons int_polys;
-    int_polys.reserve(unsafe_polys.size());
+    int_polys.reserve(unsafe_polys.size() * 2);
     for (const auto& up : unsafe_polys)
     {
-        if (up.closed)
+        // for fdm/fff only closed polygons are valid, skip open polylines
+        if (!up.closed || up.path.size() < 3)
         {
-            int_polys.push_back(up.path);
+            continue;
+        }
+
+        auto normalized = NormalizeToSimplePolygons(up.path);
+        for (const auto& simple_poly : normalized)
+        {
+            int_polys.push_back(simple_poly);
         }
     }
     return UnIntegerization(int_polys);

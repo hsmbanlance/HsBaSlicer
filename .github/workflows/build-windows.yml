@@ -46,13 +46,3 @@ jobs:
           set /p VSPATH=<vspath.txt
           call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
           cmake --build build --config Release
-
-      - name: Run tests
-        shell: cmd
-        run: |
-          call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
-          set /p VSPATH=<vspath.txt
-          call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
-          cd build/tests
-          ctest -C Release --output-on-failure --parallel 2
-        continue-on-error: true

@@ -403,13 +403,13 @@ const luaL_Reg polygonFillLib[] = {{"offsetFill", l_offsetFill},
                                    {"hybridFill", l_hybridFill},
                                    {"offsetOnly", l_offsetOnly},
                                    {NULL, nullptr}};
+}  // namespace
 
 void RegisterLuaPolygonFillFunctions(lua_State* L)
 {
     luaL_newlib(L, polygonFillLib);
     lua_setglobal(L, "PolygonFill");
 }
-}  // namespace
 
 Polygons OffsetFill(const Polygons& poly, double spacing, Clipper2Lib::JoinType join_type)
 {

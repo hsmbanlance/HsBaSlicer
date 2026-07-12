@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <boost/container_hash/hash.hpp>
+#include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -209,6 +210,7 @@ void WriteSvgFile(std::string_view filename, const std::vector<std::vector<Point
          << height << "\" preserveAspectRatio=\"xMinYMin meet\">\n";
     DumpSvgPaths(polys, file, close_path, scale);
     file << "</svg>\n";
+    file.close();
 }
 }  // namespace
 
@@ -269,6 +271,144 @@ std::vector<Polygons> MakeSimpleAndSplit(const Polygon& p, double epsilon)
         ps = MakeSimple(ps, epsilon);
     }
     return res;
+}
+
+namespace
+{
+struct ContourNode
+{
+    Polygon path;
+    bool is_hole = false;
+    int parent = -1;
+    std::vector<int> children;
+};
+
+bool PointInPolygon(const Polygon& poly, const Point2& pt)
+{
+    if (poly.size() < 3)
+        return false;
+
+    bool inside = false;
+    for (size_t i = 0, j = poly.size() - 1; i < poly.size(); j = i++)
+    {
+        const auto& a = poly[i];
+        const auto& b = poly[j];
+        const bool intersect = ((a.y > pt.y) != (b.y > pt.y)) &&
+                               (pt.x < (b.x - a.x) * (pt.y - a.y) / (b.y - a.y) + a.x);
+        if (intersect)
+            inside = !inside;
+    }
+    return inside;
+}
+
+bool ContainsPolygon(const Polygon& outer, const Polygon& inner)
+{
+    if (outer.size() < 3 || inner.size() < 3)
+        return false;
+    return PointInPolygon(outer, inner.front());
+}
+
+void NormalizeOrientation(Polygon& poly)
+{
+    if (poly.size() < 3)
+        return;
+
+    const double area = Area(poly);
+    if (std::abs(area) < 1e-6)
+        return;
+
+    if (area < 0.0)
+        std::reverse(poly.begin(), poly.end());
+}
+} // namespace
+
+std::vector<Polygon> NormalizeToSimplePolygons(const Polygon& p, double epsilon)
+{
+    std::vector<Polygon> result;
+    if (p.size() < 3)
+    {
+        return result;
+    }
+
+    auto split_groups = MakeSimpleAndSplit(p, epsilon);
+    std::vector<ContourNode> nodes;
+    nodes.reserve(split_groups.size() * 2);
+
+    for (const auto& group : split_groups)
+    {
+        for (const auto& poly : group)
+        {
+            if (poly.size() < 3)
+            {
+                continue;
+            }
+
+            Polygon normalized = poly;
+            NormalizeOrientation(normalized);
+            const double area = std::abs(Area(normalized));
+            if (area < 1e-6)
+            {
+                continue;
+            }
+
+            nodes.push_back({std::move(normalized), false, -1, {}});
+        }
+    }
+
+    for (size_t i = 0; i < nodes.size(); ++i)
+    {
+        // Find the smallest-area container (innermost parent) for node i
+        int best_parent = -1;
+        double best_area = std::numeric_limits<double>::max();
+
+        for (size_t j = 0; j < nodes.size(); ++j)
+        {
+            if (i == j)
+                continue;
+            if (!ContainsPolygon(nodes[j].path, nodes[i].path))
+                continue;
+
+            double area_j = std::abs(Area(nodes[j].path));
+            if (area_j < best_area)
+            {
+                best_area = area_j;
+                best_parent = static_cast<int>(j);
+            }
+        }
+
+        if (best_parent >= 0)
+        {
+            nodes[best_parent].children.push_back(static_cast<int>(i));
+            nodes[i].parent = best_parent;
+            nodes[i].is_hole = true;
+        }
+    }
+
+    for (size_t i = 0; i < nodes.size(); ++i)
+    {
+        if (nodes[i].parent != -1)
+            continue;
+
+        result.push_back(nodes[i].path);
+        for (int child : nodes[i].children)
+        {
+            result.push_back(nodes[child].path);
+        }
+    }
+
+    return result;
+}
+
+std::vector<Polygon> NormalizeToSimplePolygons(const Polygons& ps, double epsilon)
+{
+    std::vector<Polygon> result;
+    result.reserve(ps.size());
+    for (const auto& p : ps)
+    {
+        auto normalized = NormalizeToSimplePolygons(p, epsilon);
+        result.insert(result.end(), normalized.begin(), normalized.end());
+    }
+    return result;
 }
 }  // namespace HsBa::Slicer
 

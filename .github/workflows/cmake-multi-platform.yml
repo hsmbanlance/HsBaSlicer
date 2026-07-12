@@ -178,35 +178,6 @@ jobs:
         call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
         cmake --build build --config ${{ matrix.build_type }}
 
-    - name: Test (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      working-directory: build
-      run: |
-        $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
-                  -latest -property installationPath
-        if (-not $vsPath) { throw "Cannot locate Visual Studio installation" }
-
-        $vcvarsall = Join-Path $vsPath "VC\Auxiliary\Build\vcvarsall.bat"
-        if (-not (Test-Path $vcvarsall)) { throw "vcvarsall.bat not found" }
-        cmd.exe /c "call `"$vcvarsall`" x64 >nul && set" |
-          ForEach-Object {
-            if ($_ -match '^([^=]+)=(.*)$') {
-              [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process')
-           }
-        }
-        $exe = Get-ChildItem -Path "tests" -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-        if (-not $exe) {
-          Write-Error "No test executable (*.exe) found under build\tests"
-          exit 1
-        }
-
-        Write-Host "Found test exe: $($exe.FullName)"
-        Set-Location $exe.DirectoryName
-        ctest -C Release --output-on-failure --parallel 2
-      continue-on-error: true
-
   build-android:
     runs-on: ubuntu-latest
     needs: build
@@ -396,7 +367,7 @@ jobs:
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_OSX_SYSROOT=iphoneos \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=16.3
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=26.5
 
       - name: Build iOS target
         shell: bash

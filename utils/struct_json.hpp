@@ -141,11 +141,12 @@ void add_member(rapidjson::Value& parent, std::string_view name, const FieldType
     parent.AddMember(rapidjson::StringRef(name.data()), field_json, allocator);
 }
 template <typename FieldType>
-requires std::is_same_v<FieldType, std::string> void add_member(rapidjson::Value& parent, std::string_view name,
-                                                                const FieldType& field,
-                                                                rapidjson::Document::AllocatorType& allocator)
+requires(std::is_same_v<FieldType, std::string> || std::is_same_v<FieldType, std::string_view>)
+void add_member(rapidjson::Value& parent, std::string_view name,
+                const FieldType& field,
+                rapidjson::Document::AllocatorType& allocator)
 {
-    parent.AddMember(rapidjson::StringRef(name.data()), rapidjson::Value(field.c_str(), allocator), allocator);
+    parent.AddMember(rapidjson::StringRef(name.data()), rapidjson::Value(field.data(), static_cast<rapidjson::SizeType>(field.size()), allocator), allocator);
 }
 
 template <typename FieldType>
@@ -157,9 +158,10 @@ requires std::is_arithmetic_v<FieldType> void add_member(rapidjson::Value& paren
 }
 
 template <std::ranges::range Range>
-requires(!std::is_same_v<Range, std::string>) void add_member(rapidjson::Value& parent, std::string_view name,
-                                                              const Range& rng,
-                                                              rapidjson::Document::AllocatorType& allocator)
+requires(!std::is_same_v<Range, std::string> && !std::is_same_v<Range, std::string_view>)
+void add_member(rapidjson::Value& parent, std::string_view name,
+                const Range& rng,
+                rapidjson::Document::AllocatorType& allocator)
 {
     rapidjson::Value array_json(rapidjson::kArrayType);
     for (const auto& item : rng)

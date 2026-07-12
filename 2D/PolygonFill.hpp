@@ -124,6 +124,13 @@ Polygons LuaCustomFill(const Polygons& poly, const std::string& scriptPath,
 Polygons LuaCustomFillString(const Polygons& poly, const std::string& script,
                              const std::string& functionName = "generate_fill", double lineThickness = 0.5,
                              const std::function<void(lua_State*)>& lua_reg = {});
+
+/**
+ * @brief Register Lua polygon fill functions (offsetFill, lineFill, zigzagFill, etc.).
+ * @param L Lua state pointer.
+ */
+void RegisterLuaPolygonFillFunctions(lua_State* L);
+
 }  // namespace HsBa::Slicer
 
 #endif  // !HSBA_SLICER_POLYGONFILL_HPP
