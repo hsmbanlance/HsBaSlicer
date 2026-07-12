@@ -254,14 +254,14 @@ bool SaveJPG(const std::string& path, const std::vector<uint8_t>& img, int w, in
 }
 
 void RasterizePolygons(const PolygonsD& polys, std::vector<uint8_t>& img, int width, int height, double pixelSize,
-                       uint8_t foreground)
+                       double origin_x, double origin_y, uint8_t foreground)
 {
     for (int y = 0; y < height; ++y)
     {
         for (int x = 0; x < width; ++x)
         {
-            double px = (x + 0.5) * pixelSize;
-            double py = (y + 0.5) * pixelSize;
+            double px = origin_x + (x + 0.5) * pixelSize;
+            double py = origin_y + (y + 0.5) * pixelSize;
             for (const auto& poly : polys)
             {
                 if (pointInPolygon(poly, px, py))
@@ -290,6 +290,34 @@ bool ToImage(const PolygonsD& polys, int width, int height, double pixelSize, co
     if (width <= 0 || height <= 0)
         return false;
 
+    double min_x = 0.0;
+    double min_y = 0.0;
+    double max_x = 0.0;
+    double max_y = 0.0;
+    bool has_bounds = false;
+    for (const auto& poly : polys)
+    {
+        for (const auto& pt : poly)
+        {
+            if (!has_bounds)
+            {
+                min_x = max_x = pt.x;
+                min_y = max_y = pt.y;
+                has_bounds = true;
+            }
+            else
+            {
+                min_x = std::min(min_x, pt.x);
+                min_y = std::min(min_y, pt.y);
+                max_x = std::max(max_x, pt.x);
+                max_y = std::max(max_y, pt.y);
+            }
+        }
+    }
+
+    if (!has_bounds)
+        return false;
+
     auto low = Utils::to_lower(outPath);
     if (low.size() >= 4 && low.substr(low.size() - 4) == ".svg")
     {
@@ -311,8 +339,8 @@ bool ToImage(const PolygonsD& polys, int width, int height, double pixelSize, co
             std::ostringstream pts;
             for (const auto& pt : poly)
             {
-                double px = pt.x / pixelSize + 0.5;  // center sample
-                double py = pt.y / pixelSize + 0.5;
+                double px = (pt.x - min_x) / pixelSize + 0.5;  // center sample
+                double py = (pt.y - min_y) / pixelSize + 0.5;
                 pts << px << "," << py << " ";
             }
             ofs << "<polygon points=\"" << pts.str() << "\" fill=\"rgb(" << int(foreground) << "," << int(foreground)
@@ -335,8 +363,8 @@ bool ToImage(const PolygonsD& polys, int width, int height, double pixelSize, co
             contours.emplace_back();
             for (const auto& pt : poly)
             {
-                int px = (int)std::round(pt.x / pixelSize);
-                int py = (int)std::round(pt.y / pixelSize);
+                int px = (int)std::round((pt.x - min_x) / pixelSize);
+                int py = (int)std::round((pt.y - min_y) / pixelSize);
                 contours.back().push_back(cv::Point(px, py));
             }
             // fill polygon
@@ -347,7 +375,7 @@ bool ToImage(const PolygonsD& polys, int width, int height, double pixelSize, co
 #else
     // rasterize manually
     std::vector<uint8_t> img(width * height, background);
-    RasterizePolygons(polys, img, width, height, pixelSize, foreground);
+    RasterizePolygons(polys, img, width, height, pixelSize, min_x, min_y, foreground);
     if (low.size() >= 4 &&
         (low.substr(low.size() - 4) == ".jpg" || (low.size() >= 5 && low.substr(low.size() - 5) == ".jpeg")))
     {

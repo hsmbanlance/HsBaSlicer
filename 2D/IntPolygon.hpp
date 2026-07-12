@@ -5,6 +5,7 @@
 #include <clipper2/clipper.h>
 #include <clipper2/clipper.offset.h>
 #include <string_view>
+#include <vector>
 
 namespace HsBa::Slicer
 {
@@ -43,6 +44,22 @@ Polygons MakeSimple(const Polygons& ps, double epsilon = 1e-3);
  * @return Vector of simplified and split polygons.
  */
 std::vector<Polygons> MakeSimpleAndSplit(const Polygon& p, double epsilon = 1e-3);
+
+/**
+ * @brief Simplify and split a polygon into a set of simple polygons.
+ * @param p Input polygon.
+ * @param epsilon Tolerance for simplification (default: 1e-3).
+ * @return Vector of simple polygons.
+ */
+std::vector<Polygon> NormalizeToSimplePolygons(const Polygon& p, double epsilon = 1e-3);
+
+/**
+ * @brief Simplify and split a set of polygons into simple polygons.
+ * @param ps Input polygons.
+ * @param epsilon Tolerance for simplification (default: 1e-3).
+ * @return Vector of simple polygons.
+ */
+std::vector<Polygon> NormalizeToSimplePolygons(const Polygons& ps, double epsilon = 1e-3);
 
 /**
  * @brief Compute union of two polygons.
