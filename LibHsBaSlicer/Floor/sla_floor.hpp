@@ -3,9 +3,12 @@
 #define HSBA_SLICER_LIB_SLA_FLOOR_HPP
 
 #include "../export.h"
+#include "2D/FloatPolygons.hpp"
 #include "2D/IntPolygon.hpp"
 
 #include <functional>
+#include <string>
+#include <vector>
 
 struct lua_State;
 
@@ -109,6 +112,70 @@ HSBA_SLICER_LIB_API Polygons LuaCustomFloorByString(
     const Polygons& bottom_layer, const std::string& lua_script,
     const std::string& function_name, const SlaFloorConfig& config,
     const std::function<void(lua_State*)>& lua_reg = {});
+
+// ============================================================
+// SLA image rendering
+// ============================================================
+
+/**
+ * @brief Render polygons to an image file.
+ *
+ * Computes pixel size automatically from polygon bounding box and requested
+ * image dimensions, then writes the rendered image to outPath.
+ *
+ * @param polys Input polygons to render.
+ * @param width Requested image width in pixels (0 = auto 800).
+ * @param height Requested image height in pixels (0 = auto 600).
+ * @param outPath Output image file path (extension determines format: .png, .jpg, .svg).
+ * @return true if rendering succeeded, false otherwise.
+ */
+HSBA_SLICER_LIB_API bool RenderPolygonsToImage(const PolygonsD& polys, int width, int height,
+                                                const std::string& outPath);
+
+// ============================================================
+// SLA package export
+// ============================================================
+
+/**
+ * @brief Data package for SLA export (layer images, floor, supports, config).
+ */
+struct SlaPackage
+{
+    std::vector<PolygonsD> layer_outlines;       ///< Per-layer slice outlines
+    std::vector<PolygonsD> layer_supports;       ///< Per-layer support polygons (empty if no support)
+    PolygonsD floor_polygons;                    ///< Floor / raft polygons (empty if no floor)
+    std::string config_json;                     ///< Configuration JSON content
+    int image_width = 0;                         ///< Image width (0 = auto)
+    int image_height = 0;                        ///< Image height (0 = auto)
+    std::string image_extension = ".png";        ///< Image file extension (.png, .jpg, .svg)
+    bool include_floor_images = true;            ///< Generate floor image
+    bool include_support_images = true;          ///< Generate support images
+};
+
+/**
+ * @brief Save SLA package as a zip archive with layer images, floor images,
+ *        support images, and a config.json.
+ *
+ * Internally renders polygons to images and packages them using ImagesPath.
+ *
+ * @param pkg SLA package data.
+ * @param output_zip Output zip file path.
+ * @return true if save succeeded, false otherwise.
+ */
+HSBA_SLICER_LIB_API bool SaveSlaPackage(const SlaPackage& pkg, const std::string& output_zip);
+
+/**
+ * @brief Save SLA package with Lua-customized export logic.
+ *
+ * @param pkg SLA package data.
+ * @param output_zip Output zip file path.
+ * @param lua_script Inline Lua script source code.
+ * @param lua_func Lua function name to call (default: "export_sla").
+ * @return true if save succeeded, false otherwise.
+ */
+HSBA_SLICER_LIB_API bool SaveSlaPackageLua(const SlaPackage& pkg, const std::string& output_zip,
+                                            const std::string& lua_script,
+                                            const std::string& lua_func = "export_sla");
 
 }  // namespace HsBa::Slicer
 

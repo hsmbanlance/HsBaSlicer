@@ -1,6 +1,8 @@
 ﻿if(NOT BUILD_SHARED_LIBS)
     add_library(LibHsBaSlicer STATIC 
     pch_headers.hpp
+    version_info.hpp
+    version_info.cpp
     Slice/mesh_slice.hpp
     Slice/mesh_slice.cpp
     Preprocess/model_preprocess.hpp
@@ -17,6 +19,8 @@
 else()
     add_library(LibHsBaSlicer SHARED 
     pch_headers.hpp
+    version_info.hpp
+    version_info.cpp
     Slice/mesh_slice.hpp
     Slice/mesh_slice.cpp
     Preprocess/model_preprocess.hpp
@@ -46,6 +50,7 @@ HsBaSlicer2D
 HsBaPreprocess
 HsBaSupport
 HsBaPaths
+HsBaVersion
 )
 
 # OCCT / CAD kernel is not available on Android, iOS, or game consoles

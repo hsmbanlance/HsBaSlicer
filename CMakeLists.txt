@@ -357,6 +357,7 @@ set(_HSBA_INSTALL_TARGETS
     HsBaSlicer2D HsBaPreprocess HsBaSupport HsBaPaths
     HsBaSlicerFileOperator
     HsBaSlicerProto HsBaCipher
+    HsBaVersion
 )
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
   list(APPEND _HSBA_INSTALL_TARGETS HsBaSlicerCADModel)
@@ -384,6 +385,12 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/base
 )
 
+# version
+install(FILES
+    version/version.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer
+)
+
 # logger
 install(FILES
     logger/logger.hpp
@@ -394,6 +401,7 @@ install(FILES
 # LibHsBaSlicer 公开 API
 install(FILES
     LibHsBaSlicer/export.h
+    LibHsBaSlicer/version_info.hpp
     LibHsBaSlicer/Slice/mesh_slice.hpp
     LibHsBaSlicer/Preprocess/model_preprocess.hpp
     LibHsBaSlicer/Support/fdm_support.hpp

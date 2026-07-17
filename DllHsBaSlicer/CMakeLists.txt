@@ -15,8 +15,11 @@ target_compile_definitions(DllHsBaSlicer PRIVATE HSBA_SLICER_EXPORTS)
 
 target_link_libraries(DllHsBaSlicer PRIVATE
 LibHsBaSlicer
+# Transitive static dependencies required for link resolution.
+# Code-level constraint: DllHsBaSlicer only calls LibHsBaSlicer exported functions.
 HsBaSlicerBase
 HsBaSlicerUtils
+HsBaSlicerMesh
 HsBaSlicer2D
 HsBaPreprocess
 HsBaSupport
