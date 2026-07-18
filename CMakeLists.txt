@@ -358,6 +358,7 @@ set(_HSBA_INSTALL_TARGETS
     HsBaSlicerFileOperator
     HsBaSlicerProto HsBaCipher
     HsBaVersion
+    HsBaSlicerConverter
 )
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
   list(APPEND _HSBA_INSTALL_TARGETS HsBaSlicerCADModel)
@@ -374,6 +375,7 @@ install(FILES
     DllHsBaSlicer/dllexport.h
     DllHsBaSlicer/fdm_pipeline.h
     DllHsBaSlicer/sla_pipeline.h
+    DllHsBaSlicer/pipeline_convert.h
     DllHsBaSlicer/initialize.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer
 )
@@ -433,6 +435,13 @@ install(FILES
     paths/IPath.hpp
     paths/pointspath.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/paths
+)
+
+# convert pipeline conversion headers
+install(FILES
+    convert/PipelineConfig2Msg.hpp
+    convert/Msg2PipelineConfig.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/convert
 )
 
 # proto 生成的头文件

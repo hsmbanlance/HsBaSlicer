@@ -7,6 +7,8 @@ fdm_pipeline.h
 fdm_pipeline.cpp
 sla_pipeline.h
 sla_pipeline.cpp
+pipeline_convert.h
+pipeline_convert.cpp
 version_info.h
 version_info.cpp
 )
@@ -26,4 +28,6 @@ HsBaSupport
 HsBaPaths
 HsBaSlicerFileOperator
 HsBaVersion
+HsBaSlicerConverter
+HsBaSlicerProto
 )

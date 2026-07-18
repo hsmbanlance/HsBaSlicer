@@ -31,8 +31,8 @@ public:
 
     ModelLoader(const ModelLoader&) = delete;
     ModelLoader& operator=(const ModelLoader&) = delete;
-    ModelLoader(ModelLoader&&) = default;
-    ModelLoader& operator=(ModelLoader&&) = default;
+    ModelLoader(ModelLoader&&) = delete;
+    ModelLoader& operator=(ModelLoader&&) = delete;
 
     /** @brief Load a model from file and store it in the pool.
      *
