@@ -441,6 +441,38 @@ install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/proto/
     FILES_MATCHING PATTERN "*.pb.h"
 )
 
+# proto 多语言导出文件
+if(HSBA_PROTOBUF_OUT)
+    install(DIRECTORY ${HSBA_PROTO_OUT_DIRECTORY}/protobuf/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/HsBaSlicer/proto
+    )
+    if(HSBA_PROTO_OUT_CPP)
+        install(DIRECTORY ${HSBA_PROTO_OUT_DIRECTORY}/cpp/
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/HsBaSlicer/proto/cpp
+        )
+    endif()
+    if(HSBA_PROTO_OUT_CSHARP)
+        install(DIRECTORY ${HSBA_PROTO_OUT_DIRECTORY}/cs/
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/HsBaSlicer/proto/cs
+        )
+    endif()
+    if(HSBA_PROTO_OUT_JAVA)
+        install(DIRECTORY ${HSBA_PROTO_OUT_DIRECTORY}/java/
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/HsBaSlicer/proto/java
+        )
+    endif()
+    if(HSBA_PROTO_OUT_PYTHON)
+        install(DIRECTORY ${HSBA_PROTO_OUT_DIRECTORY}/python/
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/HsBaSlicer/proto/python
+        )
+    endif()
+    if(HSBA_PROTO_OUT_PHP)
+        install(DIRECTORY ${HSBA_PROTO_OUT_DIRECTORY}/php/
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/HsBaSlicer/proto/php
+        )
+    endif()
+endif()
+
 # 导出 CMake Targets 文件
 install(EXPORT HsBaSlicerTargets
     FILE HsBaSlicerTargets.cmake

@@ -97,6 +97,98 @@ cmake --build . --config Release
 
 Android 编译通常在 Linux 环境下完成，需安装 Android SDK/NDK，并设置 `ANDROID_NDK_HOME`。iOS 在 CI 上已验证，macOS 本地构建未进行广泛测试。
 
+## 安装与导出 / Install & Export
+
+项目通过 `cmake --install` 提供完整的安装导出能力。安装后，下游项目可通过 `find_package(HsBaSlicer)` 直接引用。
+
+### 库目标 / Library Targets
+
+| 目标 | 类型 | 说明 |
+|------|------|------|
+| `DllHsBaSlicer` | 共享库 (.dll/.so) | C ABI 流水线接口，供外部语言（Java/C#/Python 等）调用 |
+| `LibHsBaSlicer` | 静态/共享库 | C++ 全流程切片能力封装 |
+| `HsBaSlicerLog` | 静态库 | 日志模块 |
+| `HsBaSlicerBase` | 静态库 | 基础类型与工具 |
+| `HsBaSlicerUtils` | 静态库 | 序列化、配置、Lua 绑定等辅助 |
+| `HsBaSlicerMesh` | 静态库 | 网格模型（CGAL/IGL） |
+| `HsBaSlicerCADModel` | 静态库 | CAD 模型（OpenCascade），桌面平台可用 |
+| `HsBaSlicer2D` | 静态库 | 2D 多边形处理（Clipper2） |
+| `HsBaPreprocess` | 静态库 | 模型加载与预处理 |
+| `HsBaSupport` | 静态库 | FDM/SLA 支撑生成 |
+| `HsBaPaths` | 静态库 | 路径输出 |
+| `HsBaSlicerFileOperator` | 静态库 | 文件压缩、SQL、配置树 |
+| `HsBaSlicerProto` | 静态库 | Protobuf 消息定义 |
+| `HsBaCipher` | 静态库 | 加密与哈希 |
+| `HsBaVersion` | 静态库 | 版本信息 |
+
+安装后所有目标以 `HsBaSlicer::` 命名空间导出，例如 `HsBaSlicer::DllHsBaSlicer`、`HsBaSlicer::LibHsBaSlicer`。
+
+### 头文件布局 / Header Layout
+
+```
+<install_prefix>/include/HsBaSlicer/
+├── dllexport.h                  # DllHsBaSlicer C API
+├── fdm_pipeline.h
+├── sla_pipeline.h
+├── initialize.h
+├── version.hpp                  # 版本信息
+├── base/                        # 基础类型
+├── logger/                      # 日志
+├── LibHsBaSlicer/               # C++ 全流程 API
+│   ├── export.h
+│   ├── version_info.hpp
+│   ├── Slice/mesh_slice.hpp
+│   ├── Preprocess/model_preprocess.hpp
+│   ├── Support/fdm_support.hpp
+│   ├── Fill/polygon_fill.hpp
+│   ├── Path/path_generator.hpp
+│   └── Floor/sla_floor.hpp
+├── 2D/                          # 多边形处理
+├── meshmodel/                   # 网格模型
+├── support/                     # 支撑配置
+├── paths/                       # 路径接口
+└── proto/                       # Protobuf C++ 生成头 (.pb.h)
+```
+
+Proto 多语言导出文件（需启用 `HSBA_PROTOBUF_OUT`）：
+
+```
+<install_prefix>/share/HsBaSlicer/proto/
+├── *.proto                      # 原始 Protobuf 定义
+├── cpp/                         # C++ 生成源 (.pb.cc / .pb.h)
+├── cs/                          # C# 生成源 (.cs)
+├── java/                        # Java 生成源 (.java)
+├── python/                      # Python 生成源 (_pb2.py)
+└── php/                         # PHP 生成源 (.php)
+```
+
+### CMake 配置文件 / Config Files
+
+```
+<install_prefix>/lib/cmake/HsBaSlicer/
+├── HsBaSlicerConfig.cmake
+├── HsBaSlicerConfigVersion.cmake
+└── HsBaSlicerTargets.cmake
+```
+
+下游项目引用示例：
+
+```cmake
+find_package(HsBaSlicer CONFIG REQUIRED)
+target_link_libraries(my_app PRIVATE HsBaSlicer::DllHsBaSlicer)
+```
+
+### 安装命令 / Install Command
+
+```bash
+cmake --install <build_dir> --prefix <install_prefix> --config Release
+```
+
+### 平台说明 / Platform Notes
+
+- **桌面平台（Windows/Linux/macOS）**：所有库目标均参与安装。
+- **Android / iOS / 游戏主机**：`HsBaSlicerCADModel` 不参与安装（因缺少 OpenCascade 支持）。
+
 ## 贡献 / Contributing
 
 欢迎提交 issue 或 PR。对外部依赖和构建选项有疑问时，请先参考项目 `CMakeLists.txt` 与 `proto/CMakeLists.txt`。
