@@ -1,5 +1,7 @@
 #include "polygon_fill.hpp"
 
+#include "2D/PolygonFill.hpp"
+
 namespace HsBa::Slicer
 {
 HSBA_SLICER_LIB_API Polygons FillPolygon(const Polygons& poly, double spacing, FillMode mode, double angle_deg)
@@ -23,6 +25,12 @@ HSBA_SLICER_LIB_API Polygons FillWithBorder(const Polygons& poly, double spacing
     // 使用CompositeOffsetFill：边框偏移 + 内部填充
     // outwardCount=0 表示不向外偏移，inwardCount=border_count 向内偏移生成边框
     return CompositeOffsetFill(poly, spacing, spacing, 0, border_count, fill_mode, angle_deg);
+}
+
+HSBA_SLICER_LIB_API Polygons LuaCustomFillByFile(const Polygons& poly, const std::string& scriptPath,
+                                                  const std::string& functionName, double lineThickness)
+{
+    return LuaCustomFill(poly, scriptPath, functionName, lineThickness);
 }
 
 }  // namespace HsBa::Slicer

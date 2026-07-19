@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
 #include <fstream>
 #include <memory>
 #include <sstream>
@@ -15,16 +14,8 @@
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
-#include "preprocess/ModelLoader.hpp"
-#include "2D/IntPolygon.hpp"
-#include "2D/FloatPolygons.hpp"
-#include "2D/ImageToPolygons.hpp"
+#include "LibHsBaSlicer/Support/fdm_support.hpp"
 #include "base/coroutine.hpp"
-#include "support/SupportConfig.hpp"
-#include "support/SlaSupport.hpp"
-#include "support/LuaSupport.hpp"
-#include "support/ISupport.hpp"
-#include "paths/imagespath.hpp"
 
 namespace HsBa::Slicer::Pipeline
 {
@@ -146,26 +137,6 @@ void ReportProgress(const InternalSlaConfig& cfg, int percent, const std::string
     }
 }
 
-PolygonsD UnSafePolygonsToPolygonsD(const UnSafePolygons& unsafe_polys)
-{
-    Polygons int_polys;
-    int_polys.reserve(unsafe_polys.size() * 2);
-    for (const auto& up : unsafe_polys)
-    {
-        if (!up.closed || up.path.size() < 3)
-        {
-            continue;
-        }
-
-        auto normalized = NormalizeToSimplePolygons(up.path);
-        for (const auto& simple_poly : normalized)
-        {
-            int_polys.push_back(simple_poly);
-        }
-    }
-    return UnIntegerization(int_polys);
-}
-
 std::string GetImageExtension(SlaImageType type)
 {
     switch (type)
@@ -174,44 +145,6 @@ std::string GetImageExtension(SlaImageType type)
         case SlaImageType::Svg: return ".svg";
         default: return ".png";
     }
-}
-
-std::string RenderPolygonsToImageBuffer(const PolygonsD& polys, SlaImageType type, int req_width, int req_height)
-{
-    if (polys.empty())
-        return {};
-
-    double min_x = 1e18, min_y = 1e18, max_x = -1e18, max_y = -1e18;
-    for (const auto& poly : polys)
-    {
-        for (const auto& pt : poly)
-        {
-            min_x = std::min(min_x, pt.x);
-            min_y = std::min(min_y, pt.y);
-            max_x = std::max(max_x, pt.x);
-            max_y = std::max(max_y, pt.y);
-        }
-    }
-
-    int width = req_width > 0 ? req_width : 800;
-    int height = req_height > 0 ? req_height : 600;
-    double range_x = max_x - min_x;
-    double range_y = max_y - min_y;
-    if (range_x < 1e-6) range_x = 1.0;
-    if (range_y < 1e-6) range_y = 1.0;
-    double pixel_size = std::max(range_x / width, range_y / height);
-
-    auto tmp_path = std::filesystem::temp_directory_path() / ("hsba_sla_tmp" + GetImageExtension(type));
-    if (!ToImage(polys, width, height, pixel_size, tmp_path.string()))
-        return {};
-
-    std::ifstream ifs(tmp_path, std::ios::binary);
-    if (!ifs)
-        return {};
-    std::string data((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-    ifs.close();
-    std::filesystem::remove(tmp_path);
-    return data;
 }
 
 std::string BuildConfigJson(const InternalSlaConfig& cfg, int total_layers)
@@ -338,12 +271,12 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
     try
     {
         // ========== Stage 1: Preprocess ==========
-        ModelLoader model_loader;
+        // Use LibHsBaSlicer model management (thread-local pool)
         ReportProgress(cfg, 0, "Loading model...");
-        auto model = model_loader.GetModel(cfg.model_name);
+        auto model = GetModel(cfg.model_name);
         if (!model)
         {
-            model = model_loader.LoadModel(cfg.model_name, cfg.model_path);
+            model = LoadModel(cfg.model_name, cfg.model_path);
         }
         if (!model)
         {
@@ -373,7 +306,7 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
         for (int i = 0; i < total_layers; ++i)
         {
             float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
-            layer_outlines[i] = UnSafePolygonsToPolygonsD(UnSafeSlice(*model, z));
+            layer_outlines[i] = NormalizeUnSafePolygons(UnSafeSlice(*model, z));
             int progress = 15 + (i * 20) / total_layers;
             ReportProgress(cfg, progress, "Slicing layer");
         }
@@ -421,15 +354,15 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
 
             if (!cfg.support_lua_script.empty())
             {
+                // Lua custom support via LibHsBaSlicer API
                 std::string func = cfg.support_lua_func.empty() ? "generate_support" : cfg.support_lua_func;
-                auto lua_support = std::make_unique<Support::LuaSupport>(
-                    std::string_view(cfg.support_lua_script), std::string_view(func));
-                layer_supports = lua_support->GenerateAll(layer_outlines, sla_support_cfg);
+                layer_supports = GenerateAllLuaSupport(layer_outlines, sla_support_cfg,
+                                                       std::string_view(cfg.support_lua_script),
+                                                       std::string_view(func));
             }
             else
             {
-                Support::SlaSacrificialSupport sla_support;
-                layer_supports = sla_support.GenerateAll(layer_outlines, sla_support_cfg);
+                layer_supports = GenerateAllSlaSupport(layer_outlines, sla_support_cfg);
             }
             ReportProgress(cfg, 70, "Support generation complete");
         }
@@ -438,7 +371,7 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
             ReportProgress(cfg, 70, "Support disabled");
         }
 
-        // ========== Stage 5: Export (zip via ImagesPath) ==========
+        // ========== Stage 5: Export via LibHsBaSlicer SlaPackage ==========
         ReportProgress(cfg, 75, "Exporting...");
 
         std::string output_zip = cfg.output_path;
@@ -447,66 +380,41 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
             output_zip = cfg.model_name + "_sla_output.zip";
         }
 
-        std::string ext = GetImageExtension(cfg.image_type);
         std::string config_json = BuildConfigJson(cfg, total_layers);
 
-        ImagesPath images_path("config.json", config_json);
+        SlaPackage pkg;
+        pkg.layer_outlines = layer_outlines;
+        pkg.layer_supports = layer_supports;
+        pkg.floor_polygons = floor_result_d;
+        pkg.config_json = config_json;
+        pkg.image_width = cfg.image_width;
+        pkg.image_height = cfg.image_height;
+        pkg.image_extension = GetImageExtension(cfg.image_type);
+        pkg.include_floor_images = true;
+        pkg.include_support_images = cfg.enable_support;
 
-        // Generate layer images
-        for (int i = 0; i < total_layers; ++i)
-        {
-            std::string img_data = RenderPolygonsToImageBuffer(
-                layer_outlines[i], cfg.image_type, cfg.image_width, cfg.image_height);
-            if (!img_data.empty())
-            {
-                std::string filename = "layers/layer_" + std::to_string(i) + ext;
-                images_path.AddImage(filename, img_data);
-            }
-            int progress = 75 + (i * 15) / total_layers;
-            ReportProgress(cfg, progress, "Exporting layer");
-        }
-
-        // Add floor image
-        std::string floor_img = RenderPolygonsToImageBuffer(
-            floor_result_d, cfg.image_type, cfg.image_width, cfg.image_height);
-        if (!floor_img.empty())
-        {
-            images_path.AddImage("floor/floor_raft" + ext, floor_img);
-        }
-
-        // Add support images (if enabled)
-        if (cfg.enable_support)
-        {
-            for (int i = 0; i < total_layers; ++i)
-            {
-                if (!layer_supports[i].empty())
-                {
-                    std::string img_data = RenderPolygonsToImageBuffer(
-                        layer_supports[i], cfg.image_type, cfg.image_width, cfg.image_height);
-                    if (!img_data.empty())
-                    {
-                        std::string filename = "supports/layer_" + std::to_string(i) + ext;
-                        images_path.AddImage(filename, img_data);
-                    }
-                }
-            }
-        }
-
-        // Save zip via ImagesPath (supports Lua customization)
+        bool export_ok = false;
         if (!cfg.export_lua_script.empty())
         {
             std::string func = cfg.export_lua_func.empty() ? "export_sla" : cfg.export_lua_func;
-            std::function<void(lua_State*)> no_reg;
-            images_path.Save(std::filesystem::path(output_zip), std::string_view(cfg.export_lua_script),
-                             std::string_view(func), no_reg);
+            export_ok = SaveSlaPackageLua(pkg, output_zip, cfg.export_lua_script, func);
         }
         else
         {
-            images_path.Save(output_zip);
+            export_ok = SaveSlaPackage(pkg, output_zip);
         }
 
-        result.export_path = output_zip;
-        result.success = true;
+        if (export_ok)
+        {
+            result.export_path = output_zip;
+            result.success = true;
+        }
+        else
+        {
+            result.success = false;
+            result.error_message = "Failed to export SLA package";
+        }
+
         ReportProgress(cfg, 100, "Pipeline complete");
     }
     catch (const std::exception& e)

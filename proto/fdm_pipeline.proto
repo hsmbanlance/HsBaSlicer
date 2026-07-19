@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package HsbaProto;
+
+enum msg_fdm_filltype
+{
+    filltype_fdm_line = 0; // line fill
+    filltype_fdm_simple_zigzag = 1; // simple zigzag fill
+    filltype_fdm_zigzag = 2; // Advanced zigzag fill
+}
+
+enum msg_fdm_support_pattern
+{
+    support_pattern_fdm_plane = 0; // plane support
+    support_pattern_fdm_trnaee = 1; // tree support
+    support_pattern_fdm_honeycomb = 2; // honeycomb support
+}
+
+message msg_fdm_pipeline_config
+{
+    string fdm_pipe_config_model_name = 1; // model name
+    string fdm_pipe_config_model_path = 2; // model path
+
+    float fdm_pipe_config_layer_height = 3; // layer height
+    float fdm_pipe_config_first_layer_height = 4; // first layer height
+
+    double fdm_pipe_config_fill_space = 5; // fill space
+    msg_fdm_filltype fdm_pipe_config_fill_type = 6; // fill type
+    double fdm_pipe_config_fill_angle = 7; // fill angle
+    int32 fdm_pipe_config_wall_count = 8; // wall count
+    int32 fdm_pipe_config_top_layer_count = 9; // top layer count
+    int32 fdm_pipe_config_bottom_layer_count = 10; // bottom layer count
+
+    bool fdm_pipe_config_support_enable = 11; // support enable
+    float fdm_pipe_config_support_angle = 12; // support angle
+    float fdm_pipe_config_support_gap = 13; // support gap
+    float fdm_pipe_config_support_support_diameter = 14; // support diameter
+    float fdm_pipe_config_support_density = 15; // support density
+    msg_fdm_support_pattern fdm_pipe_config_support_pattern = 16; // support pattern
+    int32 fdm_pipe_config_interface_layers = 17; // interface layers
+    float fdm_pipe_config_interface_density = 18; // interface density
+
+    float fdm_pipe_config_line_width = 19; // line width
+    float fdm_pipe_config_print_speed = 20; // print speed
+    float fdm_pipe_config_travel_speed = 21; // travel speed
+    float fdm_pipe_config_extrusion_multiplier = 22; // extrusion multiplier
+
+    string fdm_pipe_config_support_lua_script = 23; // support lua script
+    string fdm_pipe_config_support_lua_func = 24; // support lua function
+    string fdm_pipe_config_infill_lua_script = 25; // infill lua script
+    string fdm_pipe_config_infill_lua_func = 26; // infill lua function
+
+    string fdm_pipe_config_output_path = 27; // output path
+}
+
+message msg_fdm_pipe_result
+{
+    bool fdm_pipe_result_success = 1; // result success
+    int32 fdm_pipe_result_total_layers = 2; // total layers
+    string fdm_pipe_result_gcode_content = 3; // gcode content
+    string fdm_pipe_result_error_message = 4; // error message
+    double fdm_pipe_result_elapsed_seconds = 5; // elapsed seconds
+}

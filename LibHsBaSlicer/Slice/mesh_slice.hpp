@@ -22,6 +22,19 @@ HSBA_SLICER_LIB_API UnSafePolygons UnSafeSlice(const IModel& model, const float 
 
 HSBA_SLICER_LIB_API Polygons SliceLua(const IModel& model, const std::string& script, const float height);
 HSBA_SLICER_LIB_API UnSafePolygons UnSafeSliceLua(const IModel& model, const std::string& script, const float height);
+
+/**
+ * @brief Normalize UnSafePolygons to clean PolygonsD (double-precision).
+ *
+ * Filters out open polylines and non-simple polygons, then converts
+ * from integer to floating-point coordinates. This is the standard
+ * post-processing step after UnSafeSlice.
+ *
+ * @param unsafe_polys Raw unsafe polygons from slicing.
+ * @return Cleaned double-precision polygons suitable for downstream processing.
+ */
+HSBA_SLICER_LIB_API PolygonsD NormalizeUnSafePolygons(const UnSafePolygons& unsafe_polys);
+
 }  // namespace HsBa::Slicer
 
 #endif  // !HSBA_SLICER_MESH_SLICE_HPP

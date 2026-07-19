@@ -13,13 +13,9 @@
 #include "LibHsBaSlicer/Fill/polygon_fill.hpp"
 #include "LibHsBaSlicer/Path/path_generator.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
-#include "preprocess/ModelLoader.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
-#include "2D/PolygonFill.hpp"
 #include "base/coroutine.hpp"
-#include "support/SupportConfig.hpp"
-#include "support/LuaSupport.hpp"
 
 namespace HsBa::Slicer::Pipeline
 {
@@ -125,27 +121,6 @@ void ReportProgress(const InternalConfig& cfg, int percent, const std::string& s
     }
 }
 
-// UnSafePolygons -> PolygonsD 转换
-PolygonsD UnSafePolygonsToPolygonsD(const UnSafePolygons& unsafe_polys)
-{
-    Polygons int_polys;
-    int_polys.reserve(unsafe_polys.size() * 2);
-    for (const auto& up : unsafe_polys)
-    {
-        // for fdm/fff only closed polygons are valid, skip open polylines
-        if (!up.closed || up.path.size() < 3)
-        {
-            continue;
-        }
-
-        auto normalized = NormalizeToSimplePolygons(up.path);
-        for (const auto& simple_poly : normalized)
-        {
-            int_polys.push_back(simple_poly);
-        }
-    }
-    return UnIntegerization(int_polys);
-}
 }  // anonymous namespace
 
 InternalConfig BuildConfig(const HsBaFdmPipelineConfig_t* cfg, HsBaProgressCallback cb, void* ud)
@@ -214,14 +189,13 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
 
     try
     {
-        // ========== 阶段1: 预处理 ==========
-        // ModelLoader 在协程内局部创建，每个 pipeline 独立模型池
-        ModelLoader model_loader;
+        // ========== Stage 1: Preprocess ==========
+        // Use LibHsBaSlicer model management (thread-local pool)
         ReportProgress(cfg, 0, "Loading model...");
-        auto model = model_loader.GetModel(cfg.model_name);
+        auto model = GetModel(cfg.model_name);
         if (!model)
         {
-            model = model_loader.LoadModel(cfg.model_name, cfg.model_path);
+            model = LoadModel(cfg.model_name, cfg.model_path);
         }
         if (!model)
         {
@@ -251,7 +225,7 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
         for (int i = 0; i < total_layers; ++i)
         {
             float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
-            layer_outlines[i] = UnSafePolygonsToPolygonsD(UnSafeSlice(*model, z));
+            layer_outlines[i] = NormalizeUnSafePolygons(UnSafeSlice(*model, z));
             int progress = 15 + (i * 25) / total_layers;
             ReportProgress(cfg, progress, "Slicing layer");
         }
@@ -264,14 +238,13 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             ReportProgress(cfg, 45, "Generating supports...");
             if (!cfg.support_lua_script.empty())
             {
-                // Lua自定义支撑：读取文件内容，使用string_view构造函数避免歧义
+                // Lua custom support via LibHsBaSlicer API
                 std::string func = cfg.support_lua_func.empty() ? "generate_support" : cfg.support_lua_func;
                 std::ifstream ifs(cfg.support_lua_script);
                 std::string script_content((std::istreambuf_iterator<char>(ifs)),
                                            std::istreambuf_iterator<char>());
-                auto lua_support = std::make_unique<Support::LuaSupport>(
-                    std::string_view(script_content), std::string_view(func));
-                layer_supports = lua_support->GenerateAll(layer_outlines, cfg.support_config);
+                layer_supports = GenerateAllLuaSupport(layer_outlines, cfg.support_config,
+                                                       std::string_view(script_content), std::string_view(func));
             }
             else
             {
@@ -310,8 +283,8 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
         
                 if (has_lua_infill && !is_solid)
                 {
-                    // Lua自定义填充（仅中间层）
-                    Polygons fill_result = LuaCustomFill(int_polys, cfg.infill_lua_script, infill_func);
+                    // Lua custom fill via LibHsBaSlicer API
+                    Polygons fill_result = LuaCustomFillByFile(int_polys, cfg.infill_lua_script, infill_func);
                     layer_fills[i] = UnIntegerization(fill_result);
                 }
                 else if (is_solid)

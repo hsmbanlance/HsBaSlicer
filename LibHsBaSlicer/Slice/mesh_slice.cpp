@@ -24,4 +24,25 @@ HSBA_SLICER_LIB_API UnSafePolygons UnSafeSliceLua(const IModel& model, const std
     auto topo_mesh = std::make_unique<FullTopoModel>(FullTopoModel(model));
     return topo_mesh->UnSafeSliceLua(script, height);
 }
+
+HSBA_SLICER_LIB_API PolygonsD NormalizeUnSafePolygons(const UnSafePolygons& unsafe_polys)
+{
+    Polygons int_polys;
+    int_polys.reserve(unsafe_polys.size() * 2);
+    for (const auto& up : unsafe_polys)
+    {
+        // For FDM/FFF only closed polygons are valid; skip open polylines
+        if (!up.closed || up.path.size() < 3)
+        {
+            continue;
+        }
+        auto normalized = NormalizeToSimplePolygons(up.path);
+        for (const auto& simple_poly : normalized)
+        {
+            int_polys.push_back(simple_poly);
+        }
+    }
+    return UnIntegerization(int_polys);
+}
+
 }  // namespace HsBa::Slicer

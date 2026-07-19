@@ -49,5 +49,8 @@ add_library(HsBaVersion STATIC
 	${VERSION_CPP_PATH}
 )
 
-target_include_directories(HsBaVersion PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(HsBaVersion PUBLIC 
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer>
+)
 target_link_libraries(HsBaVersion PUBLIC HsBaSlicerBase)

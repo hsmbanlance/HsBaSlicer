@@ -4,9 +4,7 @@
 #include <cstring>
 #include <string>
 
-#include "utils/struct_json.hpp"
-#include "utils/struct_xml.hpp"
-#include "version.hpp"
+#include "LibHsBaSlicer/version_info.hpp"
 
 namespace
 {
@@ -24,15 +22,13 @@ char* DuplicateString(const std::string& str)
 
 HSBA_SLICER_API char* HsBaGetVersionJson(void)
 {
-    const auto info = HsBa::Slicer::Version::GetVersionInfo();
-    const auto json = HsBa::Slicer::Utils::write_pretty_json(info);
+    const auto json = HsBa::Slicer::GetVersionJson();
     return DuplicateString(json);
 }
 
 HSBA_SLICER_API char* HsBaGetVersionXml(void)
 {
-    const auto info = HsBa::Slicer::Version::GetVersionInfo();
-    const auto xml = HsBa::Slicer::Utils::write_xml(info, "VersionInfo");
+    const auto xml = HsBa::Slicer::GetVersionXml();
     return DuplicateString(xml);
 }
 

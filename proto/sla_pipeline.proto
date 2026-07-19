@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package HsbaProto;
+
+enum sla_support_pattern
+{
+    support_pattern_sla_sacrificial = 0; // sacrificial support
+    support_pattern_sla_cone = 1; // cone support
+}
+
+enum sla_image_type
+{
+    image_type_sla_png = 0; // png image
+    image_type_sla_jpg = 1; // jpg image
+    image_type_sla_svg = 2; // svg image
+}
+
+message sla_pipe_config
+{
+    string sla_pipe_config_model_name = 1; // model name
+    string sla_pipe_config_model_path = 2; // model path
+
+    float sla_pipe_config_layer_height = 3; // layer height
+    float sla_pipe_config_first_layer_height = 4; // first layer height
+
+    float sla_pipe_config_bottom_exposure_time = 5; // bottom exposure time
+    float sla_pipe_config_normal_exposure_time = 6; // normal exposure time
+    float sla_pipe_config_bottom_lift_distance = 7; // bottom lift distance
+    float sla_pipe_config_lift_distance = 8; // lift distance
+    float sla_pipe_config_lift_speed = 9; // lift speed
+    float sla_pipe_config_retract_speed = 10; // retract speed
+
+    float sla_pipe_config_floor_raft_offset = 11; // floor raft offset
+    float sla_pipe_config_floor_border_width = 12; // floor border width
+    float sla_pipe_config_floor_fill_spacing = 13; // floor fill spacing
+    float sla_pipe_config_floor_fill_angle = 14; // floor fill angle
+    int32 sla_pipe_config_floor_border_count = 15; // floor border count
+    bool sla_pipe_config_floor_use_convex_hull = 16; // floor use convex hull
+
+    bool sla_pipe_config_support_enable = 17; // support enable
+    float sla_pipe_config_overhang_angle = 18; // overhang angle
+    float sla_pipe_config_support_gap = 19; // support gap
+    float sla_pipe_config_support_diameter = 20; // support diameter
+    float sla_pipe_config_support_density = 21; // support density
+    sla_support_pattern sla_pipe_config_support_pattern = 22; // support pattern
+
+    string sla_pipe_config_support_lua_script = 23; // support lua script
+    string sla_pipe_config_support_lua_func = 24; // support lua function
+    string sla_pipe_config_floor_lua_script = 25; // floor lua script
+    string sla_pipe_config_floor_lua_func = 26; // floor lua function
+    string sla_pipe_config_export_lua_script = 27; // export lua script
+    string sla_pipe_config_export_lua_func = 28; // export lua function
+
+    string sla_pipe_config_output_path = 29; // output path
+    sla_image_type sla_pipe_config_output_image_type = 30; // output image type
+    int32 sla_pipe_config_output_image_width = 31; // output image width
+    int32 sla_pipe_config_output_image_height = 32; // output image height
+}
+
+message sla_pipe_result
+{
+    bool sla_pipe_result_success = 1; // result success
+    int32 sla_pipe_result_total_layers = 2; // total layers
+    string sla_pipe_result_export_path = 3; // export path
+    string sla_pipe_result_error_message = 4; // error message
+    double sla_pipe_result_elapsed_seconds = 5; // elapsed seconds
+}

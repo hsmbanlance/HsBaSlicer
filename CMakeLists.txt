@@ -357,6 +357,8 @@ set(_HSBA_INSTALL_TARGETS
     HsBaSlicer2D HsBaPreprocess HsBaSupport HsBaPaths
     HsBaSlicerFileOperator
     HsBaSlicerProto HsBaCipher
+    HsBaVersion
+    HsBaSlicerConverter
 )
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
   list(APPEND _HSBA_INSTALL_TARGETS HsBaSlicerCADModel)
@@ -373,6 +375,7 @@ install(FILES
     DllHsBaSlicer/dllexport.h
     DllHsBaSlicer/fdm_pipeline.h
     DllHsBaSlicer/sla_pipeline.h
+    DllHsBaSlicer/pipeline_convert.h
     DllHsBaSlicer/initialize.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer
 )
@@ -382,6 +385,12 @@ install(FILES
     base/IModel.hpp
     base/singleton.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/base
+)
+
+# version
+install(FILES
+    version/version.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer
 )
 
 # logger
@@ -394,6 +403,7 @@ install(FILES
 # LibHsBaSlicer 公开 API
 install(FILES
     LibHsBaSlicer/export.h
+    LibHsBaSlicer/version_info.hpp
     LibHsBaSlicer/Slice/mesh_slice.hpp
     LibHsBaSlicer/Preprocess/model_preprocess.hpp
     LibHsBaSlicer/Support/fdm_support.hpp
@@ -427,11 +437,50 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/paths
 )
 
+# convert pipeline conversion headers
+install(FILES
+    convert/PipelineConfig2Msg.hpp
+    convert/Msg2PipelineConfig.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/convert
+)
+
 # proto 生成的头文件
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/proto/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/proto
     FILES_MATCHING PATTERN "*.pb.h"
 )
+
+# proto 多语言导出文件
+if(HSBA_PROTOBUF_OUT)
+    install(DIRECTORY ${HSBA_PROTO_OUT_DIRECTORY}/protobuf/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/HsBaSlicer/proto
+    )
+    if(HSBA_PROTO_OUT_CPP)
+        install(DIRECTORY ${HSBA_PROTO_OUT_DIRECTORY}/cpp/
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/HsBaSlicer/proto/cpp
+        )
+    endif()
+    if(HSBA_PROTO_OUT_CSHARP)
+        install(DIRECTORY ${HSBA_PROTO_OUT_DIRECTORY}/cs/
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/HsBaSlicer/proto/cs
+        )
+    endif()
+    if(HSBA_PROTO_OUT_JAVA)
+        install(DIRECTORY ${HSBA_PROTO_OUT_DIRECTORY}/java/
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/HsBaSlicer/proto/java
+        )
+    endif()
+    if(HSBA_PROTO_OUT_PYTHON)
+        install(DIRECTORY ${HSBA_PROTO_OUT_DIRECTORY}/python/
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/HsBaSlicer/proto/python
+        )
+    endif()
+    if(HSBA_PROTO_OUT_PHP)
+        install(DIRECTORY ${HSBA_PROTO_OUT_DIRECTORY}/php/
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/HsBaSlicer/proto/php
+        )
+    endif()
+endif()
 
 # 导出 CMake Targets 文件
 install(EXPORT HsBaSlicerTargets

@@ -7,6 +7,10 @@
     Msg2FullTopoModel.cpp
     FullTopoModel2Msg.hpp
     FullTopoModel2Msg.cpp
+    PipelineConfig2Msg.hpp
+    PipelineConfig2Msg.cpp
+    Msg2PipelineConfig.hpp
+    Msg2PipelineConfig.cpp
     )
 
 target_link_libraries(HsBaSlicerConverter PUBLIC Eigen3::Eigen HsBaSlicerProto

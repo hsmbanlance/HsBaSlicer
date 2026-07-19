@@ -1,11 +1,17 @@
 ﻿#include "sla_floor.hpp"
 
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+
 #include <lua.hpp>
 
 #include "2D/2Dhull.hpp"
+#include "2D/ImageToPolygons.hpp"
 #include "2D/LuaAdapter.hpp"
 #include "2D/PolygonFill.hpp"
 #include "base/error.hpp"
+#include "paths/imagespath.hpp"
 #include "utils/LuaNewObject.hpp"
 
 namespace HsBa::Slicer
@@ -284,6 +290,175 @@ HSBA_SLICER_LIB_API Polygons LuaCustomFloorByString(
         lua_pop(L.get(), 1);
     }
     return result;
+}
+
+// ============================================================
+// SLA image rendering
+// ============================================================
+
+HSBA_SLICER_LIB_API bool RenderPolygonsToImage(const PolygonsD& polys, int width, int height,
+                                                const std::string& outPath)
+{
+    if (polys.empty())
+        return false;
+
+    double min_x = 1e18, min_y = 1e18, max_x = -1e18, max_y = -1e18;
+    for (const auto& poly : polys)
+    {
+        for (const auto& pt : poly)
+        {
+            min_x = std::min(min_x, pt.x);
+            min_y = std::min(min_y, pt.y);
+            max_x = std::max(max_x, pt.x);
+            max_y = std::max(max_y, pt.y);
+        }
+    }
+
+    int w = width > 0 ? width : 800;
+    int h = height > 0 ? height : 600;
+    double range_x = max_x - min_x;
+    double range_y = max_y - min_y;
+    if (range_x < 1e-6) range_x = 1.0;
+    if (range_y < 1e-6) range_y = 1.0;
+    double pixel_size = std::max(range_x / w, range_y / h);
+
+    return ToImage(polys, w, h, pixel_size, outPath);
+}
+
+// ============================================================
+// SLA package export
+// ============================================================
+
+namespace
+{
+std::string RenderToBuffer(const PolygonsD& polys, int width, int height, const std::string& ext)
+{
+    if (polys.empty())
+        return {};
+
+    auto tmp_path = std::filesystem::temp_directory_path() / ("hsba_sla_tmp" + ext);
+    if (!RenderPolygonsToImage(polys, width, height, tmp_path.string()))
+        return {};
+
+    std::ifstream ifs(tmp_path, std::ios::binary);
+    if (!ifs)
+        return {};
+    std::string data((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+    ifs.close();
+    std::filesystem::remove(tmp_path);
+    return data;
+}
+}  // anonymous namespace
+
+HSBA_SLICER_LIB_API bool SaveSlaPackage(const SlaPackage& pkg, const std::string& output_zip)
+{
+    try
+    {
+        ImagesPath images_path("config.json", pkg.config_json);
+        const int total_layers = static_cast<int>(pkg.layer_outlines.size());
+        const std::string& ext = pkg.image_extension;
+
+        // Layer images
+        for (int i = 0; i < total_layers; ++i)
+        {
+            std::string img_data = RenderToBuffer(pkg.layer_outlines[i], pkg.image_width, pkg.image_height, ext);
+            if (!img_data.empty())
+            {
+                images_path.AddImage("layers/layer_" + std::to_string(i) + ext, img_data);
+            }
+        }
+
+        // Floor image
+        if (pkg.include_floor_images && !pkg.floor_polygons.empty())
+        {
+            std::string floor_img = RenderToBuffer(pkg.floor_polygons, pkg.image_width, pkg.image_height, ext);
+            if (!floor_img.empty())
+            {
+                images_path.AddImage("floor/floor_raft" + ext, floor_img);
+            }
+        }
+
+        // Support images
+        if (pkg.include_support_images)
+        {
+            const int support_count = std::min(static_cast<int>(pkg.layer_supports.size()), total_layers);
+            for (int i = 0; i < support_count; ++i)
+            {
+                if (!pkg.layer_supports[i].empty())
+                {
+                    std::string img_data = RenderToBuffer(pkg.layer_supports[i], pkg.image_width, pkg.image_height, ext);
+                    if (!img_data.empty())
+                    {
+                        images_path.AddImage("supports/layer_" + std::to_string(i) + ext, img_data);
+                    }
+                }
+            }
+        }
+
+        images_path.Save(output_zip);
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+HSBA_SLICER_LIB_API bool SaveSlaPackageLua(const SlaPackage& pkg, const std::string& output_zip,
+                                            const std::string& lua_script, const std::string& lua_func)
+{
+    try
+    {
+        ImagesPath images_path("config.json", pkg.config_json);
+        const int total_layers = static_cast<int>(pkg.layer_outlines.size());
+        const std::string& ext = pkg.image_extension;
+
+        // Layer images
+        for (int i = 0; i < total_layers; ++i)
+        {
+            std::string img_data = RenderToBuffer(pkg.layer_outlines[i], pkg.image_width, pkg.image_height, ext);
+            if (!img_data.empty())
+            {
+                images_path.AddImage("layers/layer_" + std::to_string(i) + ext, img_data);
+            }
+        }
+
+        // Floor image
+        if (pkg.include_floor_images && !pkg.floor_polygons.empty())
+        {
+            std::string floor_img = RenderToBuffer(pkg.floor_polygons, pkg.image_width, pkg.image_height, ext);
+            if (!floor_img.empty())
+            {
+                images_path.AddImage("floor/floor_raft" + ext, floor_img);
+            }
+        }
+
+        // Support images
+        if (pkg.include_support_images)
+        {
+            const int support_count = std::min(static_cast<int>(pkg.layer_supports.size()), total_layers);
+            for (int i = 0; i < support_count; ++i)
+            {
+                if (!pkg.layer_supports[i].empty())
+                {
+                    std::string img_data = RenderToBuffer(pkg.layer_supports[i], pkg.image_width, pkg.image_height, ext);
+                    if (!img_data.empty())
+                    {
+                        images_path.AddImage("supports/layer_" + std::to_string(i) + ext, img_data);
+                    }
+                }
+            }
+        }
+
+        std::function<void(lua_State*)> no_reg;
+        images_path.Save(std::filesystem::path(output_zip), std::string_view(lua_script),
+                         std::string_view(lua_func), no_reg);
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
 }
 
 }  // namespace HsBa::Slicer
