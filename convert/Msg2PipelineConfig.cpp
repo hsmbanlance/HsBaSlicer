@@ -125,4 +125,35 @@ void MsgToSlaResult(const HsbaProto::sla_pipe_result& msg, HsBaSlaPipelineResult
     result->elapsed_seconds = msg.sla_pipe_result_elapsed_seconds();
 }
 
+void MsgToSlsConfig(const HsbaProto::sls_pipe_config& msg, HsBaSlsPipelineConfig_t* config)
+{
+    *config = HsBaCreateDefaultSlsConfig();
+
+    config->model_name = DupString(msg.sls_pipe_config_model_name());
+    config->model_path = DupString(msg.sls_pipe_config_model_path());
+
+    config->layer_height = msg.sls_pipe_config_layer_height();
+    config->first_layer_height = msg.sls_pipe_config_first_layer_height();
+
+    config->laser_power = msg.sls_pipe_config_laser_power();
+    config->scan_speed = msg.sls_pipe_config_scan_speed();
+    config->hatch_spacing = msg.sls_pipe_config_hatch_spacing();
+    config->hatch_rotation = msg.sls_pipe_config_hatch_rotation();
+    config->bed_temperature = msg.sls_pipe_config_bed_temperature();
+
+    config->export_lua_script = DupString(msg.sls_pipe_config_export_lua_script());
+    config->export_lua_func = DupString(msg.sls_pipe_config_export_lua_func());
+
+    config->output_path = DupString(msg.sls_pipe_config_output_path());
+}
+
+void MsgToSlsResult(const HsbaProto::sls_pipe_result& msg, HsBaSlsPipelineResult_t* result)
+{
+    result->success = msg.sls_pipe_result_success() ? 1 : 0;
+    result->total_layers = msg.sls_pipe_result_total_layers();
+    result->export_path = DupString(msg.sls_pipe_result_export_path());
+    result->error_message = DupString(msg.sls_pipe_result_error_message());
+    result->elapsed_seconds = msg.sls_pipe_result_elapsed_seconds();
+}
+
 }  // namespace HsBa::Slicer

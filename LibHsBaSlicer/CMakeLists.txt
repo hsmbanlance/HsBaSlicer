@@ -13,6 +13,8 @@
     Fill/polygon_fill.cpp
     Path/path_generator.hpp
     Path/path_generator.cpp
+    Path/sls_export.hpp
+    Path/sls_export.cpp
     Floor/sla_floor.hpp
     Floor/sla_floor.cpp
     )
@@ -31,6 +33,8 @@ else()
     Fill/polygon_fill.cpp
     Path/path_generator.hpp
     Path/path_generator.cpp
+    Path/sls_export.hpp
+    Path/sls_export.cpp
     Floor/sla_floor.hpp
     Floor/sla_floor.cpp
     )

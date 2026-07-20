@@ -4,9 +4,11 @@
 
 #include "DllHsBaSlicer/fdm_pipeline.h"
 #include "DllHsBaSlicer/sla_pipeline.h"
+#include "DllHsBaSlicer/sls_pipeline.h"
 
 #include "fdm_pipeline.pb.h"
 #include "sla_pipeline.pb.h"
+#include "sls_pipeline.pb.h"
 
 namespace HsBa::Slicer
 {
@@ -30,6 +32,16 @@ void MsgToSlaConfig(const HsbaProto::sla_pipe_config& msg, HsBaSlaPipelineConfig
 /// @note String fields (export_path, error_message) are allocated with malloc;
 ///       caller must call HsBaFreeSlaPipelineResult to release.
 void MsgToSlaResult(const HsbaProto::sla_pipe_result& msg, HsBaSlaPipelineResult_t* result);
+
+/// @brief Convert proto message to SLS pipeline C config.
+/// @note String fields are allocated with malloc; caller must free the struct
+///       or pass it through HsBaRunSlsPipeline which copies internally.
+void MsgToSlsConfig(const HsbaProto::sls_pipe_config& msg, HsBaSlsPipelineConfig_t* config);
+
+/// @brief Convert proto message to SLS pipeline C result.
+/// @note String fields (export_path, error_message) are allocated with malloc;
+///       caller must call HsBaFreeSlsPipelineResult to release.
+void MsgToSlsResult(const HsbaProto::sls_pipe_result& msg, HsBaSlsPipelineResult_t* result);
 
 }  // namespace HsBa::Slicer
 

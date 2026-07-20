@@ -8,7 +8,7 @@ if(MSVC)
   add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 endif()
 
-# 将源代码添加到此项目的可执行文件或共享库（在 Android 下）
+# 将源代码添加到此项目的可执行文件或共享库（在 Android 下）或静态库（在 iOS 下）
 if(ANDROID)
   # 在 Android 上，构建为共享库以便打包进 APK
   add_library(HsBaSlicer SHARED "HsBaSlicer.cpp" "HsBaSlicer.h")
@@ -37,6 +37,17 @@ if(ANDROID)
       COMMENT "Copying DllHsBaSlicer .so to android_libs/${ANDROID_ABI}"
     )
   endif()
+
+elseif(IOS OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  # 在 iOS 上，构建为静态库以便链接进 App
+  add_library(HsBaSlicer STATIC "HsBaSlicer.cpp" "HsBaSlicer.h")
+
+  target_link_libraries(HsBaSlicer PRIVATE
+    HsBaSlicerUtils
+    HsBaSlicerLog
+    DllHsBaSlicer
+  )
+
 else()
   add_executable (HsBaSlicer "HsBaSlicer.cpp" "HsBaSlicer.h")
 

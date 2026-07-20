@@ -341,6 +341,7 @@ option(HSBA_SLICER_BUILD_SAMPLES "Build samples" ON)
 if(HSBA_SLICER_BUILD_SAMPLES)
   add_subdirectory("samples/FDM")
   add_subdirectory("samples/SLA")
+  add_subdirectory("samples/SLS")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -375,6 +376,7 @@ install(FILES
     DllHsBaSlicer/dllexport.h
     DllHsBaSlicer/fdm_pipeline.h
     DllHsBaSlicer/sla_pipeline.h
+    DllHsBaSlicer/sls_pipeline.h
     DllHsBaSlicer/pipeline_convert.h
     DllHsBaSlicer/initialize.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer
@@ -409,6 +411,7 @@ install(FILES
     LibHsBaSlicer/Support/fdm_support.hpp
     LibHsBaSlicer/Fill/polygon_fill.hpp
     LibHsBaSlicer/Path/path_generator.hpp
+    LibHsBaSlicer/Path/sls_export.hpp
     LibHsBaSlicer/Floor/sla_floor.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/LibHsBaSlicer
 )

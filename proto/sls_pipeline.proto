@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package HsbaProto;
+
+message sls_pipe_config
+{
+    string sls_pipe_config_model_name = 1; // model name
+    string sls_pipe_config_model_path = 2; // model path
+
+    float sls_pipe_config_layer_height = 3; // layer height (mm)
+    float sls_pipe_config_first_layer_height = 4; // first layer height (mm)
+
+    float sls_pipe_config_laser_power = 5; // laser power (W)
+    float sls_pipe_config_scan_speed = 6; // scan speed (mm/s)
+    float sls_pipe_config_hatch_spacing = 7; // hatch spacing (mm)
+    float sls_pipe_config_hatch_rotation = 8; // hatch rotation angle (degrees)
+    float sls_pipe_config_bed_temperature = 9; // powder bed temperature (°C)
+
+    string sls_pipe_config_export_lua_script = 10; // export lua script path (required)
+    string sls_pipe_config_export_lua_func = 11; // export lua function name
+
+    string sls_pipe_config_output_path = 12; // output path
+}
+
+message sls_pipe_result
+{
+    bool sls_pipe_result_success = 1; // result success
+    int32 sls_pipe_result_total_layers = 2; // total layers
+    string sls_pipe_result_export_path = 3; // export path
+    string sls_pipe_result_error_message = 4; // error message
+    double sls_pipe_result_elapsed_seconds = 5; // elapsed seconds
+}
