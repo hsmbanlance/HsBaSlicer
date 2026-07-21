@@ -330,6 +330,7 @@ if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
 endif()
 add_subdirectory("preprocess")
 add_subdirectory("support")
+add_subdirectory("pipelinetypes")
 add_subdirectory("convert")
 add_subdirectory("LibHsBaSlicer")
 add_subdirectory("DllHsBaSlicer")
@@ -360,6 +361,7 @@ set(_HSBA_INSTALL_TARGETS
     HsBaSlicerProto HsBaCipher
     HsBaVersion
     HsBaSlicerConverter
+    HsBaPipelineTypes
 )
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
   list(APPEND _HSBA_INSTALL_TARGETS HsBaSlicerCADModel)
@@ -380,6 +382,12 @@ install(FILES
     DllHsBaSlicer/pipeline_convert.h
     DllHsBaSlicer/initialize.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer
+)
+
+# pipelinetypes standalone type definitions
+install(FILES
+    pipelinetypes/pipeline_types.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/pipelinetypes
 )
 
 # base

@@ -26,7 +26,7 @@ char* DupString(const std::string& str)
 
 void MsgToFdmConfig(const HsbaProto::msg_fdm_pipeline_config& msg, HsBaFdmPipelineConfig_t* config)
 {
-    *config = HsBaCreateDefaultConfig();
+    *config = HsBaFdmConfigDefault();
 
     config->model_name = DupString(msg.fdm_pipe_config_model_name());
     config->model_path = DupString(msg.fdm_pipe_config_model_path());
@@ -74,7 +74,7 @@ void MsgToFdmResult(const HsbaProto::msg_fdm_pipe_result& msg, HsBaFdmPipelineRe
 
 void MsgToSlaConfig(const HsbaProto::sla_pipe_config& msg, HsBaSlaPipelineConfig_t* config)
 {
-    *config = HsBaCreateDefaultSlaConfig();
+    *config = HsBaSlaConfigDefault();
 
     config->model_name = DupString(msg.sla_pipe_config_model_name());
     config->model_path = DupString(msg.sla_pipe_config_model_path());
@@ -127,7 +127,7 @@ void MsgToSlaResult(const HsbaProto::sla_pipe_result& msg, HsBaSlaPipelineResult
 
 void MsgToSlsConfig(const HsbaProto::sls_pipe_config& msg, HsBaSlsPipelineConfig_t* config)
 {
-    *config = HsBaCreateDefaultSlsConfig();
+    *config = HsBaSlsConfigDefault();
 
     config->model_name = DupString(msg.sls_pipe_config_model_name());
     config->model_path = DupString(msg.sls_pipe_config_model_path());

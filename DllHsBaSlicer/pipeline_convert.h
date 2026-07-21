@@ -3,9 +3,7 @@
 #define HSBA_SLICER_PIPELINE_CONVERT_H
 
 #include "dllexport.h"
-#include "fdm_pipeline.h"
-#include "sla_pipeline.h"
-#include "sls_pipeline.h"
+#include "pipelinetypes/pipeline_types.h"
 
 #ifdef __cplusplus
 extern "C"

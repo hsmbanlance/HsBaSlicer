@@ -2,9 +2,7 @@
 #ifndef HSBA_SLICER_MSG2PIPELINE_CONFIG_HPP
 #define HSBA_SLICER_MSG2PIPELINE_CONFIG_HPP
 
-#include "DllHsBaSlicer/fdm_pipeline.h"
-#include "DllHsBaSlicer/sla_pipeline.h"
-#include "DllHsBaSlicer/sls_pipeline.h"
+#include "pipelinetypes/pipeline_types.h"
 
 #include "fdm_pipeline.pb.h"
 #include "sla_pipeline.pb.h"

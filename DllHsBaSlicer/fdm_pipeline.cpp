@@ -352,35 +352,7 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
 
 HSBA_SLICER_API HsBaFdmPipelineConfig_t HsBaCreateDefaultConfig(void)
 {
-    HsBaFdmPipelineConfig_t cfg{};
-
-    cfg.layer_height = 0.2f;
-    cfg.first_layer_height = 0.25f;
-    cfg.fill_spacing = 0.4;
-    cfg.fill_mode = HSBA_FILL_ZIGZAG;
-    cfg.fill_angle = 45.0;
-    cfg.wall_count = 3;
-    cfg.top_layer_count = 3;
-    cfg.bottom_layer_count = 3;
-    cfg.infill_density = 0.2;
-    cfg.enable_support = 1;
-    cfg.overhang_angle = 45.0f;
-    cfg.support_gap = 0.5f;
-    cfg.support_diameter = 2.0f;
-    cfg.support_density = 0.3f;
-    cfg.support_pattern = HSBA_SUPPORT_PLANE;
-    cfg.interface_layers = 2;
-    cfg.interface_density = 0.5f;
-    cfg.line_width = 0.4f;
-    cfg.print_speed = 50.0f;
-    cfg.travel_speed = 100.0f;
-    cfg.extrusion_multiplier = 1.0f;
-    cfg.support_lua_script = nullptr;
-    cfg.support_lua_func = nullptr;
-    cfg.infill_lua_script = nullptr;
-    cfg.infill_lua_func = nullptr;
-
-    return cfg;
+    return HsBaFdmConfigDefault();
 }
 
 HSBA_SLICER_API HsBaFdmPipelineResult_t HsBaRunFdmPipeline(const HsBaFdmPipelineConfig_t* config,

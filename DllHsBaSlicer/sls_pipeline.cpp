@@ -275,20 +275,7 @@ Utils::Task<InternalSlsResult> RunSlsPipelineAsync(const InternalSlsConfig& cfg)
 
 HSBA_SLICER_API HsBaSlsPipelineConfig_t HsBaCreateDefaultSlsConfig(void)
 {
-    HsBaSlsPipelineConfig_t cfg{};
-
-    cfg.layer_height = 0.1f;
-    cfg.first_layer_height = 0.15f;
-    cfg.laser_power = 30.0f;
-    cfg.scan_speed = 2000.0f;
-    cfg.hatch_spacing = 0.15f;
-    cfg.hatch_rotation = 90.0f;
-    cfg.bed_temperature = 180.0f;
-    cfg.export_lua_script = nullptr;
-    cfg.export_lua_func = nullptr;
-    cfg.output_path = nullptr;
-
-    return cfg;
+    return HsBaSlsConfigDefault();
 }
 
 HSBA_SLICER_API HsBaSlsPipelineResult_t HsBaRunSlsPipeline(const HsBaSlsPipelineConfig_t* config,
