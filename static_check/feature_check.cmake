@@ -92,6 +92,24 @@ int main(){ S s; s.foo(1); return 0; }
 " ${result})
 endfunction()
 
+# C++20 modules support check
+function(check_cxx_modules_support result)
+  # CMake 3.28+ with a module-aware compiler (MSVC 19.34+, GCC 14+, Clang 16+)
+  if(CMAKE_VERSION VERSION_LESS 3.28)
+    set(${result} FALSE PARENT_SCOPE)
+    return()
+  endif()
+  if(MSVC AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.34)
+    set(${result} TRUE PARENT_SCOPE)
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14)
+    set(${result} TRUE PARENT_SCOPE)
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
+    set(${result} TRUE PARENT_SCOPE)
+  else()
+    set(${result} FALSE PARENT_SCOPE)
+  endif()
+endfunction()
+
 # Optional: C23 constexpr-like support check (try compile with C2x-style constexpr usage)
 function(check_c_feature_c23_constexpr result)
 	check_c_source_compiles(
@@ -100,4 +118,3 @@ constexpr int a = 42;
 int main(void){ (void)a; return 1; }
 " ${result})
 endfunction()
-

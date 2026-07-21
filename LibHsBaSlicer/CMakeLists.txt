@@ -2,40 +2,40 @@
     add_library(LibHsBaSlicer STATIC 
     pch_headers.hpp
     version_info.hpp
-    version_info.cpp
     Slice/mesh_slice.hpp
-    Slice/mesh_slice.cpp
     Preprocess/model_preprocess.hpp
-    Preprocess/model_preprocess.cpp
     Support/fdm_support.hpp
-    Support/fdm_support.cpp
     Fill/polygon_fill.hpp
-    Fill/polygon_fill.cpp
     Path/path_generator.hpp
-    Path/path_generator.cpp
     Path/sls_export.hpp
-    Path/sls_export.cpp
     Floor/sla_floor.hpp
+    version_info.cpp
+    Slice/mesh_slice.cpp
+    Preprocess/model_preprocess.cpp
+    Support/fdm_support.cpp
+    Fill/polygon_fill.cpp
+    Path/path_generator.cpp
+    Path/sls_export.cpp
     Floor/sla_floor.cpp
     )
 else()
     add_library(LibHsBaSlicer SHARED 
     pch_headers.hpp
     version_info.hpp
-    version_info.cpp
     Slice/mesh_slice.hpp
-    Slice/mesh_slice.cpp
     Preprocess/model_preprocess.hpp
-    Preprocess/model_preprocess.cpp
     Support/fdm_support.hpp
-    Support/fdm_support.cpp
     Fill/polygon_fill.hpp
-    Fill/polygon_fill.cpp
     Path/path_generator.hpp
-    Path/path_generator.cpp
     Path/sls_export.hpp
-    Path/sls_export.cpp
     Floor/sla_floor.hpp
+    version_info.cpp
+    Slice/mesh_slice.cpp
+    Preprocess/model_preprocess.cpp
+    Support/fdm_support.cpp
+    Fill/polygon_fill.cpp
+    Path/path_generator.cpp
+    Path/sls_export.cpp
     Floor/sla_floor.cpp
     )
     # Define the export macro for Windows
@@ -46,14 +46,19 @@ else()
     )
 endif()
 
-target_link_libraries(LibHsBaSlicer PRIVATE
+# PUBLIC: types/symbols exposed in LibHsBaSlicer's public headers
+target_link_libraries(LibHsBaSlicer PUBLIC
 HsBaSlicerBase
-HsBaSlicerUtils
 HsBaSlicerMesh
 HsBaSlicer2D
-HsBaPreprocess
 HsBaSupport
 HsBaPaths
+)
+
+# PRIVATE: internal implementation only
+target_link_libraries(LibHsBaSlicer PRIVATE
+HsBaSlicerUtils
+HsBaPreprocess
 HsBaVersion
 )
 
