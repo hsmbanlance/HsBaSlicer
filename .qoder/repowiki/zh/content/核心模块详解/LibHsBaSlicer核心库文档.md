@@ -13,6 +13,10 @@
 - [polygon_fill.hpp](file://LibHsBaSlicer/Fill/polygon_fill.hpp)
 - [polygon_fill.cpp](file://LibHsBaSlicer/Fill/polygon_fill.cpp)
 - [path_generator.hpp](file://LibHsBaSlicer/Path/path_generator.hpp)
+- [sls_export.hpp](file://LibHsBaSlicer/Path/sls_export.hpp)
+- [sls_export.cpp](file://LibHsBaSlicer/Path/sls_export.cpp)
+- [sla_floor.hpp](file://LibHsBaSlicer/Floor/sla_floor.hpp)
+- [LuaAdapter.hpp](file://fileoperator/LuaAdapter.hpp)
 - [IModel.hpp](file://base/IModel.hpp)
 - [README.md](file://docs/zh/LibHsBaSlicer/README.md)
 - [main.cpp](file://samples/FDM/main.cpp)
@@ -21,35 +25,38 @@
 - [version.hpp](file://version/version.hpp)
 - [version.cpp.in](file://version/version.cpp.in)
 - [CMakeLists.txt](file://version/CMakeLists.txt)
+- [sls_pipeline.h](file://DllHsBaSlicer/sls_pipeline.h)
+- [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
 </cite>
 
 ## 更新摘要
 **所做更改**   
-- 新增版本信息管理模块章节，详细说明统一的版本API接口
-- 更新项目结构图，包含版本管理组件
-- 添加版本信息架构重构说明
-- 更新依赖关系分析，包含HsBaVersion库
-- 新增版本信息使用示例和最佳实践
+- 新增SLS导出功能支持章节，详细说明选择性激光烧结工艺的实现
+- 增强路径输出模块以支持SLS格式，新增SlsPackage数据结构
+- 改进Lua脚本扩展能力，提供完整的数据库集成支持
+- 更新API参考文档，包含SLS相关的新接口和配置选项
+- 添加SLS流水线示例和最佳实践指南
 
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
-4. [版本信息管理](#版本信息管理)
-5. [架构总览](#架构总览)
-6. [详细组件分析](#详细组件分析)
-7. [依赖关系分析](#依赖关系分析)
-8. [性能与并发特性](#性能与并发特性)
-9. [故障排查指南](#故障排查指南)
-10. [结论](#结论)
-11. [附录：API参考](#附录api参考)
+4. [SLS导出功能](#sls导出功能)
+5. [版本信息管理](#版本信息管理)
+6. [架构总览](#架构总览)
+7. [详细组件分析](#详细组件分析)
+8. [依赖关系分析](#依赖关系分析)
+9. [性能与并发特性](#性能与并发特性)
+10. [故障排查指南](#故障排查指南)
+11. [结论](#结论)
+12. [附录：API参考](#附录api参考)
 
 ## 简介
-LibHsBaSlicer 是 HsBaSlicer 的核心 C++ 静态/共享库，提供五大切片能力：模型预处理、网格切片、FDM支撑生成、多边形填充与路径生成。所有对外 API 位于命名空间 HsBa::Slicer，并通过统一的导出宏在 Windows 平台进行 DLL 导出控制。该库面向 FDM/SLA 等增材制造流程，支持 STL/OBJ/STEP/IGES 等常见格式输入，输出层轮廓、支撑截面、填充线与 G-code 路径序列。
+LibHsBaSlicer 是 HsBaSlicer 的核心 C++ 静态/共享库，提供五大切片能力：模型预处理、网格切片、FDM支撑生成、多边形填充与路径生成。所有对外 API 位于命名空间 HsBa::Slicer，并通过统一的导出宏在 Windows 平台进行 DLL 导出控制。该库面向 FDM/SLA/SLS 等增材制造流程，支持 STL/OBJ/STEP/IGES 等常见格式输入，输出层轮廓、支撑截面、填充线与 G-code 路径序列。
 
 典型工作流为：加载并变换模型 → 按层高切片 → 生成支撑 → 填充内腔 → 生成打印路径。
 
-**更新** 版本管理功能已从DllHsBaSlicer迁移到LibHsBaSlicer核心库，提供统一的GetVersionJson()和GetVersionXml()接口，实现跨平台的版本信息查询。
+**更新** 新增了SLS（选择性激光烧结）导出功能支持，通过Lua脚本驱动实现灵活的自定义输出格式，同时增强了路径输出模块以支持SLS格式的数据包封装。
 
 章节来源
 - [README.md:1-49](file://docs/zh/LibHsBaSlicer/README.md#L1-L49)
@@ -65,7 +72,8 @@ B["Slice<br/>网格切片"]
 C["Support<br/>FDM支撑"]
 D["Fill<br/>多边形填充"]
 E["Path<br/>路径生成"]
-V["Version<br/>版本管理"]
+F["Floor<br/>SLA底板"]
+G["Version<br/>版本管理"]
 end
 subgraph "依赖库"
 L1["HsBaSlicerBase"]
@@ -85,16 +93,17 @@ B --> L4
 C --> L6
 D --> L4
 E --> L7
-V --> L9
+F --> L4
+G --> L9
 A -.-> L8
 B -.-> L8
 ```
 
 图表来源
-- [CMakeLists.txt:1-68](file://LibHsBaSlicer/CMakeLists.txt#L1-L68)
+- [CMakeLists.txt:1-78](file://LibHsBaSlicer/CMakeLists.txt#L1-L78)
 
 章节来源
-- [CMakeLists.txt:1-68](file://LibHsBaSlicer/CMakeLists.txt#L1-L68)
+- [CMakeLists.txt:1-78](file://LibHsBaSlicer/CMakeLists.txt#L1-L78)
 
 ## 核心组件
 - 预处理（Preprocess）：模型加载、查询与几何变换；维护线程局部模型池。
@@ -102,15 +111,73 @@ B -.-> L8
 - 支撑（Support）：基于悬垂检测与配置参数生成单层/全层支撑截面。
 - 填充（Fill）：线型/之字形/简单之字形等多种填充模式，支持带边框的复合偏移填充。
 - 路径（Path）：将层数据转换为 G-code 点序列，封装挤出/移动段与速度、线宽等工艺参数。
-- **版本管理（Version）**：提供统一的版本信息查询接口，支持JSON和XML格式输出。
+- **SLS导出（SLS Export）**：为选择性激光烧结工艺提供专用的数据包封装和Lua脚本导出功能。
+- 底板（Floor）：为SLA工艺生成接触底板和支撑结构。
+- 版本管理（Version）：提供统一的版本信息查询接口，支持JSON和XML格式输出。
 
 章节来源
 - [model_preprocess.hpp:15-85](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L15-L85)
 - [mesh_slice.hpp:13-25](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L13-L25)
 - [fdm_support.hpp:11-33](file://LibHsBaSlicer/Support/fdm_support.hpp#L11-L33)
-- [polygon_fill.hpp:9-33](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L9-L33)
-- [path_generator.hpp:13-59](file://LibHsBaSlicer/Path/path_generator.hpp#L13-L59)
-- [version_info.hpp:11-21](file://LibHsBaSlicer/version_info.hpp#L11-L21)
+- [polygon_fill.hpp:9-33](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L9-33)
+- [path_generator.hpp:13-59](file://LibHsBaSlicer/Path/path_generator.hpp#L13-59)
+- [sls_export.hpp:20-47](file://LibHsBaSlicer/Path/sls_export.hpp#L20-47)
+- [sla_floor.hpp:20-74](file://LibHsBaSlicer/Floor/sla_floor.hpp#L20-74)
+- [version_info.hpp:11-21](file://LibHsBaSlicer/version_info.hpp#L11-21)
+
+## SLS导出功能
+
+### 架构设计
+SLS（选择性激光烧结）导出功能专为粉末床熔融工艺设计，无需底板和支撑结构，输出格式完全由Lua脚本控制。该功能提供了灵活的数据包封装机制和强大的脚本扩展能力。
+
+```mermaid
+classDiagram
+class SlsPackage {
++layer_outlines : vector~PolygonsD~
++layer_z_heights : vector~float~
++config_json : string
+}
+class SaveSlsPackageLua {
++(pkg, output_zip, lua_script, lua_func) bool
+}
+class LayerData {
++layer : int
++z_height : float
++outlines : PolygonsD
+}
+SlsPackage --> LayerData : "包含多层数据"
+SaveSlsPackageLua --> SlsPackage : "处理"
+```
+
+图表来源
+- [sls_export.hpp:20-47](file://LibHsBaSlicer/Path/sls_export.hpp#L20-47)
+
+### 核心API接口
+SLS导出功能提供以下主要接口：
+
+- `SlsPackage` 数据结构：封装SLS导出的核心数据，包括每层轮廓、Z高度和配置信息
+- `SaveSlsPackageLua()`：使用Lua脚本执行自定义导出逻辑，支持zip打包和数据库注册
+
+### 数据包结构
+SlsPackage包含以下关键字段：
+- **layer_outlines**：每层的二维多边形轮廓数组
+- **layer_z_heights**：对应的Z轴高度值（毫米）
+- **config_json**：JSON格式的配置文件内容
+
+### Lua脚本环境
+SLS导出脚本运行在完整的Lua环境中，提供以下全局变量：
+- `config`：包含路径和配置字符串的表
+- `images`：每层数据的数组，每个元素包含路径和数据
+- `output_path`：输出文件路径
+- 已注册的Lua库：Zipper、Cipher、SQLite、MySQL、PostgreSQL等
+
+### 构建系统集成
+SLS导出功能通过CMake构建系统自动集成到LibHsBaSlicer库中，支持动态编译选项控制第三方库的可用性。
+
+**章节来源**
+- [sls_export.hpp:20-47](file://LibHsBaSlicer/Path/sls_export.hpp#L20-47)
+- [sls_export.cpp:50-94](file://LibHsBaSlicer/Path/sls_export.cpp#L50-94)
+- [LuaAdapter.hpp:25-58](file://fileoperator/LuaAdapter.hpp#L25-58)
 
 ## 版本信息管理
 
@@ -148,7 +215,7 @@ SlicerVersionInfo --> Version : "调用"
 
 图表来源
 - [version.hpp:17-31](file://version/version.hpp#L17-L31)
-- [version_info.hpp:9-23](file://LibHsBaSlicer/version_info.hpp#L9-L23)
+- [version_info.hpp:9-23](file://LibHsBaSlicer/version_info.hpp#L9-23)
 
 ### 核心API接口
 LibHsBaSlicer提供两个主要的版本信息查询接口：
@@ -180,8 +247,8 @@ E --> F["LibHsBaSlicer链接HsBaVersion"]
 - [CMakeLists.txt:28-45](file://version/CMakeLists.txt#L28-L45)
 
 **章节来源**
-- [version_info.hpp:11-21](file://LibHsBaSlicer/version_info.hpp#L11-L21)
-- [version_info.cpp:9-19](file://LibHsBaSlicer/version_info.cpp#L9-L19)
+- [version_info.hpp:11-21](file://LibHsBaSlicer/version_info.hpp#L11-21)
+- [version_info.cpp:9-19](file://LibHsBaSlicer/version_info.cpp#L9-19)
 - [version.hpp:17-31](file://version/version.hpp#L17-L31)
 - [CMakeLists.txt:47-56](file://version/CMakeLists.txt#L47-L56)
 
@@ -230,6 +297,15 @@ class Path {
 +GenerateGCodePath(layer_data,config) unique_ptr~PointsPath~
 +PolygonsToGPoints(polys,z,config,is_extrude) vector~GPoint~
 }
+class SLSExport {
++SaveSlsPackageLua(pkg,output_zip,lua_script,lua_func) bool
+}
+class Floor {
++GenerateFloorContact(bottom_layer,config) Polygons
++GenerateFloorRaft(bottom_layer,config) Polygons
++GenerateFloorBorder(bottom_layer,config) Polygons
++GenerateFloorFill(bottom_layer,config) Polygons
+}
 class VersionInfo {
 +GetVersionJson() string
 +GetVersionXml() string
@@ -238,6 +314,8 @@ Preprocess --> IModel : "管理生命周期"
 Slice --> IModel : "读取几何"
 Support --> Fill : "使用填充结果"
 Path --> Fill : "消费填充轮廓"
+SLSExport --> Fill : "处理层数据"
+Floor --> Fill : "生成底板"
 VersionInfo --> IModel : "独立模块"
 ```
 
@@ -246,9 +324,11 @@ VersionInfo --> IModel : "独立模块"
 - [model_preprocess.hpp:15-85](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L15-L85)
 - [mesh_slice.hpp:13-25](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L13-L25)
 - [fdm_support.hpp:11-33](file://LibHsBaSlicer/Support/fdm_support.hpp#L11-L33)
-- [polygon_fill.hpp:9-33](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L9-L33)
-- [path_generator.hpp:13-59](file://LibHsBaSlicer/Path/path_generator.hpp#L13-L59)
-- [version_info.hpp:11-21](file://LibHsBaSlicer/version_info.hpp#L11-L21)
+- [polygon_fill.hpp:9-33](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L9-33)
+- [path_generator.hpp:13-59](file://LibHsBaSlicer/Path/path_generator.hpp#L13-59)
+- [sls_export.hpp:20-47](file://LibHsBaSlicer/Path/sls_export.hpp#L20-47)
+- [sla_floor.hpp:20-74](file://LibHsBaSlicer/Floor/sla_floor.hpp#L20-74)
+- [version_info.hpp:11-21](file://LibHsBaSlicer/version_info.hpp#L11-21)
 
 ## 详细组件分析
 
@@ -332,10 +412,10 @@ Sup-->>App : vector<PolygonsD>
 ```
 
 图表来源
-- [fdm_support.hpp:20-31](file://LibHsBaSlicer/Support/fdm_support.hpp#L20-L31)
+- [fdm_support.hpp:20-31](file://LibHsBaSlicer/Support/fdm_support.hpp#L20-31)
 
 章节来源
-- [fdm_support.hpp:11-33](file://LibHsBaSlicer/Support/fdm_support.hpp#L11-L33)
+- [fdm_support.hpp:11-33](file://LibHsBaSlicer/Support/fdm_support.hpp#L11-33)
 
 ### 填充（Fill）
 - 职责：对二维多边形执行不同模式的填充，并提供带边框的复合偏移填充。
@@ -357,11 +437,11 @@ Z --> Out
 ```
 
 图表来源
-- [polygon_fill.cpp:5-18](file://LibHsBaSlicer/Fill/polygon_fill.cpp#L5-L18)
-- [polygon_fill.hpp:11-31](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L11-L31)
+- [polygon_fill.cpp:5-18](file://LibHsBaSlicer/Fill/polygon_fill.cpp#L5-18)
+- [polygon_fill.hpp:11-31](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L11-31)
 
 章节来源
-- [polygon_fill.hpp:9-33](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L9-L33)
+- [polygon_fill.hpp:9-33](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L9-33)
 - [polygon_fill.cpp:1-29](file://LibHsBaSlicer/Fill/polygon_fill.cpp#L1-L29)
 
 ### 路径（Path）
@@ -384,10 +464,53 @@ Path-->>App : unique_ptr<PointsPath>
 ```
 
 图表来源
-- [path_generator.hpp:18-57](file://LibHsBaSlicer/Path/path_generator.hpp#L18-L57)
+- [path_generator.hpp:18-57](file://LibHsBaSlicer/Path/path_generator.hpp#L18-57)
 
 章节来源
-- [path_generator.hpp:13-59](file://LibHsBaSlicer/Path/path_generator.hpp#L13-L59)
+- [path_generator.hpp:13-59](file://LibHsBaSlicer/Path/path_generator.hpp#L13-59)
+
+### SLS导出（SLS Export）
+- 职责：为选择性激光烧结工艺提供专用导出功能，支持Lua脚本驱动的自定义输出格式。
+- 关键设计：
+  - SlsPackage 数据结构封装层轮廓、Z高度和配置信息。
+  - SaveSlsPackageLua 函数提供完整的Lua脚本执行环境，支持zip打包和数据库操作。
+  - 内置JSON序列化功能，将多边形数据转换为标准格式。
+- 复杂度与性能：
+  - JSON序列化开销与层数和顶点数量成正比；Lua脚本执行时间取决于自定义逻辑复杂度。
+- 错误处理：
+  - 捕获所有异常并返回布尔值表示成功/失败；支持可选的错误消息传递。
+
+```mermaid
+sequenceDiagram
+participant App as "调用方"
+participant SLS as "SLS导出"
+participant Lua as "Lua脚本"
+App->>SLS : SaveSlsPackageLua(pkg, output_zip, lua_script)
+SLS->>SLS : 序列化层数据为JSON
+SLS->>Lua : 执行导出脚本
+Lua->>Lua : 创建zip包 + 数据库注册
+Lua-->>SLS : 返回执行结果
+SLS-->>App : 返回成功/失败状态
+```
+
+图表来源
+- [sls_export.cpp:50-94](file://LibHsBaSlicer/Path/sls_export.cpp#L50-94)
+
+章节来源
+- [sls_export.hpp:20-47](file://LibHsBaSlicer/Path/sls_export.hpp#L20-47)
+- [sls_export.cpp:1-97](file://LibHsBaSlicer/Path/sls_export.cpp#L1-97)
+
+### 底板（Floor）
+- 职责：为SLA工艺生成接触底板和支撑结构，支持凸包和凹包简化算法。
+- 关键设计：
+  - GenerateFloorContact 计算接触区域，支持凸包和凹包简化。
+  - GenerateFloorRaft 生成完整的底板结构，包括边框和内填充。
+  - 支持Lua脚本自定义底板生成逻辑。
+- 复杂度与性能：
+  - 凸包算法复杂度为O(n log n)；凹包算法复杂度更高但能更好地贴合复杂形状。
+
+章节来源
+- [sla_floor.hpp:20-74](file://LibHsBaSlicer/Floor/sla_floor.hpp#L20-74)
 
 ## 依赖关系分析
 LibHsBaSlicer 通过 CMake 链接多个基础与领域库，并在非移动端/主机平台可选链接 CAD 内核。
@@ -406,25 +529,28 @@ Lib -.可选.-> CAD["HsBaSlicerCADModel"]
 ```
 
 图表来源
-- [CMakeLists.txt:45-54](file://LibHsBaSlicer/CMakeLists.txt#L45-L54)
+- [CMakeLists.txt:45-54](file://LibHsBaSlicer/CMakeLists.txt#L45-54)
 
 章节来源
-- [CMakeLists.txt:1-68](file://LibHsBaSlicer/CMakeLists.txt#L1-L68)
+- [CMakeLists.txt:1-78](file://LibHsBaSlicer/CMakeLists.txt#L1-78)
 
 ## 性能与并发特性
 - 线程局部模型池：预处理模块使用 thread_local 的 ModelLoader，避免多线程竞争，提高并发安全性与性能。
 - 切片并行潜力：注释指出在层间路径规划不干涉时可考虑协程并行处理单层路径，适合高吞吐流水线。
 - 预编译头：通过 pch_headers.hpp 集中引入常用标准库与第三方头，减少重复编译开销。
 - 版本信息缓存：版本信息在构建时生成，运行时直接访问，无额外性能开销。
+- SLS导出优化：JSON序列化采用流式处理，避免大对象内存分配；Lua脚本执行支持异步回调。
 - 建议：
   - 大批量模型处理时复用模型对象，避免频繁加载/释放。
   - 合理设置填充间距与壁厚，平衡质量与时间。
   - 对超大模型优先使用不安全切片获取完整拓扑，再进行后处理筛选。
+  - SLS导出时使用合适的压缩级别，平衡文件大小和处理时间。
 
 章节来源
 - [model_preprocess.cpp:9-14](file://LibHsBaSlicer/Preprocess/model_preprocess.cpp#L9-L14)
 - [mesh_slice.hpp:15-16](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L15-L16)
 - [pch_headers.hpp:1-40](file://LibHsBaSlicer/pch_headers.hpp#L1-L40)
+- [sls_export.cpp:50-94](file://LibHsBaSlicer/Path/sls_export.cpp#L50-94)
 
 ## 故障排查指南
 - 模型加载失败
@@ -436,21 +562,26 @@ Lib -.可选.-> CAD["HsBaSlicerCADModel"]
   - 调整悬垂角度、填充间距与壁厚；检查输入轮廓是否为有效闭合多边形。
 - 路径生成问题
   - 核对 FdmPathConfig 的单位、线宽与速度设置；确保层数据中 z_height 正确递增。
+- **SLS导出失败**
+  - 检查Lua脚本语法和路径是否正确；确认输出目录具有写入权限。
+  - 验证Lua环境中必要的库（Zipper、数据库适配器）是否正确注册。
+  - 检查SlsPackage数据结构中的层数据是否为空或无效。
 - **版本信息查询失败**
   - 确认已正确链接 HsBaVersion 库；检查构建类型是否正确传递。
   - 验证 PowerShell 环境是否正常，确保版本信息生成脚本可执行。
 
 章节来源
-- [model_preprocess.hpp:27-35](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L27-L35)
-- [mesh_slice.hpp:17-21](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L17-L21)
-- [fdm_support.hpp:13-22](file://LibHsBaSlicer/Support/fdm_support.hpp#L13-L22)
-- [polygon_fill.hpp:11-31](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L11-L31)
-- [path_generator.hpp:18-57](file://LibHsBaSlicer/Path/path_generator.hpp#L18-L57)
+- [model_preprocess.hpp:27-35](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L27-35)
+- [mesh_slice.hpp:17-21](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L17-21)
+- [fdm_support.hpp:13-22](file://LibHsBaSlicer/Support/fdm_support.hpp#L13-22)
+- [polygon_fill.hpp:11-31](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L11-31)
+- [path_generator.hpp:18-57](file://LibHsBaSlicer/Path/path_generator.hpp#L18-57)
+- [sls_export.cpp:50-94](file://LibHsBaSlicer/Path/sls_export.cpp#L50-94)
 
 ## 结论
-LibHsBaSlicer 提供了从模型预处理到 G-code 路径生成的完整切片链路，具备清晰的模块化设计与良好的可扩展性（Lua 脚本、多后端模型）。通过合理的参数配置与并发策略，可在多平台上稳定高效地服务 FDM/SLA 等工艺需求。
+LibHsBaSlicer 提供了从模型预处理到 G-code 路径生成的完整切片链路，具备清晰的模块化设计与良好的可扩展性（Lua 脚本、多后端模型）。通过合理的参数配置与并发策略，可在多平台上稳定高效地服务 FDM/SLA/SLS 等工艺需求。
 
-**更新** 版本管理功能的架构重构进一步增强了库的完整性，提供了统一的版本信息查询接口，便于调试、日志记录和兼容性检查。
+**更新** 新增的SLS导出功能进一步增强了库的工艺覆盖范围，通过Lua脚本驱动的灵活输出机制，为用户提供了高度定制化的数据处理能力。版本管理功能的架构重构也进一步提升了库的完整性，提供了统一的版本信息查询接口，便于调试、日志记录和兼容性检查。
 
 ## 附录：API参考
 - 预处理
@@ -463,7 +594,13 @@ LibHsBaSlicer 提供了从模型预处理到 G-code 路径生成的完整切片�
   - FillPolygon / FillWithBorder
 - 路径
   - GenerateGCodePath / PolygonsToGPoints
-- **版本管理**
+- **SLS导出**
+  - SlsPackage / SaveSlsPackageLua
+- 底板
+  - GenerateFloorContact / GenerateFloorRaft / GenerateFloorBorder / GenerateFloorFill
+  - LuaCustomFloorByFile / LuaCustomFloorByString
+  - RenderPolygonsToImage / SaveSlaPackage / SaveSlaPackageLua
+- 版本管理
   - GetVersionJson / GetVersionXml
 - 导出宏
   - HSBA_SLICER_LIB_API（Windows 下 __declspec(dllexport/dllimport)，其他平台为空）
@@ -472,7 +609,9 @@ LibHsBaSlicer 提供了从模型预处理到 G-code 路径生成的完整切片�
 - [model_preprocess.hpp:15-85](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L15-L85)
 - [mesh_slice.hpp:13-25](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L13-L25)
 - [fdm_support.hpp:11-33](file://LibHsBaSlicer/Support/fdm_support.hpp#L11-L33)
-- [polygon_fill.hpp:9-33](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L9-L33)
-- [path_generator.hpp:13-59](file://LibHsBaSlicer/Path/path_generator.hpp#L13-L59)
-- [version_info.hpp:11-21](file://LibHsBaSlicer/version_info.hpp#L11-L21)
+- [polygon_fill.hpp:9-33](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L9-33)
+- [path_generator.hpp:13-59](file://LibHsBaSlicer/Path/path_generator.hpp#L13-59)
+- [sls_export.hpp:20-47](file://LibHsBaSlicer/Path/sls_export.hpp#L20-47)
+- [sla_floor.hpp:20-178](file://LibHsBaSlicer/Floor/sla_floor.hpp#L20-178)
+- [version_info.hpp:11-21](file://LibHsBaSlicer/version_info.hpp#L11-21)
 - [export.h:1-15](file://LibHsBaSlicer/export.h#L1-L15)

@@ -10,37 +10,60 @@
 - [IntPolygon.hpp](file://2D/IntPolygon.hpp)
 - [FloatPolygons.hpp](file://2D/FloatPolygons.hpp)
 - [LuaNewObject.hpp](file://utils/LuaNewObject.hpp)
+- [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
+- [sls_pipeline.h](file://DllHsBaSlicer/sls_pipeline.h)
+- [sls_pipeline.cpp](file://DllHsBaSlicer/sls_pipeline.cpp)
+- [sls_export.hpp](file://LibHsBaSlicer/Path/sls_export.hpp)
+- [hsba_slicer.cppm](file://ModuleHsBaSlicer/hsba_slicer.cppm)
+- [main.cpp](file://samples/SLS/main.cpp)
 </cite>
+
+## Update Summary
+**Changes Made**   
+- Added comprehensive SLS (Selective Laser Sintering) processing pipeline documentation
+- Updated data flow overview to include three distinct manufacturing process pipelines (FDM, SLA, SLS)
+- Enhanced modular architecture section with C++20 module wrapper details
+- Added pipelinetypes abstraction layer documentation for unified configuration management
+- Updated examples to demonstrate all three pipeline types with their specific characteristics
 
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Data Flow Overview](#data-flow-overview)
-3. [Model Ingestion via IModel Interface](#model-ingestion-via-imodel-interface)
-4. [FullTopoModel Topological Reconstruction](#fulltopomodel-topological-reconstruction)
-5. [Slicing Pipeline](#slicing-pipeline)
-6. [Safe vs Unsafe Slicing](#safe-vs-unsafe-slicing)
-7. [Lua-Scripted Slicing](#lua-scripted-slicing)
-8. [Performance and Memory Considerations](#performance-and-memory-considerations)
-9. [Common Issues and Error Handling](#common-issues-and-error-handling)
-10. [Conclusion](#conclusion)
+3. [Modular Architecture and Type Abstraction](#modular-architecture-and-type-abstraction)
+4. [Model Ingestion via IModel Interface](#model-ingestion-via-imodel-interface)
+5. [FullTopoModel Topological Reconstruction](#fulltopomodel-topological-reconstruction)
+6. [Multi-Pipeline Processing Architecture](#multi-pipeline-processing-architecture)
+7. [SLS Processing Pipeline](#sls-processing-pipeline)
+8. [Safe vs Unsafe Slicing](#safe-vs-unsafe-slicing)
+9. [Lua-Scripted Slicing](#lua-scripted-slicing)
+10. [Performance and Memory Considerations](#performance-and-memory-considerations)
+11. [Common Issues and Error Handling](#common-issues-and-error-handling)
+12. [Conclusion](#conclusion)
 
 ## Introduction
 
-The HsBaSlicer application implements a sophisticated data flow and processing pipeline for 3D model slicing, designed to efficiently convert raw triangle mesh data into 2D polygonal cross-sections at specified Z-heights. This document details the end-to-end pathway from model ingestion through topological reconstruction to final slice generation, with emphasis on the architectural decisions that enable high-performance slicing operations.
+The HsBaSlicer application implements a sophisticated multi-process data flow and processing pipeline designed to efficiently convert raw triangle mesh data into 2D polygonal cross-sections for various additive manufacturing technologies. This document details the end-to-end pathway from model ingestion through topological reconstruction to final slice generation, supporting FDM (Fused Deposition Modeling), SLA (Stereolithography), and SLS (Selective Laser Sintering) processes.
 
-The core of the slicing pipeline revolves around the `FullTopoModel` class, which performs complete topological reconstruction of the input mesh, establishing explicit relationships between vertices, edges, and faces. This pre-processing step enables efficient Z-direction slicing without repeated topological analysis, significantly improving performance for multi-layer slicing operations. The pipeline supports multiple slicing modes, including standard safe slicing, unsafe slicing for specialized manufacturing processes, and Lua-scripted slicing for custom algorithms.
+The core of the slicing pipeline revolves around the `FullTopoModel` class, which performs complete topological reconstruction of the input mesh, establishing explicit relationships between vertices, edges, and faces. This pre-processing step enables efficient Z-direction slicing without repeated topological analysis, significantly improving performance for multi-layer slicing operations. The system now features a modular architecture with C++20 modules and a unified type abstraction layer that provides consistent interfaces across all manufacturing processes.
 
 **Section sources**
-- [FullTopoModel.hpp](file://meshmodel/FullTopoModel.hpp#L36-L42)
-- [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L9-L19)
+- [FullTopoModel.hpp:36-42](file://meshmodel/FullTopoModel.hpp#L36-L42)
+- [mesh_slice.hpp:9-19](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L9-L19)
+- [pipeline_types.h:1-400](file://pipelinetypes/pipeline_types.h#L1-L400)
 
 ## Data Flow Overview
 
-The data flow in HsBaSlicer follows a structured pipeline that transforms a 3D model into 2D slice polygons through several well-defined stages. The process begins with model ingestion through the `IModel` interface, which provides a standardized way to access triangle mesh data regardless of the underlying model format or implementation.
+The data flow in HsBaSlicer follows a structured modular pipeline that transforms a 3D model into 2D slice polygons through several well-defined stages, with specialized processing paths for different manufacturing technologies. The process begins with model ingestion through the `IModel` interface, which provides a standardized way to access triangle mesh data regardless of the underlying model format or implementation.
 
 Once the model data is available, it is passed to the `FullTopoModel` constructor, which performs comprehensive topological reconstruction. This step creates explicit data structures representing vertices, edges, and faces, along with their interrelationships. The reconstructed topology is stored in memory and can be reused for multiple slicing operations at different heights without repeating the computationally expensive reconstruction process.
 
-The final stage is the slicing operation itself, which intersects the reconstructed mesh with a Z-plane at the specified height. The intersection algorithm efficiently computes polygonal cross-sections by analyzing edge-face relationships and constructing closed loops from intersection points. The pipeline supports multiple slicing variants, including safe slicing (which only returns closed contours), unsafe slicing (which includes open polylines), and Lua-scripted slicing (which allows custom algorithms).
+The system now supports three distinct processing pipelines:
+
+1. **FDM Pipeline**: Slice → Support Generation → Fill Pattern → Path Planning → G-code Export
+2. **SLA Pipeline**: Slice → Support Generation → Floor/Raft Generation → Image Rendering → Package Export  
+3. **SLS Pipeline**: Slice → Lua-driven Custom Export (no standard output format)
+
+Each pipeline shares the common topological foundation but diverges in post-processing based on the specific requirements of each manufacturing technology.
 
 ```mermaid
 flowchart TD
@@ -49,15 +72,103 @@ B --> C["FullTopoModel Construction"]
 C --> D["Topological Reconstruction"]
 D --> E["Slice(height)"]
 E --> F["2D Polygons"]
-C --> G["SliceLua(script, height)"]
-G --> H["Custom 2D Polygons"]
-C --> I["UnSafeSlice(height)"]
-I --> J["Open Polylines + Closed Contours"]
+F --> G["FDM Pipeline"]
+F --> H["SLA Pipeline"]
+F --> I["SLS Pipeline"]
+G --> J["Support + Fill + Path"]
+H --> K["Floor + Render + Package"]
+I --> L["Lua Custom Export"]
+J --> M["G-code Output"]
+K --> N["Image Package"]
+L --> O["Custom Format"]
+C --> P["SliceLua(script, height)"]
+P --> Q["Custom 2D Polygons"]
+C --> R["UnSafeSlice(height)"]
+R --> S["Open Polylines + Closed Contours"]
 ```
 
 **Diagram sources**
-- [mesh_slice.cpp](file://LibHsBaSlicer/Slice/mesh_slice.cpp#L5-L26)
-- [FullTopoModel.cpp](file://meshmodel/FullTopoModel.cpp#L19-L143)
+- [mesh_slice.cpp:5-26](file://LibHsBaSlicer/Slice/mesh_slice.cpp#L5-L26)
+- [FullTopoModel.cpp:19-143](file://meshmodel/FullTopoModel.cpp#L19-L143)
+- [sls_pipeline.cpp:169-270](file://DllHsBaSlicer/sls_pipeline.cpp#L169-L270)
+
+## Modular Architecture and Type Abstraction
+
+The HsBaSlicer system has evolved to feature a sophisticated modular architecture built around two key architectural patterns: C++20 modules and centralized type abstraction.
+
+### C++20 Module Wrapper (ModuleHsBaSlicer)
+
+The system now includes a dedicated C++20 module wrapper (`ModuleHsBaSlicer`) that provides a modern, class-based API over the traditional free-function interface. This module exports a clean namespace `HsBa::Slicer` containing RAII-managed classes like `Model`, `FdmPipeline`, `SlaPipeline`, and `SlsPipeline`.
+
+The module architecture follows these principles:
+- **Single-file module design**: The entire module interface and implementation are contained in `hsba_slicer.cppm` to avoid MSVC C++20 module compilation issues
+- **RAII resource management**: Automatic cleanup of models and resources through destructors
+- **Exception-based error handling**: All errors thrown as `SlicerError` exceptions rather than return codes
+- **Type re-exporting**: Common types like `Point2`, `Polygon`, `Polygons` are re-exported for convenience
+
+### Pipelinetypes Abstraction Layer
+
+The `pipelinetypes` directory provides a centralized, C-compatible type definition layer that abstracts configuration and result structures across all pipeline types. This header-only library defines unified structures for:
+
+- **FDM Configuration**: `HsBaFdmPipelineConfig_t` with fill modes, support patterns, and path parameters
+- **SLA Configuration**: `HsBaSlaPipelineConfig_t` with exposure settings, floor/raft options, and image formats  
+- **SLS Configuration**: `HsBaSlsPipelineConfig_t` with laser parameters and Lua export requirements
+
+Each configuration structure includes default initialization functions (`HsBaFdmConfigDefault()`, `HsBaSlaConfigDefault()`, `HsBaSlsConfigDefault()`) ensuring consistent parameter defaults across the system.
+
+```mermaid
+classDiagram
+class ModuleHsBaSlicer {
+<<C++20 Module>>
++export hsba.slicer
++namespace HsBa : : Slicer
+}
+class Model {
++Model(name, file)
++~Model()
++slice(height) Polygons
++sliceD(height) PolygonsD
++translate(t) void
++rotate(r) void
++scale(s) void
+}
+class FdmPipeline {
++run(model) FdmResult
++sliceAll(model) vector<Polygons>
++generateSupports(layers) vector<PolygonsD>
++fill(contour) Polygons
+}
+class SlaPipeline {
++run(model, output_zip) SlaResult
++generateFloor(bottom_layer) Polygons
++renderLayer(polys, width, height, path) bool
+}
+class SlsPipeline {
++run(model) bool
+}
+class PipelineTypes {
+<<Header-only Library>>
++HsBaFdmPipelineConfig_t
++HsBaSlaPipelineConfig_t
++HsBaSlsPipelineConfig_t
++HsBaFdmConfigDefault()
++HsBaSlaConfigDefault()
++HsBaSlsConfigDefault()
+}
+ModuleHsBaSlicer --> Model
+ModuleHsBaSlicer --> FdmPipeline
+ModuleHsBaSlicer --> SlaPipeline
+ModuleHsBaSlicer --> SlsPipeline
+ModuleHsBaSlicer --> PipelineTypes
+```
+
+**Diagram sources**
+- [hsba_slicer.cppm:1-642](file://ModuleHsBaSlicer/hsba_slicer.cppm#L1-L642)
+- [pipeline_types.h:1-400](file://pipelinetypes/pipeline_types.h#L1-L400)
+
+**Section sources**
+- [hsba_slicer.cppm:1-100](file://ModuleHsBaSlicer/hsba_slicer.cppm#L1-L100)
+- [pipeline_types.h:1-400](file://pipelinetypes/pipeline_types.h#L1-L400)
 
 ## Model Ingestion via IModel Interface
 
@@ -70,9 +181,9 @@ Concrete implementations of the `IModel` interface, such as `CgalModel` and `Igl
 When a model is passed to the slicing functions, it is typically already loaded and transformed as needed. The `IModel` interface ensures that the slicing pipeline receives consistent, validated mesh data that can be reliably processed by the `FullTopoModel` constructor.
 
 **Section sources**
-- [IModel.hpp](file://base/IModel.hpp#L14-L37)
-- [CgalModel.cpp](file://meshmodel/CgalModel.cpp#L23-L42)
-- [IglModel.cpp](file://meshmodel/IglModel.cpp#L54-L60)
+- [IModel.hpp:14-37](file://base/IModel.hpp#L14-L37)
+- [CgalModel.cpp:23-42](file://meshmodel/CgalModel.cpp#L23-L42)
+- [IglModel.cpp:54-60](file://meshmodel/IglModel.cpp#L54-L60)
 
 ## FullTopoModel Topological Reconstruction
 
@@ -118,48 +229,139 @@ Edge --> Vertex : "references"
 ```
 
 **Diagram sources**
-- [FullTopoModel.hpp](file://meshmodel/FullTopoModel.hpp#L42-L115)
-- [FullTopoModel.cpp](file://meshmodel/FullTopoModel.cpp#L19-L143)
+- [FullTopoModel.hpp:42-115](file://meshmodel/FullTopoModel.hpp#L42-L115)
+- [FullTopoModel.cpp:19-143](file://meshmodel/FullTopoModel.cpp#L19-L143)
 
-## Slicing Pipeline
+## Multi-Pipeline Processing Architecture
 
-The slicing pipeline in HsBaSlicer is designed for efficient Z-direction plane intersection, leveraging the pre-constructed topological model to avoid redundant calculations. The core slicing algorithm, implemented in `FullTopoModel::Slice()`, follows a systematic approach to generate 2D polygonal cross-sections from the 3D mesh.
+The HsBaSlicer system now implements a unified multi-pipeline architecture that supports three distinct manufacturing processes while sharing common topological foundations. Each pipeline is optimized for its specific technology requirements while maintaining consistent interfaces through the modular architecture.
 
-The algorithm begins by collecting all intersection points between mesh edges and the slicing plane at the specified height. For each triangular face, it checks all three edges for intersection with the Z-plane. The intersection calculation is handled by the `Intersetion()` method, which determines if a line segment crosses the plane and computes the exact intersection point using linear interpolation.
+### Pipeline Architecture Overview
 
-To handle floating-point precision issues, the algorithm employs integerization of coordinates by scaling the X and Y coordinates by a factor of 1e6 (defined as `integerization` in `IntPolygon.hpp`). This conversion to integer coordinates prevents floating-point errors during polygon construction and ensures robust topological operations in subsequent processing stages.
+All three pipelines share the same foundational components:
+- **Model Loading**: Via `IModel` interface and `FullTopoModel` reconstruction
+- **Core Slicing**: Using `Slice()` or `UnSafeSlice()` methods
+- **Coordinate Systems**: Consistent use of integerized coordinates for precision
 
-The intersection points are organized into an adjacency map, where each point is associated with its connected neighbors. This graph structure is then traversed to construct closed polygonal loops. The traversal algorithm follows connected edges, ensuring that each polygon is properly closed and that all intersection segments are accounted for. Only polygons with three or more vertices are included in the final result, as smaller collections cannot form valid closed contours.
+However, each pipeline diverges in post-processing based on manufacturing requirements:
 
-The slicing function returns a collection of `Polygon` objects, each representing a closed contour in the slice plane. These polygons are ready for further processing, such as path planning, infill generation, or export to manufacturing formats.
+**FDM Pipeline Characteristics:**
+- Requires support structure generation for overhangs
+- Needs infill pattern generation for solid parts
+- Generates continuous toolpaths for extrusion
+- Outputs standard G-code format
+
+**SLA Pipeline Characteristics:**
+- Requires floor/raft generation for build plate adhesion
+- Needs support structure generation for complex geometries
+- Renders layers to images (PNG/JPG/SVG)
+- Packages results with exposure parameters
+
+**SLS Pipeline Characteristics:**
+- No floor/raft required (powder bed provides support)
+- No support structures needed (powder bed acts as support)
+- Completely Lua-driven export process
+- Custom output format determined by user scripts
 
 ```mermaid
-flowchart TD
-A["Start Slice(height)"] --> B["Initialize adjacency map"]
-B --> C["For each face in mesh"]
-C --> D["Check edge intersections with Z-plane"]
-D --> E["Compute intersection points"]
-E --> F["Integerize coordinates"]
-F --> G["Add to adjacency map"]
-G --> H{"More faces?"}
-H --> |Yes| C
-H --> |No| I["Initialize visited set"]
-I --> J["For each unvisited point"]
-J --> K["Start new path"]
-K --> L["Follow connected edges"]
-L --> M["Check for loop closure"]
-M --> N{"Closed loop?"}
-N --> |Yes| O["Create polygon if ≥3 vertices"]
-N --> |No| P["Discard open path"]
-O --> Q{"More points?"}
-P --> Q
-Q --> |Yes| J
-Q --> |No| R["Return polygons"]
+flowchart LR
+subgraph "Shared Foundation"
+A[IModel Interface] --> B[FullTopoModel]
+B --> C[Core Slicing Engine]
+end
+subgraph "FDM Pipeline"
+C --> D[Support Generation]
+D --> E[Infill Patterns]
+E --> F[Toolpath Planning]
+F --> G[G-code Output]
+end
+subgraph "SLA Pipeline"
+C --> H[Support Generation]
+H --> I[Floor/Raft Generation]
+I --> J[Image Rendering]
+J --> K[Package Export]
+end
+subgraph "SLS Pipeline"
+C --> L[Lua Export Script]
+L --> M[Custom Output Format]
+end
 ```
 
 **Diagram sources**
-- [FullTopoModel.cpp](file://meshmodel/FullTopoModel.cpp#L256-L342)
-- [IntPolygon.hpp](file://2D/IntPolygon.hpp#L10)
+- [hsba_slicer.cppm:154-237](file://ModuleHsBaSlicer/hsba_slicer.cppm#L154-L237)
+- [sls_pipeline.cpp:169-270](file://DllHsBaSlicer/sls_pipeline.cpp#L169-L270)
+
+## SLS Processing Pipeline
+
+The SLS (Selective Laser Sintering) pipeline represents the most flexible and customizable processing path in HsBaSlicer, designed specifically for powder bed fusion processes where no floor/raft or support structures are required.
+
+### SLS Pipeline Architecture
+
+The SLS pipeline follows a streamlined three-stage process:
+
+1. **Preprocessing Stage**: Model loading and validation
+2. **Slicing Stage**: Core topological slicing using `UnSafeSlice()` for maximum geometric information
+3. **Export Stage**: Complete customization through Lua scripting
+
+Unlike FDM and SLA pipelines, SLS has no standard output format. Instead, the entire export process is driven by user-provided Lua scripts, giving complete control over output generation, database registration, and custom processing workflows.
+
+### SLS Configuration Structure
+
+The `HsBaSlsPipelineConfig_t` structure encapsulates all SLS-specific parameters:
+
+```cpp
+typedef struct HsBaSlsPipelineConfig {
+    // Model Configuration
+    const char* model_name;
+    const char* model_path;
+    
+    // Slice Configuration  
+    float layer_height;        // Default: 0.1mm
+    float first_layer_height;  // Default: 0.15mm
+    
+    // Laser Configuration
+    float laser_power;         // Default: 30.0W
+    float scan_speed;          // Default: 2000.0mm/s
+    float hatch_spacing;       // Default: 0.15mm
+    float hatch_rotation;      // Default: 90.0 degrees
+    float bed_temperature;     // Default: 180.0°C
+    
+    // Lua Export Configuration (required)
+    const char* export_lua_script;  // Must not be NULL
+    const char* export_lua_func;    // Default: "export_sls"
+    
+    // Output Configuration
+    const char* output_path;
+} HsBaSlsPipelineConfig_t;
+```
+
+### SLS Package Structure
+
+The `SlsPackage` structure carries sliced data to the Lua export script:
+
+```cpp
+struct SlsPackage {
+    std::vector<PolygonsD> layer_outlines;  // Per-layer slice outlines
+    std::vector<float> layer_z_heights;     // Z height per layer (mm)
+    std::string config_json;                // Configuration JSON content
+};
+```
+
+### Lua Export Environment
+
+The Lua export script receives a rich environment with global variables:
+- `config`: Table containing `{path="config.json", configStr="<JSON content>"}`
+- `images`: Array where each element is `{path="layers/N.json", data="<polygon JSON>"}`
+- `output_path`: String with the requested output file path
+- Registered libraries: Zipper, Cipher, Bit7zZipper, SQLite, MySQL, PostgreSQL
+
+The example Lua script demonstrates creating zip archives with layer data and registering entries in SQLite databases.
+
+**Section sources**
+- [sls_pipeline.h:1-60](file://DllHsBaSlicer/sls_pipeline.h#L1-L60)
+- [sls_pipeline.cpp:169-270](file://DllHsBaSlicer/sls_pipeline.cpp#L169-L270)
+- [sls_export.hpp:1-52](file://LibHsBaSlicer/Path/sls_export.hpp#L1-L52)
+- [main.cpp:1-219](file://samples/SLS/main.cpp#L1-L219)
 
 ## Safe vs Unsafe Slicing
 
@@ -174,9 +376,9 @@ The choice between safe and unsafe slicing represents a trade-off between geomet
 Both slicing modes share the same underlying intersection algorithm but differ in their post-processing of the results. The safe slicer filters the results to include only closed loops, while the unsafe slicer preserves all paths and annotates them with their closure status.
 
 **Section sources**
-- [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L11-L15)
-- [FullTopoModel.hpp](file://meshmodel/FullTopoModel.hpp#L18-L35)
-- [FullTopoModel.cpp](file://meshmodel/FullTopoModel.cpp#L256-L432)
+- [mesh_slice.hpp:11-15](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L11-L15)
+- [FullTopoModel.hpp:18-35](file://meshmodel/FullTopoModel.hpp#L18-L35)
+- [FullTopoModel.cpp:256-432](file://meshmodel/FullTopoModel.cpp#L256-L432)
 
 ## Lua-Scripted Slicing
 
@@ -212,9 +414,9 @@ C->>C : Return Polygons
 ```
 
 **Diagram sources**
-- [FullTopoModel.cpp](file://meshmodel/FullTopoModel.cpp#L434-L642)
-- [LuaNewObject.hpp](file://utils/LuaNewObject.hpp#L57-L61)
-- [full_topo_model_test.cpp](file://tests/Models/full_topo_model_test.cpp#L97-L164)
+- [FullTopoModel.cpp:434-642](file://meshmodel/FullTopoModel.cpp#L434-L642)
+- [LuaNewObject.hpp:57-61](file://utils/LuaNewObject.hpp#L57-L61)
+- [full_topo_model_test.cpp:97-164](file://tests/Models/full_topo_model_test.cpp#L97-L164)
 
 ## Performance and Memory Considerations
 
@@ -230,10 +432,13 @@ The Lua integration is designed with resource management in mind, using RAII (Re
 
 For large models, the memory footprint of the `FullTopoModel` is approximately 48 bytes per vertex, 24 bytes per edge, and 60 bytes per face, plus overhead for the container structures. This represents a significant increase over the raw triangle mesh data but is justified by the performance benefits for multi-layer slicing operations.
 
+The modular architecture further enhances performance through compile-time optimizations enabled by C++20 modules, reducing linking overhead and improving build times for consumers using the class-based API.
+
 **Section sources**
-- [FullTopoModel.cpp](file://meshmodel/FullTopoModel.cpp#L267-L268)
+- [FullTopoModel.cpp:267-268](file://meshmodel/FullTopoModel.cpp#L267-L268)
 - [IntPolygon.hpp](file://2D/IntPolygon.hpp#L10)
-- [LuaNewObject.hpp](file://utils/LuaNewObject.hpp#L55-L56)
+- [LuaNewObject.hpp:55-56](file://utils/LuaNewObject.hpp#L55-L56)
+- [hsba_slicer.cppm:1-20](file://ModuleHsBaSlicer/hsba_slicer.cppm#L1-L20)
 
 ## Common Issues and Error Handling
 
@@ -245,25 +450,27 @@ Floating-point precision issues are addressed through the integerization process
 
 The intersection calculation in `Intersetion()` includes special handling for edge cases, such as when both endpoints lie exactly on the slicing plane. In this case, the algorithm returns one endpoint but indicates that the segment is not a proper intersection, preventing the creation of degenerate zero-length segments.
 
-Error handling is implemented through C++ exceptions, with the Lua interface providing detailed error messages for script loading and execution failures. The `RuntimeError` class, defined in `error.hpp`, is used to report various error conditions, including Lua initialization failures, script loading errors, and runtime exceptions.
+Error handling is implemented through C++ exceptions in the modular API, with the Lua interface providing detailed error messages for script loading and execution failures. The `SlicerError` class, defined in the module wrapper, is used to report various error conditions, including Lua initialization failures, script loading errors, and runtime exceptions.
 
 For models with known topological issues, users can employ the unsafe slicing mode to examine all intersection geometry, including open polylines that might indicate problems in the model. The Euler characteristic calculation provides a simple metric for assessing topological validity, with values that are not even or greater than 2 suggesting potential issues with the model.
 
+The modular architecture improves error handling by providing consistent exception semantics across all pipeline types, making it easier for consumers to handle errors uniformly regardless of which manufacturing process is being used.
+
 **Section sources**
-- [FullTopoModel.cpp](file://meshmodel/FullTopoModel.cpp#L230-L254)
-- [FullTopoModel.hpp](file://meshmodel/FullTopoModel.hpp#L81-L83)
-- [error.hpp](file://base/error.hpp#L12-L139)
+- [FullTopoModel.cpp:230-254](file://meshmodel/FullTopoModel.cpp#L230-L254)
+- [FullTopoModel.hpp:81-83](file://meshmodel/FullTopoModel.hpp#L81-L83)
+- [hsba_slicer.cppm:67-72](file://ModuleHsBaSlicer/hsba_slicer.cppm#L67-L72)
 
 ## Conclusion
 
-The data flow and processing pipeline in HsBaSlicer demonstrates a well-architected approach to 3D model slicing, balancing performance, flexibility, and robustness. By separating topological reconstruction from the slicing operation, the system achieves significant efficiency gains for multi-layer processing while maintaining the ability to handle complex geometric operations.
+The data flow and processing pipeline in HsBaSlicer demonstrates a well-architected approach to 3D model slicing, balancing performance, flexibility, and robustness across multiple manufacturing technologies. By separating topological reconstruction from the slicing operation and implementing a modular architecture with unified type abstractions, the system achieves significant efficiency gains for multi-layer processing while maintaining the ability to handle complex geometric operations.
 
 The `FullTopoModel` class serves as the central component of this pipeline, transforming raw triangle mesh data into a rich topological representation that enables efficient Z-plane intersection. This design decision shifts computational costs to the model loading phase, allowing subsequent slicing operations to proceed rapidly without repeating connectivity analysis.
 
-The pipeline supports multiple slicing modes to accommodate different manufacturing requirements, from the robust safe slicing for standard additive processes to the flexible unsafe slicing for specialized techniques. The Lua-scripted slicing extension provides a powerful mechanism for custom algorithms, opening the system to domain-specific optimizations and advanced processing techniques.
+The system now supports three distinct manufacturing pipelines (FDM, SLA, SLS) through a unified modular architecture. Each pipeline leverages the common topological foundation while providing specialized post-processing tailored to specific manufacturing requirements. The SLS pipeline exemplifies maximum flexibility through its completely Lua-driven export process, while FDM and SLA pipelines provide standardized workflows with extensive customization options.
+
+The introduction of C++20 modules and centralized type abstractions significantly improves the developer experience, providing modern APIs with RAII resource management, exception-based error handling, and consistent interfaces across all pipeline types. The pipelinetypes abstraction layer ensures uniform configuration management and reduces code duplication across different manufacturing processes.
 
 Performance considerations are addressed through careful memory management, efficient data structures, and the use of integerization to mitigate floating-point precision issues. The system handles common geometric problems through validation checks and robust intersection algorithms, while providing tools for diagnosing and addressing model quality issues.
 
-Overall, the HsBaSlicer pipeline represents a sophisticated solution to the challenges of 3D model processing, combining algorithmic efficiency with practical considerations for real-world manufacturing applications.
-
-[No sources needed since this section summarizes without analyzing specific files]
+Overall, the HsBaSlicer pipeline represents a sophisticated solution to the challenges of 3D model processing, combining algorithmic efficiency with practical considerations for real-world manufacturing applications while providing the flexibility needed for diverse additive manufacturing technologies.

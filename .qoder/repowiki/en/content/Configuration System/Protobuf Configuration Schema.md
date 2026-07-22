@@ -5,6 +5,7 @@
 - [slice_config.proto](file://proto/slice_config.proto)
 - [fdm_pipeline.proto](file://proto/fdm_pipeline.proto)
 - [sla_pipeline.proto](file://proto/sla_pipeline.proto)
+- [sls_pipeline.proto](file://proto/sls_pipeline.proto)
 - [point.proto](file://proto/point.proto)
 - [vector.proto](file://proto/vector.proto)
 - [CMakeLists.txt](file://proto/CMakeLists.txt)
@@ -14,40 +15,43 @@
 - [PipelineConfig2Msg.hpp](file://convert/PipelineConfig2Msg.hpp)
 - [fdm_pipeline.h](file://DllHsBaSlicer/fdm_pipeline.h)
 - [sla_pipeline.h](file://DllHsBaSlicer/sla_pipeline.h)
+- [sls_pipeline.h](file://DllHsBaSlicer/sls_pipeline.h)
+- [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
 - [Eigen2Msg.hpp](file://convert/Eigen2Msg.hpp)
-- [Msg2Eigen.hpp](file://convert/Msg2Eigen.hpp)
+- [Msg2Eigen.hpp](file://convert/Meg2Eigen.hpp)
 </cite>
 
 ## Update Summary
 **Changes Made**   
-- Added comprehensive documentation for new FDM and SLA pipeline protobuf schemas
-- Documented bidirectional conversion system between C++ structures and protobuf messages
-- Updated integration examples to include both legacy slice configuration and new pipeline configurations
-- Enhanced schema versioning section with multi-language compilation support
-- Added validation rules for all new pipeline configuration fields
+- Added comprehensive documentation for new SLS (Selective Laser Sintering) pipeline protobuf schema
+- Documented powder bed fusion process parameters including laser power, scan speed, hatch spacing, and temperature control
+- Updated bidirectional conversion system to include SLS pipeline support
+- Enhanced integration examples to demonstrate SLS-specific configuration patterns
+- Added validation rules and default values for SLS powder bed fusion processes
 
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Core Message Structure](#core-message-structure)
 3. [FDM Pipeline Configuration](#fdm-pipeline-configuration)
 4. [SLA Pipeline Configuration](#sla-pipeline-configuration)
-5. [Legacy Slice Configuration](#legacy-slice-configuration)
-6. [Bidirectional Conversion System](#bidirectional-conversion-system)
-7. [Geometry Type Reuse](#geometry-type-reuse)
-8. [Configuration Examples](#configuration-examples)
-9. [C++ Integration and Compilation](#c-integration-and-compilation)
-10. [Schema Versioning and Compatibility](#schema-versioning-and-compatibility)
-11. [Validation and Default Value Handling](#validation-and-default-value-handling)
-12. [Best Practices for Schema Extension](#best-practices-for-schema-extension)
+5. [SLS Pipeline Configuration](#sls-pipeline-configuration)
+6. [Legacy Slice Configuration](#legacy-slice-configuration)
+7. [Bidirectional Conversion System](#bidirectional-conversion-system)
+8. [Geometry Type Reuse](#geometry-type-reuse)
+9. [Configuration Examples](#configuration-examples)
+10. [C++ Integration and Compilation](#c-integration-and-compilation)
+11. [Schema Versioning and Compatibility](#schema-versioning-and-compatibility)
+12. [Validation and Default Value Handling](#validation-and-default-value-handling)
+13. [Best Practices for Schema Extension](#best-practices-for-schema-extension)
 
 ## Introduction
-This document provides comprehensive documentation for the Protobuf-based configuration system used in the HsBaSlicer application. The system now supports three distinct configuration paradigms: **FDM (Fused Deposition Modeling) pipeline**, **SLA (Stereolithography) pipeline**, and **legacy slice configuration**. Each paradigm serves different 3D printing technologies and processing workflows, with robust bidirectional conversion between internal C++ structures and protobuf messages enabling seamless integration across multiple programming languages.
+This document provides comprehensive documentation for the Protobuf-based configuration system used in the HsBaSlicer application. The system now supports four distinct configuration paradigms: **FDM (Fused Deposition Modeling) pipeline**, **SLA (Stereolithography) pipeline**, **SLS (Selective Laser Sintering) pipeline**, and **legacy slice configuration**. Each paradigm serves different 3D printing technologies and processing workflows, with robust bidirectional conversion between internal C++ structures and protobuf messages enabling seamless integration across multiple programming languages.
 
-The enhanced architecture provides comprehensive configuration management for both modern FDM and SLA pipelines while maintaining backward compatibility with existing slice configuration patterns.
+The enhanced architecture provides comprehensive configuration management for modern additive manufacturing processes while maintaining backward compatibility with existing slice configuration patterns.
 
 ## Core Message Structure
 
-The HsBaSlicer configuration system encompasses three primary message families, each tailored to specific 3D printing technologies:
+The HsBaSlicer configuration system encompasses four primary message families, each tailored to specific 3D printing technologies:
 
 ```mermaid
 classDiagram
@@ -114,6 +118,20 @@ class sla_pipe_config {
 +int32 sla_pipe_config_output_image_width
 +int32 sla_pipe_config_output_image_height
 }
+class sls_pipe_config {
++string sls_pipe_config_model_name
++string sls_pipe_config_model_path
++float sls_pipe_config_layer_height
++float sls_pipe_config_first_layer_height
++float sls_pipe_config_laser_power
++float sls_pipe_config_scan_speed
++float sls_pipe_config_hatch_spacing
++float sls_pipe_config_hatch_rotation
++float sls_pipe_config_bed_temperature
++string sls_pipe_config_export_lua_script
++string sls_pipe_config_export_lua_func
++string sls_pipe_config_output_path
+}
 class msg_slice_config {
 +msg_slice_type type
 +float slice_height
@@ -135,11 +153,13 @@ msg_slice_config --> msg_vector3 : "uses"
 **Diagram sources**
 - [fdm_pipeline.proto:19-54](file://proto/fdm_pipeline.proto#L19-L54)
 - [sla_pipeline.proto:18-58](file://proto/sla_pipeline.proto#L18-L58)
+- [sls_pipeline.proto:5-23](file://proto/sls_pipeline.proto#L5-L23)
 - [slice_config.proto:18-27](file://proto/slice_config.proto#L18-L27)
 
 **Section sources**
 - [fdm_pipeline.proto:1-63](file://proto/fdm_pipeline.proto#L1-L63)
 - [sla_pipeline.proto:1-67](file://proto/sla_pipeline.proto#L1-L67)
+- [sls_pipeline.proto:1-33](file://proto/sls_pipeline.proto#L1-L33)
 - [slice_config.proto:1-27](file://proto/slice_config.proto#L1-L27)
 
 ## FDM Pipeline Configuration
@@ -274,6 +294,49 @@ The SLA (Stereolithography) pipeline configuration defines parameters for resin-
 **Section sources**
 - [sla_pipeline.proto:5-58](file://proto/sla_pipeline.proto#L5-L58)
 
+## SLS Pipeline Configuration
+
+**Updated** Added comprehensive SLS (Selective Laser Sintering) pipeline configuration for powder bed fusion processes. The SLS pipeline represents a significant addition to the configuration system, supporting advanced metal and polymer powder sintering operations with precise laser control and thermal management.
+
+The SLS pipeline is designed for powder bed fusion technology where a laser selectively sinters powder particles to create solid parts. Unlike FDM and SLA processes, SLS uses the surrounding powder bed as both support material and thermal mass, eliminating the need for separate support structures.
+
+### Powder Bed Fusion Process Parameters
+
+#### Model Configuration
+- **sls_pipe_config_model_name**: Human-readable model identifier for SLS processing
+- **sls_pipe_config_model_path**: File path to input 3D model (STL, OBJ, etc.)
+
+#### Slicing Parameters
+- **sls_pipe_config_layer_height**: Layer thickness in millimeters (typically 0.05-0.15mm for high precision)
+- **sls_pipe_config_first_layer_height**: Initial layer thickness for powder bed adhesion (typically 1.2-1.5x base height)
+
+#### Laser Processing Parameters
+- **sls_pipe_config_laser_power**: Laser power in watts (W), typically 20-100W depending on material
+- **sls_pipe_config_scan_speed**: Laser scanning speed in millimeters per second (mm/s), typically 1000-5000 mm/s
+- **sls_pipe_config_hatch_spacing**: Distance between adjacent laser scan lines in millimeters (mm), typically 0.05-0.3mm
+- **sls_pipe_config_hatch_rotation**: Rotation angle between consecutive layer hatch patterns in degrees, typically 67° or 90°
+- **sls_pipe_config_bed_temperature**: Powder bed preheating temperature in Celsius (°C), typically 150-200°C depending on material
+
+#### Lua Export Configuration
+- **sls_pipe_config_export_lua_script**: Path to custom SLS export script (required - no standard output format)
+- **sls_pipe_config_export_lua_func**: Function name in export script (default: "export_sls")
+
+#### Output Configuration
+- **sls_pipe_config_output_path**: Output file path for processed data (can be NULL for auto-generation)
+
+### SLS-Specific Characteristics
+
+Unlike FDM and SLA processes, SLS has unique characteristics:
+
+1. **No Support Structures Required**: The surrounding powder bed provides natural support
+2. **Thermal Management Critical**: Powder bed temperature must be carefully controlled
+3. **Custom Export Required**: No standard output format; entirely determined by Lua export script
+4. **Material-Specific Parameters**: Laser and thermal settings vary significantly by material type
+
+**Section sources**
+- [sls_pipeline.proto:5-23](file://proto/sls_pipeline.proto#L5-L23)
+- [pipeline_types.h:228-260](file://pipelinetypes/pipeline_types.h#L228-L260)
+
 ## Legacy Slice Configuration
 
 The legacy `msg_slice_config` maintains backward compatibility for existing slice-based operations, supporting uniform, differential, curved, and ring-based slicing patterns.
@@ -311,8 +374,8 @@ The enhanced configuration system provides comprehensive bidirectional conversio
 
 ```mermaid
 flowchart TD
-ProtoMessages["Protobuf Messages<br/>fdm_pipeline.pb.h<br/>sla_pipeline.pb.h"] --> ConversionLayer["Conversion Layer<br/>Msg2PipelineConfig.cpp<br/>PipelineConfig2Msg.cpp"]
-ConversionLayer --> CppStructures["C++ Structures<br/>fdm_pipeline.h<br/>sla_pipeline.h"]
+ProtoMessages["Protobuf Messages<br/>fdm_pipeline.pb.h<br/>sla_pipeline.pb.h<br/>sls_pipeline.pb.h"] --> ConversionLayer["Conversion Layer<br/>Msg2PipelineConfig.cpp<br/>PipelineConfig2Msg.cpp"]
+ConversionLayer --> CppStructures["C++ Structures<br/>fdm_pipeline.h<br/>sla_pipeline.h<br/>sls_pipeline.h"]
 CppStructures --> Application["Application Code<br/>Samples & Libraries"]
 subgraph "FDM Pipeline"
 FDMProto["msg_fdm_pipeline_config"]
@@ -324,12 +387,20 @@ SLAProto["sla_pipe_config"]
 SLAResult["sla_pipe_result"]
 SLACpp["HsBaSlaPipelineConfig_t<br/>HsBaSlaPipelineResult_t"]
 end
+subgraph "SLS Pipeline"
+SLSProto["sls_pipe_config"]
+SLSResult["sls_pipe_result"]
+SLSCpp["HsBaSlsPipelineConfig_t<br/>HsBaSlsPipelineResult_t"]
+end
 ProtoMessages --> FDMProto
 ProtoMessages --> SLAProto
+ProtoMessages --> SLSProto
 FDMProto --> FDMCpp
 SLAProto --> SLACpp
+SLSProto --> SLSCpp
 FDMResult --> FDMCpp
 SLAResult --> SLACpp
+SLSResult --> SLSCpp
 ```
 
 **Diagram sources**
@@ -356,6 +427,16 @@ SLAResult --> SLACpp
 - **SlaConfigToMsg**: Converts `HsBaSlaPipelineConfig_t` to `sla_pipe_config`
 - **SlaResultToMsg**: Converts `HsBaSlaPipelineResult_t` to `sla_pipe_result`
 
+### SLS Conversion Functions
+
+#### Protobuf to C++ Structure
+- **MsgToSlsConfig**: Converts `sls_pipe_config` to `HsBaSlsPipelineConfig_t`
+- **MsgToSlsResult**: Converts `sls_pipe_result` to `HsBaSlsPipelineResult_t`
+
+#### C++ Structure to Protobuf
+- **SlsConfigToMsg**: Converts `HsBaSlsPipelineConfig_t` to `sls_pipe_config`
+- **SlsResultToMsg**: Converts `HsBaSlsPipelineResult_t` to `sls_pipe_result`
+
 ### Memory Management
 
 The conversion system implements careful memory management for string fields:
@@ -364,10 +445,10 @@ The conversion system implements careful memory management for string fields:
 - Built-in pipeline functions handle internal memory management automatically
 
 **Section sources**
-- [Msg2PipelineConfig.cpp:1-129](file://convert/Msg2PipelineConfig.cpp#L1-L129)
-- [PipelineConfig2Msg.cpp:1-124](file://convert/PipelineConfig2Msg.cpp#L1-L124)
-- [Msg2PipelineConfig.hpp:14-32](file://convert/Msg2PipelineConfig.hpp#L14-L32)
-- [PipelineConfig2Msg.hpp:14-24](file://convert/PipelineConfig2Msg.hpp#L14-L24)
+- [Msg2PipelineConfig.cpp:1-160](file://convert/Msg2PipelineConfig.cpp#L1-L160)
+- [PipelineConfig2Msg.cpp:1-160](file://convert/PipelineConfig2Msg.cpp#L1-L160)
+- [Msg2PipelineConfig.hpp:14-46](file://convert/Msg2PipelineConfig.hpp#L14-L46)
+- [PipelineConfig2Msg.hpp:14-31](file://convert/PipelineConfig2Msg.hpp#L14-L31)
 
 ## Geometry Type Reuse
 
@@ -476,6 +557,32 @@ message sla_pipe_config {
 }
 ```
 
+### SLS Pipeline Configuration Example
+**New** Added SLS powder bed fusion configuration example demonstrating laser and thermal parameters.
+
+```protobuf
+message sls_pipe_config {
+    sls_pipe_config_model_name: "metal_part"
+    sls_pipe_config_model_path: "models/metal_part.stl"
+    sls_pipe_config_layer_height: 0.08
+    sls_pipe_config_first_layer_height: 0.12
+    
+    # Laser processing parameters
+    sls_pipe_config_laser_power: 45.0
+    sls_pipe_config_scan_speed: 3500.0
+    sls_pipe_config_hatch_spacing: 0.12
+    sls_pipe_config_hatch_rotation: 67.0
+    sls_pipe_config_bed_temperature: 175.0
+    
+    # Export configuration (required for SLS)
+    sls_pipe_config_export_lua_script: "scripts/my_sls_export.lua"
+    sls_pipe_config_export_lua_func: "export_sls"
+    
+    # Output configuration
+    sls_pipe_config_output_path: "output/metal_part_sls.zip"
+}
+```
+
 ### Legacy Slice Configuration Examples
 
 #### Same Height Slicing
@@ -525,6 +632,7 @@ message msg_slice_config {
 **Section sources**
 - [fdm_pipeline.proto:19-54](file://proto/fdm_pipeline.proto#L19-L54)
 - [sla_pipeline.proto:18-58](file://proto/sla_pipeline.proto#L18-L58)
+- [sls_pipeline.proto:5-23](file://proto/sls_pipeline.proto#L5-L23)
 - [slice_config.proto:18-27](file://proto/slice_config.proto#L18-L27)
 
 ## C++ Integration and Compilation
@@ -535,7 +643,7 @@ The enhanced protobuf system integrates seamlessly into the C++ build system thr
 
 ```mermaid
 flowchart TD
-ProtoFiles["*.proto files<br/>fdm_pipeline.proto<br/>sla_pipeline.proto<br/>slice_config.proto"] --> Protoc["protoc compiler"]
+ProtoFiles["*.proto files<br/>fdm_pipeline.proto<br/>sla_pipeline.proto<br/>sls_pipeline.proto<br/>slice_config.proto"] --> Protoc["protoc compiler"]
 Protoc --> GeneratedFiles["Generated .pb.cc and .pb.h files"]
 GeneratedFiles --> StaticLib["HsBaSlicerProto static library"]
 StaticLib --> ConversionLayer["Conversion Layer"]
@@ -654,6 +762,19 @@ The enhanced configuration system implements comprehensive validation and defaul
 | support_pattern | HSBA_SLA_SUPPORT_SACRIFICIAL | Minimal support visibility |
 | image_type | HSBA_SLA_IMAGE_PNG | Lossless image format |
 
+#### SLS Pipeline Defaults
+**New** Added SLS-specific default values for powder bed fusion processes.
+
+| Field | Default Value | Description |
+|-------|---------------|-------------|
+| layer_height | 0.1 | Standard SLS layer height |
+| first_layer_height | 0.15 | Enhanced first layer adhesion |
+| laser_power | 30.0 | Moderate laser power (W) |
+| scan_speed | 2000.0 | Standard scan speed (mm/s) |
+| hatch_spacing | 0.15 | Moderate hatch spacing (mm) |
+| hatch_rotation | 90.0 | Perpendicular hatch rotation (degrees) |
+| bed_temperature | 180.0 | Standard powder bed temperature (°C) |
+
 #### Legacy Slice Defaults
 | Field | Default Value | Description |
 |-------|---------------|-------------|
@@ -678,6 +799,18 @@ The enhanced configuration system implements comprehensive validation and defaul
 4. **Image Dimensions**: Must be positive or zero (auto)
 5. **Output Path**: Must be writable if specified
 
+#### SLS Pipeline Validation
+**New** Added SLS-specific validation rules for powder bed fusion processes.
+
+1. **Model Path**: Must be non-empty and accessible
+2. **Layer Height**: Must be positive and within machine limits (0.05-0.2mm)
+3. **Laser Power**: Must be positive and within machine capabilities (10-100W)
+4. **Scan Speed**: Must be positive and within operational range (500-10000 mm/s)
+5. **Hatch Spacing**: Must be positive and less than layer height
+6. **Bed Temperature**: Must be within material-specific safe range (100-250°C)
+7. **Export Script**: Must be specified (required for SLS processing)
+8. **Output Path**: Must be writable if specified
+
 #### Legacy Slice Validation
 1. **Slice Type**: Must be valid enum value
 2. **Height Values**: Must be positive for active slice types
@@ -698,6 +831,8 @@ The conversion system implements comprehensive error handling:
 **Section sources**
 - [fdm_pipeline.h:35-79](file://DllHsBaSlicer/fdm_pipeline.h#L35-L79)
 - [sla_pipeline.h:36-84](file://DllHsBaSlicer/sla_pipeline.h#L36-L84)
+- [sls_pipeline.h:13-53](file://DllHsBaSlicer/sls_pipeline.h#L13-L53)
+- [pipeline_types.h:228-274](file://pipelinetypes/pipeline_types.h#L228-L274)
 - [slice_config.proto:18-27](file://proto/slice_config.proto#L18-L27)
 
 ## Best Practices for Schema Extension
@@ -708,7 +843,8 @@ When extending the enhanced protobuf schema with new parameters, follow these be
 
 #### Naming Conventions
 - **FDM Fields**: Use `fdm_pipe_config_` prefix
-- **SLA Fields**: Use `sla_pipe_config_` prefix  
+- **SLA Fields**: Use `sla_pipe_config_` prefix
+- **SLS Fields**: Use `sls_pipe_config_` prefix
 - **Common Fields**: Use descriptive names without prefixes
 - **Enums**: Use descriptive names with type context
 
@@ -756,6 +892,23 @@ message sla_pipe_config {
 }
 ```
 
+#### Adding SLS Material-Specific Parameters
+**New** Example of extending SLS schema with material-specific parameters.
+
+```protobuf
+message msg_sls_material_properties {
+    float powder_particle_size = 1;
+    float melting_point = 2;
+    float thermal_conductivity = 3;
+    float expansion_coefficient = 4;
+}
+
+message sls_pipe_config {
+    // existing fields...
+    msg_sls_material_properties material = 13;
+}
+```
+
 ### Testing and Validation
 
 When extending schemas:
@@ -769,5 +922,6 @@ When extending schemas:
 **Section sources**
 - [fdm_pipeline.proto:19-54](file://proto/fdm_pipeline.proto#L19-L54)
 - [sla_pipeline.proto:18-58](file://proto/sla_pipeline.proto#L18-L58)
+- [sls_pipeline.proto:5-23](file://proto/sls_pipeline.proto#L5-L23)
 - [Msg2PipelineConfig.cpp:27-126](file://convert/Msg2PipelineConfig.cpp#L27-L126)
 - [PipelineConfig2Msg.cpp:6-121](file://convert/PipelineConfig2Msg.cpp#L6-L121)

@@ -9,25 +9,29 @@
 - [README.md](file://README.md)
 - [LibHsBaSlicer/CMakeLists.txt](file://LibHsBaSlicer/CMakeLists.txt)
 - [DllHsBaSlicer/CMakeLists.txt](file://DllHsBaSlicer/CMakeLists.txt)
+- [ModuleHsBaSlicer/CMakeLists.txt](file://ModuleHsBaSlicer/CMakeLists.txt)
+- [ModuleHsBaSlicer/hsba_slicer.cppm](file://ModuleHsBaSlicer/hsba_slicer.cppm)
+- [ModuleHsBaSlicer/module_anchor.cpp](file://ModuleHsBaSlicer/module_anchor.cpp)
 - [base/CMakeLists.txt](file://base/CMakeLists.txt)
 - [cmake/HsBaSlicerConfig.cmake.in](file://cmake/HsBaSlicerConfig.cmake.in)
 - [cmake/deploy_dlls.cmake](file://cmake/deploy_dlls.cmake)
 - [android/build.gradle](file://android/build.gradle)
 - [android/app/build.gradle](file://android/app/build.gradle)
+- [static_check/feature_check.cmake](file://static_check/feature_check.cmake)
 - [base/coroutine.hpp](file://base/coroutine.hpp)
 - [LibHsBaSlicer/Slice/mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp)
 - [DllHsBaSlicer/fdm_pipeline.h](file://DllHsBaSlicer/fdm_pipeline.h)
 - [preprocess/ModelLoader.hpp](file://preprocess/ModelLoader.hpp)
 - [support/FdmSupport.hpp](file://support/FdmSupport.hpp)
+- [.github/workflows/build-android.yml](file://.github/workflows/build-android.yml)
+- [.github/workflows/cmake-multi-platform.yml](file://.github/workflows/cmake-multi-platform.yml)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Updated unified output directory structure from traditional CMake layout to `bin/<configuration>` organization
-- Added comprehensive installation support with CMake package configuration files
-- Enhanced conditional compilation for Android/iOS/game console platforms
-- Introduced new deployment utilities for DLL/PDB management
-- Improved platform detection and feature gating mechanisms
+- Enhanced Android build system with clang-scan-deps support for improved incremental build performance
+- Updated GitHub Actions workflows to include CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS configuration parameter
+- Added comprehensive documentation for Android build optimization and dependency tracking improvements
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -42,19 +46,21 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document explains the multi-platform build system for HsBaSlicer, focusing on how CMake, vcpkg, and platform-specific presets orchestrate a consistent build across Windows, Linux, macOS, Android, and iOS. The system has been completely overhauled with unified output directories, comprehensive installation support, and enhanced platform detection for mobile and game console targets. It documents the module layout, dependency management, shared vs static library configuration, and the integration points that enable the FDM pipeline (preprocess, slice, support, fill, path generation) to be built and linked uniformly.
+This document explains the multi-platform build system for HsBaSlicer, focusing on how CMake 3.28+, vcpkg, and platform-specific presets orchestrate a consistent build across Windows, Linux, macOS, Android, iOS, and game consoles. The system has been significantly enhanced with C++20 module support, comprehensive installation capabilities, improved cross-platform compatibility, and optimized Android builds with clang-scan-deps for superior incremental build performance. It documents the modernized module layout, dependency management, shared vs static library configuration, and the integration points that enable the FDM pipeline (preprocess, slice, support, fill, path generation) to be built and linked uniformly using both traditional headers and C++20 modules.
 
 ## Project Structure
 The repository is organized into feature-based modules with a top-level CMake orchestrating subprojects. Key aspects:
 - Top-level CMake configures compiler standards, feature detection, platform flags, and third-party dependencies via vcpkg/pkg-config.
 - Subdirectories define libraries and executables (e.g., base, 2D, paths, preprocess, support, meshmodel, convert, LibHsBaSlicer, DllHsBaSlicer, HsBaSlicer).
+- **New**: ModuleHsBaSlicer provides C++20 module interface for modern consumers.
 - CMake presets standardize cross-platform builds using Ninja or Xcode generators and integrate vcpkg toolchains.
 - Unified output directories place all artifacts under `bin/<configuration>` for consistent deployment.
 - Android project uses Gradle to consume prebuilt native artifacts; iOS/macOS use Xcode generator presets.
+- **Enhanced**: Android builds now leverage clang-scan-deps for significantly improved incremental compilation performance.
 
 ```mermaid
 graph TB
-Root["Top-level CMake<br/>Feature checks, options, deps"] --> Base["base (HsBaSlicerBase)"]
+Root["Top-level CMake 3.28+<br/>Feature checks, options, deps"] --> Base["base (HsBaSlicerBase)"]
 Root --> Utils["utils (HsBaSlicerUtils)"]
 Root --> TwoD["2D (HsBaSlicer2D)"]
 Root --> Paths["paths (HsBaPaths)"]
@@ -64,16 +70,22 @@ Root --> Mesh["meshmodel (HsBaSlicerMesh)"]
 Root --> Convert["convert"]
 Root --> CAD["cadmodel (HsBaSlicerCADModel)"]
 Root --> Lib["LibHsBaSlicer (static/shared)"]
+Root --> Module["ModuleHsBaSlicer (C++20 module)"]
 Root --> Dll["DllHsBaSlicer (shared)"]
 Root --> App["HsBaSlicer (app)"]
 Root --> Tests["tests / static_tests"]
 Root --> Docs["docs"]
-Root --> Install["Installation & Export<br/>CMake Package Config"]
+Root --> Install["Installation & Export<br/>CMake Package Config + FILE_SET"]
+AndroidCI[".github/workflows/build-android.yml<br/>clang-scan-deps enabled"] --> Root
+MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>clang-scan-deps enabled"] --> Root
 ```
 
 **Diagram sources**
 - [CMakeLists.txt:304-328](file://CMakeLists.txt#L304-L328)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
+- [ModuleHsBaSlicer/CMakeLists.txt:1-46](file://ModuleHsBaSlicer/CMakeLists.txt#L1-L46)
+- [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
+- [.github/workflows/cmake-multi-platform.yml:268-276](file://.github/workflows/cmake-multi-platform.yml#L268-L276)
 
 **Section sources**
 - [CMakeLists.txt:1-107](file://CMakeLists.txt#L1-L107)
@@ -81,21 +93,25 @@ Root --> Install["Installation & Export<br/>CMake Package Config"]
 - [README.md:41-194](file://README.md#L41-L194)
 
 ## Core Components
+- **Enhanced CMake Requirements**: Minimum CMake 3.28 for C++20 module support and FILE_SET functionality.
 - Compiler and language standards: Enforces C++20 and conditional C23 where supported.
-- Feature detection: Concepts, ranges, source_location, NTTP, template-template matching, coroutines, explicit this.
+- **Advanced Feature Detection**: Concepts, ranges, source_location, NTTP, template-template matching, coroutines, explicit this, and C++20 modules.
 - Platform detection: Desktop vs mobile vs game console toggles features like logging, dynamic loader, CGAL, OpenCASCADE, SQL backends.
 - Dependency resolution: vcpkg-managed packages with platform-scoped features (e.g., sqlpp11 SQLite-only on mobile).
 - Library type control: Shared vs static based on VCPKG_TARGET_TRIPLET or user option.
 - Unified output directories: All binaries placed in `bin/<configuration>` for consistent deployment.
-- Comprehensive installation support: Full CMake package configuration with export targets and header installation.
+- **Comprehensive Installation Support**: Full CMake package configuration with export targets, header installation, and FILE_SET for C++20 modules.
+- **Optimized Android Builds**: Enhanced with clang-scan-deps for superior incremental compilation performance.
 
 Key behaviors:
 - HSBA_DESKTOP, HSBA_MOBILE, HSBA_GAME_CONSOLE flags gate optional subsystems.
 - Optional bit7z compression and dynamic loader disabled on non-desktop platforms.
 - Boolean operations disabled in Debug due to performance/memory constraints.
 - Game console detection via VCPKG_TARGET_TRIPLET patterns (xbox, switch, playstation, stadia).
+- **C++20 Modules**: Optional module building with automatic compiler capability detection.
+- **Android Optimization**: clang-scan-deps integration enables faster rebuilds by tracking precise file dependencies.
 
-**Updated** Enhanced platform detection now includes game console support with specific triplet pattern matching.
+**Updated** Enhanced with CMake 3.28 minimum requirement, optional C++20 module support, and Android clang-scan-deps optimization.
 
 **Section sources**
 - [CMakeLists.txt:17-38](file://CMakeLists.txt#L17-L38)
@@ -104,30 +120,36 @@ Key behaviors:
 - [CMakeLists.txt:160-194](file://CMakeLists.txt#L160-L194)
 - [CMakeLists.txt:226-237](file://CMakeLists.txt#L226-L237)
 - [CMakeLists.txt:280-302](file://CMakeLists.txt#L280-L302)
-- [CMakeLists.txt:110-126](file://CMakeLists.txt#L110-L126)
+- [CMakeLists.txt:108-119](file://CMakeLists.txt#L108-L119)
+- [static_check/feature_check.cmake:96-111](file://static_check/feature_check.cmake#L96-L111)
 
 ## Architecture Overview
-The build architecture integrates three layers:
-- Configuration layer: CMake + CMakePresets + vcpkg configuration.
-- Module layer: Feature-based libraries and executables.
+The build architecture integrates four layers:
+- Configuration layer: CMake 3.28+ + CMakePresets + vcpkg configuration.
+- Module layer: Feature-based libraries and executables with optional C++20 modules.
 - Platform layer: OS-specific toolchains, generators, and ABI settings.
-- Installation layer: CMake package configuration and target export system.
+- Installation layer: CMake package configuration, target export system, and FILE_SET support.
+- **Enhanced CI layer**: Optimized workflows with clang-scan-deps for Android builds.
 
 ```mermaid
 graph TB
-Presets["CMakePresets.json<br/>Windows/Linux/macOS/iOS/Android presets"] --> CMakeRoot["Top-level CMakeLists.txt"]
+Presets["CMakePresets.json<br/>Windows/Linux/macOS/iOS/Android presets"] --> CMakeRoot["Top-level CMakeLists.txt (3.28+)"]
 VcpkgCfg["vcpkg-configuration.json<br/>registries, overlays, triplets"] --> CMakeRoot
 VcpkgJson["vcpkg.json<br/>dependencies per platform"] --> CMakeRoot
+BuildAndroid[".github/workflows/build-android.yml<br/>clang-scan-deps enabled"] --> CMakeRoot
+CMakeMulti[".github/workflows/cmake-multi-platform.yml<br/>clang-scan-deps enabled"] --> CMakeRoot
 CMakeRoot --> Modules["Submodules (base, utils, 2D, paths, preprocess, support, meshmodel, convert, cadmodel)"]
 Modules --> LibHsBaSlicer["LibHsBaSlicer (static/shared)"]
-LibHsBaSlicer --> DllHsBaSlicer["DllHsBaSlicer (shared)"]
+LibHsBaSlicer --> ModuleHsBaSlicer["ModuleHsBaSlicer (C++20 module)"]
+ModuleHsBaSlicer --> DllHsBaSlicer["DllHsBaSlicer (shared)"]
 DllHsBaSlicer --> App["HsBaSlicer (executable)"]
 CMakeRoot --> Tests["tests/static_tests"]
 CMakeRoot --> Docs["docs"]
-CMakeRoot --> Install["Installation & Export<br/>Package Config Files"]
+CMakeRoot --> Install["Installation & Export<br/>Package Config + FILE_SET"]
 Install --> ConfigFile["HsBaSlicerConfig.cmake.in"]
 Install --> Targets["HsBaSlicerTargets.cmake"]
 Install --> Version["HsBaSlicerConfigVersion.cmake"]
+Install --> ModulesSet["FILE_SET hsba_slicer_modules"]
 ```
 
 **Diagram sources**
@@ -136,32 +158,35 @@ Install --> Version["HsBaSlicerConfigVersion.cmake"]
 - [vcpkg.json:1-93](file://vcpkg.json#L1-L93)
 - [CMakeLists.txt:304-328](file://CMakeLists.txt#L304-L328)
 - [cmake/HsBaSlicerConfig.cmake.in:1-16](file://cmake/HsBaSlicerConfig.cmake.in#L1-L16)
+- [ModuleHsBaSlicer/CMakeLists.txt:17-20](file://ModuleHsBaSlicer/CMakeLists.txt#L17-20)
+- [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
+- [.github/workflows/cmake-multi-platform.yml:268-276](file://.github/workflows/cmake-multi-platform.yml#L268-L276)
 
 ## Detailed Component Analysis
 
 ### Top-level CMake Configuration
 Responsibilities:
-- Set minimum CMake version, position-independent code, UTF-8 on MSVC.
+- Set minimum CMake version to 3.28 for C++20 module support.
 - Configure C++20 and conditional C23.
-- Run static feature checks and set compile definitions accordingly.
+- Run static feature checks including C++20 modules capability detection.
 - Detect platform family and set desktop/mobile/console flags.
 - Resolve third-party libraries via pkg-config and find_package.
 - Toggle optional features (bit7z, dynamic loader, boolean ops, CAD kernel, SQL backends).
 - Control BUILD_SHARED_LIBS based on VCPKG_TARGET_TRIPLET.
 - Include subdirectories for all modules and optional tests/docs.
 - **Unified output directories**: All binaries placed in `bin/<configuration>`.
-- **Comprehensive installation**: Full CMake package configuration with export targets.
+- **Comprehensive installation**: Full CMake package configuration with export targets and FILE_SET support.
 
 ```mermaid
 flowchart TD
 Start(["Configure"]) --> Standards["Set C++20 / C23"]
-Standards --> Features["Run feature checks"]
+Standards --> Features["Run feature checks + C++20 modules"]
 Features --> Platform["Detect platform family"]
 Platform --> Deps["Find dependencies (Boost, Clipper2, miniz, protobuf, etc.)"]
 Deps --> Options["Apply platform options (bit7z, DLL loader, CGAL, OCCT, SQL)"]
 Options --> Linkage["Decide static vs shared via triplet"]
 Linkage --> OutputDirs["Set unified output dirs (bin/<config>)"]
-OutputDirs --> Install["Configure installation & export"]
+OutputDirs --> Install["Configure installation & export + FILE_SET"]
 Install --> Subdirs["Add subdirectories (modules, tests, docs)"]
 Subdirs --> End(["Configure complete"])
 ```
@@ -175,7 +200,7 @@ Subdirs --> End(["Configure complete"])
 - [CMakeLists.txt:277-286](file://CMakeLists.txt#L277-L286)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
 
-**Updated** Added unified output directory configuration and comprehensive installation support.
+**Updated** Enhanced with CMake 3.28 minimum requirement and C++20 modules support.
 
 **Section sources**
 - [CMakeLists.txt:1-107](file://CMakeLists.txt#L1-L107)
@@ -185,6 +210,55 @@ Subdirs --> End(["Configure complete"])
 - [CMakeLists.txt:304-328](file://CMakeLists.txt#L304-L328)
 - [CMakeLists.txt:277-286](file://CMakeLists.txt#L277-L286)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
+
+### C++20 Module System (ModuleHsBaSlicer)
+**New** Comprehensive C++20 module support with class-based API:
+- **Module Interface**: Single-file module (`hsba_slicer.cppm`) providing modern C++ API.
+- **Automatic Detection**: Compiler capability detection for MSVC 19.34+, GCC 14+, Clang 16+.
+- **Conditional Building**: Optional module building controlled by `HSBA_SLICER_MODULE` option.
+- **Modern API Design**: Class-based RAII interfaces replacing free functions.
+- **FILE_SET Integration**: Proper installation of module interface files.
+
+```mermaid
+classDiagram
+class ModuleHsBaSlicer {
++Static library with CXX_MODULES FILE_SET
++C++20 module interface (hsba_slicer.cppm)
++Class-based API wrapping LibHsBaSlicer
++Automatic compiler detection
+}
+class Model {
++RAII model handle
++translate(), rotate(), scale()
++slice(), sliceD()
++info(), raw(), name()
+}
+class FdmPipeline {
++Full FDM pipeline
++run(), sliceAll(), generateSupports()
++fill(), generatePath()
+}
+class SlaPipeline {
++SLA pipeline with floor/render
++run(), generateFloor(), renderLayer()
++savePackage()
+}
+ModuleHsBaSlicer --> Model : "exports"
+ModuleHsBaSlicer --> FdmPipeline : "exports"
+ModuleHsBaSlicer --> SlaPipeline : "exports"
+ModuleHsBaSlicer --> LibHsBaSlicer : "links"
+```
+
+**Diagram sources**
+- [ModuleHsBaSlicer/CMakeLists.txt:1-46](file://ModuleHsBaSlicer/CMakeLists.txt#L1-L46)
+- [ModuleHsBaSlicer/hsba_slicer.cppm:114-276](file://ModuleHsBaSlicer/hsba_slicer.cppm#L114-L276)
+
+**Section sources**
+- [ModuleHsBaSlicer/CMakeLists.txt:1-46](file://ModuleHsBaSlicer/CMakeLists.txt#L1-L46)
+- [ModuleHsBaSlicer/hsba_slicer.cppm:1-642](file://ModuleHsBaSlicer/hsba_slicer.cppm#L1-642)
+- [ModuleHsBaSlicer/module_anchor.cpp:1-13](file://ModuleHsBaSlicer/module_anchor.cpp#L1-13)
+- [CMakeLists.txt:108-119](file://CMakeLists.txt#L108-L119)
+- [static_check/feature_check.cmake:96-111](file://static_check/feature_check.cmake#L96-L111)
 
 ### CMake Presets and Toolchains
 - Provides named presets for Windows, Linux, macOS, iOS, and Android.
@@ -242,9 +316,10 @@ Deps --> Desktop["Desktop-specific deps (MySQL, PostgreSQL)"]
 - [vcpkg.json:1-93](file://vcpkg.json#L1-L93)
 
 ### Installation and Package Configuration
-**New** Comprehensive installation support with CMake package configuration:
+**Enhanced** Comprehensive installation support with CMake package configuration:
 - **Target export**: All libraries exported with `HsBaSlicer::` namespace.
 - **Header installation**: Public headers installed to structured include directories.
+- **FILE_SET support**: C++20 module interface files properly installed.
 - **Package config files**: Generated `HsBaSlicerConfig.cmake` and version files.
 - **Dependency management**: Automatic dependency resolution via `find_dependency()`.
 - **Cross-platform compatibility**: Proper handling of runtime/library/archive destinations.
@@ -252,7 +327,8 @@ Deps --> Desktop["Desktop-specific deps (MySQL, PostgreSQL)"]
 ```mermaid
 flowchart TD
 Install["install(TARGETS ...)"] --> Export["Export HsBaSlicerTargets"]
-Export --> Config["configure_package_config_file()"]
+Export --> FileSet["Install FILE_SET hsba_slicer_modules"]
+FileSet --> Config["configure_package_config_file()"]
 Config --> Version["write_basic_package_version_file()"]
 Config --> FindDep["find_dependency() calls"]
 FindDep --> Usage["External projects use find_package(HsBaSlicer)"]
@@ -261,13 +337,14 @@ FindDep --> Usage["External projects use find_package(HsBaSlicer)"]
 **Diagram sources**
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
 - [cmake/HsBaSlicerConfig.cmake.in:1-16](file://cmake/HsBaSlicerConfig.cmake.in#L1-L16)
+- [ModuleHsBaSlicer/CMakeLists.txt:17-20](file://ModuleHsBaSlicer/CMakeLists.txt#L17-20)
 
 **Section sources**
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
 - [cmake/HsBaSlicerConfig.cmake.in:1-16](file://cmake/HsBaSlicerConfig.cmake.in#L1-L16)
 
 ### Deployment Utilities
-**New** Enhanced deployment support with specialized tools:
+**Enhanced** Enhanced deployment support with specialized tools:
 - **DLL deployment script**: `deploy_dlls.cmake` for copying PDB debug symbols.
 - **Configuration-aware copying**: Automatically copies logcfg.ini to correct build configuration directory.
 - **Conditional execution**: Skips missing files gracefully (Release mode may not generate PDBs).
@@ -287,6 +364,35 @@ Copy --> Done["Deployment complete"]
 - [cmake/deploy_dlls.cmake:1-27](file://cmake/deploy_dlls.cmake#L1-L27)
 - [CMakeLists.txt:277-286](file://CMakeLists.txt#L277-L286)
 
+### Enhanced Android Build System with clang-scan-deps
+**New** Significantly improved Android build performance through clang-scan-deps integration:
+- **Incremental Build Optimization**: clang-scan-deps enables precise dependency tracking for faster rebuilds.
+- **GitHub Actions Integration**: Both Android workflow files now include CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS parameter.
+- **NDK Integration**: Leverages Android NDK's built-in clang-scan-deps tool for optimal performance.
+- **CI/CD Enhancement**: Automated builds benefit from reduced compilation times in continuous integration environments.
+
+```mermaid
+flowchart TD
+AndroidWorkflow[".github/workflows/build-android.yml"] --> CMakeConfig["CMake Configuration"]
+CMakeConfig --> ScanDeps["CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS"]
+ScanDeps --> NDKTool["Android NDK clang-scan-deps"]
+NDKTool --> Incremental["Improved Incremental Builds"]
+Incremental --> FasterRebuild["Faster Compilation Times"]
+CMakeMulti[".github/workflows/cmake-multi-platform.yml"] --> CMakeConfig2["CMake Configuration"]
+CMakeConfig2 --> ScanDeps2["CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS"]
+ScanDeps2 --> NDKTool2["Android NDK clang-scan-deps"]
+NDKTool2 --> Incremental2["Improved Incremental Builds"]
+Incremental2 --> FasterRebuild2["Faster Compilation Times"]
+```
+
+**Diagram sources**
+- [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
+- [.github/workflows/cmake-multi-platform.yml:268-276](file://.github/workflows/cmake-multi-platform.yml#L268-L276)
+
+**Section sources**
+- [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
+- [.github/workflows/cmake-multi-platform.yml:268-276](file://.github/workflows/cmake-multi-platform.yml#L268-L276)
+
 ### Module: base (HsBaSlicerBase)
 - Static library providing core utilities, coroutine primitives, object pools, thread pool, units, reflection helpers.
 - Links Eigen3 and Boost; locale/nowide excluded on mobile/console.
@@ -301,10 +407,10 @@ class HsBaSlicerBase {
 +Object/Thread/Memory pools
 +Units, reflection, delegates
 }
-HsBaSlicerBase --> Eigen3 : : Eigen : "links"
-HsBaSlicerBase --> Boost : : boost : "links"
-HsBaSlicerBase --> magic_enum : : magic_enum : "links"
-HsBaSlicerBase -. mobile .-> iconv : "iOS only"
+HsBaSlicerBase --> Eigen3 : "links"
+HsBaSlicerBase --> Boost : "links"
+HsBaSlicerBase --> magic_enum : "links"
+HsBaSlicerBase ..> iconv : "iOS only"
 ```
 
 **Diagram sources**
@@ -495,6 +601,7 @@ class FdmHoneycombSupport {
 - Gradle wrapper and app module configure namespace, SDK versions, ABI filters, and jniLibs directory.
 - Native libraries are consumed from prebuilt artifacts produced by CMake presets.
 - **Unified output consumption**: Gradle expects artifacts in standardized locations.
+- **Enhanced CI Integration**: GitHub Actions workflows now leverage clang-scan-deps for faster Android builds.
 
 ```mermaid
 graph TB
@@ -502,11 +609,13 @@ Gradle["android/build.gradle"] --> AppGradle["android/app/build.gradle"]
 AppGradle --> JNILibs["jniLibs.srcDirs = src/main/jniLibs"]
 AppGradle --> ABIs["abiFilters arm64-v8a"]
 AppGradle --> CMakeOut["CMake output: out/build/android-release/bin/Release"]
+AndroidCI[".github/workflows/build-android.yml<br/>clang-scan-deps enabled"] --> CMakeOut
 ```
 
 **Diagram sources**
 - [android/build.gradle:1-17](file://android/build.gradle#L1-L17)
 - [android/app/build.gradle:1-45](file://android/app/build.gradle#L1-L45)
+- [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
 
 **Section sources**
 - [android/build.gradle:1-17](file://android/build.gradle#L1-L17)
@@ -525,20 +634,27 @@ Supp["HsBaSupport"] --> Lib
 Mesh["HsBaSlicerMesh"] --> Lib
 Paths["HsBaPaths"] --> Lib
 CAD["HsBaSlicerCADModel"] -. desktop only .-> Lib
-Lib --> Dll["DllHsBaSlicer"]
+Lib --> Module["ModuleHsBaSlicer (C++20)"]
+Module --> Dll["DllHsBaSlicer"]
 Dll --> Install["Installation & Export"]
 Install --> External["External Projects"]
+AndroidCI[".github/workflows/build-android.yml<br/>clang-scan-deps"] --> Lib
+MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>clang-scan-deps"] --> Lib
 ```
 
 **Diagram sources**
 - [LibHsBaSlicer/CMakeLists.txt:37-50](file://LibHsBaSlicer/CMakeLists.txt#L37-L50)
+- [ModuleHsBaSlicer/CMakeLists.txt:23-29](file://ModuleHsBaSlicer/CMakeLists.txt#L23-L29)
 - [DllHsBaSlicer/CMakeLists.txt:12-20](file://DllHsBaSlicer/CMakeLists.txt#L12-L20)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
+- [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
+- [.github/workflows/cmake-multi-platform.yml:268-276](file://.github/workflows/cmake-multi-platform.yml#L268-L276)
 
-**Updated** Added installation and export layer for external project usage.
+**Updated** Added C++20 module layer, enhanced installation/export layer for external project usage, and Android clang-scan-deps optimization.
 
 **Section sources**
 - [LibHsBaSlicer/CMakeLists.txt:37-50](file://LibHsBaSlicer/CMakeLists.txt#L37-L50)
+- [ModuleHsBaSlicer/CMakeLists.txt:23-29](file://ModuleHsBaSlicer/CMakeLists.txt#L23-L29)
 - [DllHsBaSlicer/CMakeLists.txt:12-20](file://DllHsBaSlicer/CMakeLists.txt#L12-L20)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
 
@@ -548,12 +664,15 @@ Install --> External["External Projects"]
 - Dynamic loader and bit7z disabled on non-desktop platforms to reduce runtime overhead and complexity.
 - Prefer Release builds for production to optimize slicing and path generation throughput.
 - **Game console optimizations**: Specific feature gating for console platforms to minimize resource usage.
+- **C++20 modules benefits**: Faster compile times and improved build performance for module consumers.
+- **Android clang-scan-deps optimization**: Significantly improved incremental build performance through precise dependency tracking, reducing unnecessary recompilation during development and CI/CD processes.
 
-**Updated** Added game console optimization considerations.
+**Updated** Added C++20 modules performance benefits, game console optimization considerations, and Android clang-scan-deps incremental build improvements.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
 - Missing C++20 support: Ensure compiler meets requirements; CMake enforces C++20 and will fail early if concepts/ranges/source_location are unavailable.
+- **CMake 3.28 requirement**: Upgrade CMake to 3.28+ for C++20 module support and FILE_SET functionality.
 - vcpkg not found: Provide VCPKG_ROOT environment variable or pass -DCMAKE_TOOLCHAIN_FILE explicitly; verify vcpkg-configuration.json registries and baselines.
 - Android build fails: Confirm ANDROID_NDK_HOME is set; use android-release preset; ensure ABI matches app module abiFilters.
 - iOS build fails: Verify Xcode generator preset and deployment target >= 16.3; confirm arm64 architecture.
@@ -561,20 +680,27 @@ Common issues and resolutions:
 - **Installation issues**: Ensure proper CMake package configuration files are installed; check namespace usage (`HsBaSlicer::`).
 - **Game console builds**: Verify VCPKG_TARGET_TRIPLET matches expected patterns (xbox, switch, playstation, stadia).
 - **DLL deployment**: Use deploy_dlls.cmake script for PDB copying; ensure TARGET_BIN and PDB_FILES variables are set correctly.
+- **C++20 modules not building**: Check compiler version (MSVC 19.34+, GCC 14+, Clang 16+) and HSBA_SLICER_MODULE option.
+- **Module import errors**: Ensure consumer project also uses CMake 3.28+ and supports C++20 modules.
+- **Android clang-scan-deps issues**: Verify Android NDK r27d+ is installed; ensure clang-scan-deps path is accessible; check that CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS points to correct NDK toolchain location.
 
-**Updated** Added troubleshooting for installation, game console builds, and DLL deployment.
+**Updated** Added troubleshooting for CMake 3.28 requirement, C++20 modules, installation, game console builds, DLL deployment, and Android clang-scan-deps configuration.
 
 **Section sources**
-- [CMakeLists.txt:17-38](file://CMakeLists.txt#L17-L38)
+- [CMakeLists.txt:17-38](file://CMakeLists.txt#L17-38)
 - [CMakeLists.txt:226-237](file://CMakeLists.txt#L226-L237)
+- [CMakeLists.txt:108-119](file://CMakeLists.txt#L108-L119)
 - [CMakePresets.json:84-109](file://CMakePresets.json#L84-L109)
 - [CMakePresets.json:153-176](file://CMakePresets.json#L153-L176)
 - [android/app/build.gradle:39-41](file://android/app/build.gradle#L39-L41)
 - [CMakeLists.txt:110-126](file://CMakeLists.txt#L110-L126)
 - [cmake/deploy_dlls.cmake:1-27](file://cmake/deploy_dlls.cmake#L1-L27)
+- [static_check/feature_check.cmake:96-111](file://static_check/feature_check.cmake#L96-L111)
+- [.github/workflows/build-android.yml:41-50](file://.github/workflows/build-android.yml#L41-L50)
+- [.github/workflows/cmake-multi-platform.yml:222-231](file://.github/workflows/cmake-multi-platform.yml#L222-L231)
 
 ## Conclusion
-The HsBaSlicer build system leverages modern CMake practices, vcpkg for dependency management, and platform presets to deliver a consistent, extensible, and efficient build across desktop and mobile environments. The recent overhaul introduces unified output directories, comprehensive installation support, and enhanced platform detection including game console targets. The modular design cleanly separates core utilities, geometry kernels, and pipeline stages, while the C-compatible API in DllHsBaSlicer exposes an ergonomic interface for higher-level applications. The new CMake package configuration enables seamless integration into external projects with proper dependency resolution.
+The HsBaSlicer build system leverages modern CMake 3.28+ practices, vcpkg for dependency management, and platform presets to deliver a consistent, extensible, and efficient build across desktop and mobile environments. The recent enhancements introduce C++20 module support through ModuleHsBaSlicer, comprehensive installation capabilities with FILE_SET support, improved cross-platform compatibility including game console targets, and significantly optimized Android builds with clang-scan-deps for superior incremental compilation performance. The modular design cleanly separates core utilities, geometry kernels, and pipeline stages, while the dual API approach (traditional C ABI in DllHsBaSlicer and modern C++20 modules in ModuleHsBaSlicer) exposes ergonomic interfaces for both legacy and modern applications. The enhanced CMake package configuration enables seamless integration into external projects with proper dependency resolution and module support. The new Android build optimizations through clang-scan-deps integration provide substantial performance improvements in both development and continuous integration environments.
 
 ## Appendices
 
@@ -585,25 +711,29 @@ The HsBaSlicer build system leverages modern CMake practices, vcpkg for dependen
 - iOS (arm64): cmake . --preset ios-release
 - **Installation**: cmake --install out/build/windows-release --prefix ./install
 - **External project usage**: find_package(HsBaSlicer REQUIRED) in consumer CMakeLists.txt
+- **C++20 modules**: Enable HSBA_SLICER_MODULE=ON for module support (requires CMake 3.28+)
+- **Android with clang-scan-deps**: Ensure ANDROID_NDK is set to r27d+ and CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS is configured automatically in CI workflows.
 
-**Updated** Added installation and external project usage examples.
+**Updated** Added C++20 modules build instructions, updated CMake version requirements, and Android clang-scan-deps configuration guidance.
 
 **Section sources**
 - [README.md:47-194](file://README.md#L47-L194)
 - [CMakePresets.json:1-179](file://CMakePresets.json#L1-L179)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
+- [CMakeLists.txt:108-119](file://CMakeLists.txt#L108-L119)
 
 ### CMake Package Configuration
-**New** External projects can now easily integrate HsBaSlicer:
+**Enhanced** External projects can now easily integrate HsBaSlicer with full C++20 module support:
 
 ```cmake
-# In your project's CMakeLists.txt
+# In your project's CMakeLists.txt (requires CMake 3.28+)
 find_package(HsBaSlicer REQUIRED)
 
-# Link against the exported targets
+# Traditional C API usage
 target_link_libraries(your_app PRIVATE HsBaSlicer::DllHsBaSlicer)
 
-# Headers are automatically included via the package configuration
+# Modern C++20 modules usage (if available)
+# target_link_libraries(your_app PRIVATE HsBaSlicer::ModuleHsBaSlicer)
 ```
 
 The package configuration automatically handles:
@@ -611,7 +741,57 @@ The package configuration automatically handles:
 - Target namespace (`HsBaSlicer::`)
 - Cross-platform compatibility
 - Version checking and compatibility
+- **C++20 module FILE_SET installation**
 
 **Section sources**
 - [cmake/HsBaSlicerConfig.cmake.in:1-16](file://cmake/HsBaSlicerConfig.cmake.in#L1-L16)
 - [CMakeLists.txt:441-457](file://CMakeLists.txt#L441-L457)
+- [ModuleHsBaSlicer/CMakeLists.txt:17-20](file://ModuleHsBaSlicer/CMakeLists.txt#L17-20)
+
+### C++20 Module Usage Example
+**New** Modern C++20 module consumer example:
+
+```cpp
+// Consumer application using C++20 modules
+import hsba.slicer;
+
+int main() {
+    try {
+        // Create model with RAII
+        HsBa::Slicer::Model model("test", "model.stl");
+        
+        // Use FDM pipeline
+        HsBa::Slicer::FdmPipeline pipeline;
+        auto result = pipeline.run(model);
+        
+        std::cout << "Generated " << result.total_layers << " layers\n";
+    } catch (const HsBa::Slicer::SlicerError& e) {
+        std::cerr << "Error: " << e.what() << "\n";
+        return 1;
+    }
+    
+    return 0;
+}
+```
+
+**Section sources**
+- [ModuleHsBaSlicer/hsba_slicer.cppm:114-276](file://ModuleHsBaSlicer/hsba_slicer.cppm#L114-L276)
+- [ModuleHsBaSlicer/CMakeLists.txt:1-46](file://ModuleHsBaSlicer/CMakeLists.txt#L1-L46)
+
+### Android clang-scan-deps Configuration Details
+**New** Technical details for Android build optimization:
+
+The clang-scan-deps integration is configured through the following parameters in GitHub Actions workflows:
+
+- **Parameter**: `-DCMAKE_CXX_COMPILER_CLANG_SCAN_DEPS="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang-scan-deps"`
+- **NDK Requirement**: Android NDK r27d or later
+- **Benefit**: Enables precise dependency tracking for incremental builds
+- **Impact**: Significantly reduces compilation time during development and CI/CD processes
+
+Both workflow files have been updated to include this configuration:
+- `.github/workflows/build-android.yml`: Line 95
+- `.github/workflows/cmake-multi-platform.yml`: Line 276
+
+**Section sources**
+- [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
+- [.github/workflows/cmake-multi-platform.yml:268-276](file://.github/workflows/cmake-multi-platform.yml#L268-L276)

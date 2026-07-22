@@ -9,13 +9,21 @@
 - [transform.proto](file://proto/transform.proto)
 - [base_config.proto](file://proto/base_config.proto)
 - [mesh.proto](file://proto/mesh.proto)
+- [fdm_pipeline.proto](file://proto/fdm_pipeline.proto)
+- [sla_pipeline.proto](file://proto/sla_pipeline.proto)
+- [sls_pipeline.proto](file://proto/sls_pipeline.proto)
 - [Eigen2Msg.hpp](file://convert/Eigen2Msg.hpp)
 - [Eigen2Msg.cpp](file://convert/Eigen2Msg.cpp)
 - [Msg2Eigen.hpp](file://convert/Msg2Eigen.hpp)
 - [Msg2Eigen.cpp](file://convert/Msg2Eigen.cpp)
+- [PipelineConfig2Msg.hpp](file://convert/PipelineConfig2Msg.hpp)
+- [PipelineConfig2Msg.cpp](file://convert/PipelineConfig2Msg.cpp)
+- [Msg2PipelineConfig.hpp](file://convert/Msg2PipelineConfig.hpp)
+- [Msg2PipelineConfig.cpp](file://convert/Msg2PipelineConfig.cpp)
 - [pipeline_convert.h](file://DllHsBaSlicer/pipeline_convert.h)
 - [pipeline_convert.cpp](file://DllHsBaSlicer/pipeline_convert.cpp)
 - [fdm_pipeline.h](file://DllHsBaSlicer/fdm_pipeline.h)
+- [sls_pipeline.h](file://DllHsBaSlicer/sls_pipeline.h)
 - [CMakeLists.txt](file://proto/CMakeLists.txt)
 - [CMakeLists.txt](file://convert/CMakeLists.txt)
 - [error.hpp](file://base/error.hpp)
@@ -23,11 +31,11 @@
 
 ## 更新摘要
 **所做更改**   
-- 新增HsBaSlicerConverter库的详细说明和架构介绍
-- 添加C API接口文档，包括FDM和SLA配置转换函数
-- 扩展内存管理考虑，包括动态内存分配和释放策略
-- 增加多语言集成示例，涵盖Python、Java、C#等语言
-- 完善错误处理和调试建议
+- 新增SLS流水线完整的Protobuf支持和转换逻辑
+- 扩展C API接口以支持SLS配置的序列化和反序列化
+- 完善FDM、SLA和SLS三种流水线类型的统一转换架构
+- 增强内存管理功能，新增SLS相关的内存释放函数
+- 更新多语言集成示例，涵盖SLS流水线的跨语言支持
 
 ## 目录
 1. [引言](#引言)
@@ -48,6 +56,8 @@
 ## 引言
 HsBaSlicer项目采用Protocol Buffers（Protobuf）作为核心数据交换机制，实现跨语言、跨平台的数据序列化与反序列化。该机制支持C++、Python、Java、C#等多种编程语言，确保了切片配置、几何数据、路径信息等关键数据在不同组件间的高效传输。本文档详细阐述了基于Protobuf的数据交换机制，包括核心`.proto`文件的结构定义、HsBaSlicerConverter库的使用、C API接口的调用、Eigen矩阵与Protobuf消息之间的转换函数、CMake构建系统的集成方式、完整的数据交换流程、多语言集成示例、版本兼容性策略、内存管理考虑以及常见的序列化错误和调试建议。
 
+**更新** 新增了SLS（选择性激光烧结）流水线的完整Protobuf支持，实现了FDM、SLA、SLS三种主流3D打印技术的统一数据交换架构。
+
 ## 核心Proto文件结构
 
 HsBaSlicer项目中的Protobuf数据交换机制围绕一系列核心`.proto`文件构建，这些文件定义了切片参数、几何数据、路径信息等关键数据结构。所有`.proto`文件均遵循`proto3`语法，并位于`proto/`目录下，通过`HsbaProto`包进行组织。
@@ -62,18 +72,36 @@ F[mesh.proto] --> |import| B
 F --> |import| C
 G[base_config.proto] --> H[fdm_pipeline.proto]
 G --> I[sla_pipeline.proto]
+G --> J[sls_pipeline.proto]
+subgraph "基础类型"
+B
+C
+end
+subgraph "管道配置"
+H
+I
+J
+end
+subgraph "几何数据"
+A
+D
+E
+F
+end
 ```
 
 **图表来源**
 - [slice_config.proto:5-6](file://proto/slice_config.proto#L5-L6)
 - [path.proto](file://proto/path.proto#L5)
 - [mesh.proto:5-6](file://proto/mesh.proto#L5-L6)
+- [sls_pipeline.proto:1-33](file://proto/sls_pipeline.proto#L1-L33)
 
 **章节来源**
 - [slice_config.proto:1-27](file://proto/slice_config.proto#L1-L27)
 - [path.proto:1-15](file://proto/path.proto#L1-L15)
 - [vector.proto:1-24](file://proto/vector.proto#L1-L24)
 - [point.proto:1-16](file://proto/point.proto#L1-L16)
+- [sls_pipeline.proto:1-33](file://proto/sls_pipeline.proto#L1-L33)
 
 ## 几何数据序列化
 
@@ -109,11 +137,11 @@ class msg_point3 {
 +float y
 +float z
 }
-note right of msg_vector2: "二维向量"
-note right of msg_vector3: "三维向量"
-note right of msg_vector4: "四维向量含齐次坐标"
-note right of msg_point2: "二维点"
-note right of msg_point3: "三维点"
+note right of msg_vector2 : "二维向量"
+note right of msg_vector3 : "三维向量"
+note right of msg_vector4 : "四维向量含齐次坐标"
+note right of msg_point2 : "二维点"
+note right of msg_point3 : "三维点"
 ```
 
 **图表来源**
@@ -255,10 +283,24 @@ G --> J
 H --> K[Vector/Point转换]
 H --> L[Transform转换]
 H --> M[Path转换]
+subgraph "管道配置转换"
+F
+G
+end
+subgraph "支持的流水线类型"
+N[FDM]
+O[SLA]
+P[SLS]
+end
+J --> N
+J --> O
+J --> P
 ```
 
 **图表来源**
 - [CMakeLists.txt:1-18](file://convert/CMakeLists.txt#L1-L18)
+- [PipelineConfig2Msg.hpp:1-35](file://convert/PipelineConfig2Msg.hpp#L1-L35)
+- [Msg2PipelineConfig.hpp:1-47](file://convert/Msg2PipelineConfig.hpp#L1-L47)
 
 ### 核心组件
 
@@ -275,14 +317,19 @@ H --> M[Path转换]
 - 路径转换：`MsgPath2Eigen`
 
 #### 管道配置转换
-提供完整的FDM和SLA管道配置的序列化/反序列化功能：
+提供完整的FDM、SLA和SLS管道配置的序列化/反序列化功能：
 - FDM配置：`FdmConfigToMsg`、`MsgToFdmConfig`
 - SLA配置：`SlaConfigToMsg`、`MsgToSlaConfig`
+- SLS配置：`SlsConfigToMsg`、`MsgToSlsConfig`
+
+**更新** 新增了SLS流水线的完整转换支持，实现了三种主流3D打印技术（FDM、SLA、SLS）的统一转换架构。
 
 **章节来源**
 - [CMakeLists.txt:1-18](file://convert/CMakeLists.txt#L1-L18)
 - [Eigen2Msg.hpp:1-34](file://convert/Eigen2Msg.hpp#L1-L34)
 - [Msg2Eigen.hpp:1-33](file://convert/Msg2Eigen.hpp#L1-L33)
+- [PipelineConfig2Msg.hpp:26-30](file://convert/PipelineConfig2Msg.hpp#L26-L30)
+- [Msg2PipelineConfig.hpp:34-42](file://convert/Msg2PipelineConfig.hpp#L34-L42)
 
 ## C API接口
 
@@ -316,22 +363,31 @@ CAPI-->>Client : 返回字节数组
 - `HsBaFdmConfigToProtoBytes`: 将FDM配置序列化为Protobuf字节流
 - `HsBaSlaConfigFromProtoBytes`: 从Protobuf字节流解析SLA配置
 - `HsBaSlaConfigToProtoBytes`: 将SLA配置序列化为Protobuf字节流
+- `HsBaSlsConfigFromProtoBytes`: 从Protobuf字节流解析SLS配置
+- `HsBaSlsConfigToProtoBytes`: 将SLS配置序列化为Protobuf字节流
 
 #### 结果处理函数
 - `HsBaFdmResultFromProtoBytes`: 从Protobuf字节流解析FDM结果
 - `HsBaFdmResultToProtoBytes`: 将FDM结果序列化为Protobuf字节流
 - `HsBaSlaResultFromProtoBytes`: 从Protobuf字节流解析SLA结果
 - `HsBaSlaResultToProtoBytes`: 将SLA结果序列化为Protobuf字节流
+- `HsBaSlsResultFromProtoBytes`: 从Protobuf字节流解析SLS结果
+- `HsBaSlsResultToProtoBytes`: 将SLS结果序列化为Protobuf字节流
 
 #### 内存管理函数
 - `HsBaFreeFdmConfigStrings`: 释放FDM配置中的动态内存
 - `HsBaFreeSlaConfigStrings`: 释放SLA配置中的动态内存
+- `HsBaFreeSlsConfigStrings`: 释放SLS配置中的动态内存
 - `HsBaFreePipelineResult`: 释放管道结果中的动态内存
+- `HsBaFreeSlsPipelineResult`: 释放SLS管道结果中的动态内存
+
+**更新** 新增了SLS流水线的完整C API支持，包括配置和结果的序列化和反序列化功能，以及相应的内存管理函数。
 
 **章节来源**
-- [pipeline_convert.h:21-124](file://DllHsBaSlicer/pipeline_convert.h#L21-L124)
-- [pipeline_convert.cpp:23-210](file://DllHsBaSlicer/pipeline_convert.cpp#L23-L210)
+- [pipeline_convert.h:21-169](file://DllHsBaSlicer/pipeline_convert.h#L21-L169)
+- [pipeline_convert.cpp:23-236](file://DllHsBaSlicer/pipeline_convert.cpp#L23-L236)
 - [fdm_pipeline.h:35-156](file://DllHsBaSlicer/fdm_pipeline.h#L35-L156)
+- [sls_pipeline.h:36-59](file://DllHsBaSlicer/sls_pipeline.h#L36-L59)
 
 ## Eigen与Protobuf转换
 
@@ -477,37 +533,50 @@ add_library(HsBaSlicerConverter STATIC
 
 target_link_libraries(HsBaSlicerConverter PUBLIC Eigen3::Eigen HsBaSlicerProto
     HsBaSlicerMesh
+    HsBaPipelineTypes
 )
 ```
 
 这确保了转换函数可以访问Eigen库的头文件和Protobuf生成的代码。
 
+**更新** 转换模块现在支持FDM、SLA、SLS三种流水线类型的完整转换功能。
+
 **章节来源**
-- [CMakeLists.txt:1-18](file://convert/CMakeLists.txt#L1-L18)
+- [CMakeLists.txt:1-19](file://convert/CMakeLists.txt#L1-L19)
 
 ### protoc命令示例
 
 虽然CMake自动化了构建过程，但手动调用`protoc`的命令示例如下：
 ```bash
-protoc --proto_path=proto/ --cpp_out=generated_cpp/ proto/slice_config.proto
+protoc --proto_path=proto/ --cpp_out=generated_cpp/ proto/sls_pipeline.proto
 ```
 此命令会从`proto/`目录查找`.proto`文件，并将生成的C++代码输出到`generated_cpp/`目录。
 
 ## 完整数据交换流程
 
-以下是一个从C++程序生成切片配置并传递给Python客户端的完整数据交换流程。
+以下是一个从C++程序生成SLS切片配置并传递给Python客户端的完整数据交换流程。
 
 ### C++端（序列化）
 
-1.  **创建并填充消息**: 在C++程序中，创建一个`msg_slice_config`对象，并设置其字段。
-2.  **序列化为字节流**: 调用`SerializeToString()`方法将Protobuf消息序列化为一个`std::string`字节流。
-3.  **传输**: 通过网络套接字发送或写入文件。
+1. **创建并填充消息**: 在C++程序中，创建一个`sls_pipe_config`对象，并设置其字段。
+2. **序列化为字节流**: 调用`SerializeToString()`方法将Protobuf消息序列化为一个`std::string`字节流。
+3. **传输**: 通过网络套接字发送或写入文件。
 
 ```cpp
-// 伪代码示例
-HsbaProto::msg_slice_config config;
-config.set_type(HsbaProto::slicet_Same);
-config.set_slice_height(0.1f);
+// SLS配置示例
+HsbaProto::sls_pipe_config config;
+config.set_sls_pipe_config_model_name("stanford_bunny");
+config.set_sls_pipe_config_model_path("models/stanford_bunny.stl");
+config.set_sls_pipe_config_layer_height(0.1f);
+config.set_sls_pipe_config_first_layer_height(0.15f);
+config.set_sls_pipe_config_laser_power(30.0f);
+config.set_sls_pipe_config_scan_speed(2000.0f);
+config.set_sls_pipe_config_hatch_spacing(0.15f);
+config.set_sls_pipe_config_hatch_rotation(90.0f);
+config.set_sls_pipe_config_bed_temperature(180.0f);
+config.set_sls_pipe_config_export_lua_script("scripts/my_sls_export.lua");
+config.set_sls_pipe_config_export_lua_func("export_sls");
+config.set_sls_pipe_config_output_path("output/sls_result.zip");
 
 std::string serialized_data;
 config.SerializeToString(&serialized_data);
@@ -517,22 +586,26 @@ config.SerializeToString(&serialized_data);
 
 ### Python端（反序列化）
 
-1.  **接收字节流**: 从网络或文件读取字节流。
-2.  **反序列化**: 使用Python生成的`_pb2.py`模块中的类，调用`ParseFromString()`方法。
-3.  **读取参数**: 访问反序列化后消息对象的属性。
+1. **接收字节流**: 从网络或文件读取字节流。
+2. **反序列化**: 使用Python生成的`_pb2.py`模块中的类，调用`ParseFromString()`方法。
+3. **读取参数**: 访问反序列化后消息对象的属性。
 
 ```python
 # Python伪代码示例
-import slice_config_pb2
+import sls_pipeline_pb2
 
-config = slice_config_pb2.msg_slice_config()
+config = sls_pipeline_pb2.sls_pipe_config()
 config.ParseFromString(serialized_data)
 
-print(f"切片类型: {config.type}")
-print(f"切片高度: {config.slice_height} mm")
+print(f"模型名称: {config.sls_pipe_config_model_name}")
+print(f"层厚: {config.sls_pipe_config_layer_height} mm")
+print(f"激光功率: {config.sls_pipe_config_laser_power} W")
+print(f"扫描速度: {config.sls_pipe_config_scan_speed} mm/s")
 ```
 
-此流程展示了Protobuf如何实现跨语言的数据交换，C++生成的数据可以被Python无缝读取。
+此流程展示了Protobuf如何实现跨语言的数据交换，C++生成的SLS配置数据可以被Python无缝读取。
+
+**更新** 新增了SLS流水线的完整数据交换流程示例，展示了激光参数、粉末床温度等SLS特有参数的序列化传输。
 
 ## 多语言集成示例
 
@@ -542,11 +615,12 @@ HsBaSlicer的Protobuf数据交换机制支持多种编程语言的集成。
 
 ```java
 // Java伪代码示例
-import com.hsmbanlance.hsbaslicer.proto.SliceConfig;
+import com.hsmbanlance.hsbaslicer.proto.SlsPipeline;
 
-SliceConfig.MsgSliceConfig config = SliceConfig.MsgSliceConfig.newBuilder()
-    .setType(SliceConfig.MsgSliceType.SLICET_SAME)
-    .setSliceHeight(0.1f)
+SlsPipeline.SlsPipeConfig config = SlsPipeline.SlsPipeConfig.newBuilder()
+    .setSlsPipeConfigModelName("stanford_bunny")
+    .setSlsPipeConfigLayerHeight(0.1f)
+    .setSlsPipeConfigLaserPower(30.0f)
     .build();
 
 byte[] data = config.toByteArray();
@@ -559,10 +633,11 @@ byte[] data = config.toByteArray();
 // C#伪代码示例
 using HsbaProto;
 
-var config = new MsgSliceConfig
+var config = new SlsPipeConfig
 {
-    Type = MsgSliceType.Slicet_Same,
-    SliceHeight = 0.1f
+    SlsPipeConfigModelName = "stanford_bunny",
+    SlsPipeConfigLayerHeight = 0.1f,
+    SlsPipeConfigLaserPower = 30.0f
 };
 
 byte[] data = config.ToByteArray();
@@ -575,18 +650,21 @@ byte[] data = config.ToByteArray();
 // JavaScript伪代码示例
 const protobuf = require('protobufjs');
 
-protobuf.load('slice_config.proto', function(err, root) {
-    const MsgSliceConfig = root.lookupType('HsbaProto.msg_slice_config');
+protobuf.load('sls_pipeline.proto', function(err, root) {
+    const SlsPipeConfig = root.lookupType('HsbaProto.sls_pipe_config');
     
-    const config = MsgSliceConfig.create({
-        type: 0, // slicet_Same
-        slice_height: 0.1
+    const config = SlsPipeConfig.create({
+        sls_pipe_config_model_name: "stanford_bunny",
+        sls_pipe_config_layer_height: 0.1,
+        sls_pipe_config_laser_power: 30.0
     });
     
-    const buffer = MsgSliceConfig.encode(config).finish();
+    const buffer = SlsPipeConfig.encode(config).finish();
     // 发送或保存buffer
 });
 ```
+
+**更新** 新增了SLS流水线的多语言集成示例，展示了跨语言的SLS配置数据传输。
 
 **章节来源**
 - [CMakeLists.txt:42-120](file://proto/CMakeLists.txt#L42-L120)
@@ -617,8 +695,8 @@ C API函数使用标准的`malloc`函数分配内存，调用方负责释放这�
 
 ### 内存释放函数
 
-- **配置内存释放**: `HsBaFreeFdmConfigStrings`和`HsBaFreeSlaConfigStrings`函数用于释放配置结构体中的动态字符串字段
-- **结果内存释放**: `HsBaFreePipelineResult`函数用于释放管道结果中的动态内存
+- **配置内存释放**: `HsBaFreeFdmConfigStrings`、`HsBaFreeSlaConfigStrings`和`HsBaFreeSlsConfigStrings`函数用于释放配置结构体中的动态字符串字段
+- **结果内存释放**: `HsBaFreePipelineResult`和`HsBaFreeSlsPipelineResult`函数用于释放管道结果中的动态内存
 
 ### 内存泄漏防护
 
@@ -643,8 +721,11 @@ D --> H[错误处理]
 3. **空指针检查**: 在使用前检查指针是否为NULL
 4. **异常安全**: 在C++代码中使用RAII模式管理内存
 
+**更新** 新增了SLS流水线的内存管理支持，包括`HsBaFreeSlsConfigStrings`和`HsBaFreeSlsPipelineResult`函数。
+
 **章节来源**
-- [pipeline_convert.cpp:183-210](file://DllHsBaSlicer/pipeline_convert.cpp#L183-L210)
+- [pipeline_convert.cpp:183-236](file://DllHsBaSlicer/pipeline_convert.cpp#L183-L236)
+- [sls_pipeline.cpp:309-315](file://DllHsBaSlicer/sls_pipeline.cpp#L309-L315)
 
 ## 常见序列化错误与调试
 
@@ -666,7 +747,17 @@ D --> H[错误处理]
 
 在C API调用中，忘记释放动态分配的内存会导致内存泄漏。**调试建议**: 使用内存分析工具（如Valgrind、Visual Studio Debugger）检测内存泄漏，确保所有分配的内存都被正确释放。
 
+### SLS特定错误
+
+SLS流水线特有的错误包括：
+- **Lua脚本路径错误**: 确保`export_lua_script`字段指向有效的Lua脚本文件
+- **激光参数范围检查**: 验证激光功率、扫描速度等参数是否在设备允许范围内
+- **粉末床温度设置**: 确保`bed_temperature`参数符合材料要求
+
+**更新** 新增了SLS流水线的特定错误处理和调试建议。
+
 **章节来源**
 - [Msg2Eigen.cpp:28-33](file://convert/Msg2Eigen.cpp#L28-L33)
 - [error.hpp:32-37](file://base/error.hpp#L32-L37)
-- [pipeline_convert.cpp:183-210](file://DllHsBaSlicer/pipeline_convert.cpp#L183-L210)
+- [pipeline_convert.cpp:183-236](file://DllHsBaSlicer/pipeline_convert.cpp#L183-L236)
+- [sls_pipeline.cpp:309-315](file://DllHsBaSlicer/sls_pipeline.cpp#L309-L315)
