@@ -103,7 +103,9 @@ function(check_cxx_modules_support result)
     set(${result} TRUE PARENT_SCOPE)
   elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14)
     set(${result} TRUE PARENT_SCOPE)
-  elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
+    # NOTE: AppleClang excluded (STREQUAL, not MATCHES) - it lacks CMake module
+    # import-graph discovery support (cmake-cxxmodules(7)).
     set(${result} TRUE PARENT_SCOPE)
   else()
     set(${result} FALSE PARENT_SCOPE)
