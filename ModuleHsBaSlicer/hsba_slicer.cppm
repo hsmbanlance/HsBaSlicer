@@ -121,30 +121,30 @@ public:
 
     Model(const Model&) = delete;
     Model& operator=(const Model&) = delete;
-    Model(Model&& other) noexcept;
-    Model& operator=(Model&& other) noexcept;
+    inline Model(Model&& other) noexcept;
+    inline Model& operator=(Model&& other) noexcept;
 
     /// @brief Get model bounding box and volume.
-    ModelInfo info() const;
+    inline ModelInfo info() const;
 
     /// @brief Apply translation.
-    void translate(const Eigen::Vector3f& t);
+    inline void translate(const Eigen::Vector3f& t);
     /// @brief Apply rotation.
-    void rotate(const Eigen::Quaternionf& r);
+    inline void rotate(const Eigen::Quaternionf& r);
     /// @brief Apply uniform scale.
-    void scale(float s);
+    inline void scale(float s);
     /// @brief Apply non-uniform scale.
-    void scale(const Eigen::Vector3f& s);
+    inline void scale(const Eigen::Vector3f& s);
 
     /// @brief Slice at given height (integer coordinates).
-    Polygons slice(float height) const;
+    inline Polygons slice(float height) const;
     /// @brief Slice at given height (double coordinates).
-    PolygonsD sliceD(float height) const;
+    inline PolygonsD sliceD(float height) const;
 
     /// @brief Access underlying IModel.
-    const IModel& raw() const;
+    inline const IModel& raw() const;
     /// @brief Model name.
-    const std::string& name() const;
+    inline const std::string& name() const;
 
 private:
     std::string name_;
@@ -173,13 +173,13 @@ public:
     FdmResult run(const Model& model) const;
 
     /// @brief Slice all layers.
-    std::vector<Polygons> sliceAll(const Model& model) const;
+    inline std::vector<Polygons> sliceAll(const Model& model) const;
     /// @brief Generate supports for all layers.
-    std::vector<PolygonsD> generateSupports(const std::vector<PolygonsD>& layers) const;
+    inline std::vector<PolygonsD> generateSupports(const std::vector<PolygonsD>& layers) const;
     /// @brief Fill a single layer contour.
-    Polygons fill(const Polygons& contour) const;
+    inline Polygons fill(const Polygons& contour) const;
     /// @brief Generate G-code path from layer data.
-    std::unique_ptr<PointsPath> generatePath(const std::vector<LayerPathData>& data) const;
+    inline std::unique_ptr<PointsPath> generatePath(const std::vector<LayerPathData>& data) const;
 
 private:
     HsBaFdmPipelineConfig_t cfg_;
@@ -204,15 +204,15 @@ public:
 
     /// @brief Run full SLA pipeline and save to zip.
     /// @throws SlicerError on failure.
-    SlaResult run(const Model& model, const std::filesystem::path& output_zip) const;
+    inline SlaResult run(const Model& model, const std::filesystem::path& output_zip) const;
 
     /// @brief Generate floor/raft from bottom layer.
-    Polygons generateFloor(const Polygons& bottom_layer) const;
+    inline Polygons generateFloor(const Polygons& bottom_layer) const;
     /// @brief Render polygons to image file.
-    bool renderLayer(const PolygonsD& polys, int width, int height,
+    inline  bool renderLayer(const PolygonsD& polys, int width, int height,
                      const std::string& out_path) const;
     /// @brief Save SLA package to zip.
-    bool savePackage(const SlaPackage& pkg, const std::string& output_zip) const;
+    inline bool savePackage(const SlaPackage& pkg, const std::string& output_zip) const;
 
 private:
     HsBaSlaPipelineConfig_t cfg_;
@@ -230,7 +230,7 @@ public:
 
     /// @brief Run SLS export via Lua script.
     /// @throws SlicerError on failure.
-    bool run(const Model& model) const;
+    inline bool run(const Model& model) const;
 
 private:
     HsBaSlsPipelineConfig_t cfg_;
@@ -241,16 +241,16 @@ private:
 // ===========================================================================
 
 /// @brief Custom fill via Lua script file.
-Polygons luaCustomFill(const Polygons& poly, const std::string& script_path,
+inline Polygons luaCustomFill(const Polygons& poly, const std::string& script_path,
                        const std::string& func_name = "generate_fill",
                        double line_thickness = 0.5);
 
 /// @brief Custom floor via Lua script file.
-Polygons luaCustomFloor(const Polygons& bottom_layer, const std::string& script_path,
+inline Polygons luaCustomFloor(const Polygons& bottom_layer, const std::string& script_path,
                         const std::string& func_name, const SlaFloorConfig& config);
 
 /// @brief Custom support via Lua script.
-std::vector<PolygonsD> luaCustomSupport(const std::vector<PolygonsD>& layers,
+inline std::vector<PolygonsD> luaCustomSupport(const std::vector<PolygonsD>& layers,
                                          const SupportConfig& config,
                                          std::string_view script,
                                          std::string_view func_name = "generate_support");
@@ -260,18 +260,18 @@ std::vector<PolygonsD> luaCustomSupport(const std::vector<PolygonsD>& layers,
 // ===========================================================================
 
 /// @brief Get version info as JSON.
-std::string versionJson();
+inline std::string versionJson();
 /// @brief Get version info as XML.
-std::string versionXml();
+inline std::string versionXml();
 
 // ===========================================================================
 // Utilities
 // ===========================================================================
 
 /// @brief Convert integer polygons to double precision.
-PolygonsD toDouble(const Polygons& polys);
+inline PolygonsD toDouble(const Polygons& polys);
 /// @brief Convert double polygons to integer precision.
-Polygons toInt(const PolygonsD& polys);
+inline Polygons toInt(const PolygonsD& polys);
 
 }  // namespace HsBa::Slicer
 
