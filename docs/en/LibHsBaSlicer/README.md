@@ -35,6 +35,8 @@ To use LibHsBaSlicer, include the corresponding header files:
 
 Link against `LibHsBaSlicer` and its dependencies.
 
+For detailed CMake integration steps, see the [C++ Usage Guide (CMake Integration)](../cpp_cmake_usage.md).
+
 ## Typical Workflow
 
 1. **Preprocess**: Load model via `LoadModel()`, apply transforms
@@ -46,3 +48,34 @@ Link against `LibHsBaSlicer` and its dependencies.
 ## Namespace
 
 All APIs are in the `HsBa::Slicer` namespace.
+
+## Samples
+
+- `samples/LibHsBaSlicer/main_header.cpp` — Full FDM slicing workflow using traditional #include
+- `samples/LibHsBaSlicer/main_module.cpp` — C++20 module version (`import hsba.slicer;`, class-based API)
+
+## C++20 Module Version (ModuleHsBaSlicer)
+
+If your compiler supports C++20 modules, use the `ModuleHsBaSlicer` wrapper for a class-based API:
+
+```cpp
+#include <iostream>          // MSVC: #include must precede import
+#include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"  // GMF types not exported
+#include "pipelinetypes/pipeline_types.h"
+
+import hsba.slicer;
+using namespace HsBa::Slicer;
+
+Model model("bunny", "model.stl");   // RAII
+HsBaFdmPipelineConfig_t cfg = defaultFdmConfig();
+cfg.output_path = "out.gcode";
+FdmPipeline pipeline(cfg);
+FdmResult result = pipeline.run(model);  // Full pipeline
+```
+
+**Important**:
+- On MSVC, `#include` must appear before `import` (otherwise C2572 redefinition errors)
+- Project types in the GMF (`ModelInfo`, etc.) are NOT exported by the module; consumers must `#include` them directly
+- Config structs are shared from `pipelinetypes/pipeline_types.h`—do NOT redefine them
+
+See [C++ Usage Guide](../cpp_cmake_usage.md#using-modulehsbaslicer-c20-module) for details.

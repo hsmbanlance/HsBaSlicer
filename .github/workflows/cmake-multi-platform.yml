@@ -257,23 +257,23 @@ jobs:
         path: ${env.VCPKG_ROOT}/downloads
         key: vcpkg-android-${{ hashFiles('vcpkg.json') }}
 
-    - name: Configure CMake for Android (vcpkg chainload)
+    - name: Configure CMake for Android
       shell: bash
       run: |
-          if [ ! -f CMakeLists.txt ]; then
-            echo "Expected CMakeLists.txt in $(pwd)"
-            ls -la
-            exit 1
-          fi
-
-          cmake -B build-android -S . -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
-            -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
-            -DVCPKG_TARGET_TRIPLET=arm64-android \
-            -DANDROID_NDK="$ANDROID_NDK" \
-            -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-28
+        if [ ! -f CMakeLists.txt ]; then
+          echo "Expected CMakeLists.txt in $(pwd)"
+          ls -la
+          exit 1
+        fi
+        cmake -B build-android -S . -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+          -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
+          -DVCPKG_TARGET_TRIPLET=arm64-android \
+          -DANDROID_NDK="$ANDROID_NDK" \
+          -DANDROID_ABI=arm64-v8a \
+          -DANDROID_PLATFORM=android-28 \
+          -DCMAKE_CXX_COMPILER_CLANG_SCAN_DEPS="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang-scan-deps"
 
     - name: Build native libraries
       shell: bash
@@ -373,3 +373,85 @@ jobs:
         shell: bash
         run: |
           cmake --build build-ios --config Release
+
+      - name: Verify iOS static library
+        shell: bash
+        run: |
+          echo "=== Checking iOS build artifacts ==="
+          
+          # On iOS, ALL libraries are STATIC (no dylib support):
+          #   - libLibHsBaSlicer.a   (core algorithms)
+          #   - libDllHsBaSlicer.a   (C API layer, static on iOS)
+          #   - libHsBaSlicer.a      (example entry point)
+          
+          # Find the HsBaSlicer example entry library
+          LIB_PATH=$(find build-ios -name "libHsBaSlicer.a" ! -name "libLibHsBaSlicer.a" ! -name "libDllHsBaSlicer.a" | head -1)
+          if [ -z "$LIB_PATH" ]; then
+            echo "ERROR: libHsBaSlicer.a (example entry) not found"
+            echo "=== All .a files in build-ios ==="
+            find build-ios -name "*.a" | head -20
+            exit 1
+          fi
+          echo "Found HsBaSlicer entry library: $LIB_PATH"
+          ls -lh "$LIB_PATH"
+          
+          # Verify DllHsBaSlicer C API layer (static on iOS)
+          DLL_LIB=$(find build-ios -name "libDllHsBaSlicer.a" | head -1)
+          if [ -n "$DLL_LIB" ]; then
+            echo "Found DllHsBaSlicer C API library (static): $DLL_LIB"
+            ls -lh "$DLL_LIB"
+          else
+            echo "WARNING: libDllHsBaSlicer.a not found"
+          fi
+          
+          # Verify LibHsBaSlicer core library
+          CORE_LIB=$(find build-ios -name "libLibHsBaSlicer.a" | head -1)
+          if [ -n "$CORE_LIB" ]; then
+            echo "Found LibHsBaSlicer core library: $CORE_LIB"
+            ls -lh "$CORE_LIB"
+          else
+            echo "WARNING: libLibHsBaSlicer.a not found"
+          fi
+
+          # Verify exported symbol exists in entry library
+          echo "=== Checking exported symbols ==="
+          if nm "$LIB_PATH" 2>/dev/null | grep -q "HsBaRunPipelineExamples"; then
+            echo "OK: HsBaRunPipelineExamples symbol found in libHsBaSlicer.a"
+          else
+            echo "WARNING: HsBaRunPipelineExamples not found (checking DllHsBaSlicer...)"
+            if [ -n "$DLL_LIB" ] && nm "$DLL_LIB" 2>/dev/null | grep -q "HsBaRunPipelineExamples"; then
+              echo "OK: HsBaRunPipelineExamples found in libDllHsBaSlicer.a"
+            fi
+          fi
+
+          # List exported symbols for reference
+          echo "=== Exported symbols in libHsBaSlicer.a (first 20) ==="
+          nm "$LIB_PATH" 2>/dev/null | grep " T " | head -20 || true
+
+      - name: Verify iOS example source files
+        shell: bash
+        run: |
+          echo "=== Checking iOS example app files ==="
+          if [ -f "ios/HsBaSlicerExample/HsBaSlicerBridge.h" ]; then
+            echo "OK: HsBaSlicerBridge.h exists"
+          else
+            echo "ERROR: HsBaSlicerBridge.h not found"
+            exit 1
+          fi
+
+          if [ -f "ios/HsBaSlicerExample/ViewController.swift" ]; then
+            echo "OK: ViewController.swift exists"
+          else
+            echo "ERROR: ViewController.swift not found"
+            exit 1
+          fi
+
+          # Verify bridging header declares the expected function
+          if grep -q "HsBaRunPipelineExamples" ios/HsBaSlicerExample/HsBaSlicerBridge.h; then
+            echo "OK: HsBaRunPipelineExamples declared in bridging header"
+          else
+            echo "ERROR: HsBaRunPipelineExamples not declared in bridging header"
+            exit 1
+          fi
+
+          echo "=== iOS verification complete ==="

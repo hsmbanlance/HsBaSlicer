@@ -64,6 +64,12 @@ HsBaSlicer 是一个面向 3D 打印切片领域的高性能 C++ 软件框架，
 ### 切片核心
 
 - [LibHsBaSlicer 模块](./LibHsBaSlicer/) - 预处理、切片、支撑、填充、路径生成
+- [DllHsBaSlicer 模块](./DllHsBaSlicer/) - C 导出层，FDM/SLA/SLS 全流程流水线，Qt/wxWidgets 与 Unity/UE 跨平台集成指南
+
+### 快速开始
+
+- [C++ 使用指南（CMake 集成）](./cpp_cmake_usage.md) - 如何在外部 C++ 项目中通过 CMake 使用 LibHsBaSlicer / DllHsBaSlicer / HsBaSlicer（模块与非模块版）
+
 # HsBaSlicer 文档
 
 欢迎来到 HsBaSlicer 文档。此仓库包含多种语言的文档。

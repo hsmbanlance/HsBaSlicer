@@ -1,7 +1,7 @@
 ﻿# CMakeList.txt: 顶层 CMake 项目文件，在此处执行全局配置
 # 并包含子项目。
 #
-cmake_minimum_required (VERSION 3.21)
+cmake_minimum_required (VERSION 3.28)
 
 # All static libraries linked into shared libraries (DllHsBaSlicer.so) require -fPIC
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -104,6 +104,19 @@ if(HAS_C_C23_CONSTEXPR)
 endif()
 
 #Todo:add defined for gamer console
+
+# C++20 modules support (optional)
+option(HSBA_SLICER_MODULE "Build ModuleHsBaSlicer C++20 module wrapper" ON)
+check_cxx_modules_support(HAS_CXX_MODULES)
+if(HSBA_SLICER_MODULE AND HAS_CXX_MODULES)
+  message(STATUS "C++20 modules supported; ModuleHsBaSlicer will be built")
+  add_compile_definitions(HSBA_HAS_CXX_MODULES)
+else()
+  if(HSBA_SLICER_MODULE AND NOT HAS_CXX_MODULES)
+    message(STATUS "C++20 modules not supported by current toolchain; HSBA_SLICER_MODULE disabled.")
+  endif()
+  set(HSBA_SLICER_MODULE OFF)
+endif()
 
 message(STATUS "Configuring for platform: ${CMAKE_SYSTEM_NAME}")
 
@@ -330,8 +343,12 @@ if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
 endif()
 add_subdirectory("preprocess")
 add_subdirectory("support")
+add_subdirectory("pipelinetypes")
 add_subdirectory("convert")
 add_subdirectory("LibHsBaSlicer")
+if(HSBA_SLICER_MODULE)
+  add_subdirectory("ModuleHsBaSlicer")
+endif()
 add_subdirectory("DllHsBaSlicer")
 add_subdirectory ("HsBaSlicer")
 add_subdirectory("version")
@@ -341,6 +358,8 @@ option(HSBA_SLICER_BUILD_SAMPLES "Build samples" ON)
 if(HSBA_SLICER_BUILD_SAMPLES)
   add_subdirectory("samples/FDM")
   add_subdirectory("samples/SLA")
+  add_subdirectory("samples/SLS")
+  add_subdirectory("samples/LibHsBaSlicer")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -352,22 +371,44 @@ include(CMakePackageConfigHelpers)
 # 安装库目标（RUNTIME → bin, LIBRARY → lib, ARCHIVE → lib）
 # 所有内部静态库必须加入导出集，否则 CMake 会报错
 set(_HSBA_INSTALL_TARGETS
-    DllHsBaSlicer LibHsBaSlicer HsBaSlicerLog
+    DllHsBaSlicer HsBaSlicerLog
     HsBaSlicerBase HsBaSlicerUtils HsBaSlicerMesh
     HsBaSlicer2D HsBaPreprocess HsBaSupport HsBaPaths
     HsBaSlicerFileOperator
     HsBaSlicerProto HsBaCipher
     HsBaVersion
     HsBaSlicerConverter
+    HsBaPipelineTypes
 )
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
   list(APPEND _HSBA_INSTALL_TARGETS HsBaSlicerCADModel)
 endif()
+
+# LibHsBaSlicer
+install(TARGETS LibHsBaSlicer
+    EXPORT HsBaSlicerTargets
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+# ModuleHsBaSlicer (C++20 module wrapper)
+if(HSBA_SLICER_MODULE)
+  install(TARGETS ModuleHsBaSlicer
+      EXPORT HsBaSlicerTargets
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      FILE_SET hsba_slicer_modules DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/modules
+  )
+endif()
+
+# Other targets
 install(TARGETS ${_HSBA_INSTALL_TARGETS}
     EXPORT HsBaSlicerTargets
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}      # DLLs (Windows) / exe
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}      # .so (Linux/macOS)
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}      # .lib/.a (import lib)
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 # 安装公共头文件 —— DllHsBaSlicer C API
@@ -375,9 +416,16 @@ install(FILES
     DllHsBaSlicer/dllexport.h
     DllHsBaSlicer/fdm_pipeline.h
     DllHsBaSlicer/sla_pipeline.h
+    DllHsBaSlicer/sls_pipeline.h
     DllHsBaSlicer/pipeline_convert.h
     DllHsBaSlicer/initialize.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer
+)
+
+# pipelinetypes standalone type definitions
+install(FILES
+    pipelinetypes/pipeline_types.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/pipelinetypes
 )
 
 # base
@@ -409,6 +457,7 @@ install(FILES
     LibHsBaSlicer/Support/fdm_support.hpp
     LibHsBaSlicer/Fill/polygon_fill.hpp
     LibHsBaSlicer/Path/path_generator.hpp
+    LibHsBaSlicer/Path/sls_export.hpp
     LibHsBaSlicer/Floor/sla_floor.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/LibHsBaSlicer
 )

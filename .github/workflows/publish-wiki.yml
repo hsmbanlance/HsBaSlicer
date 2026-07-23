@@ -1,0 +1,109 @@
+# Publish repowiki to GitHub Wiki
+#
+# This workflow converts .qoder/repowiki content into GitHub Wiki format
+# and pushes it to the repository's wiki.
+#
+# Prerequisites:
+#   - The wiki repository must be initialized (create at least one wiki page manually first)
+#   - GITHUB_TOKEN has wiki write access (default for public repos)
+#
+# Triggers:
+#   - Manual dispatch (workflow_dispatch)
+#   - Push to main when repowiki files change
+
+name: Publish Wiki
+
+on:
+  workflow_dispatch:
+    inputs:
+      lang:
+        description: 'Language to publish (en, zh, both)'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - en
+          - zh
+  push:
+    branches: [main, master]
+    paths:
+      - '.qoder/repowiki/**'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate wiki files
+        run: |
+          python scripts/repowiki_to_github_wiki.py \
+            --lang "${{ inputs.lang || 'both' }}" \
+            --src .qoder/repowiki \
+            --out wiki-output
+
+      - name: Clone wiki repository
+        env:
+          WIKI_URL: "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git"
+        run: |
+          git clone --depth 1 "$WIKI_URL" wiki-repo 2>&1 || {
+            echo "::error::Failed to clone wiki repo. Make sure the wiki is initialized (create at least one page manually)."
+            exit 1
+          }
+
+      - name: Sync wiki content
+        run: |
+          cd wiki-repo
+
+          # Remove existing wiki pages (keep .git)
+          find . -maxdepth 1 -name '*.md' -delete
+
+          # Copy generated wiki files
+          cp -r ../wiki-output/*.md .
+
+          # Show what changed
+          echo "=== Wiki files to be updated ==="
+          ls -la *.md
+          echo "================================"
+
+      - name: Commit and push to wiki
+        run: |
+          cd wiki-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+          else
+            git commit -m "Auto-update wiki from repowiki (${{ github.sha }})"
+            git push origin master 2>&1 || git push origin main 2>&1
+            echo "Wiki published successfully!"
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Wiki Publish Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -d wiki-repo ]; then
+            echo "| File | Status |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|------|--------|" >> "$GITHUB_STEP_SUMMARY"
+            cd wiki-repo
+            for f in *.md; do
+              echo "| \`$f\` | Generated |" >> "$GITHUB_STEP_SUMMARY"
+            done
+          else
+            echo "Wiki repository was not cloned (clone step failed)." >> "$GITHUB_STEP_SUMMARY"
+          fi

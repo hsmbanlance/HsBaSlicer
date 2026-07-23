@@ -435,40 +435,7 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
 
 HSBA_SLICER_API HsBaSlaPipelineConfig_t HsBaCreateDefaultSlaConfig(void)
 {
-    HsBaSlaPipelineConfig_t cfg{};
-
-    cfg.layer_height = 0.05f;
-    cfg.first_layer_height = 0.1f;
-    cfg.bottom_exposure_time = 60.0f;
-    cfg.normal_exposure_time = 2.5f;
-    cfg.bottom_lift_distance = 5.0f;
-    cfg.lift_distance = 3.0f;
-    cfg.lift_speed = 60.0f;
-    cfg.retract_speed = 150.0f;
-    cfg.floor_raft_offset = 2.0f;
-    cfg.floor_border_width = 1.0f;
-    cfg.floor_fill_spacing = 0.5f;
-    cfg.floor_fill_angle = 0.0f;
-    cfg.floor_border_count = 2;
-    cfg.floor_use_convex_hull = 0;
-    cfg.enable_support = 1;
-    cfg.overhang_angle = 45.0f;
-    cfg.support_gap = 0.5f;
-    cfg.support_diameter = 2.0f;
-    cfg.support_density = 0.3f;
-    cfg.support_pattern = HSBA_SLA_SUPPORT_SACRIFICIAL;
-    cfg.support_lua_script = nullptr;
-    cfg.support_lua_func = nullptr;
-    cfg.floor_lua_script = nullptr;
-    cfg.floor_lua_func = nullptr;
-    cfg.export_lua_script = nullptr;
-    cfg.export_lua_func = nullptr;
-    cfg.output_path = nullptr;
-    cfg.image_type = HSBA_SLA_IMAGE_PNG;
-    cfg.image_width = 0;
-    cfg.image_height = 0;
-
-    return cfg;
+    return HsBaSlaConfigDefault();
 }
 
 HSBA_SLICER_API HsBaSlaPipelineResult_t HsBaRunSlaPipeline(const HsBaSlaPipelineConfig_t* config,

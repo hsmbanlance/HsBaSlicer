@@ -120,4 +120,40 @@ void SlaResultToMsg(const HsBaSlaPipelineResult_t& result, HsbaProto::sla_pipe_r
     msg->set_sla_pipe_result_elapsed_seconds(result.elapsed_seconds);
 }
 
+void SlsConfigToMsg(const HsBaSlsPipelineConfig_t& config, HsbaProto::sls_pipe_config* msg)
+{
+    if (config.model_name)
+        msg->set_sls_pipe_config_model_name(config.model_name);
+    if (config.model_path)
+        msg->set_sls_pipe_config_model_path(config.model_path);
+
+    msg->set_sls_pipe_config_layer_height(config.layer_height);
+    msg->set_sls_pipe_config_first_layer_height(config.first_layer_height);
+
+    msg->set_sls_pipe_config_laser_power(config.laser_power);
+    msg->set_sls_pipe_config_scan_speed(config.scan_speed);
+    msg->set_sls_pipe_config_hatch_spacing(config.hatch_spacing);
+    msg->set_sls_pipe_config_hatch_rotation(config.hatch_rotation);
+    msg->set_sls_pipe_config_bed_temperature(config.bed_temperature);
+
+    if (config.export_lua_script)
+        msg->set_sls_pipe_config_export_lua_script(config.export_lua_script);
+    if (config.export_lua_func)
+        msg->set_sls_pipe_config_export_lua_func(config.export_lua_func);
+
+    if (config.output_path)
+        msg->set_sls_pipe_config_output_path(config.output_path);
+}
+
+void SlsResultToMsg(const HsBaSlsPipelineResult_t& result, HsbaProto::sls_pipe_result* msg)
+{
+    msg->set_sls_pipe_result_success(result.success != 0);
+    msg->set_sls_pipe_result_total_layers(result.total_layers);
+    if (result.export_path)
+        msg->set_sls_pipe_result_export_path(result.export_path);
+    if (result.error_message)
+        msg->set_sls_pipe_result_error_message(result.error_message);
+    msg->set_sls_pipe_result_elapsed_seconds(result.elapsed_seconds);
+}
+
 }  // namespace HsBa::Slicer

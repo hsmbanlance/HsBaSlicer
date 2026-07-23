@@ -64,6 +64,7 @@ HsBaSlicer is a high-performance C++ software framework for 3D printing slicing,
 ### Slicing Core
 
 - [LibHsBaSlicer Module](./en/LibHsBaSlicer/) - Preprocess, Slice, Support, Fill, Path Generation
+- [DllHsBaSlicer Module](./en/DllHsBaSlicer/) - C export layer, FDM/SLA/SLS full pipelines, Qt/wxWidgets & Unity/UE cross-platform integration guides
 # HsBaSlicer Documentation
 
 Welcome to the HsBaSlicer documentation. This repository contains documentation in multiple languages.

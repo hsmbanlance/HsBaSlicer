@@ -1,4 +1,8 @@
-﻿#include <algorithm>
+﻿#ifdef _WIN32
+#include <windows.h>  // full windows.h before bit7z (which defines WIN32_LEAN_AND_MEAN)
+#endif
+
+#include <algorithm>
 #include <any>
 #include <coroutine>
 #include <list>

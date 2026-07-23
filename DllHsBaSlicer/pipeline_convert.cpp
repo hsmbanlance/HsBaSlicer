@@ -178,6 +178,86 @@ HSBA_SLICER_API int HsBaSlaResultToProtoBytes(const HsBaSlaPipelineResult_t* res
     return 1;
 }
 
+// ========== SLS ==========
+
+HSBA_SLICER_API int HsBaSlsConfigFromProtoBytes(const void* proto_data, int proto_size,
+                                                 HsBaSlsPipelineConfig_t* config)
+{
+    if (!proto_data || proto_size <= 0 || !config)
+        return 0;
+
+    HsbaProto::sls_pipe_config msg;
+    if (!msg.ParseFromArray(proto_data, proto_size))
+        return 0;
+
+    HsBa::Slicer::MsgToSlsConfig(msg, config);
+    return 1;
+}
+
+HSBA_SLICER_API int HsBaSlsConfigToProtoBytes(const HsBaSlsPipelineConfig_t* config,
+                                               void** out_data, int* out_size)
+{
+    if (!config || !out_data || !out_size)
+        return 0;
+
+    HsbaProto::sls_pipe_config msg;
+    HsBa::Slicer::SlsConfigToMsg(*config, &msg);
+
+    int size = static_cast<int>(msg.ByteSizeLong());
+    void* buf = std::malloc(static_cast<size_t>(size));
+    if (!buf)
+        return 0;
+
+    if (!msg.SerializeToArray(buf, size))
+    {
+        std::free(buf);
+        return 0;
+    }
+
+    *out_data = buf;
+    *out_size = size;
+    return 1;
+}
+
+HSBA_SLICER_API int HsBaSlsResultFromProtoBytes(const void* proto_data, int proto_size,
+                                                 HsBaSlsPipelineResult_t* result)
+{
+    if (!proto_data || proto_size <= 0 || !result)
+        return 0;
+
+    HsbaProto::sls_pipe_result msg;
+    if (!msg.ParseFromArray(proto_data, proto_size))
+        return 0;
+
+    HsBa::Slicer::MsgToSlsResult(msg, result);
+    return 1;
+}
+
+HSBA_SLICER_API int HsBaSlsResultToProtoBytes(const HsBaSlsPipelineResult_t* result,
+                                               void** out_data, int* out_size)
+{
+    if (!result || !out_data || !out_size)
+        return 0;
+
+    HsbaProto::sls_pipe_result msg;
+    HsBa::Slicer::SlsResultToMsg(*result, &msg);
+
+    int size = static_cast<int>(msg.ByteSizeLong());
+    void* buf = std::malloc(static_cast<size_t>(size));
+    if (!buf)
+        return 0;
+
+    if (!msg.SerializeToArray(buf, size))
+    {
+        std::free(buf);
+        return 0;
+    }
+
+    *out_data = buf;
+    *out_size = size;
+    return 1;
+}
+
 // ========== Cleanup helpers ==========
 
 HSBA_SLICER_API void HsBaFreeFdmConfigStrings(HsBaFdmPipelineConfig_t* config)
@@ -203,6 +283,17 @@ HSBA_SLICER_API void HsBaFreeSlaConfigStrings(HsBaSlaPipelineConfig_t* config)
     FreeIfNotNull(const_cast<char*&>(config->support_lua_func));
     FreeIfNotNull(const_cast<char*&>(config->floor_lua_script));
     FreeIfNotNull(const_cast<char*&>(config->floor_lua_func));
+    FreeIfNotNull(const_cast<char*&>(config->export_lua_script));
+    FreeIfNotNull(const_cast<char*&>(config->export_lua_func));
+    FreeIfNotNull(const_cast<char*&>(config->output_path));
+}
+
+HSBA_SLICER_API void HsBaFreeSlsConfigStrings(HsBaSlsPipelineConfig_t* config)
+{
+    if (!config)
+        return;
+    FreeIfNotNull(const_cast<char*&>(config->model_name));
+    FreeIfNotNull(const_cast<char*&>(config->model_path));
     FreeIfNotNull(const_cast<char*&>(config->export_lua_script));
     FreeIfNotNull(const_cast<char*&>(config->export_lua_func));
     FreeIfNotNull(const_cast<char*&>(config->output_path));

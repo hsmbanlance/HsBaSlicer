@@ -2,11 +2,11 @@
 #ifndef HSBA_SLICER_PIPELINE_CONFIG2MSG_HPP
 #define HSBA_SLICER_PIPELINE_CONFIG2MSG_HPP
 
-#include "DllHsBaSlicer/fdm_pipeline.h"
-#include "DllHsBaSlicer/sla_pipeline.h"
+#include "pipelinetypes/pipeline_types.h"
 
 #include "fdm_pipeline.pb.h"
 #include "sla_pipeline.pb.h"
+#include "sls_pipeline.pb.h"
 
 namespace HsBa::Slicer
 {
@@ -22,6 +22,12 @@ void SlaConfigToMsg(const HsBaSlaPipelineConfig_t& config, HsbaProto::sla_pipe_c
 
 /// @brief Convert SLA pipeline C result to proto message.
 void SlaResultToMsg(const HsBaSlaPipelineResult_t& result, HsbaProto::sla_pipe_result* msg);
+
+/// @brief Convert SLS pipeline C config to proto message.
+void SlsConfigToMsg(const HsBaSlsPipelineConfig_t& config, HsbaProto::sls_pipe_config* msg);
+
+/// @brief Convert SLS pipeline C result to proto message.
+void SlsResultToMsg(const HsBaSlsPipelineResult_t& result, HsbaProto::sls_pipe_result* msg);
 
 }  // namespace HsBa::Slicer
 
