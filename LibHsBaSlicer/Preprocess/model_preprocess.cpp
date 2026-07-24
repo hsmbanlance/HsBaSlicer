@@ -77,4 +77,72 @@ HSBA_SLICER_LIB_API void RemoveModel(const std::string& name)
     GetLoader().RemoveModel(name);
 }
 
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> InsertModel(const std::string& name, std::shared_ptr<IModel> model)
+{
+    return GetLoader().InsertModel(name, std::move(model));
+}
+
+HSBA_SLICER_LIB_API bool ContainsModel(const std::string& name)
+{
+    return GetLoader().ContainsModel(name);
+}
+
+HSBA_SLICER_LIB_API std::size_t ModelCount()
+{
+    return GetLoader().ModelCount();
+}
+
+HSBA_SLICER_LIB_API std::vector<std::string> GetModelNames()
+{
+    return GetLoader().GetModelNames();
+}
+
+HSBA_SLICER_LIB_API std::size_t CleanupModels()
+{
+    return GetLoader().Cleanup();
+}
+
+#ifdef USE_CGAL
+
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> ThickSolidModel(const std::string& sourceName,
+                                                            const std::string& resultName, float thickness)
+{
+    return GetLoader().ThickSolidModel(sourceName, resultName, thickness);
+}
+
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> ThickSolidModel(
+    const std::string& sourceName, const std::string& resultName,
+    const std::vector<std::vector<Eigen::Vector3f>>& closingFaces, float thickness)
+{
+    return GetLoader().ThickSolidModel(sourceName, resultName, closingFaces, thickness);
+}
+
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanUnion(const std::string& leftName, const std::string& rightName,
+                                                         const std::string& resultName)
+{
+    return GetLoader().BooleanUnion(leftName, rightName, resultName);
+}
+
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanIntersection(const std::string& leftName,
+                                                                const std::string& rightName,
+                                                                const std::string& resultName)
+{
+    return GetLoader().BooleanIntersection(leftName, rightName, resultName);
+}
+
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanDifference(const std::string& leftName,
+                                                              const std::string& rightName,
+                                                              const std::string& resultName)
+{
+    return GetLoader().BooleanDifference(leftName, rightName, resultName);
+}
+
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanXor(const std::string& leftName, const std::string& rightName,
+                                                       const std::string& resultName)
+{
+    return GetLoader().BooleanXor(leftName, rightName, resultName);
+}
+
+#endif  // USE_CGAL
+
 }  // namespace HsBa::Slicer

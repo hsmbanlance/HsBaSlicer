@@ -4,7 +4,7 @@ LibHsBaSlicer 是 HsBaSlicer 的核心 C++ 静态库，提供五大切片接口�
 
 ## 子模块列表
 
-- [Preprocess（模型预处理）](./model_preprocess.md) - 模型加载、变换和信息查询
+- [Preprocess（模型预处理）](./model_preprocess.md) - 模型加载、变换、信息查询、布尔运算与抽壳
 - [Slice（网格切片）](./mesh_slice.md) - Z 轴平面切片，生成层轮廓
 - [Support（FDM 支撑生成）](./fdm_support.md) - FDM 支撑截面生成
 - [Fill（多边形填充）](./polygon_fill.md) - 多种模式的多边形填充
@@ -15,7 +15,7 @@ LibHsBaSlicer 是 HsBaSlicer 的核心 C++ 静态库，提供五大切片接口�
 
 ```
 LibHsBaSlicer
-├── Preprocess/    模型加载与变换
+├── Preprocess/    模型加载、变换、布尔运算与抽壳
 ├── Slice/         指定高度的网格切片
 ├── Support/       FDM 支撑生成
 ├── Fill/          多边形填充模式
@@ -81,11 +81,47 @@ AddEventCallback("zipper.on_add", [](lua_State* L) {
 
 ## 典型工作流
 
-1. **预处理**：通过 `LoadModel()` 加载模型，施加变换
+1. **预处理**：通过 `LoadModel()` 加载模型，施加变换，可选执行布尔运算/抽壳
 2. **切片**：在每个层高位置通过 `Slice()` 生成层轮廓
 3. **支撑**：通过 `GenerateAllFdmSupport()` 生成支撑结构
 4. **填充**：通过 `FillPolygon()` 或 `FillWithBorder()` 填充层多边形
 5. **路径**：通过 `GenerateGCodePathV2()` 生成支持多固件格式的 G-code 路径
+
+## 模型预处理高级操作（CGAL/OCCT）
+
+当编译时启用 `USE_CGAL` 宏，预处理模块提供以下高级几何操作：
+
+```cpp
+#include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
+using namespace HsBa::Slicer;
+
+// Load models
+LoadModel("body", "models/body.step");    // BRep via OCCT
+LoadModel("cavity", "models/cavity.stl"); // Mesh via IGL
+
+// ThickSolid (shell) - requires OCCT BRep source
+ThickSolidModel("body", "shelled", 2.0f);
+
+// Boolean operations - OCCT for BRep-BRep, IGL/CGAL fallback for mesh
+BooleanUnion("body", "cavity", "merged");
+BooleanDifference("body", "cavity", "cut");
+BooleanIntersection("body", "cavity", "common");
+BooleanXor("body", "cavity", "xor_result");
+
+// Pool management
+ContainsModel("merged");   // true
+ModelCount();              // number of models
+GetModelNames();           // all names
+CleanupModels();           // remove unreferenced models
+```
+
+### 内核路由策略
+
+| 操作 | BRep 模型 (OCCT) | 网格模型 (IGL/CGAL) |
+| --- | --- | --- |
+| 布尔运算 | OCCT 优先 | IGL/CGAL 回退 |
+| 抽壳 (ThickSolid) | 支持 | 不支持（抛出异常） |
+| 加载 | STEP/IGES/VRML/BREP | STL/OBJ/PLY/OFF |
 
 ## GCode 多固件输出（V2）
 

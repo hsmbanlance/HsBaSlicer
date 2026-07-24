@@ -36,6 +36,7 @@ All public headers are exported to `include/HsBaSlicer/` in the install tree.
 | --- | --- |
 | `dllexport.h` | `HSBA_SLICER_API` export macro |
 | `initialize.h` | `initialize()` global initialization (must be called first) |
+| `model_preprocess.h` | Model preprocessing interface (load/transform/query/boolean/shell) |
 | `fdm_pipeline.h` | FDM full-pipeline interface |
 | `sla_pipeline.h` | SLA full-pipeline interface |
 | `sls_pipeline.h` | SLS full-pipeline interface |
@@ -49,6 +50,89 @@ All public headers are exported to `include/HsBaSlicer/` in the install tree.
 
 ```c
 void initialize(void);   // call once after process startup
+```
+
+### Model Preprocessing
+
+Standalone model management interface for operating on models before or outside pipeline execution. Models are referenced via opaque handles (`void*`) with internal reference counting for lifetime management.
+
+#### Basic Operations
+
+```c
+void* HsBaLoadModel(const char* name, const char* file_path);  // Load model (IGL: STL/OBJ/PLY/OFF; OCCT: STEP/IGES/VRML/BREP)
+void* HsBaGetModel(const char* name);                          // Get a previously loaded model
+void  HsBaRemoveModel(const char* name);                       // Remove model from pool
+int   HsBaContainsModel(const char* name);                     // Check if model exists
+int   HsBaModelCount(void);                                    // Number of models in pool
+int   HsBaCleanupModels(void);                                 // Clean up unreferenced models
+```
+
+#### Transform Operations
+
+```c
+int HsBaTranslateModel(const char* name, float tx, float ty, float tz);       // Translation
+int HsBaRotateModel(const char* name, float qx, float qy, float qz, float qw); // Rotation (quaternion)
+int HsBaScaleModelUniform(const char* name, float scale);                      // Uniform scale
+int HsBaScaleModel(const char* name, float sx, float sy, float sz);            // Non-uniform scale
+```
+
+#### Query Operations
+
+```c
+int HsBaGetModelInfo(const char* name, float out_bbox_min[3], float out_bbox_max[3], float* out_volume);
+```
+
+#### Advanced Operations (require CGAL/OCCT)
+
+```c
+void* HsBaThickSolidModel(const char* source_name, const char* result_name, float thickness);  // Shell (requires OCCT BRep model)
+void* HsBaBooleanUnion(const char* left_name, const char* right_name, const char* result_name);        // Boolean union
+void* HsBaBooleanIntersection(const char* left_name, const char* right_name, const char* result_name); // Boolean intersection
+void* HsBaBooleanDifference(const char* left_name, const char* right_name, const char* result_name);   // Boolean difference
+void* HsBaBooleanXor(const char* left_name, const char* right_name, const char* result_name);          // Boolean XOR
+```
+
+#### Handle Management
+
+```c
+void HsBaReleaseModelHandle(void* handle);  // Release handle reference (model stays in pool)
+```
+
+> **Kernel routing strategy**: Boolean operations prefer OCCT (BRep-BRep); falls back to IGL/CGAL for mesh models. ThickSolid only supports OCCT BRep models. Advanced operations are compile-time gated by the `USE_CGAL` macro and return NULL when unavailable.
+
+#### Model Preprocessing Example
+
+```c
+#include "initialize.h"
+#include "model_preprocess.h"
+
+int main(void)
+{
+    initialize();
+
+    // Load mesh model (IGL)
+    void* h1 = HsBaLoadModel("part_a", "models/part_a.stl");
+    void* h2 = HsBaLoadModel("part_b", "models/part_b.stl");
+
+    // Transform
+    HsBaTranslateModel("part_b", 10.0f, 0.0f, 0.0f);
+
+    // Boolean union (IGL/CGAL fallback for mesh)
+    void* merged = HsBaBooleanUnion("part_a", "part_b", "merged");
+
+    // Query
+    float bmin[3], bmax[3], vol;
+    HsBaGetModelInfo("merged", bmin, bmax, &vol);
+
+    // Release handles
+    HsBaReleaseModelHandle(h1);
+    HsBaReleaseModelHandle(h2);
+    HsBaReleaseModelHandle(merged);
+
+    // Cleanup when done
+    HsBaCleanupModels();
+    return 0;
+}
 ```
 
 ### FDM Pipeline
@@ -189,7 +273,8 @@ typedef void (*HsBaResultCallback)(HsBaFdmPipelineResult_t result, void* user_da
 1. `HsBaCreateDefault*Config()` returns a **value-type** struct that needs no freeing; the caller guarantees the lifetime of memory referenced by its string fields;
 2. `gcode_content` / `export_path` / `error_message` inside result structs are allocated by the library and **must** be released with the matching `HsBaFree*PipelineResult()`;
 3. Version strings must be freed with `HsBaFreeVersionString()`;
-4. `pipeline_types.h` also provides DLL-independent inline initializers `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()`, handy for header-only scenarios (e.g. mirroring structs for P/Invoke).
+4. Model handles (`void*` returned by `HsBaLoadModel` / `HsBaGetModel` / `HsBaBoolean*` / `HsBaThickSolidModel`) must be released with `HsBaReleaseModelHandle()`;
+5. `pipeline_types.h` also provides DLL-independent inline initializers `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()`, handy for header-only scenarios (e.g. mirroring structs for P/Invoke).
 
 ## Minimal Example (C/C++)
 

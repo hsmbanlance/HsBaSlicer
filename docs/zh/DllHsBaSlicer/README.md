@@ -36,6 +36,7 @@ LibHsBaSlicer  ← C++ 静态库：预处理 / 切片 / 支撑 / 填充 / 路径
 | --- | --- |
 | `dllexport.h` | `HSBA_SLICER_API` 导出宏 |
 | `initialize.h` | `initialize()` 全局初始化（必须最先调用） |
+| `model_preprocess.h` | 模型预处理接口（加载/变换/查询/布尔运算/抽壳） |
 | `fdm_pipeline.h` | FDM 全流程接口 |
 | `sla_pipeline.h` | SLA 全流程接口 |
 | `sls_pipeline.h` | SLS 全流程接口 |
@@ -49,6 +50,89 @@ LibHsBaSlicer  ← C++ 静态库：预处理 / 切片 / 支撑 / 填充 / 路径
 
 ```c
 void initialize(void);   // 进程启动后调用一次
+```
+
+### 模型预处理
+
+独立的模型管理接口，支持在流水线运行前/外单独操作模型。模型通过不透明句柄（`void*`）引用，内部引用计数管理生命周期。
+
+#### 基本操作
+
+```c
+void* HsBaLoadModel(const char* name, const char* file_path);  // 加载模型（IGL: STL/OBJ/PLY/OFF; OCCT: STEP/IGES/VRML/BREP）
+void* HsBaGetModel(const char* name);                          // 获取已加载模型
+void  HsBaRemoveModel(const char* name);                       // 从池中移除模型
+int   HsBaContainsModel(const char* name);                     // 检查模型是否存在
+int   HsBaModelCount(void);                                    // 池中模型数量
+int   HsBaCleanupModels(void);                                 // 清理无外部引用的模型
+```
+
+#### 变换操作
+
+```c
+int HsBaTranslateModel(const char* name, float tx, float ty, float tz);       // 平移
+int HsBaRotateModel(const char* name, float qx, float qy, float qz, float qw); // 旋转（四元数）
+int HsBaScaleModelUniform(const char* name, float scale);                      // 等比缩放
+int HsBaScaleModel(const char* name, float sx, float sy, float sz);            // 非等比缩放
+```
+
+#### 查询操作
+
+```c
+int HsBaGetModelInfo(const char* name, float out_bbox_min[3], float out_bbox_max[3], float* out_volume);
+```
+
+#### 高级操作（需要 CGAL/OCCT）
+
+```c
+void* HsBaThickSolidModel(const char* source_name, const char* result_name, float thickness);  // 抽壳（需 OCCT BRep 模型）
+void* HsBaBooleanUnion(const char* left_name, const char* right_name, const char* result_name);        // 布尔并集
+void* HsBaBooleanIntersection(const char* left_name, const char* right_name, const char* result_name); // 布尔交集
+void* HsBaBooleanDifference(const char* left_name, const char* right_name, const char* result_name);   // 布尔差集
+void* HsBaBooleanXor(const char* left_name, const char* right_name, const char* result_name);          // 布尔异或
+```
+
+#### 句柄管理
+
+```c
+void HsBaReleaseModelHandle(void* handle);  // 释放句柄引用（模型仍留在池中）
+```
+
+> **内核路由策略**：布尔运算优先使用 OCCT（BRep-BRep），若模型为网格则回退到 IGL/CGAL；抽壳仅支持 OCCT BRep 模型。高级操作在编译期由 `USE_CGAL` 宏控制，不可用时返回 NULL。
+
+#### 模型预处理示例
+
+```c
+#include "initialize.h"
+#include "model_preprocess.h"
+
+int main(void)
+{
+    initialize();
+
+    // Load mesh model (IGL)
+    void* h1 = HsBaLoadModel("part_a", "models/part_a.stl");
+    void* h2 = HsBaLoadModel("part_b", "models/part_b.stl");
+
+    // Transform
+    HsBaTranslateModel("part_b", 10.0f, 0.0f, 0.0f);
+
+    // Boolean union (IGL/CGAL fallback for mesh)
+    void* merged = HsBaBooleanUnion("part_a", "part_b", "merged");
+
+    // Query
+    float bmin[3], bmax[3], vol;
+    HsBaGetModelInfo("merged", bmin, bmax, &vol);
+
+    // Release handles
+    HsBaReleaseModelHandle(h1);
+    HsBaReleaseModelHandle(h2);
+    HsBaReleaseModelHandle(merged);
+
+    // Cleanup when done
+    HsBaCleanupModels();
+    return 0;
+}
 ```
 
 ### FDM 流水线
@@ -189,7 +273,8 @@ typedef void (*HsBaResultCallback)(HsBaFdmPipelineResult_t result, void* user_da
 1. `HsBaCreateDefault*Config()` 返回**值类型**结构体，无需释放；字符串字段指向的内存由调用方保证生命周期；
 2. 结果结构体中的 `gcode_content` / `export_path` / `error_message` 由库内部分配，**必须**调用对应的 `HsBaFree*PipelineResult()` 释放；
 3. 版本字符串必须用 `HsBaFreeVersionString()` 释放；
-4. `pipeline_types.h` 还提供无 DLL 依赖的内联初始化器 `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()`，便于纯头文件场景（如 P/Invoke 结构体对照）使用。
+4. 模型句柄（`HsBaLoadModel` / `HsBaGetModel` / `HsBaBoolean*` / `HsBaThickSolidModel` 返回的 `void*`）必须用 `HsBaReleaseModelHandle()` 释放引用；
+5. `pipeline_types.h` 还提供无 DLL 依赖的内联初始化器 `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()`，便于纯头文件场景（如 P/Invoke 结构体对照）使用。
 
 ## 最小示例（C/C++）
 

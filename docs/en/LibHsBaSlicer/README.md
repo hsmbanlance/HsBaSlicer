@@ -4,7 +4,7 @@ LibHsBaSlicer is the core C++ static library of HsBaSlicer, providing five major
 
 ## Submodule List
 
-- [Preprocess (Model Preprocessing)](./model_preprocess.md) - Model loading, transformation, and information queries
+- [Preprocess (Model Preprocessing)](./model_preprocess.md) - Model loading, transformation, information queries, boolean operations and shelling
 - [Slice (Mesh Slicing)](./mesh_slice.md) - Z-axis plane slicing for generating layer contours
 - [Support (FDM Support Generation)](./fdm_support.md) - FDM support cross-section generation
 - [Fill (Polygon Fill)](./polygon_fill.md) - Polygon infill with various patterns
@@ -15,7 +15,7 @@ LibHsBaSlicer is the core C++ static library of HsBaSlicer, providing five major
 
 ```
 LibHsBaSlicer
-├── Preprocess/    Model loading & transformation
+├── Preprocess/    Model loading, transformation, boolean operations & shelling
 ├── Slice/         Mesh slicing at specified heights
 ├── Support/       FDM support generation
 ├── Fill/          Polygon infill patterns
@@ -81,11 +81,47 @@ AddEventCallback("zipper.on_add", [](lua_State* L) {
 
 ## Typical Workflow
 
-1. **Preprocess**: Load model via `LoadModel()`, apply transforms
+1. **Preprocess**: Load model via `LoadModel()`, apply transforms, optionally perform boolean operations/shelling
 2. **Slice**: Generate layer contours via `Slice()` at each layer height
 3. **Support**: Generate support structures via `GenerateAllFdmSupport()`
 4. **Fill**: Fill layer polygons via `FillPolygon()` or `FillWithBorder()`
 5. **Path**: Generate G-code paths via `GenerateGCodePathV2()` with multi-firmware output
+
+## Advanced Model Preprocessing (CGAL/OCCT)
+
+When compiled with the `USE_CGAL` macro enabled, the preprocessing module provides the following advanced geometric operations:
+
+```cpp
+#include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
+using namespace HsBa::Slicer;
+
+// Load models
+LoadModel("body", "models/body.step");    // BRep via OCCT
+LoadModel("cavity", "models/cavity.stl"); // Mesh via IGL
+
+// ThickSolid (shell) - requires OCCT BRep source
+ThickSolidModel("body", "shelled", 2.0f);
+
+// Boolean operations - OCCT for BRep-BRep, IGL/CGAL fallback for mesh
+BooleanUnion("body", "cavity", "merged");
+BooleanDifference("body", "cavity", "cut");
+BooleanIntersection("body", "cavity", "common");
+BooleanXor("body", "cavity", "xor_result");
+
+// Pool management
+ContainsModel("merged");   // true
+ModelCount();              // number of models
+GetModelNames();           // all names
+CleanupModels();           // remove unreferenced models
+```
+
+### Kernel Routing Strategy
+
+| Operation | BRep Model (OCCT) | Mesh Model (IGL/CGAL) |
+| --- | --- | --- |
+| Boolean operations | OCCT preferred | IGL/CGAL fallback |
+| ThickSolid (shell) | Supported | Not supported (throws exception) |
+| Loading | STEP/IGES/VRML/BREP | STL/OBJ/PLY/OFF |
 
 ## GCode Multi-Firmware Output (V2)
 
