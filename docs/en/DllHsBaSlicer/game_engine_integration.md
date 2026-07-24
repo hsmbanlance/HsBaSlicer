@@ -104,6 +104,22 @@ public static class HsBaSlicerNative
 
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
     public static extern void HsBaFreePipelineResult(ref FdmPipelineResult result);
+
+    // ---- Lua extension function registration ----
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void LuaRegFn(IntPtr luaState);   // void (*)(lua_State*)
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void HsBaAdd2DFunction(LuaRegFn func);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void HsBaAdd3DFunction(LuaRegFn func);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void HsBaAddFileFunction(LuaRegFn func);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void HsBaAddEventCallback(IntPtr eventName, LuaRegFn func);
 }
 ```
 
@@ -358,6 +374,81 @@ Calling SLA / SLS from Unity or UE follows the identical pattern — swap accord
 | SLS | `HsBaSlsPipelineConfig_t` | `HsBaCreateDefaultSlsConfig` | `HsBaRunSlsPipeline(Async)` | `HsBaFreeSlsPipelineResult` |
 
 > SLS requires `export_lua_script` (a Lua export script shipped with your app); the result's `export_path` is the exported file path.
+
+---
+
+## 4. Lua Extension Function Registration
+
+Register custom Lua functions before running pipelines; they are automatically injected when each stage creates its Lua environment.
+
+### Unity (C# P/Invoke)
+
+```csharp
+// Delegate must be kept alive (static reference)
+private static HsBaSlicerNative.LuaRegFn s_luaReg;
+
+public static void RegisterLuaExtensions()
+{
+    s_luaReg = (IntPtr luaState) =>
+    {
+        // Note: this receives a lua_State* pointer.
+        // To operate on Lua from C#, pair with NLua/MoonSharp.
+        // Typically, custom functions are best written on the native C/C++ side.
+    };
+
+    HsBaSlicerNative.HsBaAdd3DFunction(s_luaReg);  // Slice/Support stages
+    // HsBaSlicerNative.HsBaAdd2DFunction(s_luaReg);
+    // HsBaSlicerNative.HsBaAddFileFunction(s_luaReg);
+
+    // Event callback
+    var namePtr = Marshal.StringToCoTaskMemUTF8("zipper.on_add");
+    HsBaSlicerNative.HsBaAddEventCallback(namePtr, s_luaReg);
+    // Do NOT free namePtr (the library retains the pointer)
+}
+```
+
+> **Best practice**: Since Lua C API operations are more natural on the native side, consider writing custom Lua functions as a C/C++ plugin (separate .dll/.so) that calls `HsBaAddXXXFunction` in its `DllMain`/`__attribute__((constructor))`, or invoke them explicitly during game initialization.
+
+### Unreal Engine (C++)
+
+```cpp
+#include "lua_register.h"
+#include <lua.hpp>
+
+static int l_my_ue_func(lua_State* L)
+{
+    // custom implementation
+    return 0;
+}
+
+static void registerMyLuaFunctions(lua_State* L)
+{
+    lua_register(L, "my_ue_func", l_my_ue_func);
+}
+
+// Call during module startup or GameInstance initialization
+void UHsBaSlicerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+    Super::Initialize(Collection);
+    initialize();
+
+    // Register Lua extension functions
+    HsBaAdd3DFunction(registerMyLuaFunctions);   // Slice/Support
+    HsBaAdd2DFunction(registerMyLuaFunctions);   // Support/Fill/SLA Output
+    // HsBaAddFileFunction(registerMyLuaFunctions);
+    // HsBaAddEventCallback("zipper.on_add", registerMyLuaFunctions);
+}
+```
+
+### Function Types Available Per Stage
+
+| Pipeline Stage | Registration Function | Description |
+| --- | --- | --- |
+| Slice | `HsBaAdd3DFunction` | 3D model operations |
+| Support | `HsBaAdd2DFunction` + `HsBaAdd3DFunction` | 2D + 3D |
+| Fill | `HsBaAdd2DFunction` | 2D polygons |
+| SLS Output | `HsBaAddFileFunction` | File output |
+| SLA Output | `HsBaAdd2DFunction` + `HsBaAddFileFunction` | 2D + file |
 
 ## FAQ
 

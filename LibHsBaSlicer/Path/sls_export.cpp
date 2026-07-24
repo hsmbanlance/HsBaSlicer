@@ -8,6 +8,7 @@
 
 #include "paths/imagespath.hpp"
 #include "fileoperator/LuaAdapter.hpp"
+#include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
 
 namespace HsBa::Slicer
 {
@@ -81,6 +82,9 @@ HSBA_SLICER_LIB_API bool SaveSlsPackageLua(const SlsPackage& pkg, const std::str
 #ifdef HSBA_USE_PGSQL
             RegisterLuaPostgreSQLAdapter(L);
 #endif
+            // Register external File functions for SLS output stage
+            for (auto& reg : GetFileFunctions())
+                reg(L);
         };
 
         images_path.Save(std::filesystem::path(output_zip), std::filesystem::path(lua_script),

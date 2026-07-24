@@ -1,6 +1,7 @@
 #include "path_generator.hpp"
 
 #include <cmath>
+#include <format>
 
 namespace HsBa::Slicer
 {
@@ -80,6 +81,29 @@ HSBA_SLICER_LIB_API std::unique_ptr<PointsPath> GenerateGCodePath(const std::vec
         {
             path->push_back(pt);
         }
+    }
+
+    return path;
+}
+
+HSBA_SLICER_LIB_API std::unique_ptr<GCodePath> GenerateGCodePathV2(const std::vector<LayerPathData>& layer_data,
+                                                                   const FdmPathConfig& config,
+                                                                   const GCodePrinterConfig& printer_config)
+{
+    auto path = std::make_unique<GCodePath>(printer_config);
+
+    for (const auto& layer : layer_data)
+    {
+        // Encode Z height in layer config string
+        std::string layer_config = std::format("Z:{:.6f}", layer.z_height);
+
+        // Combine all polygons for this layer: outlines + fills + supports
+        PolygonsD combined;
+        combined.insert(combined.end(), layer.outlines.begin(), layer.outlines.end());
+        combined.insert(combined.end(), layer.fills.begin(), layer.fills.end());
+        combined.insert(combined.end(), layer.supports.begin(), layer.supports.end());
+
+        path->push_back(layer_config, combined);
     }
 
     return path;

@@ -1,6 +1,7 @@
 #include "polygon_fill.hpp"
 
 #include "2D/PolygonFill.hpp"
+#include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
 
 namespace HsBa::Slicer
 {
@@ -30,7 +31,13 @@ HSBA_SLICER_LIB_API Polygons FillWithBorder(const Polygons& poly, double spacing
 HSBA_SLICER_LIB_API Polygons LuaCustomFillByFile(const Polygons& poly, const std::string& scriptPath,
                                                   const std::string& functionName, double lineThickness)
 {
-    return LuaCustomFill(poly, scriptPath, functionName, lineThickness);
+    // Compose external 2D functions into lua_reg callback
+    std::function<void(lua_State*)> reg = [](lua_State* L)
+    {
+        for (auto& f : Get2DFunctions())
+            f(L);
+    };
+    return LuaCustomFill(poly, scriptPath, functionName, lineThickness, reg);
 }
 
 }  // namespace HsBa::Slicer

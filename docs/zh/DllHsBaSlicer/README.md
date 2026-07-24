@@ -39,6 +39,7 @@ LibHsBaSlicer  ← C++ 静态库：预处理 / 切片 / 支撑 / 填充 / 路径
 | `fdm_pipeline.h` | FDM 全流程接口 |
 | `sla_pipeline.h` | SLA 全流程接口 |
 | `sls_pipeline.h` | SLS 全流程接口 |
+| `lua_register.h` | Lua 扩展函数注册接口（2D/3D/File/事件回调） |
 | `version_info.h` | 版本信息（JSON / XML 字符串） |
 | `pipelinetypes/pipeline_types.h` | 全部配置/结果结构体、枚举、回调类型与内联默认值初始化器（**无 DLL 依赖**，可独立包含） |
 
@@ -52,7 +53,7 @@ void initialize(void);   // 进程启动后调用一次
 
 ### FDM 流水线
 
-预处理 → 切片 → 支撑 → 填充 → 路径生成，输出 G-code。
+预处理 → 切片 → 支撑 → 填充 → 路径生成，输出标准 3D 打印机 G-code（支持 Marlin / RepRap / Klipper 固件格式）。
 
 ```c
 HsBaFdmPipelineConfig_t HsBaCreateDefaultConfig(void);
@@ -66,6 +67,29 @@ void HsBaRunFdmPipelineAsync(const HsBaFdmPipelineConfig_t* config,
 
 void HsBaFreePipelineResult(HsBaFdmPipelineResult_t* result);
 ```
+
+#### GCode 固件选择
+
+通过 `gcode_firmware` 字段指定目标固件，输出对应规范的 GCode：
+
+| 枚举值 | 固件 | 特性 |
+| --- | --- | --- |
+| `HSBA_GCODE_MARLIN` | Marlin（默认） | M104/M109 温度等待、G92 E0、M82/M83 |
+| `HSBA_GCODE_REPRAP` | RepRap/RRF | 额外 M106 风扇控制 |
+| `HSBA_GCODE_KLIPPER` | Klipper | SET_PRESSURE_ADVANCE、M220/M221、SET_FAN_SPEED |
+
+#### 打印机配置字段（新增）
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `gcode_firmware` | `HSBA_GCODE_MARLIN` | 目标固件类型 |
+| `nozzle_diameter` | 0.4 | 喷嘴直径 (mm) |
+| `filament_diameter` | 1.75 | 耗材直径 (mm) |
+| `nozzle_temp` | 200.0 | 喷嘴温度 (°C) |
+| `bed_temp` | 60.0 | 热床温度 (°C) |
+| `retract_length` | 1.0 | 回抽长度 (mm) |
+| `retract_speed` | 40.0 | 回抽速度 (mm/s) |
+| `first_layer_speed` | 20.0 | 首层速度 (mm/s) |
 
 ### SLA 流水线
 
@@ -111,6 +135,43 @@ char* HsBaGetVersionXml(void);
 void  HsBaFreeVersionString(char* str);
 ```
 
+### Lua 扩展函数注册
+
+在流水线运行前注册外部 Lua 函数，各阶段创建 Lua 环境时自动注入：
+
+```c
+typedef void (*HsBaLuaRegFn)(lua_State*);
+
+void HsBaAdd2DFunction(HsBaLuaRegFn func);       // 2D（Support、Fill、SLA Output）
+void HsBaAdd3DFunction(HsBaLuaRegFn func);       // 3D（Slice、Support）
+void HsBaAddFileFunction(HsBaLuaRegFn func);     // File（SLS Output、SLA Output）
+void HsBaAddEventCallback(const char* event_name, HsBaLuaRegFn func);  // 事件回调
+```
+
+示例：
+
+```c
+#include "initialize.h"
+#include "lua_register.h"
+#include <lua.hpp>
+
+static int my_custom_func(lua_State* L) {
+    // 自定义实现
+    return 0;
+}
+
+static void register_my_functions(lua_State* L) {
+    lua_register(L, "my_custom_func", my_custom_func);
+}
+
+int main(void) {
+    initialize();
+    HsBaAdd3DFunction(register_my_functions);  // 注册到切片/支撑阶段
+    // ... 运行流水线
+    return 0;
+}
+```
+
 ## 回调与线程模型
 
 ```c
@@ -146,6 +207,9 @@ int main(void)
     cfg.model_name  = "stanford_bunny";
     cfg.model_path  = "models/stanford_bunny.stl";
     cfg.output_path = "output/bunny.gcode";
+    cfg.gcode_firmware = HSBA_GCODE_MARLIN;  // 可选: HSBA_GCODE_REPRAP, HSBA_GCODE_KLIPPER
+    cfg.nozzle_temp = 210.0f;
+    cfg.bed_temp    = 60.0f;
 
     HsBaFdmPipelineResult_t r = HsBaRunFdmPipeline(&cfg, OnProgress, NULL);
     if (r.success) { /* 使用 r.gcode_content ... */ }

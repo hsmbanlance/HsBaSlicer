@@ -34,6 +34,15 @@ void FdmConfigToMsg(const HsBaFdmPipelineConfig_t& config, HsbaProto::msg_fdm_pi
     msg->set_fdm_pipe_config_travel_speed(config.travel_speed);
     msg->set_fdm_pipe_config_extrusion_multiplier(config.extrusion_multiplier);
 
+    msg->set_fdm_pipe_config_gcode_firmware(static_cast<HsbaProto::msg_fdm_gcode_firmware>(config.gcode_firmware));
+    msg->set_fdm_pipe_config_nozzle_diameter(config.nozzle_diameter);
+    msg->set_fdm_pipe_config_filament_diameter(config.filament_diameter);
+    msg->set_fdm_pipe_config_nozzle_temp(config.nozzle_temp);
+    msg->set_fdm_pipe_config_bed_temp(config.bed_temp);
+    msg->set_fdm_pipe_config_retract_length(config.retract_length);
+    msg->set_fdm_pipe_config_retract_speed(config.retract_speed);
+    msg->set_fdm_pipe_config_first_layer_speed(config.first_layer_speed);
+
     if (config.support_lua_script)
         msg->set_fdm_pipe_config_support_lua_script(config.support_lua_script);
     if (config.support_lua_func)

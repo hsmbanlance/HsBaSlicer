@@ -39,6 +39,7 @@ All public headers are exported to `include/HsBaSlicer/` in the install tree.
 | `fdm_pipeline.h` | FDM full-pipeline interface |
 | `sla_pipeline.h` | SLA full-pipeline interface |
 | `sls_pipeline.h` | SLS full-pipeline interface |
+| `lua_register.h` | Lua extension function registration (2D/3D/File/Event callbacks) |
 | `version_info.h` | Version information (JSON / XML strings) |
 | `pipelinetypes/pipeline_types.h` | All config/result structs, enums, callback types and inline default initializers (**no DLL dependency**, can be included standalone) |
 
@@ -52,7 +53,7 @@ void initialize(void);   // call once after process startup
 
 ### FDM Pipeline
 
-Preprocess -> Slice -> Support -> Fill -> Path Generation, outputs G-code.
+Preprocess -> Slice -> Support -> Fill -> Path Generation, outputs standard 3D printer G-code (supports Marlin / RepRap / Klipper firmware formats).
 
 ```c
 HsBaFdmPipelineConfig_t HsBaCreateDefaultConfig(void);
@@ -66,6 +67,29 @@ void HsBaRunFdmPipelineAsync(const HsBaFdmPipelineConfig_t* config,
 
 void HsBaFreePipelineResult(HsBaFdmPipelineResult_t* result);
 ```
+
+#### GCode Firmware Selection
+
+Use the `gcode_firmware` field to specify the target firmware for standards-compliant GCode output:
+
+| Enum Value | Firmware | Features |
+| --- | --- | --- |
+| `HSBA_GCODE_MARLIN` | Marlin (default) | M104/M109 temp wait, G92 E0, M82/M83 |
+| `HSBA_GCODE_REPRAP` | RepRap/RRF | Additional M106 fan control |
+| `HSBA_GCODE_KLIPPER` | Klipper | SET_PRESSURE_ADVANCE, M220/M221, SET_FAN_SPEED |
+
+#### Printer Configuration Fields (New)
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `gcode_firmware` | `HSBA_GCODE_MARLIN` | Target firmware type |
+| `nozzle_diameter` | 0.4 | Nozzle diameter (mm) |
+| `filament_diameter` | 1.75 | Filament diameter (mm) |
+| `nozzle_temp` | 200.0 | Nozzle temperature (°C) |
+| `bed_temp` | 60.0 | Bed temperature (°C) |
+| `retract_length` | 1.0 | Retraction length (mm) |
+| `retract_speed` | 40.0 | Retraction speed (mm/s) |
+| `first_layer_speed` | 20.0 | First layer speed (mm/s) |
 
 ### SLA Pipeline
 
@@ -111,6 +135,43 @@ char* HsBaGetVersionXml(void);
 void  HsBaFreeVersionString(char* str);
 ```
 
+### Lua Extension Function Registration
+
+Register external Lua functions before running pipelines; they are automatically injected when each stage creates its Lua environment:
+
+```c
+typedef void (*HsBaLuaRegFn)(lua_State*);
+
+void HsBaAdd2DFunction(HsBaLuaRegFn func);       // 2D (Support, Fill, SLA Output)
+void HsBaAdd3DFunction(HsBaLuaRegFn func);       // 3D (Slice, Support)
+void HsBaAddFileFunction(HsBaLuaRegFn func);     // File (SLS Output, SLA Output)
+void HsBaAddEventCallback(const char* event_name, HsBaLuaRegFn func);  // Event callback
+```
+
+Example:
+
+```c
+#include "initialize.h"
+#include "lua_register.h"
+#include <lua.hpp>
+
+static int my_custom_func(lua_State* L) {
+    // custom implementation
+    return 0;
+}
+
+static void register_my_functions(lua_State* L) {
+    lua_register(L, "my_custom_func", my_custom_func);
+}
+
+int main(void) {
+    initialize();
+    HsBaAdd3DFunction(register_my_functions);  // Register for slice/support stages
+    // ... run pipeline
+    return 0;
+}
+```
+
 ## Callback & Threading Model
 
 ```c
@@ -146,6 +207,9 @@ int main(void)
     cfg.model_name  = "stanford_bunny";
     cfg.model_path  = "models/stanford_bunny.stl";
     cfg.output_path = "output/bunny.gcode";
+    cfg.gcode_firmware = HSBA_GCODE_MARLIN;  // or: HSBA_GCODE_REPRAP, HSBA_GCODE_KLIPPER
+    cfg.nozzle_temp = 210.0f;
+    cfg.bed_temp    = 60.0f;
 
     HsBaFdmPipelineResult_t r = HsBaRunFdmPipeline(&cfg, OnProgress, NULL);
     if (r.success) { /* use r.gcode_content ... */ }

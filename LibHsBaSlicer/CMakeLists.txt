@@ -17,6 +17,8 @@
     Path/path_generator.cpp
     Path/sls_export.cpp
     Floor/sla_floor.cpp
+    Extends/LuaAddFunction.hpp
+    Extends/LuaAddFunction.cpp
     )
 else()
     add_library(LibHsBaSlicer SHARED 
@@ -37,6 +39,8 @@ else()
     Path/path_generator.cpp
     Path/sls_export.cpp
     Floor/sla_floor.cpp
+    Extends/LuaAddFunction.hpp
+    Extends/LuaAddFunction.cpp
     )
     # Define the export macro for Windows
     target_compile_definitions(LibHsBaSlicer PRIVATE HSBA_SLICER_EXPORTS)

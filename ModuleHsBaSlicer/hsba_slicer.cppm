@@ -43,6 +43,7 @@ module;
 #include "meshmodel/FullTopoModel.hpp"
 #include "paths/IPath.hpp"
 #include "paths/pointspath.hpp"
+#include "paths/gcodepath.hpp"
 #include "support/SupportConfig.hpp"
 #include "LibHsBaSlicer/export.h"
 #include "LibHsBaSlicer/version_info.hpp"
@@ -53,6 +54,7 @@ module;
 #include "LibHsBaSlicer/Path/path_generator.hpp"
 #include "LibHsBaSlicer/Path/sls_export.hpp"
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"
+#include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
 
 // ---- Module interface ----
 export module hsba.slicer;
@@ -85,6 +87,7 @@ using PolygonsD = Clipper2Lib::PathsD;
 // Re-export pipeline_types.h config/result types
 using ::HsBaFillMode_t;
 using ::HsBaSupportPattern_t;
+using ::HsBaGCodeFirmware_t;
 using ::HsBaSlaSupportPattern_t;
 using ::HsBaSlaImageType_t;
 using ::HsBaFdmPipelineConfig_t;
@@ -98,6 +101,9 @@ using ::HsBaSlsPipelineResult_t;
 using Support::SupportConfig;
 using Support::FdmSupportConfig;
 using Support::SlaSupportConfig;
+
+// Re-export Lua registration function type
+using LuaRegFunc = std::function<void(lua_State*)>;
 
 /// @brief Create default FDM pipeline config.
 HsBaFdmPipelineConfig_t defaultFdmConfig();
@@ -179,7 +185,7 @@ public:
     /// @brief Fill a single layer contour.
     inline Polygons fill(const Polygons& contour) const;
     /// @brief Generate G-code path from layer data.
-    inline std::unique_ptr<PointsPath> generatePath(const std::vector<LayerPathData>& data) const;
+    inline std::unique_ptr<GCodePath> generatePath(const std::vector<LayerPathData>& data) const;
 
 private:
     HsBaFdmPipelineConfig_t cfg_;
@@ -254,6 +260,22 @@ inline std::vector<PolygonsD> luaCustomSupport(const std::vector<PolygonsD>& lay
                                          const SupportConfig& config,
                                          std::string_view script,
                                          std::string_view func_name = "generate_support");
+
+// ===========================================================================
+// External Lua function registration
+// ===========================================================================
+
+/// @brief Register an external 2D Lua function (available in Support, Fill, SLA Output stages).
+inline void add2DFunction(LuaRegFunc func);
+
+/// @brief Register an external 3D Lua function (available in Slice, Support stages).
+inline void add3DFunction(LuaRegFunc func);
+
+/// @brief Register an external File Lua function (available in SLS Output, SLA Output stages).
+inline void addFileFunction(LuaRegFunc func);
+
+/// @brief Register an event callback by name (e.g. "zipper.on_add").
+inline void addEventCallback(const std::string& event_name, LuaRegFunc func);
 
 // ===========================================================================
 // Version
@@ -404,7 +426,7 @@ Polygons FdmPipeline::fill(const Polygons& contour) const
     return FillWithBorder(contour, cfg_.fill_spacing, cfg_.wall_count, mode, cfg_.fill_angle);
 }
 
-std::unique_ptr<PointsPath> FdmPipeline::generatePath(const std::vector<LayerPathData>& data) const
+std::unique_ptr<GCodePath> FdmPipeline::generatePath(const std::vector<LayerPathData>& data) const
 {
     FdmPathConfig pc;
     pc.layer_height         = cfg_.layer_height;
@@ -413,7 +435,22 @@ std::unique_ptr<PointsPath> FdmPipeline::generatePath(const std::vector<LayerPat
     pc.travel_speed         = cfg_.travel_speed;
     pc.extrusion_multiplier = cfg_.extrusion_multiplier;
     pc.units                = GCodeUnits::mm;
-    return GenerateGCodePath(data, pc);
+
+    GCodePrinterConfig printer_cfg;
+    printer_cfg.nozzle_diameter       = cfg_.nozzle_diameter;
+    printer_cfg.filament_diameter     = cfg_.filament_diameter;
+    printer_cfg.nozzle_temp           = cfg_.nozzle_temp;
+    printer_cfg.bed_temp              = cfg_.bed_temp;
+    printer_cfg.retract_length        = cfg_.retract_length;
+    printer_cfg.retract_speed         = cfg_.retract_speed;
+    printer_cfg.print_speed           = cfg_.print_speed;
+    printer_cfg.travel_speed          = cfg_.travel_speed;
+    printer_cfg.first_layer_speed     = cfg_.first_layer_speed;
+    printer_cfg.layer_height          = cfg_.layer_height;
+    printer_cfg.line_width            = cfg_.line_width;
+    printer_cfg.extrusion_multiplier  = cfg_.extrusion_multiplier;
+
+    return GenerateGCodePathV2(data, pc, printer_cfg);
 }
 
 FdmResult FdmPipeline::run(const Model& model) const
@@ -455,11 +492,12 @@ FdmResult FdmPipeline::run(const Model& model) const
 
     FdmResult result;
     result.total_layers = total_layers;
-    result.gcode        = path->ToString();
+    auto firmware = static_cast<GCodeFirmware>(static_cast<int>(cfg_.gcode_firmware));
+    result.gcode        = path->ToGCode(firmware);
 
     // 6. Optional save to file
     if (cfg_.output_path)
-        path->Save(cfg_.output_path);
+        path->SaveGCode(cfg_.output_path, firmware);
 
     return result;
 }
@@ -622,6 +660,18 @@ std::vector<PolygonsD> luaCustomSupport(const std::vector<PolygonsD>& layers,
                                          std::string_view func_name)
 {
     return GenerateAllLuaSupport(layers, config, script, func_name);
+}
+
+// ===========================================================================
+// External Lua function registration
+// ===========================================================================
+
+void add2DFunction(LuaRegFunc func) { Add2DFunctions(std::move(func)); }
+void add3DFunction(LuaRegFunc func) { Add3DFunctions(std::move(func)); }
+void addFileFunction(LuaRegFunc func) { AddFileFunctions(std::move(func)); }
+void addEventCallback(const std::string& event_name, LuaRegFunc func)
+{
+    AddEventCallback(event_name, std::move(func));
 }
 
 // ===========================================================================

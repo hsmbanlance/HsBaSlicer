@@ -8,6 +8,7 @@
 #include "../export.h"
 #include "2D/FloatPolygons.hpp"
 #include "2D/IntPolygon.hpp"
+#include "paths/gcodepath.hpp"
 #include "paths/pointspath.hpp"
 
 namespace HsBa::Slicer
@@ -44,6 +45,17 @@ struct LayerPathData
  */
 HSBA_SLICER_LIB_API std::unique_ptr<PointsPath> GenerateGCodePath(const std::vector<LayerPathData>& layer_data,
                                                                   const FdmPathConfig& config);
+
+/**
+ * @brief Generate G-code paths with firmware-specific output (V2).
+ * @param layer_data Per-layer path data (outlines, fills, supports).
+ * @param config FDM path configuration.
+ * @param printer_config Printer configuration for GCode generation.
+ * @return GCodePath object supporting multi-firmware output.
+ */
+HSBA_SLICER_LIB_API std::unique_ptr<GCodePath> GenerateGCodePathV2(const std::vector<LayerPathData>& layer_data,
+                                                                   const FdmPathConfig& config,
+                                                                   const GCodePrinterConfig& printer_config);
 
 /**
  * @brief Convert PolygonsD to G-point sequence (helper function).
