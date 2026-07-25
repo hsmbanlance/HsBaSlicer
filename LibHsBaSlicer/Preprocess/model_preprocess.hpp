@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
@@ -81,6 +82,107 @@ HSBA_SLICER_LIB_API ModelInfo GetModelInfo(const std::string& name);
  * @param name Model name.
  */
 HSBA_SLICER_LIB_API void RemoveModel(const std::string& name);
+
+/**
+ * @brief Insert a pre-constructed model into the pool.
+ * @param name Unique model name.
+ * @param model Shared pointer to the model.
+ * @return The same shared pointer.
+ * @throws InvalidArgumentError If name already exists.
+ */
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> InsertModel(const std::string& name, std::shared_ptr<IModel> model);
+
+/**
+ * @brief Check whether a model with the given name exists.
+ * @param name Model name.
+ * @return true if the model exists.
+ */
+HSBA_SLICER_LIB_API bool ContainsModel(const std::string& name);
+
+/**
+ * @brief Return the number of models currently in the pool.
+ */
+HSBA_SLICER_LIB_API std::size_t ModelCount();
+
+/**
+ * @brief Return the names of all models in the pool.
+ */
+HSBA_SLICER_LIB_API std::vector<std::string> GetModelNames();
+
+/**
+ * @brief Clean up models that are no longer referenced externally.
+ * @return Number of models removed.
+ */
+HSBA_SLICER_LIB_API std::size_t CleanupModels();
+
+#ifdef USE_CGAL
+// ----- Advanced model operations (require CGAL, uses IGL for mesh booleans) -----
+
+/**
+ * @brief Perform a thick-solid (shell) operation on an OcctModel.
+ * @param sourceName Name of the source model (must be an OcctModel).
+ * @param resultName Name to store the result under.
+ * @param thickness Shell thickness (positive = inward).
+ * @return Shared pointer to the resulting model.
+ * @throws RuntimeError If the source is not an OcctModel or OCCT is unavailable.
+ */
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> ThickSolidModel(const std::string& sourceName,
+                                                            const std::string& resultName, float thickness);
+
+/**
+ * @brief Perform a thick-solid operation, excluding specified faces.
+ * @param sourceName Name of the source model (must be an OcctModel).
+ * @param resultName Name to store the result under.
+ * @param closingFaces Faces to leave open (specified as vertex loops).
+ * @param thickness Shell thickness.
+ * @return Shared pointer to the resulting model.
+ */
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> ThickSolidModel(
+    const std::string& sourceName, const std::string& resultName,
+    const std::vector<std::vector<Eigen::Vector3f>>& closingFaces, float thickness);
+
+/**
+ * @brief Boolean union of two models.
+ * @param leftName Left model name.
+ * @param rightName Right model name.
+ * @param resultName Name to store the result under.
+ * @return Shared pointer to the resulting model.
+ */
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanUnion(const std::string& leftName, const std::string& rightName,
+                                                         const std::string& resultName);
+
+/**
+ * @brief Boolean intersection of two models.
+ * @param leftName Left model name.
+ * @param rightName Right model name.
+ * @param resultName Name to store the result under.
+ * @return Shared pointer to the resulting model.
+ */
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanIntersection(const std::string& leftName,
+                                                                const std::string& rightName,
+                                                                const std::string& resultName);
+
+/**
+ * @brief Boolean difference of two models (left - right).
+ * @param leftName Left model name.
+ * @param rightName Right model name.
+ * @param resultName Name to store the result under.
+ * @return Shared pointer to the resulting model.
+ */
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanDifference(const std::string& leftName,
+                                                              const std::string& rightName,
+                                                              const std::string& resultName);
+
+/**
+ * @brief Boolean XOR of two models.
+ * @param leftName Left model name.
+ * @param rightName Right model name.
+ * @param resultName Name to store the result under.
+ * @return Shared pointer to the resulting model.
+ */
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanXor(const std::string& leftName, const std::string& rightName,
+                                                       const std::string& resultName);
+#endif  // USE_CGAL
 
 }  // namespace HsBa::Slicer
 

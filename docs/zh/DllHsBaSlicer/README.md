@@ -36,9 +36,11 @@ LibHsBaSlicer  ← C++ 静态库：预处理 / 切片 / 支撑 / 填充 / 路径
 | --- | --- |
 | `dllexport.h` | `HSBA_SLICER_API` 导出宏 |
 | `initialize.h` | `initialize()` 全局初始化（必须最先调用） |
+| `model_preprocess.h` | 模型预处理接口（加载/变换/查询/布尔运算/抽壳） |
 | `fdm_pipeline.h` | FDM 全流程接口 |
 | `sla_pipeline.h` | SLA 全流程接口 |
 | `sls_pipeline.h` | SLS 全流程接口 |
+| `lua_register.h` | Lua 扩展函数注册接口（2D/3D/File/事件回调） |
 | `version_info.h` | 版本信息（JSON / XML 字符串） |
 | `pipelinetypes/pipeline_types.h` | 全部配置/结果结构体、枚举、回调类型与内联默认值初始化器（**无 DLL 依赖**，可独立包含） |
 
@@ -50,9 +52,92 @@ LibHsBaSlicer  ← C++ 静态库：预处理 / 切片 / 支撑 / 填充 / 路径
 void initialize(void);   // 进程启动后调用一次
 ```
 
+### 模型预处理
+
+独立的模型管理接口，支持在流水线运行前/外单独操作模型。模型通过不透明句柄（`void*`）引用，内部引用计数管理生命周期。
+
+#### 基本操作
+
+```c
+void* HsBaLoadModel(const char* name, const char* file_path);  // 加载模型（IGL: STL/OBJ/PLY/OFF; OCCT: STEP/IGES/VRML/BREP）
+void* HsBaGetModel(const char* name);                          // 获取已加载模型
+void  HsBaRemoveModel(const char* name);                       // 从池中移除模型
+int   HsBaContainsModel(const char* name);                     // 检查模型是否存在
+int   HsBaModelCount(void);                                    // 池中模型数量
+int   HsBaCleanupModels(void);                                 // 清理无外部引用的模型
+```
+
+#### 变换操作
+
+```c
+int HsBaTranslateModel(const char* name, float tx, float ty, float tz);       // 平移
+int HsBaRotateModel(const char* name, float qx, float qy, float qz, float qw); // 旋转（四元数）
+int HsBaScaleModelUniform(const char* name, float scale);                      // 等比缩放
+int HsBaScaleModel(const char* name, float sx, float sy, float sz);            // 非等比缩放
+```
+
+#### 查询操作
+
+```c
+int HsBaGetModelInfo(const char* name, float out_bbox_min[3], float out_bbox_max[3], float* out_volume);
+```
+
+#### 高级操作（需要 CGAL/OCCT）
+
+```c
+void* HsBaThickSolidModel(const char* source_name, const char* result_name, float thickness);  // 抽壳（需 OCCT BRep 模型）
+void* HsBaBooleanUnion(const char* left_name, const char* right_name, const char* result_name);        // 布尔并集
+void* HsBaBooleanIntersection(const char* left_name, const char* right_name, const char* result_name); // 布尔交集
+void* HsBaBooleanDifference(const char* left_name, const char* right_name, const char* result_name);   // 布尔差集
+void* HsBaBooleanXor(const char* left_name, const char* right_name, const char* result_name);          // 布尔异或
+```
+
+#### 句柄管理
+
+```c
+void HsBaReleaseModelHandle(void* handle);  // 释放句柄引用（模型仍留在池中）
+```
+
+> **内核路由策略**：布尔运算优先使用 OCCT（BRep-BRep），若模型为网格则回退到 IGL/CGAL；抽壳仅支持 OCCT BRep 模型。高级操作在编译期由 `USE_CGAL` 宏控制，不可用时返回 NULL。
+
+#### 模型预处理示例
+
+```c
+#include "initialize.h"
+#include "model_preprocess.h"
+
+int main(void)
+{
+    initialize();
+
+    // Load mesh model (IGL)
+    void* h1 = HsBaLoadModel("part_a", "models/part_a.stl");
+    void* h2 = HsBaLoadModel("part_b", "models/part_b.stl");
+
+    // Transform
+    HsBaTranslateModel("part_b", 10.0f, 0.0f, 0.0f);
+
+    // Boolean union (IGL/CGAL fallback for mesh)
+    void* merged = HsBaBooleanUnion("part_a", "part_b", "merged");
+
+    // Query
+    float bmin[3], bmax[3], vol;
+    HsBaGetModelInfo("merged", bmin, bmax, &vol);
+
+    // Release handles
+    HsBaReleaseModelHandle(h1);
+    HsBaReleaseModelHandle(h2);
+    HsBaReleaseModelHandle(merged);
+
+    // Cleanup when done
+    HsBaCleanupModels();
+    return 0;
+}
+```
+
 ### FDM 流水线
 
-预处理 → 切片 → 支撑 → 填充 → 路径生成，输出 G-code。
+预处理 → 切片 → 支撑 → 填充 → 路径生成，输出标准 3D 打印机 G-code（支持 Marlin / RepRap / Klipper 固件格式）。
 
 ```c
 HsBaFdmPipelineConfig_t HsBaCreateDefaultConfig(void);
@@ -66,6 +151,29 @@ void HsBaRunFdmPipelineAsync(const HsBaFdmPipelineConfig_t* config,
 
 void HsBaFreePipelineResult(HsBaFdmPipelineResult_t* result);
 ```
+
+#### GCode 固件选择
+
+通过 `gcode_firmware` 字段指定目标固件，输出对应规范的 GCode：
+
+| 枚举值 | 固件 | 特性 |
+| --- | --- | --- |
+| `HSBA_GCODE_MARLIN` | Marlin（默认） | M104/M109 温度等待、G92 E0、M82/M83 |
+| `HSBA_GCODE_REPRAP` | RepRap/RRF | 额外 M106 风扇控制 |
+| `HSBA_GCODE_KLIPPER` | Klipper | SET_PRESSURE_ADVANCE、M220/M221、SET_FAN_SPEED |
+
+#### 打印机配置字段（新增）
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `gcode_firmware` | `HSBA_GCODE_MARLIN` | 目标固件类型 |
+| `nozzle_diameter` | 0.4 | 喷嘴直径 (mm) |
+| `filament_diameter` | 1.75 | 耗材直径 (mm) |
+| `nozzle_temp` | 200.0 | 喷嘴温度 (°C) |
+| `bed_temp` | 60.0 | 热床温度 (°C) |
+| `retract_length` | 1.0 | 回抽长度 (mm) |
+| `retract_speed` | 40.0 | 回抽速度 (mm/s) |
+| `first_layer_speed` | 20.0 | 首层速度 (mm/s) |
 
 ### SLA 流水线
 
@@ -111,6 +219,43 @@ char* HsBaGetVersionXml(void);
 void  HsBaFreeVersionString(char* str);
 ```
 
+### Lua 扩展函数注册
+
+在流水线运行前注册外部 Lua 函数，各阶段创建 Lua 环境时自动注入：
+
+```c
+typedef void (*HsBaLuaRegFn)(lua_State*);
+
+void HsBaAdd2DFunction(HsBaLuaRegFn func);       // 2D（Support、Fill、SLA Output）
+void HsBaAdd3DFunction(HsBaLuaRegFn func);       // 3D（Slice、Support）
+void HsBaAddFileFunction(HsBaLuaRegFn func);     // File（SLS Output、SLA Output）
+void HsBaAddEventCallback(const char* event_name, HsBaLuaRegFn func);  // 事件回调
+```
+
+示例：
+
+```c
+#include "initialize.h"
+#include "lua_register.h"
+#include <lua.hpp>
+
+static int my_custom_func(lua_State* L) {
+    // 自定义实现
+    return 0;
+}
+
+static void register_my_functions(lua_State* L) {
+    lua_register(L, "my_custom_func", my_custom_func);
+}
+
+int main(void) {
+    initialize();
+    HsBaAdd3DFunction(register_my_functions);  // 注册到切片/支撑阶段
+    // ... 运行流水线
+    return 0;
+}
+```
+
 ## 回调与线程模型
 
 ```c
@@ -128,7 +273,8 @@ typedef void (*HsBaResultCallback)(HsBaFdmPipelineResult_t result, void* user_da
 1. `HsBaCreateDefault*Config()` 返回**值类型**结构体，无需释放；字符串字段指向的内存由调用方保证生命周期；
 2. 结果结构体中的 `gcode_content` / `export_path` / `error_message` 由库内部分配，**必须**调用对应的 `HsBaFree*PipelineResult()` 释放；
 3. 版本字符串必须用 `HsBaFreeVersionString()` 释放；
-4. `pipeline_types.h` 还提供无 DLL 依赖的内联初始化器 `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()`，便于纯头文件场景（如 P/Invoke 结构体对照）使用。
+4. 模型句柄（`HsBaLoadModel` / `HsBaGetModel` / `HsBaBoolean*` / `HsBaThickSolidModel` 返回的 `void*`）必须用 `HsBaReleaseModelHandle()` 释放引用；
+5. `pipeline_types.h` 还提供无 DLL 依赖的内联初始化器 `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()`，便于纯头文件场景（如 P/Invoke 结构体对照）使用。
 
 ## 最小示例（C/C++）
 
@@ -146,6 +292,9 @@ int main(void)
     cfg.model_name  = "stanford_bunny";
     cfg.model_path  = "models/stanford_bunny.stl";
     cfg.output_path = "output/bunny.gcode";
+    cfg.gcode_firmware = HSBA_GCODE_MARLIN;  // 可选: HSBA_GCODE_REPRAP, HSBA_GCODE_KLIPPER
+    cfg.nozzle_temp = 210.0f;
+    cfg.bed_temp    = 60.0f;
 
     HsBaFdmPipelineResult_t r = HsBaRunFdmPipeline(&cfg, OnProgress, NULL);
     if (r.success) { /* 使用 r.gcode_content ... */ }

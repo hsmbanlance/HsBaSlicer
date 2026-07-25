@@ -41,6 +41,16 @@ extern "C"
     } HsBaSupportPattern_t;
 
     /**
+     * @brief GCode output firmware target (C-compatible enum).
+     */
+    typedef enum HsBaGCodeFirmware
+    {
+        HSBA_GCODE_MARLIN = 0,   ///< Marlin firmware (most common)
+        HSBA_GCODE_REPRAP = 1,   ///< RepRap / RRF firmware
+        HSBA_GCODE_KLIPPER = 2   ///< Klipper firmware
+    } HsBaGCodeFirmware_t;
+
+    /**
      * @brief FDM pipeline configuration (C-compatible struct).
      */
     typedef struct HsBaFdmPipelineConfig
@@ -77,6 +87,16 @@ extern "C"
         float print_speed;           ///< Print speed (mm/s), default 50.0
         float travel_speed;          ///< Travel speed (mm/s), default 100.0
         float extrusion_multiplier;  ///< Extrusion multiplier, default 1.0
+
+        /* GCode Output Configuration */
+        HsBaGCodeFirmware_t gcode_firmware;  ///< Target firmware, default HSBA_GCODE_MARLIN
+        float nozzle_diameter;               ///< Nozzle diameter (mm), default 0.4
+        float filament_diameter;             ///< Filament diameter (mm), default 1.75
+        float nozzle_temp;                   ///< Nozzle temperature (C), default 200.0
+        float bed_temp;                      ///< Bed temperature (C), default 60.0
+        float retract_length;                ///< Retraction length (mm), default 1.0
+        float retract_speed;                 ///< Retraction speed (mm/s), default 40.0
+        float first_layer_speed;             ///< First layer speed (mm/s), default 20.0
 
         /* Lua Custom Configuration */
         const char* support_lua_script;   ///< Support Lua script path (NULL to use built-in algorithm)
@@ -320,6 +340,14 @@ extern "C"
         cfg.print_speed = 50.0f;
         cfg.travel_speed = 100.0f;
         cfg.extrusion_multiplier = 1.0f;
+        cfg.gcode_firmware = HSBA_GCODE_MARLIN;
+        cfg.nozzle_diameter = 0.4f;
+        cfg.filament_diameter = 1.75f;
+        cfg.nozzle_temp = 200.0f;
+        cfg.bed_temp = 60.0f;
+        cfg.retract_length = 1.0f;
+        cfg.retract_speed = 40.0f;
+        cfg.first_layer_speed = 20.0f;
         cfg.support_lua_script = 0;
         cfg.support_lua_func = 0;
         cfg.infill_lua_script = 0;

@@ -11,6 +11,7 @@
 #include "2D/LuaAdapter.hpp"
 #include "2D/PolygonFill.hpp"
 #include "base/error.hpp"
+#include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
 #include "paths/imagespath.hpp"
 #include "utils/LuaNewObject.hpp"
 
@@ -450,9 +451,16 @@ HSBA_SLICER_LIB_API bool SaveSlaPackageLua(const SlaPackage& pkg, const std::str
             }
         }
 
-        std::function<void(lua_State*)> no_reg;
+        std::function<void(lua_State*)> sla_reg = [](lua_State* L)
+        {
+            // Register external 2D+File functions for SLA output stage
+            for (auto& reg : Get2DFunctions())
+                reg(L);
+            for (auto& reg : GetFileFunctions())
+                reg(L);
+        };
         images_path.Save(std::filesystem::path(output_zip), std::string_view(lua_script),
-                         std::string_view(lua_func), no_reg);
+                         std::string_view(lua_func), sla_reg);
         return true;
     }
     catch (...)

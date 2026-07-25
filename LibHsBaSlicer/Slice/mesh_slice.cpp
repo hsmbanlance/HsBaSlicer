@@ -1,5 +1,7 @@
 ﻿#include "mesh_slice.hpp"
 
+#include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
+
 namespace HsBa::Slicer
 {
 HSBA_SLICER_LIB_API Polygons Slice(const IModel& model, const float height, double tolerance)
@@ -16,13 +18,13 @@ HSBA_SLICER_LIB_API UnSafePolygons UnSafeSlice(const IModel& model, const float 
 HSBA_SLICER_LIB_API Polygons SliceLua(const IModel& model, const std::string& script, const float height)
 {
     auto topo_mesh = std::make_unique<FullTopoModel>(FullTopoModel(model));
-    return topo_mesh->SliceLua(script, height);
+    return topo_mesh->SliceLua(script, height, Get3DFunctions());
 }
 
 HSBA_SLICER_LIB_API UnSafePolygons UnSafeSliceLua(const IModel& model, const std::string& script, const float height)
 {
     auto topo_mesh = std::make_unique<FullTopoModel>(FullTopoModel(model));
-    return topo_mesh->UnSafeSliceLua(script, height);
+    return topo_mesh->UnSafeSliceLua(script, height, Get3DFunctions());
 }
 
 HSBA_SLICER_LIB_API PolygonsD NormalizeUnSafePolygons(const UnSafePolygons& unsafe_polys)

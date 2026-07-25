@@ -32,7 +32,7 @@ public:
                       std::string_view funcName, const std::function<void(lua_State*)>& lua_reg = {}) const override;
     void push_back(const std::string& layerConfig, const PolygonsD& layer);
 
-private:
+protected:
     struct LayersData
     {
         std::string layerConfig;

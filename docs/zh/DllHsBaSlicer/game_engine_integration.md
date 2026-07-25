@@ -104,6 +104,22 @@ public static class HsBaSlicerNative
 
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
     public static extern void HsBaFreePipelineResult(ref FdmPipelineResult result);
+
+    // ---- Lua 扩展函数注册 ----
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void LuaRegFn(IntPtr luaState);   // void (*)(lua_State*)
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void HsBaAdd2DFunction(LuaRegFn func);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void HsBaAdd3DFunction(LuaRegFn func);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void HsBaAddFileFunction(LuaRegFn func);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void HsBaAddEventCallback(IntPtr eventName, LuaRegFn func);
 }
 ```
 
@@ -356,6 +372,81 @@ Unity 与 UE 中调用 SLA / SLS 的模式与 FDM 相同，对照替换即可：
 | SLS | `HsBaSlsPipelineConfig_t` | `HsBaCreateDefaultSlsConfig` | `HsBaRunSlsPipeline(Async)` | `HsBaFreeSlsPipelineResult` |
 
 > SLS 的 `export_lua_script` 必须提供（指向随包分发的 Lua 导出脚本），结果 `export_path` 为导出文件路径。
+
+---
+
+## 四、Lua 扩展函数注册
+
+在流水线运行前注册自定义 Lua 函数，各阶段创建 Lua 环境时自动注入。
+
+### Unity（C# P/Invoke）
+
+```csharp
+// 委托必须保活（静态引用）
+private static HsBaSlicerNative.LuaRegFn s_luaReg;
+
+public static void RegisterLuaExtensions()
+{
+    s_luaReg = (IntPtr luaState) =>
+    {
+        // 注意：此处收到的是 lua_State* 指针
+        // 若需在 C# 侧操作 Lua，可配合 NLua/MoonSharp 等库使用
+        // 通常建议将自定义函数写在原生 C/C++ 侧
+    };
+
+    HsBaSlicerNative.HsBaAdd3DFunction(s_luaReg);  // 切片/支撑阶段
+    // HsBaSlicerNative.HsBaAdd2DFunction(s_luaReg);
+    // HsBaSlicerNative.HsBaAddFileFunction(s_luaReg);
+
+    // 事件回调
+    var namePtr = Marshal.StringToCoTaskMemUTF8("zipper.on_add");
+    HsBaSlicerNative.HsBaAddEventCallback(namePtr, s_luaReg);
+    // namePtr 不可释放（库内部保留指针）
+}
+```
+
+> **实践建议**：由于 Lua C API 操作在原生侧更自然，建议将自定义 Lua 函数编写为 C/C++ 插件（单独 .dll/.so），在其 `DllMain`/`__attribute__((constructor))` 中调用 `HsBaAddXXXFunction`，或在游戏初始化时显式调用。
+
+### Unreal Engine（C++）
+
+```cpp
+#include "lua_register.h"
+#include <lua.hpp>
+
+static int l_my_ue_func(lua_State* L)
+{
+    // 自定义实现
+    return 0;
+}
+
+static void registerMyLuaFunctions(lua_State* L)
+{
+    lua_register(L, "my_ue_func", l_my_ue_func);
+}
+
+// 在模块启动或 GameInstance 初始化时调用
+void UHsBaSlicerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+    Super::Initialize(Collection);
+    initialize();
+
+    // 注册 Lua 扩展函数
+    HsBaAdd3DFunction(registerMyLuaFunctions);   // 切片/支撑
+    HsBaAdd2DFunction(registerMyLuaFunctions);   // 支撑/填充/SLA输出
+    // HsBaAddFileFunction(registerMyLuaFunctions);
+    // HsBaAddEventCallback("zipper.on_add", registerMyLuaFunctions);
+}
+```
+
+### 各阶段可用函数类型
+
+| 流水线阶段 | 注册函数 | 说明 |
+| --- | --- | --- |
+| Slice | `HsBaAdd3DFunction` | 3D 模型操作 |
+| Support | `HsBaAdd2DFunction` + `HsBaAdd3DFunction` | 2D + 3D |
+| Fill | `HsBaAdd2DFunction` | 2D 多边形 |
+| SLS Output | `HsBaAddFileFunction` | 文件输出 |
+| SLA Output | `HsBaAdd2DFunction` + `HsBaAddFileFunction` | 2D + 文件 |
 
 ## 常见问题
 

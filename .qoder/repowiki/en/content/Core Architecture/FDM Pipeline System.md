@@ -15,10 +15,16 @@
 - [fdm_support.hpp](file://LibHsBaSlicer/Support/fdm_support.hpp)
 - [polygon_fill.hpp](file://LibHsBaSlicer/Fill/polygon_fill.hpp)
 - [path_generator.hpp](file://LibHsBaSlicer/Path/path_generator.hpp)
+- [path_generator.cpp](file://LibHsBaSlicer/Path/path_generator.cpp)
+- [gcodepath.hpp](file://paths/gcodepath.hpp)
+- [gcodepath.cpp](file://paths/gcodepath.cpp)
+- [layerspath.hpp](file://paths/layerspath.hpp)
+- [pointspath.hpp](file://paths/pointspath.hpp)
+- [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
+- [hsba_slicer.cppm](file://ModuleHsBaSlicer/hsba_slicer.cppm)
 - [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp)
 - [coroutine.hpp](file://base/coroutine.hpp)
 - [IModel.hpp](file://base/IModel.hpp)
-- [pointspath.hpp](file://paths/pointspath.hpp)
 - [SupportConfig.hpp](file://support/SupportConfig.hpp)
 - [version_info.hpp](file://LibHsBaSlicer/version_info.hpp)
 - [version_info.cpp](file://LibHsBaSlicer/version_info.cpp)
@@ -28,10 +34,11 @@
 
 ## Update Summary
 **Changes Made**
-- Updated architectural overview to reflect use of LibHsBaSlicer public API instead of direct internal access
-- Added comprehensive version information module documentation
-- Enhanced separation of concerns explanation between DllHsBaSlicer and LibHsBaSlicer layers
-- Updated dependency analysis to show proper API boundaries
+- Added comprehensive documentation for the new GCodePath class with multi-firmware support (Marlin, RepRap, Klipper)
+- Updated path generation section to document the new GenerateGCodePathV2 function and printer configuration parameters
+- Enhanced architecture overview to show the integration between the old PointsPath system and new GCodePath system
+- Added detailed documentation for firmware-specific GCode output generation and Lua post-processing capabilities
+- Updated pipeline orchestration to reflect the new GCode firmware selection mechanism
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -52,7 +59,8 @@ The design emphasizes:
 - A C-compatible interface for cross-language integration.
 - Coroutine-based Task abstraction to simplify async composition and error handling.
 - Independent model management per pipeline instance to avoid conflicts during concurrent execution.
-- **Updated** Strict adherence to LibHsBaSlicer public API boundaries, preventing direct access to internal implementations.
+- **Updated** Multi-firmware GCode output support with Marlin, RepRap, and Klipper compatibility.
+- **Updated** Enhanced printer configuration system with nozzle, filament, temperature, and retraction parameters.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -71,7 +79,7 @@ A --> C["DllHsBaSlicer/CMakeLists.txt"]
 B --> D["LibHsBaSlicer/* (Preprocess, Slice, Support, Fill, Path)"]
 C --> E["DllHsBaSlicer/fdm_pipeline.*"]
 D --> F["base/* (IModel, coroutine)"]
-D --> G["paths/* (PointsPath)"]
+D --> G["paths/* (PointsPath, GCodePath)"]
 D --> H["support/* (SupportConfig)"]
 E --> I["LibHsBaSlicer Public API"]
 I --> J["LibHsBaSlicer Internal Modules"]
@@ -92,27 +100,27 @@ J --> K["preprocess/ModelLoader.*"]
 - Slicing: Convert 3D models into 2D polygons at specified Z heights.
 - Support: Generate layer-wise supports based on overhang detection and configuration.
 - Infill: Fill polygonal layers with various patterns and borders.
-- Path Generation: Convert outlines, fills, and supports into G-code point sequences.
+- **Updated** Path Generation: Convert outlines, fills, and supports into G-code point sequences with multi-firmware support.
 - Pipeline Orchestration: Compose steps into a single task with progress callbacks and error handling.
 
 Key public headers:
 - Preprocess: [model_preprocess.hpp:1-88](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L1-L88)
 - Support: [fdm_support.hpp:1-36](file://LibHsBaSlicer/Support/fdm_support.hpp#L1-L36)
 - Fill: [polygon_fill.hpp:1-36](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L1-L36)
-- Path: [path_generator.hpp:1-62](file://LibHsBaSlicer/Path/path_generator.hpp#L1-L62)
+- Path: [path_generator.hpp:1-74](file://LibHsBaSlicer/Path/path_generator.hpp#L1-L74)
 - Slice: [mesh_slice.hpp:1-28](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L1-L28)
 
 **Section sources**
 - [model_preprocess.hpp:1-88](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L1-L88)
 - [fdm_support.hpp:1-36](file://LibHsBaSlicer/Support/fdm_support.hpp#L1-L36)
 - [polygon_fill.hpp:1-36](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L1-L36)
-- [path_generator.hpp:1-62](file://LibHsBaSlicer/Path/path_generator.hpp#L1-L62)
+- [path_generator.hpp:1-74](file://LibHsBaSlicer/Path/path_generator.hpp#L1-L74)
 - [mesh_slice.hpp:1-28](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L1-L28)
 
 ## Architecture Overview
 The FDM pipeline composes multiple stages into a single Task. The C API exposes synchronous and asynchronous entry points. Internally, a coroutine-based function executes each stage sequentially while emitting progress updates.
 
-**Updated** The architecture now strictly adheres to LibHsBaSlicer public API boundaries, ensuring proper separation of concerns and maintainability.
+**Updated** The architecture now includes a dual path generation system: the legacy PointsPath for basic G-code output and the new GCodePath for firmware-specific output with advanced printer configuration.
 
 ```mermaid
 sequenceDiagram
@@ -125,7 +133,8 @@ participant Pre as "Preprocess"
 participant Slice as "Slice"
 participant Sup as "Support"
 participant Fill as "Fill"
-participant Path as "Path Gen"
+participant PathGen as "Path Gen (V2)"
+participant GCodePath as "GCodePath"
 Caller->>CAPI : HsBaRunFdmPipeline(config, callback, user_data)
 CAPI->>Pipeline : BuildConfig + RunPipelineAsync()
 Pipeline->>LibAPI : GetModel/LoadModel (Public API)
@@ -148,10 +157,12 @@ Pipeline->>LibAPI : FillWithBorder (Public API)
 LibAPI->>Fill : Internal filling
 Fill-->>LibAPI : PolygonsD fills
 LibAPI-->>Pipeline : PolygonsD fills
-Pipeline->>LibAPI : GenerateGCodePath (Public API)
-LibAPI->>Path : Internal path generation
-Path-->>LibAPI : PointsPath
-LibAPI-->>Pipeline : PointsPath
+Pipeline->>PathGen : GenerateGCodePathV2(layer_data, config, printer_config)
+PathGen->>GCodePath : Create GCodePath with printer_config
+GCodePath-->>PathGen : GCodePath object
+PathGen-->>Pipeline : GCodePath
+Pipeline->>GCodePath : ToGCode(firmware)
+GCodePath-->>Pipeline : Firmware-specific GCode string
 Pipeline-->>CAPI : InternalResult
 CAPI-->>Caller : HsBaFdmPipelineResult_t
 ```
@@ -159,10 +170,8 @@ CAPI-->>Caller : HsBaFdmPipelineResult_t
 **Diagram sources**
 - [fdm_pipeline.cpp:182-292](file://DllHsBaSlicer/fdm_pipeline.cpp#L182-L292)
 - [fdm_pipeline.h:100-140](file://DllHsBaSlicer/fdm_pipeline.h#L100-L140)
-- [mesh_slice.hpp:17-24](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L17-L24)
-- [fdm_support.hpp:20-31](file://LibHsBaSlicer/Support/fdm_support.hpp#L20-L31)
-- [polygon_fill.hpp:19-31](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L19-L31)
-- [path_generator.hpp:45-46](file://LibHsBaSlicer/Path/path_generator.hpp#L45-L46)
+- [path_generator.cpp:89-110](file://LibHsBaSlicer/Path/path_generator.cpp#L89-L110)
+- [gcodepath.cpp:267-279](file://paths/gcodepath.cpp#L267-L279)
 
 ## Detailed Component Analysis
 
@@ -174,12 +183,12 @@ Responsibilities:
 - Manage memory ownership for returned strings.
 
 Key elements:
-- Enums: fill mode, support pattern.
-- Config struct: model, slicing, fill, support, path, output options.
+- Enums: fill mode, support pattern, **updated** GCode firmware type.
+- Config struct: model, slicing, fill, support, path, output options, **updated** GCode firmware and printer parameters.
 - Result struct: success flag, total layers, G-code content, error message, elapsed time.
 - Callbacks: progress and result callbacks.
 
-Enhanced configuration structure with new parameters for top/bottom layer control and infill density adjustment.
+Enhanced configuration structure with new parameters for top/bottom layer control, infill density adjustment, and **new** GCode firmware selection with printer configuration.
 
 ```mermaid
 classDiagram
@@ -207,6 +216,14 @@ class HsBaFdmPipelineConfig {
 +float print_speed
 +float travel_speed
 +float extrusion_multiplier
++HsBaGCodeFirmware_t gcode_firmware
++float nozzle_diameter
++float filament_diameter
++float nozzle_temp
++float bed_temp
++float retract_length
++float retract_speed
++float first_layer_speed
 +string output_path
 }
 class HsBaFdmPipelineResult {
@@ -229,10 +246,92 @@ CAPI --> HsBaFdmPipelineResult : "produces"
 **Diagram sources**
 - [fdm_pipeline.h:12-84](file://DllHsBaSlicer/fdm_pipeline.h#L12-L84)
 - [fdm_pipeline.h:98-140](file://DllHsBaSlicer/fdm_pipeline.h#L98-L140)
+- [pipeline_types.h:46-51](file://pipelinetypes/pipeline_types.h#L46-L51)
+- [pipeline_types.h:92-100](file://pipelinetypes/pipeline_types.h#L92-L100)
 
 **Section sources**
 - [fdm_pipeline.h:1-156](file://DllHsBaSlicer/fdm_pipeline.h#L1-L156)
 - [fdm_pipeline.cpp:373-404](file://DllHsBaSlicer/fdm_pipeline.cpp#L373-L404)
+- [pipeline_types.h:46-51](file://pipelinetypes/pipeline_types.h#L46-L51)
+- [pipeline_types.h:92-100](file://pipelinetypes/pipeline_types.h#L92-L100)
+
+### Enhanced GCode Path Generation System
+**New Section** The path generation system has been significantly enhanced with a new GCodePath class that provides firmware-specific G-code output and advanced printer configuration.
+
+#### GCodePath Class Architecture
+The new GCodePath class inherits from LayersPath and adds firmware-specific G-code generation capabilities:
+
+- **Multi-Firmware Support**: Generates standard G-code for Marlin, RepRap/RRF, and Klipper firmware
+- **Printer Configuration**: Comprehensive printer parameter management including nozzle, filament, temperature, and retraction settings
+- **Lua Post-Processing**: Optional Lua script support for custom G-code modifications
+- **Layer Processing**: Efficient layer-by-layer G-code generation with proper Z-axis movement and extrusion calculations
+
+#### Firmware-Specific Features
+Each firmware target has specialized header/footer generation and command sets:
+
+- **Marlin**: Standard M104/M109/M140/M190 temperature commands, G92 E0 reset
+- **RepRap/RRF**: Additional M106 fan control, explicit M82/M83 extrusion mode switching  
+- **Klipper**: SET_PRESSURE_ADVANCE, M220/M221 speed/flow factors, SET_FAN_SPEED commands
+
+#### Printer Configuration Parameters
+The GCodePrinterConfig structure provides comprehensive printer parameter control:
+
+- **Physical Parameters**: nozzle_diameter, filament_diameter, layer_height, line_width
+- **Temperature Settings**: nozzle_temp, bed_temp
+- **Speed Settings**: print_speed, travel_speed, first_layer_speed, retract_speed
+- **Extrusion Control**: extrusion_multiplier, relative_extrusion, enable_retraction
+- **Retraction Settings**: retract_length, retract_speed
+
+```mermaid
+classDiagram
+class GCodePath {
++GCodePrinterConfig printer_config_
++ToGCode(GCodeFirmware firmware) string
++SaveGCode(path, firmware) void
++ToGCode(firmware, script, lua_reg) string
++printerConfig() const GCodePrinterConfig&
+-GenerateHeader(firmware) string
+-GenerateFooter(firmware) string
+-GenerateLayerGCode(layer_idx, firmware) string
+-CalcExtrusion(segment_length) double
+}
+class GCodePrinterConfig {
++float nozzle_diameter
++float filament_diameter
++float nozzle_temp
++float bed_temp
++float retract_length
++float retract_speed
++float print_speed
++float travel_speed
++float first_layer_speed
++float layer_height
++float line_width
++float extrusion_multiplier
++bool relative_extrusion
++bool enable_retraction
+}
+class GCodeFirmware {
+<<enumeration>>
+Marlin
+RepRap
+Klipper
+}
+GCodePath --> GCodePrinterConfig : "uses"
+GCodePath --> GCodeFirmware : "generates for"
+```
+
+**Diagram sources**
+- [gcodepath.hpp:27-43](file://paths/gcodepath.hpp#L27-L43)
+- [gcodepath.hpp:19-24](file://paths/gcodepath.hpp#L19-L24)
+- [gcodepath.cpp:57-134](file://paths/gcodepath.cpp#L57-L134)
+- [gcodepath.cpp:136-185](file://paths/gcodepath.cpp#L136-L185)
+
+**Section sources**
+- [gcodepath.hpp:1-83](file://paths/gcodepath.hpp#L1-L83)
+- [gcodepath.cpp:1-377](file://paths/gcodepath.cpp#L1-L377)
+- [path_generator.hpp:49-58](file://LibHsBaSlicer/Path/path_generator.hpp#L49-L58)
+- [path_generator.cpp:89-110](file://LibHsBaSlicer/Path/path_generator.cpp#L89-L110)
 
 ### Coroutine-Based Pipeline Orchestration
 Responsibilities:
@@ -245,10 +344,10 @@ Implementation highlights:
 - Uses Utils::Task<T> from coroutine.hpp for async composition.
 - Progress is reported at key milestones.
 - Converts unsafe slices to safe float polygons where needed.
-- Produces a final PointsPath and serializes to string.
+- Produces a final GCodePath and serializes to firmware-specific string.
 - Creates independent ModelLoader instance per pipeline execution to avoid model name conflicts.
 
-Enhanced fill algorithm with configurable top/bottom layer counts and adjustable infill density for middle layers.
+Enhanced fill algorithm with configurable top/bottom layer counts and adjustable infill density for middle layers. **Updated** Now uses GenerateGCodePathV2 with printer configuration for firmware-specific output.
 
 ```mermaid
 flowchart TD
@@ -266,15 +365,23 @@ SkipSupports --> FillLoop
 FillLoop --> LayerType{"Layer type?"}
 LayerType --> |Top/Bottom| SolidFill["Solid fill with wall_count"]
 LayerType --> |Middle| DensityFill["Density-adjusted fill spacing"]
-SolidFill --> GenPaths["GenerateGCodePath(layer_data)"]
+SolidFill --> GenPaths["GenerateGCodePathV2(layer_data, path_config, printer_config)"]
 DensityFill --> GenPaths
-GenPaths --> Success{"Success?"}
+GenPaths --> FirmwareSelect{"Select firmware"}
+FirmwareSelect --> Marlin["Marlin firmware"]
+FirmwareSelect --> RepRap["RepRap firmware"]
+FirmwareSelect --> Klipper["Klipper firmware"]
+Marlin --> ToGCode["ToGCode(Marlin)"]
+RepRap --> ToGCode
+Klipper --> ToGCode
+ToGCode --> Success{"Success?"}
 Success --> |Yes| Done(["Return result"])
 Success --> |No| ErrPath["Set error and return"]
 ```
 
 **Diagram sources**
 - [fdm_pipeline.cpp:182-292](file://DllHsBaSlicer/fdm_pipeline.cpp#L182-L292)
+- [fdm_pipeline.cpp:340-346](file://DllHsBaSlicer/fdm_pipeline.cpp#L340-L346)
 
 **Section sources**
 - [fdm_pipeline.cpp:203-367](file://DllHsBaSlicer/fdm_pipeline.cpp#L203-L367)
@@ -312,7 +419,7 @@ GlobalModelLoader --> ModelLoader : "wraps thread_local"
 
 **Diagram sources**
 - [ModelLoader.hpp:26-127](file://preprocess/ModelLoader.hpp#L26-L127)
-- [fdm_pipeline.cpp:212-228](file://DllHsBaSlicer/fdm_pipeline.cpp#L212-228)
+- [fdm_pipeline.cpp:212-228](file://DllHsBaSlicer/fdm_pipeline.cpp#L212-L228)
 - [model_preprocess.cpp:10-14](file://LibHsBaSlicer/Preprocess/model_preprocess.cpp#L10-L14)
 
 **Section sources**
@@ -369,13 +476,22 @@ The pipeline now supports advanced configuration options for better control over
 - **top_layer_count**: Number of solid layers at the top of the model
 - **bottom_layer_count**: Number of solid layers at the bottom of the model  
 - **infill_density**: Density factor (0-1) that adjusts fill spacing for middle layers
+- **gcode_firmware**: Target firmware type (Marlin, RepRap, Klipper)
+- **nozzle_diameter**: Nozzle diameter in millimeters
+- **filament_diameter**: Filament diameter in millimeters
+- **nozzle_temp**: Nozzle temperature in Celsius
+- **bed_temp**: Bed temperature in Celsius
+- **retract_length**: Retraction distance in millimeters
+- **retract_speed**: Retraction speed in mm/s
+- **first_layer_speed**: First layer printing speed in mm/s
 
-These parameters allow fine-tuning between print quality, strength, and material consumption.
+These parameters allow fine-tuning between print quality, strength, material consumption, and firmware compatibility.
 
 **Section sources**
 - [fdm_pipeline.h:50-52](file://DllHsBaSlicer/fdm_pipeline.h#L50-L52)
 - [fdm_pipeline.cpp:48-50](file://DllHsBaSlicer/fdm_pipeline.cpp#L48-L50)
 - [fdm_pipeline.cpp:155-157](file://DllHsBaSlicer/fdm_pipeline.cpp#L155-L157)
+- [pipeline_types.h:92-100](file://pipelinetypes/pipeline_types.h#L92-L100)
 
 ### Preprocessing Module (LibHsBaSlicer)
 Responsibilities:
@@ -449,23 +565,42 @@ Enhanced with intelligent layer-type detection and density-based spacing calcula
 **Section sources**
 - [polygon_fill.hpp:1-36](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L1-L36)
 
-### Path Generation Module (LibHsBaSlicer)
-Responsibilities:
-- Convert outlines, fills, and supports into G-code point sequences.
-- Serialize to string or save to file.
+### Enhanced Path Generation Module (LibHsBaSlicer)
+**Updated** The path generation module now provides two complementary approaches:
 
-Public API surface:
-- GenerateGCodePath(layer_data, config) -> unique_ptr<PointsPath>
-- PolygonsToGPoints(polys, z, config, is_extrude) -> vector<GPoint>
+#### Legacy PointsPath System
+- Basic G-code point sequence generation
+- Simple serialization to string or file
+- Suitable for basic FDM applications
 
-Data structures:
-- FdmPathConfig: layer height, line width, speeds, extrusion multiplier, units.
-- LayerPathData: outlines, fills, supports, z_height.
-- PointsPath: stores GPoint list and serialization methods.
+#### New GCodePath System (V2)
+- **GenerateGCodePathV2**: Creates firmware-specific G-code paths with printer configuration
+- **Multi-firmware support**: Marlin, RepRap, Klipper with optimized command sets
+- **Advanced printer configuration**: Comprehensive parameter management
+- **Lua post-processing**: Custom G-code modification capabilities
+- **Efficient layer processing**: Optimized for large models with many layers
+
+#### Key Functions
+- `GenerateGCodePath`: Legacy function returning PointsPath (backward compatible)
+- `GenerateGCodePathV2`: New function returning GCodePath with printer configuration
+- `PolygonsToGPoints`: Helper function for converting polygons to G-point sequences
 
 **Section sources**
-- [path_generator.hpp:1-62](file://LibHsBaSlicer/Path/path_generator.hpp#L1-L62)
+- [path_generator.hpp:1-74](file://LibHsBaSlicer/Path/path_generator.hpp#L1-L74)
+- [path_generator.cpp:1-113](file://LibHsBaSlicer/Path/path_generator.cpp#L1-L113)
 - [pointspath.hpp:1-77](file://paths/pointspath.hpp#L1-L77)
+
+### Module Interface (ModuleHsBaSlicer)
+**Updated** The C++20 module interface has been enhanced to integrate the new GCodePath system:
+
+- **FdmPipeline::generatePath**: Now returns `std::unique_ptr<GCodePath>` instead of PointsPath
+- **FdmPipeline::run**: Uses `ToGCode(firmware)` for firmware-specific output
+- **Type exports**: Exports GCodeFirmware enum and GCodePrinterConfig struct
+- **Seamless integration**: Maintains backward compatibility while enabling new features
+
+**Section sources**
+- [hsba_slicer.cppm:429-454](file://ModuleHsBaSlicer/hsba_slicer.cppm#L429-L454)
+- [hsba_slicer.cppm:456-503](file://ModuleHsBaSlicer/hsba_slicer.cppm#L456-L503)
 
 ### Coroutine Utilities (base)
 Responsibilities:
@@ -490,6 +625,7 @@ High-level dependency relationships:
 - LibHsBaSlicer composes preprocess, slice, support, fill, and path modules.
 - All modules depend on base types (IModel, coroutines) and shared geometry/path types.
 - **Updated** Pipeline now strictly uses LibHsBaSlicer public API, maintaining clear architectural boundaries.
+- **Updated** GCodePath system integrates with existing path infrastructure while providing enhanced functionality.
 
 ```mermaid
 graph LR
@@ -501,6 +637,8 @@ Lib --> Fil["Fill"]
 Lib --> Pth["Paths"]
 Lib --> Base["base (IModel, coroutine)"]
 Pth --> PP["paths/pointspath.hpp"]
+Pth --> GP["paths/gcodepath.hpp"]
+Pth --> LP["paths/layerspath.hpp"]
 Sup --> SC["support/SupportConfig.hpp"]
 Lib --> VI["version_info.hpp"]
 VI --> VS["version.hpp"]
@@ -510,11 +648,13 @@ VI --> VS["version.hpp"]
 - [DllHsBaSlicer/CMakeLists.txt:1-20](file://DllHsBaSlicer/CMakeLists.txt#L1-L20)
 - [LibHsBaSlicer/CMakeLists.txt:37-52](file://LibHsBaSlicer/CMakeLists.txt#L37-L52)
 - [CMakeLists.txt:304-327](file://CMakeLists.txt#L304-L327)
+- [paths/CMakeLists.txt:1-19](file://paths/CMakeLists.txt#L1-L19)
 
 **Section sources**
 - [DllHsBaSlicer/CMakeLists.txt:1-20](file://DllHsBaSlicer/CMakeLists.txt#L1-L20)
 - [LibHsBaSlicer/CMakeLists.txt:1-59](file://LibHsBaSlicer/CMakeLists.txt#L1-L59)
 - [CMakeLists.txt:304-327](file://CMakeLists.txt#L304-L327)
+- [paths/CMakeLists.txt:1-19](file://paths/CMakeLists.txt#L1-L19)
 
 ## Performance Considerations
 - Coroutines: Use Task<T> to avoid blocking threads; prefer asynchronous flows when integrating with UI or other services.
@@ -525,6 +665,8 @@ VI --> VS["version.hpp"]
 - Independent ModelLoader instances prevent global state contention but increase memory usage per pipeline.
 - Const reference parameter passing reduces unnecessary copies in coroutine-based operations.
 - Density-based infill spacing calculation optimizes material usage while maintaining structural integrity.
+- **Updated** GCodePath generation is optimized for large models with efficient layer processing and minimal string concatenation.
+- **Updated** Firmware-specific optimizations reduce unnecessary commands and improve G-code efficiency.
 - **Updated** Centralized version information module reduces redundant version data lookups across the application.
 
 ## Troubleshooting Guide
@@ -536,13 +678,19 @@ Common issues and remedies:
 - Memory leaks: Always call HsBaFreePipelineResult after use; avoid holding raw char* beyond scope.
 - Model loading conflicts: Each pipeline now uses independent ModelLoader instances, eliminating global model name conflicts.
 - Infill quality issues: Adjust top_layer_count, bottom_layer_count, and infill_density parameters for optimal results.
+- **Updated** GCode firmware compatibility: Ensure selected firmware matches your printer's firmware type (Marlin, RepRap, Klipper).
+- **Updated** Printer configuration validation: Verify nozzle diameter, filament diameter, and temperature settings match your hardware.
+- **Updated** Lua post-processing errors: Check Lua script syntax and available variables when using custom G-code modification.
 - **Updated** Version information access: Use centralized version_info module APIs instead of direct internal access.
 
 **Section sources**
 - [fdm_pipeline.cpp:203-367](file://DllHsBaSlicer/fdm_pipeline.cpp#L203-L367)
 - [fdm_pipeline.h:132-140](file://DllHsBaSlicer/fdm_pipeline.h#L132-L140)
+- [gcodepath.cpp:292-374](file://paths/gcodepath.cpp#L292-L374)
 
 ## Conclusion
 The FDM pipeline system integrates preprocessing, slicing, support generation, infill, and path generation into a cohesive, coroutine-driven workflow. It offers a clean C-compatible API for broad integration while leveraging modern C++ features internally for performance and clarity. The modular design enables targeted improvements and testing per stage, and the progress/callback mechanism facilitates responsive applications.
 
 Recent enhancements include strict adherence to LibHsBaSlicer public API boundaries, preventing direct access to internal implementations and improving maintainability. The centralized version information module provides consistent version data access across the application. Independent model management per pipeline instance prevents conflicts during concurrent execution, and advanced configuration options provide precise control over print quality and material usage. The optimized coroutine-based architecture with const reference parameter passing ensures efficient resource utilization and improved performance.
+
+**Updated** The most significant enhancement is the introduction of the GCodePath system, which provides firmware-specific G-code output with comprehensive printer configuration support. This system maintains backward compatibility with the existing PointsPath approach while offering advanced features like multi-firmware support, Lua post-processing, and optimized command generation for different 3D printer firmware types. The dual-path architecture ensures smooth migration while enabling cutting-edge functionality for modern 3D printing workflows.

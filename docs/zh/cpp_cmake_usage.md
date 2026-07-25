@@ -108,11 +108,18 @@ target_link_libraries(my_app PRIVATE HsBaSlicer::LibHsBaSlicer)
 #include <LibHsBaSlicer/Path/path_generator.hpp>
 #include <LibHsBaSlicer/Path/sls_export.hpp>
 #include <LibHsBaSlicer/Floor/sla_floor.hpp>
+#include <LibHsBaSlicer/Extends/LuaAddFunction.hpp>
 
 using namespace HsBa::Slicer;
 
 int main()
 {
+    // 0. 注册外部 Lua 函数（可选，在流水线运行前调用）
+    // Add2DFunctions([](lua_State* L) { lua_register(L, "my_func", impl); });
+    // Add3DFunctions([](lua_State* L) { lua_register(L, "my_3d", impl); });
+    // AddFileFunctions([](lua_State* L) { lua_register(L, "my_file", impl); });
+    // AddEventCallback("zipper.on_add", [](lua_State* L) { ... });
+
     // 1. 预处理：加载模型
     // auto model = LoadModel("model.stl");
 
@@ -179,6 +186,12 @@ int main()
 {
     try
     {
+        // 注册外部 Lua 函数（可选）
+        // add2DFunction([](lua_State* L) { lua_register(L, "my_func", impl); });
+        // add3DFunction([](lua_State* L) { lua_register(L, "my_3d", impl); });
+        // addFileFunction([](lua_State* L) { lua_register(L, "my_file", impl); });
+        // addEventCallback("zipper.on_add", [](lua_State* L) { ... });
+
         // RAII 模型管理（析构自动释放）
         Model model("bunny", "models/stanford_bunny.stl");
         auto info = model.info();
@@ -214,6 +227,19 @@ int main()
 | `SlaPipeline` | SLA 全流程（切片→支撑→底座→渲染→打包） |
 | `SlsPipeline` | SLS Lua 导出 |
 | `SlicerError` | 统一异常类型 |
+
+### Lua 扩展函数注册（模块版）
+
+```cpp
+import hsba.slicer;
+using namespace HsBa::Slicer;
+
+// 类型别名已导出：LuaRegFunc = std::function<void(lua_State*)>
+add2DFunction([](lua_State* L) { /* 注册 2D 函数 */ });
+add3DFunction([](lua_State* L) { /* 注册 3D 函数 */ });
+addFileFunction([](lua_State* L) { /* 注册 File 函数 */ });
+addEventCallback("zipper.on_add", [](lua_State* L) { /* 事件回调 */ });
+```
 
 ### 平台注意事项
 
@@ -265,16 +291,28 @@ target_link_libraries(my_app PRIVATE HsBaSlicer::DllHsBaSlicer)
 #include <fdm_pipeline.h>
 #include <sla_pipeline.h>
 #include <sls_pipeline.h>
+#include <lua_register.h>
 
 static void OnProgress(int percent, const char* stage, void* /*ud*/)
 {
     // 进度通知
 }
 
+static void my_lua_reg(lua_State* L)
+{
+    // 注册自定义 Lua 函数
+}
+
 int main()
 {
     // 必须首先调用初始化
     initialize();
+
+    // 注册外部 Lua 函数（可选，在流水线运行前）
+    HsBaAdd3DFunction(my_lua_reg);   // 切片/支撑阶段可用
+    // HsBaAdd2DFunction(my_lua_reg);   // 支撑/填充/SLA输出可用
+    // HsBaAddFileFunction(my_lua_reg); // SLS/SLA输出可用
+    // HsBaAddEventCallback("zipper.on_add", my_lua_reg);
 
     // FDM 流水线
     HsBaFdmPipelineConfig_t cfg = HsBaCreateDefaultConfig();

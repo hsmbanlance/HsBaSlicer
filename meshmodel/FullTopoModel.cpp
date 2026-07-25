@@ -1019,12 +1019,17 @@ Polygons FullTopoModel::SliceFast(const float height) const
     return result;
 }
 
-Polygons FullTopoModel::SliceLua(const std::string& script, const float height) const
+Polygons FullTopoModel::SliceLua(const std::string& script, const float height,
+                                 const std::vector<std::function<void(lua_State*)>>& ext_regs) const
 {
     auto L = MakeUniqueLuaState();
     if (!L)
         throw RuntimeError("Lua init failed");
     luaL_openlibs(L.get());
+
+    // Register external 3D functions for slice stage
+    for (auto& reg : ext_regs)
+        reg(L.get());
 
     // push model data to Lua
     PushFullTopoModelToLua(L.get(), *this, height);
@@ -1062,12 +1067,17 @@ Polygons FullTopoModel::SliceLua(const std::string& script, const float height) 
     return result;
 }
 
-UnSafePolygons FullTopoModel::UnSafeSliceLua(const std::string& script, const float height) const
+UnSafePolygons FullTopoModel::UnSafeSliceLua(const std::string& script, const float height,
+                                             const std::vector<std::function<void(lua_State*)>>& ext_regs) const
 {
     auto L = MakeUniqueLuaState();
     if (!L)
         throw RuntimeError("Lua init failed");
     luaL_openlibs(L.get());
+
+    // Register external 3D functions for slice stage
+    for (auto& reg : ext_regs)
+        reg(L.get());
 
     // push model data to Lua
     PushFullTopoModelToLua(L.get(), *this, height);
@@ -1114,12 +1124,18 @@ UnSafePolygons FullTopoModel::UnSafeSliceLua(const std::string& script, const fl
     return result;
 }
 
-Polygons FullTopoModel::SliceLua(const std::string& script, const std::string& funcName, const float height) const
+Polygons FullTopoModel::SliceLua(const std::string& script, const std::string& funcName, const float height,
+                                 const std::vector<std::function<void(lua_State*)>>& ext_regs) const
 {
     auto L = MakeUniqueLuaState();
     if (!L)
         throw RuntimeError("Lua init failed");
     luaL_openlibs(L.get());
+
+    // Register external 3D functions for slice stage
+    for (auto& reg : ext_regs)
+        reg(L.get());
+
     // push model data to Lua
     PushFullTopoModelToLua(L.get(), *this, height);
     int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "FullTopoModelSliceScript");
@@ -1165,12 +1181,18 @@ Polygons FullTopoModel::SliceLua(const std::string& script, const std::string& f
 }
 
 Polygons FullTopoModel::SliceLua(const std::filesystem::path& script_file, const std::string& funcName,
-                                 const float height) const
+                                 const float height,
+                                 const std::vector<std::function<void(lua_State*)>>& ext_regs) const
 {
     auto L = MakeUniqueLuaState();
     if (!L)
         throw RuntimeError("Lua init failed");
     luaL_openlibs(L.get());
+
+    // Register external 3D functions for slice stage
+    for (auto& reg : ext_regs)
+        reg(L.get());
+
     // push model data to Lua
     PushFullTopoModelToLua(L.get(), *this, height);
     int loadStatus = luaL_loadfile(L.get(), script_file.string().c_str());

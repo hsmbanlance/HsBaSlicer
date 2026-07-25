@@ -288,6 +288,55 @@ HsBaSlsPipelineResult_t slsR = HsBaRunSlsPipeline(&sls, nullptr, nullptr);
 HsBaFreeSlsPipelineResult(&slsR);
 ```
 
+---
+
+## 4. Lua Extension Function Registration
+
+Before running pipelines, register custom Lua functions via `lua_register.h`; they are automatically injected when each stage creates its Lua environment:
+
+```cpp
+#include "initialize.h"
+#include "lua_register.h"
+#include <lua.hpp>
+
+// Custom Lua C function
+static int l_my_database_query(lua_State* L)
+{
+    const char* sql = luaL_checkstring(L, 1);
+    // ... execute query, push results onto Lua stack
+    return 1;  // number of return values
+}
+
+// Registration function (called when the corresponding stage initializes Lua)
+static void registerMyFunctions(lua_State* L)
+{
+    lua_register(L, "db_query", l_my_database_query);
+}
+
+void setupLuaExtensions()
+{
+    // Register by stage type (after initialize(), before pipeline runs)
+    HsBaAdd2DFunction(registerMyFunctions);    // Available in Support/Fill/SLA Output
+    HsBaAdd3DFunction(registerMyFunctions);    // Available in Slice/Support
+    HsBaAddFileFunction(registerMyFunctions);  // Available in SLS/SLA Output
+
+    // Event callbacks (e.g. Zipper compression events)
+    HsBaAddEventCallback("zipper.on_add", registerMyFunctions);
+}
+```
+
+### Function Types Available Per Stage
+
+| Pipeline Stage | Registration Function | Description |
+| --- | --- | --- |
+| Slice | `HsBaAdd3DFunction` | 3D model operations |
+| Support | `HsBaAdd2DFunction` + `HsBaAdd3DFunction` | 2D contours + 3D model |
+| Fill | `HsBaAdd2DFunction` | 2D polygon operations |
+| SLS Output | `HsBaAddFileFunction` | File output operations |
+| SLA Output | `HsBaAdd2DFunction` + `HsBaAddFileFunction` | 2D + file output |
+
+> **Note**: Registration function pointers must remain valid for the entire process lifetime (use static or global functions).
+
 ## FAQ
 
 | Symptom | Cause & Fix |

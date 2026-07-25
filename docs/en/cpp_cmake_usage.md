@@ -108,11 +108,18 @@ target_link_libraries(my_app PRIVATE HsBaSlicer::LibHsBaSlicer)
 #include <LibHsBaSlicer/Path/path_generator.hpp>
 #include <LibHsBaSlicer/Path/sls_export.hpp>
 #include <LibHsBaSlicer/Floor/sla_floor.hpp>
+#include <LibHsBaSlicer/Extends/LuaAddFunction.hpp>
 
 using namespace HsBa::Slicer;
 
 int main()
 {
+    // 0. Register external Lua functions (optional, call before pipeline runs)
+    // Add2DFunctions([](lua_State* L) { lua_register(L, "my_func", impl); });
+    // Add3DFunctions([](lua_State* L) { lua_register(L, "my_3d", impl); });
+    // AddFileFunctions([](lua_State* L) { lua_register(L, "my_file", impl); });
+    // AddEventCallback("zipper.on_add", [](lua_State* L) { ... });
+
     // 1. Preprocess: load model
     // auto model = LoadModel("model.stl");
 
@@ -179,6 +186,12 @@ int main()
 {
     try
     {
+        // Register external Lua functions (optional)
+        // add2DFunction([](lua_State* L) { lua_register(L, "my_func", impl); });
+        // add3DFunction([](lua_State* L) { lua_register(L, "my_3d", impl); });
+        // addFileFunction([](lua_State* L) { lua_register(L, "my_file", impl); });
+        // addEventCallback("zipper.on_add", [](lua_State* L) { ... });
+
         // RAII model management (auto cleanup on destruction)
         Model model("bunny", "models/stanford_bunny.stl");
         auto info = model.info();
@@ -214,6 +227,19 @@ int main()
 | `SlaPipeline` | SLA full pipeline (slice→support→floor→render→package) |
 | `SlsPipeline` | SLS Lua-driven export |
 | `SlicerError` | Unified exception type |
+
+### Lua Extension Function Registration (Module Version)
+
+```cpp
+import hsba.slicer;
+using namespace HsBa::Slicer;
+
+// Type alias exported: LuaRegFunc = std::function<void(lua_State*)>
+add2DFunction([](lua_State* L) { /* register 2D functions */ });
+add3DFunction([](lua_State* L) { /* register 3D functions */ });
+addFileFunction([](lua_State* L) { /* register File functions */ });
+addEventCallback("zipper.on_add", [](lua_State* L) { /* event callback */ });
+```
 
 ### Platform Notes
 
@@ -265,16 +291,28 @@ target_link_libraries(my_app PRIVATE HsBaSlicer::DllHsBaSlicer)
 #include <fdm_pipeline.h>
 #include <sla_pipeline.h>
 #include <sls_pipeline.h>
+#include <lua_register.h>
 
 static void OnProgress(int percent, const char* stage, void* /*ud*/)
 {
     // Progress notification
 }
 
+static void my_lua_reg(lua_State* L)
+{
+    // Register custom Lua functions
+}
+
 int main()
 {
     // Must be called first
     initialize();
+
+    // Register external Lua functions (optional, before pipeline runs)
+    HsBaAdd3DFunction(my_lua_reg);   // Available in slice/support stages
+    // HsBaAdd2DFunction(my_lua_reg);   // Available in support/fill/SLA output
+    // HsBaAddFileFunction(my_lua_reg); // Available in SLS/SLA output
+    // HsBaAddEventCallback("zipper.on_add", my_lua_reg);
 
     // FDM pipeline
     HsBaFdmPipelineConfig_t cfg = HsBaCreateDefaultConfig();

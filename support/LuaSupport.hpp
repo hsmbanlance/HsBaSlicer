@@ -3,10 +3,14 @@
 #define HSBA_SLICER_LUA_SUPPORT_HPP
 
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "ISupport.hpp"
+
+struct lua_State;
 
 namespace HsBa::Slicer::Support
 {
@@ -55,6 +59,9 @@ public:
     PolygonsD Generate(const PolygonsD& current_layer, const PolygonsD& prev_layer, float layer_height,
                        const SupportConfig& config) override;
 
+    /// Set external Lua registration functions (2D+3D) to be applied at Lua state init.
+    void SetExternalRegs(std::vector<std::function<void(lua_State*)>> regs);
+
 private:
     enum class SourceType
     {
@@ -66,6 +73,7 @@ private:
     std::string script_;
     std::filesystem::path script_file_;
     std::string func_name_;
+    std::vector<std::function<void(lua_State*)>> ext_regs_;
 };
 }  // namespace HsBa::Slicer::Support
 

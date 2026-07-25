@@ -16,6 +16,7 @@
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
 #include "base/coroutine.hpp"
+#include "paths/gcodepath.hpp"
 
 namespace HsBa::Slicer::Pipeline
 {
@@ -51,6 +52,8 @@ struct InternalConfig
     std::string infill_lua_func;
     Support::FdmSupportConfig support_config;
     FdmPathConfig path_config;
+    GCodePrinterConfig printer_config;
+    GCodeFirmware firmware = GCodeFirmware::Marlin;
     std::string output_path;
     HsBaProgressCallback progress_cb = nullptr;
     void* progress_user_data = nullptr;
@@ -157,6 +160,21 @@ InternalConfig BuildConfig(const HsBaFdmPipelineConfig_t* cfg, HsBaProgressCallb
     ic.path_config.print_speed = cfg->print_speed;
     ic.path_config.travel_speed = cfg->travel_speed;
     ic.path_config.extrusion_multiplier = cfg->extrusion_multiplier;
+
+    ic.printer_config.nozzle_diameter = cfg->nozzle_diameter;
+    ic.printer_config.filament_diameter = cfg->filament_diameter;
+    ic.printer_config.nozzle_temp = cfg->nozzle_temp;
+    ic.printer_config.bed_temp = cfg->bed_temp;
+    ic.printer_config.retract_length = cfg->retract_length;
+    ic.printer_config.retract_speed = cfg->retract_speed;
+    ic.printer_config.print_speed = cfg->print_speed;
+    ic.printer_config.travel_speed = cfg->travel_speed;
+    ic.printer_config.first_layer_speed = cfg->first_layer_speed;
+    ic.printer_config.layer_height = cfg->layer_height;
+    ic.printer_config.line_width = cfg->line_width;
+    ic.printer_config.extrusion_multiplier = cfg->extrusion_multiplier;
+
+    ic.firmware = static_cast<GCodeFirmware>(static_cast<int>(cfg->gcode_firmware));
 
     ic.output_path = cfg->output_path ? cfg->output_path : "";
     ic.progress_cb = cb;
@@ -319,11 +337,11 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             layer_path_data[i].z_height = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height);
         }
 
-        auto gcode_path = GenerateGCodePath(layer_path_data, cfg.path_config);
+        auto gcode_path = GenerateGCodePathV2(layer_path_data, cfg.path_config, cfg.printer_config);
 
         if (gcode_path)
         {
-            result.gcode_content = gcode_path->ToString();
+            result.gcode_content = gcode_path->ToGCode(cfg.firmware);
             result.success = true;
         }
         else

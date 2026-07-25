@@ -100,6 +100,11 @@ LuaSupport::LuaSupport(const std::filesystem::path& script_file, std::string_vie
 {
 }
 
+void LuaSupport::SetExternalRegs(std::vector<std::function<void(lua_State*)>> regs)
+{
+    ext_regs_ = std::move(regs);
+}
+
 PolygonsD LuaSupport::Generate(const PolygonsD& current_layer, const PolygonsD& prev_layer, float layer_height,
                                const SupportConfig& config)
 {
@@ -108,6 +113,10 @@ PolygonsD LuaSupport::Generate(const PolygonsD& current_layer, const PolygonsD& 
         throw RuntimeError("LuaSupport: failed to create Lua state");
 
     SetupLuaEnvironment(L.get(), current_layer, prev_layer, layer_height, config);
+
+    // Register external 2D+3D functions for support stage
+    for (auto& reg : ext_regs_)
+        reg(L.get());
 
     // Load script
     int loadStatus = LUA_OK;

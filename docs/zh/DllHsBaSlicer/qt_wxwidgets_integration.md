@@ -288,6 +288,55 @@ HsBaSlsPipelineResult_t slsR = HsBaRunSlsPipeline(&sls, nullptr, nullptr);
 HsBaFreeSlsPipelineResult(&slsR);
 ```
 
+---
+
+## 四、Lua 扩展函数注册
+
+在流水线运行前，可通过 `lua_register.h` 注册自定义 Lua 函数，各阶段创建 Lua 环境时自动注入：
+
+```cpp
+#include "initialize.h"
+#include "lua_register.h"
+#include <lua.hpp>
+
+// 自定义 Lua C 函数
+static int l_my_database_query(lua_State* L)
+{
+    const char* sql = luaL_checkstring(L, 1);
+    // ... 执行查询，将结果压入 Lua 栈
+    return 1;  // 返回值个数
+}
+
+// 注册函数（此函数将在对应阶段初始化 Lua 时被调用）
+static void registerMyFunctions(lua_State* L)
+{
+    lua_register(L, "db_query", l_my_database_query);
+}
+
+void setupLuaExtensions()
+{
+    // 按阶段类型注册（在 initialize() 之后、流水线运行之前）
+    HsBaAdd2DFunction(registerMyFunctions);    // 支撑/填充/SLA输出阶段可用
+    HsBaAdd3DFunction(registerMyFunctions);    // 切片/支撑阶段可用
+    HsBaAddFileFunction(registerMyFunctions);  // SLS/SLA输出阶段可用
+
+    // 事件回调（如 Zipper 压缩事件）
+    HsBaAddEventCallback("zipper.on_add", registerMyFunctions);
+}
+```
+
+### 各阶段可用函数类型
+
+| 流水线阶段 | 注册函数 | 说明 |
+| --- | --- | --- |
+| Slice（切片） | `HsBaAdd3DFunction` | 3D 模型操作函数 |
+| Support（支撑） | `HsBaAdd2DFunction` + `HsBaAdd3DFunction` | 2D 轮廓 + 3D 模型 |
+| Fill（填充） | `HsBaAdd2DFunction` | 2D 多边形操作 |
+| SLS Output | `HsBaAddFileFunction` | 文件输出操作 |
+| SLA Output | `HsBaAdd2DFunction` + `HsBaAddFileFunction` | 2D + 文件输出 |
+
+> **注意**：注册函数指针必须在整个进程生命周期内保持有效（建议用静态函数或全局函数）。
+
 ## 常见问题
 
 | 现象 | 原因与处理 |

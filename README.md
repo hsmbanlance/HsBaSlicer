@@ -42,7 +42,7 @@ HsBaSlicer 是一个面向 3D 打印切片领域的高性能 C++ 软件框架，
 
 必需工具 / Requirements:
 
-- `cmake` >= 3.12
+- `cmake` >= 3.28
 - 支持 C++20 的编译器
 - `vcpkg`（建议用于依赖管理）
 - PowerShell（Windows 下建议安装 PowerShell 7；Windows PowerShell 5.1 也可用）
