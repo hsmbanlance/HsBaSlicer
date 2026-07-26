@@ -1,3 +1,5 @@
+现在我将更新文档以反映所有变更：
+
 # GCode路径输出
 
 <cite>
@@ -13,6 +15,14 @@
 - [ModuleHsBaSlicer/hsba_slicer.cppm](file://ModuleHsBaSlicer/hsba_slicer.cppm)
 </cite>
 
+## 更新摘要
+**所做更改**   
+- 增强了GCode生成系统，支持多固件（Marlin、RepRap、Klipper）
+- 新增GCodePath类，继承自LayersPath，提供完整的打印机配置管理
+- 实现GenerateGCodePathV2函数，支持综合的打印机参数配置
+- 扩展了FDM流水线配置，包含喷嘴直径、耗材直径、温度、速度、回抽等完整设置
+- 在Lib/Dll/Module三层统一集成新的路径生成与输出逻辑
+
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
@@ -27,6 +37,8 @@
 
 ## 简介
 本文件围绕 HsBaSlicer 的 FDM GCode 路径输出优化进行系统化说明。该优化在 paths 模块新增 GCodePath 类（继承 LayersPath），支持 Marlin、RepRap/RRF、Klipper 三种主流固件的标准 GCode 输出，并在 Lib/Dll/Module 三层统一接入新的路径生成与输出逻辑。同时保留原有 PointsPath 与 ToString() 行为以维持向后兼容。
+
+**更新** 本次增强引入了完整的打印机配置管理系统，包括喷嘴直径、耗材直径、温度设置、速度控制、回抽参数等，为不同固件类型提供了精确的GCode生成能力。
 
 ## 项目结构
 GCode 路径输出相关代码主要分布在以下位置：
@@ -64,7 +76,7 @@ F --> E
 G --> E
 ```
 
-图表来源
+**图表来源**
 - [paths/gcodepath.hpp:1-83](file://paths/gcodepath.hpp#L1-L83)
 - [paths/gcodepath.cpp:1-377](file://paths/gcodepath.cpp#L1-L377)
 - [paths/layerspath.hpp:1-47](file://paths/layerspath.hpp#L1-L47)
@@ -75,19 +87,21 @@ G --> E
 - [DllHsBaSlicer/fdm_pipeline.cpp:1-410](file://DllHsBaSlicer/fdm_pipeline.cpp#L1-L410)
 - [ModuleHsBaSlicer/hsba_slicer.cppm:429-503](file://ModuleHsBaSlicer/hsba_slicer.cppm#L429-L503)
 
-章节来源
+**章节来源**
 - [paths/CMakeLists.txt:1-19](file://paths/CMakeLists.txt#L1-L19)
 - [pipelinetypes/pipeline_types.h:44-110](file://pipelinetypes/pipeline_types.h#L44-L110)
 
 ## 核心组件
-- GCodePath：继承自 LayersPath，负责按固件类型生成标准 GCode，支持 Lua 后处理脚本
-- GCodePrinterConfig：打印机参数集合（喷嘴直径、耗材直径、温度、挤出倍率、回抽等）
-- GCodeFirmware：固件类型枚举（Marlin、RepRap、Klipper）
-- LayersPath：层数据容器，提供 push_back(layerConfig, PolygonsD) 与 ToString/Lua 扩展能力
-- path_generator：路径生成器，提供 GenerateGCodePathV2 将 LayerPathData 转换为 GCodePath
-- Dll/Module 集成：在 FDM 流水线阶段5调用 GenerateGCodePathV2 并输出 ToGCode(firmware)
+- **GCodePath**：继承自 LayersPath，负责按固件类型生成标准 GCode，支持 Lua 后处理脚本
+- **GCodePrinterConfig**：打印机参数集合（喷嘴直径、耗材直径、温度、挤出倍率、回抽等）
+- **GCodeFirmware**：固件类型枚举（Marlin、RepRap、Klipper）
+- **LayersPath**：层数据容器，提供 push_back(layerConfig, PolygonsD) 与 ToString/Lua 扩展能力
+- **path_generator**：路径生成器，提供 GenerateGCodePathV2 将 LayerPathData 转换为 GCodePath
+- **Dll/Module 集成**：在 FDM 流水线阶段5调用 GenerateGCodePathV2 并输出 ToGCode(firmware)
 
-章节来源
+**更新** 新增了完整的打印机配置管理，支持喷嘴直径、耗材直径、温度设置、速度控制、回抽参数等全面的打印参数配置。
+
+**章节来源**
 - [paths/gcodepath.hpp:18-78](file://paths/gcodepath.hpp#L18-L78)
 - [paths/gcodepath.cpp:39-55](file://paths/gcodepath.cpp#L39-L55)
 - [paths/layerspath.hpp:13-43](file://paths/layerspath.hpp#L13-L43)
@@ -113,7 +127,7 @@ Dll-->>Caller : 返回gcode_content
 Note over Dll,Path : 若配置了output_path则调用SaveGCode写入文件
 ```
 
-图表来源
+**图表来源**
 - [DllHsBaSlicer/fdm_pipeline.cpp:328-351](file://DllHsBaSlicer/fdm_pipeline.cpp#L328-L351)
 - [LibHsBaSlicer/Path/path_generator.cpp:89-110](file://LibHsBaSlicer/Path/path_generator.cpp#L89-L110)
 - [paths/gcodepath.cpp:267-290](file://paths/gcodepath.cpp#L267-L290)
@@ -122,14 +136,14 @@ Note over Dll,Path : 若配置了output_path则调用SaveGCode写入文件
 
 ### GCodePath 类设计
 GCodePath 继承 LayersPath，封装打印机配置与固件差异化的 GCode 生成逻辑。关键方法包括：
-- ToGCode(firmware)：生成指定固件的标准 GCode
-- SaveGCode(path, firmware)：保存为文件
-- ToGCode(firmware, script, lua_reg)：基于 Lua 脚本的后处理，可覆盖或修改基础 GCode
+- **ToGCode(firmware)**：生成指定固件的标准 GCode
+- **SaveGCode(path, firmware)**：保存为文件
+- **ToGCode(firmware, script, lua_reg)**：基于 Lua 脚本的后处理，可覆盖或修改基础 GCode
 
 内部辅助方法：
-- GenerateHeader/GenerateFooter：根据固件生成头尾命令（温度设置、归位、风扇控制、压力前馈等）
-- GenerateLayerGCode：逐层输出 Z 移动、轮廓/填充/支撑路径（G0/G1 指令）
-- CalcExtrusion：根据线宽、层高、段长与挤出倍率计算挤出量
+- **GenerateHeader/GenerateFooter**：根据固件生成头尾命令（温度设置、归位、风扇控制、压力前馈等）
+- **GenerateLayerGCode**：逐层输出 Z 移动、轮廓/填充/支撑路径（G0/G1 指令）
+- **CalcExtrusion**：根据线宽、层高、段长与挤出倍率计算挤出量
 
 ```mermaid
 classDiagram
@@ -160,19 +174,21 @@ IPath <|-- LayersPath
 LayersPath <|-- GCodePath
 ```
 
-图表来源
+**图表来源**
 - [paths/layerspath.hpp:13-43](file://paths/layerspath.hpp#L13-L43)
 - [paths/gcodepath.hpp:45-78](file://paths/gcodepath.hpp#L45-L78)
 
-章节来源
+**章节来源**
 - [paths/gcodepath.hpp:18-78](file://paths/gcodepath.hpp#L18-L78)
 - [paths/gcodepath.cpp:45-55](file://paths/gcodepath.cpp#L45-L55)
 - [paths/layerspath.hpp:13-43](file://paths/layerspath.hpp#L13-L43)
 
 ### 固件差异化输出
-- Marlin：标准 M104/M109/M140/M190 温度等待，G92 E0，M82/M83 切换绝对/相对挤出
-- RepRap/RRF：额外 M106 风扇控制，显式 M82/M83
-- Klipper：SET_PRESSURE_ADVANCE、M220/M221 速度流量百分比、SET_FAN_SPEED
+系统支持三种主流固件的差异化GCode输出：
+
+- **Marlin**：标准 M104/M109/M140/M190 温度等待，G92 E0，M82/M83 切换绝对/相对挤出
+- **RepRap/RRF**：额外 M106 风扇控制，显式 M82/M83
+- **Klipper**：SET_PRESSURE_ADVANCE、M220/M221 速度流量百分比、SET_FAN_SPEED
 
 ```mermaid
 flowchart TD
@@ -191,12 +207,12 @@ Loop --> |否| Footer["生成尾部命令<br/>冷却/抬升/归位/关电机"]
 Footer --> End(["结束"])
 ```
 
-图表来源
+**图表来源**
 - [paths/gcodepath.cpp:57-134](file://paths/gcodepath.cpp#L57-L134)
 - [paths/gcodepath.cpp:136-185](file://paths/gcodepath.cpp#L136-L185)
 - [paths/gcodepath.cpp:187-265](file://paths/gcodepath.cpp#L187-L265)
 
-章节来源
+**章节来源**
 - [paths/gcodepath.cpp:57-134](file://paths/gcodepath.cpp#L57-L134)
 - [paths/gcodepath.cpp:136-185](file://paths/gcodepath.cpp#L136-L185)
 - [paths/gcodepath.cpp:187-265](file://paths/gcodepath.cpp#L187-L265)
@@ -216,10 +232,10 @@ D --> E["计算挤出量 E = (volume / area) * extrusion_multiplier"]
 E --> F["返回 E"]
 ```
 
-图表来源
+**图表来源**
 - [paths/gcodepath.cpp:45-55](file://paths/gcodepath.cpp#L45-L55)
 
-章节来源
+**章节来源**
 - [paths/gcodepath.cpp:45-55](file://paths/gcodepath.cpp#L45-L55)
 
 ### 路径生成器 V2
@@ -237,10 +253,10 @@ end
 Gen-->>Caller : unique_ptr<GCodePath>
 ```
 
-图表来源
+**图表来源**
 - [LibHsBaSlicer/Path/path_generator.cpp:89-110](file://LibHsBaSlicer/Path/path_generator.cpp#L89-L110)
 
-章节来源
+**章节来源**
 - [LibHsBaSlicer/Path/path_generator.cpp:89-110](file://LibHsBaSlicer/Path/path_generator.cpp#L89-L110)
 
 ### DllHsBaSlicer 集成
@@ -263,11 +279,11 @@ Path-->>Stage5 : GCode字符串
 Stage5-->>API : 返回结果
 ```
 
-图表来源
+**图表来源**
 - [DllHsBaSlicer/fdm_pipeline.cpp:129-183](file://DllHsBaSlicer/fdm_pipeline.cpp#L129-L183)
 - [DllHsBaSlicer/fdm_pipeline.cpp:328-351](file://DllHsBaSlicer/fdm_pipeline.cpp#L328-L351)
 
-章节来源
+**章节来源**
 - [DllHsBaSlicer/fdm_pipeline.cpp:129-183](file://DllHsBaSlicer/fdm_pipeline.cpp#L129-L183)
 - [DllHsBaSlicer/fdm_pipeline.cpp:328-351](file://DllHsBaSlicer/fdm_pipeline.cpp#L328-L351)
 
@@ -289,10 +305,10 @@ Mod->>Path : SaveGCode(output_path, firmware)
 Mod-->>User : FdmResult{gcode, total_layers}
 ```
 
-图表来源
+**图表来源**
 - [ModuleHsBaSlicer/hsba_slicer.cppm:429-503](file://ModuleHsBaSlicer/hsba_slicer.cppm#L429-L503)
 
-章节来源
+**章节来源**
 - [ModuleHsBaSlicer/hsba_slicer.cppm:429-503](file://ModuleHsBaSlicer/hsba_slicer.cppm#L429-L503)
 
 ## 依赖关系分析
@@ -313,7 +329,7 @@ CMake["paths/CMakeLists.txt"] --> LP
 CMake --> GC
 ```
 
-图表来源
+**图表来源**
 - [paths/gcodepath.hpp:10-10](file://paths/gcodepath.hpp#L10-L10)
 - [LibHsBaSlicer/Path/path_generator.hpp:11-12](file://LibHsBaSlicer/Path/path_generator.hpp#L11-L12)
 - [DllHsBaSlicer/fdm_pipeline.cpp:14-19](file://DllHsBaSlicer/fdm_pipeline.cpp#L14-L19)
@@ -321,7 +337,7 @@ CMake --> GC
 - [pipelinetypes/pipeline_types.h:44-110](file://pipelinetypes/pipeline_types.h#L44-L110)
 - [paths/CMakeLists.txt:13-14](file://paths/CMakeLists.txt#L13-L14)
 
-章节来源
+**章节来源**
 - [paths/CMakeLists.txt:1-19](file://paths/CMakeLists.txt#L1-L19)
 - [pipelinetypes/pipeline_types.h:44-110](file://pipelinetypes/pipeline_types.h#L44-L110)
 
@@ -331,26 +347,37 @@ CMake --> GC
 - Lua 后处理仅在需要时启用，避免不必要的解释器开销
 - 建议对大型模型分层批处理，避免一次性生成过大的 GCode 字符串
 
-[本节为通用指导，不直接分析具体文件]
-
 ## 故障排查指南
-- 文件写入失败：SaveGCode 抛出 RuntimeError，检查输出路径权限与磁盘空间
-- Lua 脚本错误：加载或执行失败会抛出 RuntimeError，检查脚本语法与全局变量名
-- 固件命令不匹配：确认 gcode_firmware 与实际固件一致，特别是 Klipper 的 SET_* 命令
-- 挤出异常：检查 line_width、layer_height、filament_diameter 与 extrusion_multiplier 是否合理
+- **文件写入失败**：SaveGCode 抛出 RuntimeError，检查输出路径权限与磁盘空间
+- **Lua 脚本错误**：加载或执行失败会抛出 RuntimeError，检查脚本语法与全局变量名
+- **固件命令不匹配**：确认 gcode_firmware 与实际固件一致，特别是 Klipper 的 SET_* 命令
+- **挤出异常**：检查 line_width、layer_height、filament_diameter 与 extrusion_multiplier 是否合理
 
-章节来源
+**章节来源**
 - [paths/gcodepath.cpp:281-290](file://paths/gcodepath.cpp#L281-L290)
-- [paths/gcodepath.cpp:340-374](file://paths/gcodepath.cpp#L340-L374)
+- [paths/gcodepath.cpp:340-374](file://paths/gcodepath.cpp#L340-374)
 
 ## 结论
 本次优化通过引入 GCodePath 类与 GenerateGCodePathV2，实现了多固件标准的 GCode 输出，并在 Lib/Dll/Module 三层保持一致的调用方式。设计保持向后兼容，同时提供 Lua 扩展能力，便于定制化后处理。整体架构清晰，易于扩展与维护。
 
-[本节为总结性内容，不直接分析具体文件]
+**更新** 新增的完整打印机配置管理系统为不同固件类型提供了精确的GCode生成能力，支持喷嘴直径、耗材直径、温度设置、速度控制、回抽参数等全面的打印参数配置。
 
 ## 附录
-- 配置文件默认值：HsBaFdmConfigDefault 初始化所有字段，默认固件为 Marlin
-- 测试建议：对同一模型分别输出 Marlin/RepRap/Klipper 格式，验证头部/层/尾部命令正确性
+- **配置文件默认值**：HsBaFdmConfigDefault 初始化所有字段，默认固件为 Marlin
+- **测试建议**：对同一模型分别输出 Marlin/RepRap/Klipper 格式，验证头部/层/尾部命令正确性
+- **打印机配置字段**：
+  - nozzle_diameter：喷嘴直径（mm），默认 0.4
+  - filament_diameter：耗材直径（mm），默认 1.75
+  - nozzle_temp：喷嘴温度（°C），默认 200.0
+  - bed_temp：热床温度（°C），默认 60.0
+  - retract_length：回抽长度（mm），默认 1.0
+  - retract_speed：回抽速度（mm/s），默认 40.0
+  - print_speed：打印速度（mm/s），默认 50.0
+  - travel_speed：移动速度（mm/s），默认 100.0
+  - first_layer_speed：首层速度（mm/s），默认 20.0
+  - layer_height：层高（mm），默认 0.2
+  - line_width：线宽（mm），默认 0.4
+  - extrusion_multiplier：挤出倍率，默认 1.0
 
-章节来源
+**章节来源**
 - [pipelinetypes/pipeline_types.h:317-357](file://pipelinetypes/pipeline_types.h#L317-L357)

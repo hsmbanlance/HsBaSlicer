@@ -15,6 +15,14 @@
 - [hsba_slicer.cppm](file://ModuleHsBaSlicer/hsba_slicer.cppm)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Enhanced GCodePath class with comprehensive firmware-specific optimizations for Marlin, RepRap/RRF, and Klipper
+- Added new GCodePrinterConfig structure with detailed printer parameters
+- Implemented advanced header/footer generation with firmware-specific commands
+- Integrated multi-firmware support throughout the entire pipeline architecture
+- Enhanced Lua post-processing capabilities with firmware context awareness
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -27,15 +35,15 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document explains the Model Preprocessing System with a focus on the new GCode path generation and multi-firmware output for FDM printing. The system introduces a dedicated GCodePath class that extends layer-based path storage to produce standard GCode strings tailored for Marlin, RepRap/RRF, and Klipper firmware targets. It integrates across LibHsBaSlicer (C++ API), DllHsBaSlicer (C ABI pipeline), and ModuleHsBaSlicer (C++20 module interface).
+This document explains the Model Preprocessing System with a focus on the enhanced GCode path generation and multi-firmware output capabilities for FDM printing. The system now features a sophisticated GCodePath class that extends layer-based path storage to produce standard GCode strings tailored for Marlin, RepRap/RRF, and Klipper firmware targets with firmware-specific optimizations. It integrates across LibHsBaSlicer (C++ API), DllHsBaSlicer (C ABI pipeline), and ModuleHsBaSlicer (C++20 module interface) while supporting the new GCodePrinterConfig structure for comprehensive printer configuration.
 
 ## Project Structure
 The preprocessing and path generation components are organized into:
-- paths: Core path abstractions and GCode output implementation
+- paths: Core path abstractions and GCode output implementation with multi-firmware support
 - pipelinetypes: C-compatible configuration types including GCode firmware selection and printer parameters
-- LibHsBaSlicer/Path: Path generation utilities bridging layer data to GCodePath
-- DllHsBaSlicer: Full FDM pipeline integrating slicing, support, fill, and GCode generation
-- ModuleHsBaSlicer: High-level C++20 module exposing pipelines and GCodePath usage
+- LibHsBaSlicer/Path: Path generation utilities bridging layer data to GCodePath with firmware optimization
+- DllHsBaSlicer: Full FDM pipeline integrating slicing, support, fill, and firmware-aware GCode generation
+- ModuleHsBaSlicer: High-level C++20 module exposing pipelines and GCodePath usage with firmware selection
 
 ```mermaid
 graph TB
@@ -93,17 +101,19 @@ GMF --> Types
 - [hsba_slicer.cppm](file://ModuleHsBaSlicer/hsba_slicer.cppm)
 
 ## Core Components
-- GCodePath: Extends LayersPath to generate firmware-specific GCode strings and files; supports Lua post-processing.
-- LayersPath: Stores per-layer polygons and metadata; provides generic string conversion and Lua scripting hooks.
-- PointsPath: Low-level G-point sequence representation used by legacy path generation.
-- Path generator utilities: Convert layer polygon data into G-code points or directly into GCodePath instances.
-- Pipeline integration: DllHsBaSlicer and ModuleHsBaSlicer use GenerateGCodePathV2 and ToGCode(firmware) for final output.
+- **GCodePath**: Extends LayersPath to generate firmware-specific GCode strings and files; supports Lua post-processing with firmware context awareness.
+- **GCodePrinterConfig**: Comprehensive printer configuration structure containing nozzle diameter, filament diameter, temperatures, speeds, retraction settings, and extrusion parameters.
+- **LayersPath**: Stores per-layer polygons and metadata; provides generic string conversion and Lua scripting hooks.
+- **PointsPath**: Low-level G-point sequence representation used by legacy path generation.
+- **Path generator utilities**: Convert layer polygon data into G-code points or directly into GCodePath instances with firmware optimization.
+- **Pipeline integration**: DllHsBaSlicer and ModuleHsBaSlicer use GenerateGCodePathV2 and ToGCode(firmware) for final output with firmware-specific optimizations.
 
 Key responsibilities:
-- Firmware-specific header/footer generation
-- Layer-by-layer G0/G1 moves with extrusion calculation
-- Retraction handling and speed/feed rate management
-- Lua-driven customization of GCode content
+- Firmware-specific header/footer generation with optimized commands
+- Layer-by-layer G0/G1 moves with precise extrusion calculation
+- Retraction handling and speed/feed rate management per firmware requirements
+- Lua-driven customization of GCode content with firmware context
+- Advanced printer parameter management through GCodePrinterConfig
 
 **Section sources**
 - [gcodepath.hpp](file://paths/gcodepath.hpp)
@@ -114,7 +124,7 @@ Key responsibilities:
 - [path_generator.cpp](file://LibHsBaSlicer/Path/path_generator.cpp)
 
 ## Architecture Overview
-The preprocessing pipeline produces layered polygons which are converted into GCodePath objects. The DllHsBaSlicer orchestrates slicing, support, and fill stages, then delegates to path generation. The ModuleHsBaSlicer exposes a high-level API that uses the same path generation logic.
+The preprocessing pipeline produces layered polygons which are converted into GCodePath objects with firmware-specific optimizations. The DllHsBaSlicer orchestrates slicing, support, and fill stages, then delegates to path generation. The ModuleHsBaSlicer exposes a high-level API that uses the same path generation logic with enhanced firmware support.
 
 ```mermaid
 sequenceDiagram
@@ -148,7 +158,7 @@ Mod-->>Caller : FdmResult {gcode}
 ## Detailed Component Analysis
 
 ### GCodePath Class
-GCodePath encapsulates firmware-aware GCode generation over layered polygon data. It computes extrusion amounts based on line width, layer height, filament diameter, and multiplier, and emits G0/G1 moves with appropriate feed rates and retraction behavior.
+GCodePath encapsulates firmware-aware GCode generation over layered polygon data with comprehensive printer configuration support. It computes extrusion amounts based on line width, layer height, filament diameter, and multiplier, and emits G0/G1 moves with appropriate feed rates and retraction behavior tailored for each firmware target.
 
 ```mermaid
 classDiagram
@@ -184,9 +194,26 @@ class PointsPath {
 +ToString()
 +Save(path, script, lua_reg)
 }
+class GCodePrinterConfig {
+-nozzle_diameter : float
+-filament_diameter : float
+-nozzle_temp : float
+-bed_temp : float
+-retract_length : float
+-retract_speed : float
+-print_speed : float
+-travel_speed : float
+-first_layer_speed : float
+-layer_height : float
+-line_width : float
+-extrusion_multiplier : float
+-relative_extrusion : bool
+-enable_retraction : bool
+}
 IPath <|.. LayersPath
 LayersPath <|-- GCodePath
 IPath <|.. PointsPath
+GCodePath --> GCodePrinterConfig
 ```
 
 **Diagram sources**
@@ -196,16 +223,16 @@ IPath <|.. PointsPath
 - [pointspath.hpp](file://paths/pointspath.hpp)
 
 Key behaviors:
-- Header/Footer: Firmware-specific commands for temperature, homing, extruder mode, fan control, pressure advance, and motor disable.
-- Layer processing: Z movement, optional retraction/unretraction, and sequential G1 moves with calculated E values.
-- Lua post-processing: Optional script execution to transform base GCode; globals include firmware name and printer config table.
+- **Header/Footer Generation**: Firmware-specific commands for temperature control, homing sequences, extruder mode setup, fan control, pressure advance configuration, and motor disable sequences.
+- **Layer Processing**: Z movement with firmware-specific positioning, optional retraction/unretraction with calculated E values, and sequential G1 moves with optimized feed rates.
+- **Lua Post-processing**: Optional script execution with firmware context; globals include firmware name, printer config table, and layer information for advanced customization.
 
 **Section sources**
 - [gcodepath.hpp](file://paths/gcodepath.hpp)
 - [gcodepath.cpp](file://paths/gcodepath.cpp)
 
 ### Path Generation Utilities
-The path generator bridges layer polygon data to GCodePath instances while preserving backward compatibility with PointsPath generation.
+The path generator bridges layer polygon data to GCodePath instances while preserving backward compatibility with PointsPath generation and supporting the new GCodePrinterConfig structure.
 
 ```mermaid
 flowchart TD
@@ -224,7 +251,7 @@ PushLayer --> ReturnPath["Return unique_ptr<GCodePath>"]
 - [path_generator.cpp](file://LibHsBaSlicer/Path/path_generator.cpp)
 
 ### DllHsBaSlicer FDM Pipeline Integration
-The Dll pipeline builds internal configuration from C structs, runs slicing/support/fill stages, constructs LayerPathData, generates GCodePath, and outputs firmware-specific GCode.
+The Dll pipeline builds internal configuration from C structs, runs slicing/support/fill stages, constructs LayerPathData, generates GCodePath with firmware optimization, and outputs firmware-specific GCode.
 
 ```mermaid
 sequenceDiagram
@@ -253,7 +280,7 @@ Run-->>API : HsBaFdmPipelineResult_t
 - [fdm_pipeline.cpp](file://DllHsBaSlicer/fdm_pipeline.cpp)
 
 ### ModuleHsBaSlicer C++20 Interface
-The module exposes FdmPipeline methods returning GCodePath and using ToGCode(firmware) for output. It also maps configuration fields to GCodePrinterConfig.
+The module exposes FdmPipeline methods returning GCodePath and using ToGCode(firmware) for output. It maps configuration fields to GCodePrinterConfig with comprehensive parameter support.
 
 ```mermaid
 classDiagram
@@ -266,7 +293,24 @@ class GCodePath {
 +ToGCode(firmware) string
 +SaveGCode(path, firmware) void
 }
+class GCodePrinterConfig {
++nozzle_diameter : float
++filament_diameter : float
++nozzle_temp : float
++bed_temp : float
++retract_length : float
++retract_speed : float
++print_speed : float
++travel_speed : float
++first_layer_speed : float
++layer_height : float
++line_width : float
++extrusion_multiplier : float
++relative_extrusion : bool
++enable_retraction : bool
+}
 FdmPipeline --> GCodePath : "uses"
+GCodePath --> GCodePrinterConfig
 ```
 
 **Diagram sources**
@@ -277,7 +321,7 @@ FdmPipeline --> GCodePath : "uses"
 - [hsba_slicer.cppm](file://ModuleHsBaSlicer/hsba_slicer.cppm)
 
 ### Configuration Types (C ABI)
-The C-compatible configuration includes firmware selection and printer parameters required for GCode generation. Defaults ensure backward compatibility.
+The C-compatible configuration includes firmware selection and comprehensive printer parameters required for GCode generation with default values ensuring backward compatibility.
 
 ```mermaid
 erDiagram
@@ -290,6 +334,11 @@ float bed_temp
 float retract_length
 float retract_speed
 float first_layer_speed
+float print_speed
+float travel_speed
+float layer_height
+float line_width
+float extrusion_multiplier
 }
 ```
 
@@ -301,10 +350,10 @@ float first_layer_speed
 
 ## Dependency Analysis
 - GCodePath depends on LayersPath for layer storage and IPath for common interfaces.
-- Path generator depends on 2D polygon types and returns either PointsPath or GCodePath.
-- DllHsBaSlicer depends on LibHsBaSlicer path generation and GCodePath for final output.
-- ModuleHsBaSlicer depends on both LibHsBaSlicer and GCodePath for high-level APIs.
-- CMake links Lua libraries and core modules to enable GCodePath functionality.
+- Path generator depends on 2D polygon types and returns either PointsPath or GCodePath with firmware optimization.
+- DllHsBaSlicer depends on LibHsBaSlicer path generation and GCodePath for final firmware-specific output.
+- ModuleHsBaSlicer depends on both LibHsBaSlicer and GCodePath for high-level APIs with firmware support.
+- CMake links Lua libraries and core modules to enable GCodePath functionality with firmware context.
 
 ```mermaid
 graph LR
@@ -342,11 +391,10 @@ Types --> Mod
 
 ## Performance Considerations
 - Extrusion calculation is O(1) per segment; overall complexity scales linearly with total segment count across layers.
-- String building uses ostringstream; consider buffering strategies for very large models.
-- Lua post-processing incurs interpreter overhead; use sparingly or cache results when possible.
-- Retraction and travel moves add extra commands; tune speeds and retraction settings to balance print quality and time.
-
-[No sources needed since this section provides general guidance]
+- String building uses ostringstream with firmware-specific optimizations; consider buffering strategies for very large models.
+- Lua post-processing incurs interpreter overhead; use sparingly or cache results when possible with firmware context.
+- Retraction and travel moves add extra commands; tune speeds and retraction settings per firmware requirements to balance print quality and time.
+- Firmware-specific command generation adds minimal overhead but ensures optimal printer performance.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -354,11 +402,10 @@ Common issues and resolutions:
 - Lua runtime errors: Validate scripts and ensure required globals (gcode, firmware, printer_config) are provided; check error messages returned by Lua.
 - Incorrect firmware output: Verify GCodeFirmware selection matches target printer; confirm printer configuration fields align with hardware capabilities.
 - Extrusion anomalies: Check line_width, layer_height, filament_diameter, and extrusion_multiplier; validate relative vs absolute extrusion mode.
+- Firmware-specific command errors: Ensure firmware type matches actual printer firmware; verify printer configuration parameters are within acceptable ranges.
 
 **Section sources**
 - [gcodepath.cpp](file://paths/gcodepath.cpp)
 
 ## Conclusion
-The Model Preprocessing System now supports robust, firmware-targeted GCode generation through GCodePath, integrated seamlessly across LibHsBaSlicer, DllHsBaSlicer, and ModuleHsBaSlicer. The design maintains backward compatibility while enabling extensibility via Lua post-processing and precise printer configuration. This enables consistent, high-quality GCode output for Marlin, RepRap/RRF, and Klipper platforms.
-
-[No sources needed since this section summarizes without analyzing specific files]
+The Model Preprocessing System now supports robust, firmware-targeted GCode generation through the enhanced GCodePath class with comprehensive GCodePrinterConfig support, integrated seamlessly across LibHsBaSlicer, DllHsBaSlicer, and ModuleHsBaSlicer. The design maintains backward compatibility while enabling extensibility via Lua post-processing with firmware context awareness and precise printer configuration. This enables consistent, high-quality GCode output specifically optimized for Marlin, RepRap/RRF, and Klipper platforms with firmware-specific command sets and parameter tuning.

@@ -61,6 +61,7 @@ The design emphasizes:
 - Independent model management per pipeline instance to avoid conflicts during concurrent execution.
 - **Updated** Multi-firmware GCode output support with Marlin, RepRap, and Klipper compatibility.
 - **Updated** Enhanced printer configuration system with nozzle, filament, temperature, and retraction parameters.
+- **Updated** Dual path generation system supporting both legacy PointsPath and advanced GCodePath approaches.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -381,7 +382,7 @@ Success --> |No| ErrPath["Set error and return"]
 
 **Diagram sources**
 - [fdm_pipeline.cpp:182-292](file://DllHsBaSlicer/fdm_pipeline.cpp#L182-L292)
-- [fdm_pipeline.cpp:340-346](file://DllHsBaSlicer/fdm_pipeline.cpp#L340-L346)
+- [fdm_pipeline.cpp:340-346](file://DllHsBaSlicer/fdm_pipeline.cpp#L340-346)
 
 **Section sources**
 - [fdm_pipeline.cpp:203-367](file://DllHsBaSlicer/fdm_pipeline.cpp#L203-L367)
@@ -419,13 +420,13 @@ GlobalModelLoader --> ModelLoader : "wraps thread_local"
 
 **Diagram sources**
 - [ModelLoader.hpp:26-127](file://preprocess/ModelLoader.hpp#L26-L127)
-- [fdm_pipeline.cpp:212-228](file://DllHsBaSlicer/fdm_pipeline.cpp#L212-L228)
+- [fdm_pipeline.cpp:212-228](file://DllHsBaSlicer/fdm_pipeline.cpp#L212-228)
 - [model_preprocess.cpp:10-14](file://LibHsBaSlicer/Preprocess/model_preprocess.cpp#L10-L14)
 
 **Section sources**
 - [ModelLoader.hpp:1-131](file://preprocess/ModelLoader.hpp#L1-L131)
 - [ModelLoader.cpp:1-291](file://preprocess/ModelLoader.cpp#L1-L291)
-- [fdm_pipeline.cpp:212-228](file://DllHsBaSlicer/fdm_pipeline.cpp#L212-L228)
+- [fdm_pipeline.cpp:212-228](file://DllHsBaSlicer/fdm_pipeline.cpp#L212-228)
 
 ### Version Information Module
 **New Section** The version information system has been centralized into a unified module providing consistent version data across the application.
