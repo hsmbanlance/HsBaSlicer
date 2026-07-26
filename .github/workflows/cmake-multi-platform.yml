@@ -200,7 +200,7 @@ jobs:
     - name: Install Java (for sdkmanager)
       run: |
         sudo apt-get update
-        sudo apt-get install -y openjdk-11-jdk wget unzip
+        sudo apt-get install -y openjdk-21-jdk wget unzip
         sudo apt-get install -y ninja-build
         sudo apt-get install -y autoconf autoconf-archive automake libtool
 
@@ -214,7 +214,7 @@ jobs:
         unzip cmdline.zip -d $HOME/android-sdk/cmdline-tools
         export PATH=$PATH:$HOME/android-sdk/cmdline-tools/cmdline-tools/bin
         yes | sdkmanager --licenses || true
-        sdkmanager --sdk_root=$HOME/android-sdk "platform-tools" "platforms;android-31" "build-tools;31.0.0"
+        sdkmanager --sdk_root=$HOME/android-sdk "platform-tools" "platforms;android-34" "build-tools;34.0.0"
         # Ensure consistent SDK env vars to avoid Gradle confusion
         echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
         echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
@@ -286,15 +286,15 @@ jobs:
         mkdir -p android/app/src/main/jniLibs/arm64-v8a
         cp build-android/android_libs/arm64-v8a/*.so android/app/src/main/jniLibs/arm64-v8a/ || true
 
-    - name: Install Gradle 7.5.1, generate Gradle wrapper and build APK
+    - name: Install Gradle 8.7, generate Gradle wrapper and build APK
       shell: bash
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         sudo apt-get update
         sudo apt-get install -y wget unzip git
-        # Ensure a compatible Gradle is available (AGP 7.4.2 needs Gradle 7.5+)
-        GRADLE_VERSION=7.5.1
+        # Ensure a compatible Gradle is available (AGP 8.3.2 needs Gradle 8.5+)
+        GRADLE_VERSION=8.7
         GRADLE_DIR=/opt/gradle/gradle-${GRADLE_VERSION}
         if [ ! -d "$GRADLE_DIR" ]; then
           sudo mkdir -p /opt/gradle
