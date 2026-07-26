@@ -165,4 +165,32 @@ void SlsResultToMsg(const HsBaSlsPipelineResult_t& result, HsbaProto::sls_pipe_r
     msg->set_sls_pipe_result_elapsed_seconds(result.elapsed_seconds);
 }
 
+void FileTransferConfigToMsg(const HsBaFileTransferPipelineConfig_t& config, HsbaProto::file_transfer_pipe_config* msg)
+{
+    if (config.host)
+        msg->set_file_transfer_config_host(config.host);
+    if (config.port)
+        msg->set_file_transfer_config_port(config.port);
+    msg->set_file_transfer_config_pool_size(config.pool_size);
+
+    if (config.file_paths && config.file_count > 0)
+    {
+        for (int i = 0; i < config.file_count; ++i)
+        {
+            if (config.file_paths[i])
+                msg->add_file_transfer_config_file_paths(config.file_paths[i]);
+        }
+    }
+}
+
+void FileTransferResultToMsg(const HsBaFileTransferPipelineResult_t& result, HsbaProto::file_transfer_pipe_result* msg)
+{
+    msg->set_file_transfer_result_success(result.success != 0);
+    msg->set_file_transfer_result_files_transferred(result.files_transferred);
+    msg->set_file_transfer_result_total_files(result.total_files);
+    if (result.error_message)
+        msg->set_file_transfer_result_error_message(result.error_message);
+    msg->set_file_transfer_result_elapsed_seconds(result.elapsed_seconds);
+}
+
 }  // namespace HsBa::Slicer

@@ -138,6 +138,50 @@ extern "C"
                                                    void** out_data, int* out_size);
 
     /* ========================================================================
+     *  File Transfer Proto conversion
+     * ====================================================================== */
+
+    /**
+     * @brief Deserialize file transfer config from proto bytes.
+     * @param proto_data Serialized proto bytes (file_transfer_pipe_config).
+     * @param proto_size Size of proto_data in bytes.
+     * @param config Output C config struct.
+     * @return 1 on success, 0 on parse failure.
+     */
+    HSBA_SLICER_API int HsBaFileTransferConfigFromProtoBytes(const void* proto_data, int proto_size,
+                                                             HsBaFileTransferPipelineConfig_t* config);
+
+    /**
+     * @brief Serialize file transfer config to proto bytes.
+     * @param config Input C config struct.
+     * @param out_data Output buffer (malloc-allocated, caller must free).
+     * @param out_size Output buffer size in bytes.
+     * @return 1 on success, 0 on serialization failure.
+     */
+    HSBA_SLICER_API int HsBaFileTransferConfigToProtoBytes(const HsBaFileTransferPipelineConfig_t* config,
+                                                           void** out_data, int* out_size);
+
+    /**
+     * @brief Deserialize file transfer result from proto bytes.
+     * @param proto_data Serialized proto bytes (file_transfer_pipe_result).
+     * @param proto_size Size of proto_data in bytes.
+     * @param result Output C result struct.
+     * @return 1 on success, 0 on parse failure.
+     */
+    HSBA_SLICER_API int HsBaFileTransferResultFromProtoBytes(const void* proto_data, int proto_size,
+                                                             HsBaFileTransferPipelineResult_t* result);
+
+    /**
+     * @brief Serialize file transfer result to proto bytes.
+     * @param result Input C result struct.
+     * @param out_data Output buffer (malloc-allocated, caller must free).
+     * @param out_size Output buffer size in bytes.
+     * @return 1 on success, 0 on serialization failure.
+     */
+    HSBA_SLICER_API int HsBaFileTransferResultToProtoBytes(const HsBaFileTransferPipelineResult_t* result,
+                                                           void** out_data, int* out_size);
+
+    /* ========================================================================
      *  C struct memory cleanup helpers
      *
      *  Free malloc'd string fields in converted C structs.
@@ -160,6 +204,12 @@ extern "C"
      * @param config Config struct whose string fields should be freed.
      */
     HSBA_SLICER_API void HsBaFreeSlsConfigStrings(HsBaSlsPipelineConfig_t* config);
+
+    /**
+     * @brief Free malloc'd string fields and file_paths array in file transfer config struct.
+     * @param config Config struct whose string fields and array should be freed.
+     */
+    HSBA_SLICER_API void HsBaFreeFileTransferConfigStrings(HsBaFileTransferPipelineConfig_t* config);
 
 #ifdef __cplusplus
 }  // extern "C"

@@ -7,6 +7,7 @@
 #include "fdm_pipeline.pb.h"
 #include "sla_pipeline.pb.h"
 #include "sls_pipeline.pb.h"
+#include "file_transfer_pipeline.pb.h"
 
 namespace HsBa::Slicer
 {
@@ -40,6 +41,16 @@ void MsgToSlsConfig(const HsbaProto::sls_pipe_config& msg, HsBaSlsPipelineConfig
 /// @note String fields (export_path, error_message) are allocated with malloc;
 ///       caller must call HsBaFreeSlsPipelineResult to release.
 void MsgToSlsResult(const HsbaProto::sls_pipe_result& msg, HsBaSlsPipelineResult_t* result);
+
+/// @brief Convert proto message to file transfer pipeline C config.
+/// @note String fields (host, port) and file_paths array are allocated with malloc;
+///       caller must call HsBaFreeFileTransferConfigStrings to release.
+void MsgToFileTransferConfig(const HsbaProto::file_transfer_pipe_config& msg, HsBaFileTransferPipelineConfig_t* config);
+
+/// @brief Convert proto message to file transfer pipeline C result.
+/// @note String fields (error_message) are allocated with malloc;
+///       caller must call HsBaFreeFileTransferPipelineResult to release.
+void MsgToFileTransferResult(const HsbaProto::file_transfer_pipe_result& msg, HsBaFileTransferPipelineResult_t* result);
 
 }  // namespace HsBa::Slicer
 

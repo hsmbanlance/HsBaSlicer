@@ -54,6 +54,7 @@ module;
 #include "LibHsBaSlicer/Path/path_generator.hpp"
 #include "LibHsBaSlicer/Path/sls_export.hpp"
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"
+#include "LibHsBaSlicer/Transfer/file_transfer.hpp"
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
 
 // ---- Module interface ----
@@ -96,6 +97,8 @@ using ::HsBaSlaPipelineConfig_t;
 using ::HsBaSlaPipelineResult_t;
 using ::HsBaSlsPipelineConfig_t;
 using ::HsBaSlsPipelineResult_t;
+using ::HsBaFileTransferPipelineConfig_t;
+using ::HsBaFileTransferPipelineResult_t;
 
 // Re-export support config types into HsBa::Slicer namespace
 using Support::SupportConfig;
@@ -111,6 +114,8 @@ HsBaFdmPipelineConfig_t defaultFdmConfig();
 HsBaSlaPipelineConfig_t defaultSlaConfig();
 /// @brief Create default SLS pipeline config.
 HsBaSlsPipelineConfig_t defaultSlsConfig();
+/// @brief Create default file transfer pipeline config.
+HsBaFileTransferPipelineConfig_t defaultFileTransferConfig();
 
 // ===========================================================================
 // Model (RAII wrapper)
@@ -243,6 +248,36 @@ private:
 };
 
 // ===========================================================================
+// File Transfer Pipeline
+// ===========================================================================
+
+/// @brief File transfer result (C++ style).
+struct FileTransferOutcome
+{
+    bool success = false;
+    int files_transferred = 0;
+    int total_files = 0;
+};
+
+/// @brief File transfer pipeline: Validate -> Connect -> Transfer.
+class FileTransferPipeline
+{
+public:
+    explicit FileTransferPipeline(HsBaFileTransferPipelineConfig_t cfg = HsBaFileTransferConfigDefault());
+
+    /// @brief Run file transfer to remote executor.
+    /// @throws SlicerError on failure.
+    inline FileTransferOutcome run() const;
+
+    /// @brief Run file transfer with progress reporting.
+    /// @throws SlicerError on failure.
+    inline FileTransferOutcome run(FileTransferProgressFunc progress) const;
+
+private:
+    HsBaFileTransferPipelineConfig_t cfg_;
+};
+
+// ===========================================================================
 // Lua custom functions
 // ===========================================================================
 
@@ -311,6 +346,7 @@ namespace HsBa::Slicer
 HsBaFdmPipelineConfig_t defaultFdmConfig() { return HsBaFdmConfigDefault(); }
 HsBaSlaPipelineConfig_t defaultSlaConfig() { return HsBaSlaConfigDefault(); }
 HsBaSlsPipelineConfig_t defaultSlsConfig() { return HsBaSlsConfigDefault(); }
+HsBaFileTransferPipelineConfig_t defaultFileTransferConfig() { return HsBaFileTransferConfigDefault(); }
 
 // ===========================================================================
 // Model
@@ -636,6 +672,45 @@ bool SlsPipeline::run(const Model& model) const
     const char* output = cfg_.output_path ? cfg_.output_path : "";
     return SaveSlsPackageLua(pkg, output, cfg_.export_lua_script,
                              cfg_.export_lua_func ? cfg_.export_lua_func : "export_sls");
+}
+
+// ===========================================================================
+// FileTransferPipeline
+// ===========================================================================
+
+FileTransferPipeline::FileTransferPipeline(HsBaFileTransferPipelineConfig_t cfg) : cfg_(cfg) {}
+
+FileTransferOutcome FileTransferPipeline::run() const
+{
+    return run(nullptr);
+}
+
+FileTransferOutcome FileTransferPipeline::run(FileTransferProgressFunc progress) const
+{
+    FileTransferConfig lib_cfg;
+    lib_cfg.host = cfg_.host ? cfg_.host : "";
+    lib_cfg.port = cfg_.port ? cfg_.port : "";
+    lib_cfg.pool_size = cfg_.pool_size > 0 ? static_cast<std::size_t>(cfg_.pool_size) : 4;
+
+    if (cfg_.file_paths && cfg_.file_count > 0)
+    {
+        lib_cfg.files.reserve(static_cast<std::size_t>(cfg_.file_count));
+        for (int i = 0; i < cfg_.file_count; ++i)
+        {
+            if (cfg_.file_paths[i])
+                lib_cfg.files.emplace_back(cfg_.file_paths[i]);
+        }
+    }
+
+    FileTransferResult result = TransferFiles(lib_cfg, progress);
+    if (!result.success)
+        throw SlicerError(result.error_message);
+
+    FileTransferOutcome outcome;
+    outcome.success = result.success;
+    outcome.files_transferred = result.files_transferred;
+    outcome.total_files = result.total_files;
+    return outcome;
 }
 
 // ===========================================================================

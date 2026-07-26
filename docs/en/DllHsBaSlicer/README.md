@@ -40,6 +40,8 @@ All public headers are exported to `include/HsBaSlicer/` in the install tree.
 | `fdm_pipeline.h` | FDM full-pipeline interface |
 | `sla_pipeline.h` | SLA full-pipeline interface |
 | `sls_pipeline.h` | SLS full-pipeline interface |
+| `file_transfer_pipeline.h` | File transfer pipeline interface (sync/async) |
+| `pipeline_convert.h` | Proto serialized bytes ↔ C struct conversion |
 | `lua_register.h` | Lua extension function registration (2D/3D/File/Event callbacks) |
 | `version_info.h` | Version information (JSON / XML strings) |
 | `pipelinetypes/pipeline_types.h` | All config/result structs, enums, callback types and inline default initializers (**no DLL dependency**, can be included standalone) |
@@ -211,6 +213,73 @@ void HsBaFreeSlsPipelineResult(HsBaSlsPipelineResult_t* result);
 
 > The SLS `export_lua_script` field **must not be NULL**.
 
+### File Transfer Pipeline
+
+Validate -> Establish connection pool -> Transfer files sequentially to a remote executor service.
+
+```c
+HsBaFileTransferPipelineConfig_t HsBaCreateDefaultFileTransferConfig(void);
+
+HsBaFileTransferPipelineResult_t HsBaRunFileTransferPipeline(
+    const HsBaFileTransferPipelineConfig_t* config,
+    HsBaFileTransferProgressCallback callback, void* user_data);
+
+void HsBaRunFileTransferPipelineAsync(
+    const HsBaFileTransferPipelineConfig_t* config,
+    HsBaFileTransferProgressCallback callback, void* user_data,
+    HsBaFileTransferResultCallback result_callback, void* result_user_data);
+
+void HsBaFreeFileTransferPipelineResult(HsBaFileTransferPipelineResult_t* result);
+```
+
+#### Configuration Fields
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `host` | NULL | Remote host address |
+| `port` | NULL | Remote service port |
+| `pool_size` | 4 | Connection pool size [1, 16] |
+| `file_paths` | NULL | Array of file paths to transfer |
+| `file_count` | 0 | Number of files |
+
+### Proto Serialization Conversion
+
+Bidirectional conversion between C structs and Protobuf serialized bytes, suitable for cross-process / cross-language communication. All output buffers are allocated with `malloc`; the caller is responsible for `free`.
+
+```c
+// FDM
+int HsBaFdmConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaFdmPipelineConfig_t* config);
+int HsBaFdmConfigToProtoBytes(const HsBaFdmPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaFdmResultFromProtoBytes(const void* proto_data, int proto_size, HsBaFdmPipelineResult_t* result);
+int HsBaFdmResultToProtoBytes(const HsBaFdmPipelineResult_t* result, void** out_data, int* out_size);
+
+// SLA
+int HsBaSlaConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaSlaPipelineConfig_t* config);
+int HsBaSlaConfigToProtoBytes(const HsBaSlaPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaSlaResultFromProtoBytes(const void* proto_data, int proto_size, HsBaSlaPipelineResult_t* result);
+int HsBaSlaResultToProtoBytes(const HsBaSlaPipelineResult_t* result, void** out_data, int* out_size);
+
+// SLS
+int HsBaSlsConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaSlsPipelineConfig_t* config);
+int HsBaSlsConfigToProtoBytes(const HsBaSlsPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaSlsResultFromProtoBytes(const void* proto_data, int proto_size, HsBaSlsPipelineResult_t* result);
+int HsBaSlsResultToProtoBytes(const HsBaSlsPipelineResult_t* result, void** out_data, int* out_size);
+
+// File Transfer
+int HsBaFileTransferConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaFileTransferPipelineConfig_t* config);
+int HsBaFileTransferConfigToProtoBytes(const HsBaFileTransferPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaFileTransferResultFromProtoBytes(const void* proto_data, int proto_size, HsBaFileTransferPipelineResult_t* result);
+int HsBaFileTransferResultToProtoBytes(const HsBaFileTransferPipelineResult_t* result, void** out_data, int* out_size);
+
+// Memory cleanup
+void HsBaFreeFdmConfigStrings(HsBaFdmPipelineConfig_t* config);
+void HsBaFreeSlaConfigStrings(HsBaSlaPipelineConfig_t* config);
+void HsBaFreeSlsConfigStrings(HsBaSlsPipelineConfig_t* config);
+void HsBaFreeFileTransferConfigStrings(HsBaFileTransferPipelineConfig_t* config);
+```
+
+> Proto message definitions are in the `proto/` directory (`fdm_pipeline.proto`, `sla_pipeline.proto`, `sls_pipeline.proto`, `file_transfer_pipeline.proto`), with multi-language output support for C++/C#/Java/Python/PHP.
+
 ### Version Information
 
 ```c
@@ -274,7 +343,8 @@ typedef void (*HsBaResultCallback)(HsBaFdmPipelineResult_t result, void* user_da
 2. `gcode_content` / `export_path` / `error_message` inside result structs are allocated by the library and **must** be released with the matching `HsBaFree*PipelineResult()`;
 3. Version strings must be freed with `HsBaFreeVersionString()`;
 4. Model handles (`void*` returned by `HsBaLoadModel` / `HsBaGetModel` / `HsBaBoolean*` / `HsBaThickSolidModel`) must be released with `HsBaReleaseModelHandle()`;
-5. `pipeline_types.h` also provides DLL-independent inline initializers `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()`, handy for header-only scenarios (e.g. mirroring structs for P/Invoke).
+5. `pipeline_types.h` also provides DLL-independent inline initializers `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()` / `HsBaFileTransferConfigDefault()`, handy for header-only scenarios (e.g. mirroring structs for P/Invoke);
+6. Proto deserialization (`*FromProtoBytes`) allocates string fields with `malloc`—release them with the matching `HsBaFree*ConfigStrings()`; `*ToProtoBytes` output buffers (`out_data`) must be `free`'d by the caller.
 
 ## Minimal Example (C/C++)
 

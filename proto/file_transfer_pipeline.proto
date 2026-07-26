@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package HsbaProto;
+
+message file_transfer_pipe_config
+{
+    string file_transfer_config_host = 1; // remote host address
+    string file_transfer_config_port = 2; // remote service port
+    int32 file_transfer_config_pool_size = 3; // connection pool size [1,16]
+    repeated string file_transfer_config_file_paths = 4; // file paths to transfer
+}
+
+message file_transfer_pipe_result
+{
+    bool file_transfer_result_success = 1; // success flag
+    int32 file_transfer_result_files_transferred = 2; // files successfully transferred
+    int32 file_transfer_result_total_files = 3; // total files requested
+    string file_transfer_result_error_message = 4; // error message
+    double file_transfer_result_elapsed_seconds = 5; // elapsed seconds
+}

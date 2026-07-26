@@ -9,6 +9,7 @@ LibHsBaSlicer 是 HsBaSlicer 的核心 C++ 静态库，提供五大切片接口�
 - [Support（FDM 支撑生成）](./fdm_support.md) - FDM 支撑截面生成
 - [Fill（多边形填充）](./polygon_fill.md) - 多种模式的多边形填充
 - [Path（路径生成）](./path_generator.md) - 从层数据生成 G-code 路径
+- **Transfer（文件传输）** - 远程执行器文件传输（连接池化 TCP 传输）
 - **Extends（Lua 扩展注册）** - 外部 Lua 函数注册池与事件回调
 
 ## 架构
@@ -20,6 +21,7 @@ LibHsBaSlicer
 ├── Support/       FDM 支撑生成
 ├── Fill/          多边形填充模式
 ├── Path/          G-code 路径生成
+├── Transfer/      远程文件传输（连接池化）
 └── Extends/       外部 Lua 函数注册（2D/3D/File/事件回调）
 ```
 
@@ -33,6 +35,7 @@ LibHsBaSlicer
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
 #include "LibHsBaSlicer/Fill/polygon_fill.hpp"
 #include "LibHsBaSlicer/Path/path_generator.hpp"
+#include "LibHsBaSlicer/Transfer/file_transfer.hpp"  // 文件传输
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"  // Lua 扩展注册
 ```
 
@@ -78,6 +81,29 @@ AddEventCallback("zipper.on_add", [](lua_State* L) {
 | Fill（填充） | 2D |
 | SLS Output（SLS 输出） | File |
 | SLA Output（SLA 输出） | 2D + File |
+
+## 文件传输
+
+通过 `Transfer/file_transfer.hpp` 提供远程文件传输能力，内部使用连接池化 TCP 传输：
+
+```cpp
+#include "LibHsBaSlicer/Transfer/file_transfer.hpp"
+using namespace HsBa::Slicer;
+
+FileTransferConfig config;
+config.host = "192.168.1.100";
+config.port = "9000";
+config.pool_size = 4;
+config.files = {"part_a.stl", "part_b.stl"};
+
+FileTransferResult result = TransferFiles(config, [](int percent, std::string_view stage) {
+    // progress callback
+});
+
+if (result.success) {
+    // result.files_transferred == result.total_files
+}
+```
 
 ## 典型工作流
 

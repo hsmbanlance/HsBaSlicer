@@ -165,4 +165,36 @@ void MsgToSlsResult(const HsbaProto::sls_pipe_result& msg, HsBaSlsPipelineResult
     result->elapsed_seconds = msg.sls_pipe_result_elapsed_seconds();
 }
 
+void MsgToFileTransferConfig(const HsbaProto::file_transfer_pipe_config& msg, HsBaFileTransferPipelineConfig_t* config)
+{
+    *config = HsBaFileTransferConfigDefault();
+
+    config->host = DupString(msg.file_transfer_config_host());
+    config->port = DupString(msg.file_transfer_config_port());
+    config->pool_size = msg.file_transfer_config_pool_size();
+
+    const int count = msg.file_transfer_config_file_paths_size();
+    if (count > 0)
+    {
+        config->file_count = count;
+        config->file_paths = static_cast<const char**>(std::malloc(sizeof(char*) * static_cast<size_t>(count)));
+        if (config->file_paths)
+        {
+            for (int i = 0; i < count; ++i)
+            {
+                const_cast<char**>(config->file_paths)[i] = DupString(msg.file_transfer_config_file_paths(i));
+            }
+        }
+    }
+}
+
+void MsgToFileTransferResult(const HsbaProto::file_transfer_pipe_result& msg, HsBaFileTransferPipelineResult_t* result)
+{
+    result->success = msg.file_transfer_result_success() ? 1 : 0;
+    result->files_transferred = msg.file_transfer_result_files_transferred();
+    result->total_files = msg.file_transfer_result_total_files();
+    result->error_message = DupString(msg.file_transfer_result_error_message());
+    result->elapsed_seconds = msg.file_transfer_result_elapsed_seconds();
+}
+
 }  // namespace HsBa::Slicer

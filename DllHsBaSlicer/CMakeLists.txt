@@ -13,6 +13,8 @@ if(IOS OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
   sla_pipeline.cpp
   sls_pipeline.h
   sls_pipeline.cpp
+  file_transfer_pipeline.h
+  file_transfer_pipeline.cpp
   model_preprocess.h
   model_preprocess.cpp
   pipeline_convert.h
@@ -34,6 +36,8 @@ else()
   sla_pipeline.cpp
   sls_pipeline.h
   sls_pipeline.cpp
+  file_transfer_pipeline.h
+  file_transfer_pipeline.cpp
   model_preprocess.h
   model_preprocess.cpp
   pipeline_convert.h

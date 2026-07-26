@@ -307,6 +307,55 @@ extern "C"
     typedef void (*HsBaSlsResultCallback)(HsBaSlsPipelineResult_t result, void* user_data);
 
     /* ========================================================================
+     *  File Transfer Types
+     * ====================================================================== */
+
+    /**
+     * @brief File transfer pipeline configuration (C-compatible struct).
+     *
+     * Uses RemoteExecutorConnectionPool to send files to a remote service.
+     */
+    typedef struct HsBaFileTransferPipelineConfig
+    {
+        /* Connection Configuration */
+        const char* host;       ///< Remote host address (must not be NULL)
+        const char* port;       ///< Remote service port (must not be NULL)
+        int pool_size;          ///< Connection pool size [1,16], default 4
+
+        /* File Configuration */
+        const char** file_paths;  ///< Array of file paths to transfer (must not be NULL)
+        int file_count;           ///< Number of files in file_paths array
+
+    } HsBaFileTransferPipelineConfig_t;
+
+    /**
+     * @brief File transfer pipeline result (C-compatible struct).
+     *
+     * Must call HsBaFreeFileTransferPipelineResult to release memory after use.
+     */
+    typedef struct HsBaFileTransferPipelineResult
+    {
+        int success;              ///< Success flag (0=false, 1=true)
+        int files_transferred;    ///< Number of files successfully transferred
+        int total_files;          ///< Total number of files requested
+        char* error_message;      ///< Error message (UTF-8, caller must free)
+        double elapsed_seconds;   ///< Elapsed time (seconds)
+    } HsBaFileTransferPipelineResult_t;
+
+    /**
+     * @brief File transfer progress callback function type.
+     * @param percent Progress percentage (0-100).
+     * @param stage Current stage description (UTF-8 string).
+     * @param user_data User-defined data pointer.
+     */
+    typedef void (*HsBaFileTransferProgressCallback)(int percent, const char* stage, void* user_data);
+
+    /**
+     * @brief Result callback for async file transfer pipeline.
+     */
+    typedef void (*HsBaFileTransferResultCallback)(HsBaFileTransferPipelineResult_t result, void* user_data);
+
+    /* ========================================================================
      *  Default config initializers (inline, no DLL dependency)
      * ====================================================================== */
 
@@ -417,6 +466,21 @@ extern "C"
         cfg.export_lua_script = 0;
         cfg.export_lua_func = 0;
         cfg.output_path = 0;
+        return cfg;
+    }
+
+    /**
+     * @brief Initialize file transfer pipeline config with default values.
+     * @return Default configuration struct (string fields are NULL).
+     */
+    static inline HsBaFileTransferPipelineConfig_t HsBaFileTransferConfigDefault(void)
+    {
+        HsBaFileTransferPipelineConfig_t cfg;
+        cfg.host = 0;
+        cfg.port = 0;
+        cfg.pool_size = 4;
+        cfg.file_paths = 0;
+        cfg.file_count = 0;
         return cfg;
     }
 

@@ -9,6 +9,7 @@ LibHsBaSlicer is the core C++ static library of HsBaSlicer, providing five major
 - [Support (FDM Support Generation)](./fdm_support.md) - FDM support cross-section generation
 - [Fill (Polygon Fill)](./polygon_fill.md) - Polygon infill with various patterns
 - [Path (Path Generation)](./path_generator.md) - G-code path generation from layer data
+- **Transfer (File Transfer)** - Remote executor file transfer (pooled TCP connections)
 - **Extends (Lua Extension Registration)** - External Lua function registration pools and event callbacks
 
 ## Architecture
@@ -20,6 +21,7 @@ LibHsBaSlicer
 ├── Support/       FDM support generation
 ├── Fill/          Polygon infill patterns
 ├── Path/          G-code path generation
+├── Transfer/      Remote file transfer (pooled connections)
 └── Extends/       External Lua function registration (2D/3D/File/Event callbacks)
 ```
 
@@ -33,6 +35,7 @@ To use LibHsBaSlicer, include the corresponding header files:
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
 #include "LibHsBaSlicer/Fill/polygon_fill.hpp"
 #include "LibHsBaSlicer/Path/path_generator.hpp"
+#include "LibHsBaSlicer/Transfer/file_transfer.hpp"  // File transfer
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"  // Lua extension registration
 ```
 
@@ -78,6 +81,29 @@ AddEventCallback("zipper.on_add", [](lua_State* L) {
 | Fill | 2D |
 | SLS Output | File |
 | SLA Output | 2D + File |
+
+## File Transfer
+
+Use `Transfer/file_transfer.hpp` for remote file transfer with pooled TCP connections:
+
+```cpp
+#include "LibHsBaSlicer/Transfer/file_transfer.hpp"
+using namespace HsBa::Slicer;
+
+FileTransferConfig config;
+config.host = "192.168.1.100";
+config.port = "9000";
+config.pool_size = 4;
+config.files = {"part_a.stl", "part_b.stl"};
+
+FileTransferResult result = TransferFiles(config, [](int percent, std::string_view stage) {
+    // progress callback
+});
+
+if (result.success) {
+    // result.files_transferred == result.total_files
+}
+```
 
 ## Typical Workflow
 
