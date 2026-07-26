@@ -12,9 +12,8 @@ namespace HsBa::Slicer
 class ImagesPath : public IPath
 {
 public:
-    ImagesPath(
-        std::string_view config_file, std::string_view config_str,
-        const std::vector<std::function<void(double, std::string_view)>>& callback = {});
+    ImagesPath(std::string_view config_file, std::string_view config_str,
+               const std::vector<std::function<void(double, std::string_view)>>& callback = {});
     virtual ~ImagesPath() = default;
     virtual void Save(const std::filesystem::path&) const override;
     virtual void Save(const std::filesystem::path&, std::string_view script,

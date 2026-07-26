@@ -29,10 +29,10 @@ struct FileTransferConfig
  */
 struct FileTransferResult
 {
-    bool success = false;           ///< Whether all files were transferred successfully
-    int files_transferred = 0;      ///< Number of files successfully transferred
-    int total_files = 0;            ///< Total number of files requested
-    std::string error_message;      ///< Error message (empty on success)
+    bool success = false;       ///< Whether all files were transferred successfully
+    int files_transferred = 0;  ///< Number of files successfully transferred
+    int total_files = 0;        ///< Total number of files requested
+    std::string error_message;  ///< Error message (empty on success)
 };
 
 /**

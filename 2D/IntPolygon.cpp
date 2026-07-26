@@ -293,8 +293,8 @@ bool PointInPolygon(const Polygon& poly, const Point2& pt)
     {
         const auto& a = poly[i];
         const auto& b = poly[j];
-        const bool intersect = ((a.y > pt.y) != (b.y > pt.y)) &&
-                               (pt.x < (b.x - a.x) * (pt.y - a.y) / (b.y - a.y) + a.x);
+        const bool intersect =
+            ((a.y > pt.y) != (b.y > pt.y)) && (pt.x < (b.x - a.x) * (pt.y - a.y) / (b.y - a.y) + a.x);
         if (intersect)
             inside = !inside;
     }
@@ -320,7 +320,7 @@ void NormalizeOrientation(Polygon& poly)
     if (area < 0.0)
         std::reverse(poly.begin(), poly.end());
 }
-} // namespace
+}  // namespace
 
 std::vector<Polygon> NormalizeToSimplePolygons(const Polygon& p, double epsilon)
 {

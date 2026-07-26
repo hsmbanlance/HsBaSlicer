@@ -96,8 +96,7 @@ std::string WeldRobotPath::ToString() const
     return ss.str();
 }
 
-std::string WeldRobotPath::ToString(std::string_view script,
-                                    const std::function<void(lua_State*)>& lua_reg) const
+std::string WeldRobotPath::ToString(std::string_view script, const std::function<void(lua_State*)>& lua_reg) const
 {
     auto L = MakeUniqueLuaState();
     if (!L)
@@ -107,8 +106,7 @@ std::string WeldRobotPath::ToString(std::string_view script,
         lua_reg(L.get());
 
     // Push header
-    const std::string header =
-        "// WeldRobotPath script - robot type ignored, welding params available\n";
+    const std::string header = "// WeldRobotPath script - robot type ignored, welding params available\n";
     lua_pushstring(L.get(), header.c_str());
     lua_setglobal(L.get(), "header");
 
@@ -239,13 +237,12 @@ std::string WeldRobotPath::GenerateWeldAbbCode() const
         if (wpt.isWelding && !arcActive)
         {
             // Arc start
-            ss << std::format("    ! Arc Start - {} process, I={:.1f}A U={:.1f}V\n",
-                              WeldProcessToString(wp.process), wp.arcStartCurrent, wp.arcStartVoltage);
+            ss << std::format("    ! Arc Start - {} process, I={:.1f}A U={:.1f}V\n", WeldProcessToString(wp.process),
+                              wp.arcStartCurrent, wp.arcStartVoltage);
             ss << std::format("    ArcLStart [{},{},{},0,0,0], [{},{},{},{}], seam1, [{},{},{}], weave1, fine, "
                               "tool1\\Wobj=wobj1;\n",
-                              pt.end.x, pt.end.y, pt.end.z,
-                              wp.arcStartCurrent, wp.arcStartVoltage, wp.wireFeedSpeed, wp.gasFlowRate,
-                              wp.current, wp.voltage, wp.wireFeedSpeed);
+                              pt.end.x, pt.end.y, pt.end.z, wp.arcStartCurrent, wp.arcStartVoltage, wp.wireFeedSpeed,
+                              wp.gasFlowRate, wp.current, wp.voltage, wp.wireFeedSpeed);
             arcActive = true;
         }
         else if (wpt.isWelding && arcActive)
@@ -258,9 +255,8 @@ std::string WeldRobotPath::GenerateWeldAbbCode() const
                 ss << std::format("    ! Arc End - crater: {}\n", ArcEndToString(wp.arcEnd));
                 ss << std::format("    ArcLEnd [{},{},{},0,0,0], [{},{},{}], seam1, [{},{},{}], weave1, fine, "
                                   "tool1\\Wobj=wobj1;\n",
-                                  pt.end.x, pt.end.y, pt.end.z,
-                                  wp.craterFillCurrent, wp.craterFillVoltage, wp.wireFeedSpeed, wp.gasFlowRate,
-                                  wp.current, wp.voltage, wp.wireFeedSpeed);
+                                  pt.end.x, pt.end.y, pt.end.z, wp.craterFillCurrent, wp.craterFillVoltage,
+                                  wp.wireFeedSpeed, wp.gasFlowRate, wp.current, wp.voltage, wp.wireFeedSpeed);
                 arcActive = false;
             }
             else
@@ -268,9 +264,8 @@ std::string WeldRobotPath::GenerateWeldAbbCode() const
                 // Continue welding (ArcL)
                 ss << std::format("    ArcL [{},{},{},0,0,0], [{},{},{}], seam1, [{},{},{}], weave1, z10, "
                                   "tool1\\Wobj=wobj1;\n",
-                                  pt.end.x, pt.end.y, pt.end.z,
-                                  wp.current, wp.voltage, wp.wireFeedSpeed, wp.gasFlowRate,
-                                  wp.current, wp.voltage, wp.wireFeedSpeed);
+                                  pt.end.x, pt.end.y, pt.end.z, wp.current, wp.voltage, wp.wireFeedSpeed,
+                                  wp.gasFlowRate, wp.current, wp.voltage, wp.wireFeedSpeed);
             }
         }
         else
@@ -279,20 +274,19 @@ std::string WeldRobotPath::GenerateWeldAbbCode() const
             switch (pt.type)
             {
             case RLPointType::MoveJ:
-                ss << std::format("    MoveJ [{},{},{},0,0,0], v{:.0f}, z10, tool1\\Wobj=wobj1;\n",
-                                  pt.end.x, pt.end.y, pt.end.z, pt.velocity);
+                ss << std::format("    MoveJ [{},{},{},0,0,0], v{:.0f}, z10, tool1\\Wobj=wobj1;\n", pt.end.x, pt.end.y,
+                                  pt.end.z, pt.velocity);
                 break;
             case RLPointType::MoveC:
             case RLPointType::ProgramCStart:
             case RLPointType::ProgramC:
             case RLPointType::ProgramCEnd:
                 ss << std::format("    MoveC [{},{},{},0,0,0], [{},{},{},0,0,0], v{:.0f}, z10, tool1\\Wobj=wobj1;\n",
-                                  pt.middle.x, pt.middle.y, pt.middle.z,
-                                  pt.end.x, pt.end.y, pt.end.z, pt.velocity);
+                                  pt.middle.x, pt.middle.y, pt.middle.z, pt.end.x, pt.end.y, pt.end.z, pt.velocity);
                 break;
             default:
-                ss << std::format("    MoveL [{},{},{},0,0,0], v{:.0f}, z10, tool1\\Wobj=wobj1;\n",
-                                  pt.end.x, pt.end.y, pt.end.z, pt.velocity);
+                ss << std::format("    MoveL [{},{},{},0,0,0], v{:.0f}, z10, tool1\\Wobj=wobj1;\n", pt.end.x, pt.end.y,
+                                  pt.end.z, pt.velocity);
                 break;
             }
         }
@@ -327,15 +321,15 @@ std::string WeldRobotPath::GenerateWeldKukaCode() const
         {
             // Set welding parameters and start arc
             ss << std::format("  ; Arc Start - {} I={:.1f}A U={:.1f}V WFS={:.1f}m/min Gas={:.1f}L/min\n",
-                              WeldProcessToString(wp.process), wp.current, wp.voltage,
-                              wp.wireFeedSpeed, wp.gasFlowRate);
+                              WeldProcessToString(wp.process), wp.current, wp.voltage, wp.wireFeedSpeed,
+                              wp.gasFlowRate);
             ss << std::format("  ARC_SetWeldParam(Current:={:.1f}, Voltage:={:.1f}, WireFeed:={:.1f}, "
                               "GasFlow:={:.1f})\n",
                               wp.current, wp.voltage, wp.wireFeedSpeed, wp.gasFlowRate);
-            ss << std::format("  ARC_SetStartParam(Current:={:.1f}, Voltage:={:.1f})\n",
-                              wp.arcStartCurrent, wp.arcStartVoltage);
-            ss << std::format("  LIN {{X {:.2f}, Y {:.2f}, Z {:.2f}, A 0, B 0, C 0}} C_DIS\n",
-                              pt.end.x, pt.end.y, pt.end.z);
+            ss << std::format("  ARC_SetStartParam(Current:={:.1f}, Voltage:={:.1f})\n", wp.arcStartCurrent,
+                              wp.arcStartVoltage);
+            ss << std::format("  LIN {{X {:.2f}, Y {:.2f}, Z {:.2f}, A 0, B 0, C 0}} C_DIS\n", pt.end.x, pt.end.y,
+                              pt.end.z);
             ss << "  ARC_On()\n";
             arcActive = true;
         }
@@ -346,12 +340,12 @@ std::string WeldRobotPath::GenerateWeldKukaCode() const
             {
                 // Arc end
                 ss << std::format("  ; Arc End - crater: {}\n", ArcEndToString(wp.arcEnd));
-                ss << std::format("  LIN {{X {:.2f}, Y {:.2f}, Z {:.2f}, A 0, B 0, C 0}} C_DIS\n",
-                                  pt.end.x, pt.end.y, pt.end.z);
+                ss << std::format("  LIN {{X {:.2f}, Y {:.2f}, Z {:.2f}, A 0, B 0, C 0}} C_DIS\n", pt.end.x, pt.end.y,
+                                  pt.end.z);
                 if (wp.arcEnd == ArcEndType::CraterFill)
                 {
-                    ss << std::format("  ARC_SetCraterParam(Current:={:.1f}, Voltage:={:.1f})\n",
-                                      wp.craterFillCurrent, wp.craterFillVoltage);
+                    ss << std::format("  ARC_SetCraterParam(Current:={:.1f}, Voltage:={:.1f})\n", wp.craterFillCurrent,
+                                      wp.craterFillVoltage);
                     ss << "  ARC_CraterFill()\n";
                 }
                 ss << "  ARC_Off()\n";
@@ -360,8 +354,8 @@ std::string WeldRobotPath::GenerateWeldKukaCode() const
             else
             {
                 // Continue welding
-                ss << std::format("  LIN {{X {:.2f}, Y {:.2f}, Z {:.2f}, A 0, B 0, C 0}} C_DIS\n",
-                                  pt.end.x, pt.end.y, pt.end.z);
+                ss << std::format("  LIN {{X {:.2f}, Y {:.2f}, Z {:.2f}, A 0, B 0, C 0}} C_DIS\n", pt.end.x, pt.end.y,
+                                  pt.end.z);
             }
         }
         else
@@ -372,18 +366,17 @@ std::string WeldRobotPath::GenerateWeldKukaCode() const
             {
                 ss << std::format("  CIRC {{X {:.2f}, Y {:.2f}, Z {:.2f}, A 0, B 0, C 0}}, "
                                   "{{X {:.2f}, Y {:.2f}, Z {:.2f}, A 0, B 0, C 0}} C_DIS\n",
-                                  pt.middle.x, pt.middle.y, pt.middle.z,
-                                  pt.end.x, pt.end.y, pt.end.z);
+                                  pt.middle.x, pt.middle.y, pt.middle.z, pt.end.x, pt.end.y, pt.end.z);
             }
             else if (pt.type == RLPointType::MoveJ)
             {
-                ss << std::format("  PTP {{X {:.2f}, Y {:.2f}, Z {:.2f}, A 0, B 0, C 0}} C_DIS\n",
-                                  pt.end.x, pt.end.y, pt.end.z);
+                ss << std::format("  PTP {{X {:.2f}, Y {:.2f}, Z {:.2f}, A 0, B 0, C 0}} C_DIS\n", pt.end.x, pt.end.y,
+                                  pt.end.z);
             }
             else
             {
-                ss << std::format("  LIN {{X {:.2f}, Y {:.2f}, Z {:.2f}, A 0, B 0, C 0}} C_DIS\n",
-                                  pt.end.x, pt.end.y, pt.end.z);
+                ss << std::format("  LIN {{X {:.2f}, Y {:.2f}, Z {:.2f}, A 0, B 0, C 0}} C_DIS\n", pt.end.x, pt.end.y,
+                                  pt.end.z);
             }
         }
     }
@@ -432,8 +425,8 @@ std::string WeldRobotPath::GenerateWeldFanucCode() const
         if (wpt.isWelding && !arcActive)
         {
             // Arc start
-            ss << std::format("{:>4}:  ; Arc Start - {} Schedule={}\n", lineNum++,
-                              WeldProcessToString(wp.process), wp.weldSchedule);
+            ss << std::format("{:>4}:  ; Arc Start - {} Schedule={}\n", lineNum++, WeldProcessToString(wp.process),
+                              wp.weldSchedule);
             ss << std::format("{:>4}:  ARC START ;\n", lineNum++);
             ss << std::format("{:>4}:  L P[{}] {:.0f}mm/sec FINE ;\n", lineNum++, i + 1, wp.travelSpeed);
             arcActive = true;
@@ -465,8 +458,7 @@ std::string WeldRobotPath::GenerateWeldFanucCode() const
             else if (pt.type == RLPointType::MoveC || pt.type == RLPointType::ProgramCStart ||
                      pt.type == RLPointType::ProgramC || pt.type == RLPointType::ProgramCEnd)
             {
-                ss << std::format("{:>4}:  C P[{}] P[{}] {:.0f}mm/sec FINE ;\n", lineNum++, i, i + 1,
-                                  pt.velocity);
+                ss << std::format("{:>4}:  C P[{}] P[{}] {:.0f}mm/sec FINE ;\n", lineNum++, i, i + 1, pt.velocity);
             }
             else
             {

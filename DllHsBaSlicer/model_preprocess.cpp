@@ -163,8 +163,7 @@ HSBA_SLICER_API int HsBaScaleModel(const char* name, float sx, float sy, float s
 
 // ========== Query Operations ==========
 
-HSBA_SLICER_API int HsBaGetModelInfo(const char* name, float out_bbox_min[3], float out_bbox_max[3],
-                                      float* out_volume)
+HSBA_SLICER_API int HsBaGetModelInfo(const char* name, float out_bbox_min[3], float out_bbox_max[3], float* out_volume)
 {
     if (!name)
         return 0;

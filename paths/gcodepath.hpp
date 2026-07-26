@@ -18,9 +18,9 @@ namespace HsBa::Slicer
 /// @brief Target firmware type for GCode output.
 enum class GCodeFirmware
 {
-    Marlin,   ///< Marlin firmware (most common FDM)
-    RepRap,   ///< RepRap / RRF firmware
-    Klipper   ///< Klipper firmware
+    Marlin,  ///< Marlin firmware (most common FDM)
+    RepRap,  ///< RepRap / RRF firmware
+    Klipper  ///< Klipper firmware
 };
 
 /// @brief Printer configuration for GCode generation.
@@ -50,9 +50,8 @@ class GCodePath : public LayersPath
 {
 public:
     explicit GCodePath(
-        const GCodePrinterConfig& config,
-        const std::function<void(std::string_view, std::string_view)>& callback =
-            [](std::string_view, std::string_view) {});
+        const GCodePrinterConfig& config, const std::function<void(std::string_view, std::string_view)>& callback =
+                                              [](std::string_view, std::string_view) {});
     virtual ~GCodePath() = default;
 
     /// @brief Generate standard GCode string for the specified firmware.

@@ -50,9 +50,9 @@ int main()
 
         // Query model info
         ModelInfo info = model.info();
-        std::cout << std::format("  BBox: ({:.2f}, {:.2f}, {:.2f}) ~ ({:.2f}, {:.2f}, {:.2f})",
-                                 info.bbox_min.x(), info.bbox_min.y(), info.bbox_min.z(),
-                                 info.bbox_max.x(), info.bbox_max.y(), info.bbox_max.z())
+        std::cout << std::format("  BBox: ({:.2f}, {:.2f}, {:.2f}) ~ ({:.2f}, {:.2f}, {:.2f})", info.bbox_min.x(),
+                                 info.bbox_min.y(), info.bbox_min.z(), info.bbox_max.x(), info.bbox_max.y(),
+                                 info.bbox_max.z())
                   << std::endl;
         std::cout << std::format("  Volume: {:.2f} mm^3", info.volume) << std::endl;
 
@@ -66,21 +66,21 @@ int main()
         std::cout << "[2/3] Configuring FDM pipeline..." << std::endl;
 
         HsBaFdmPipelineConfig_t cfg = defaultFdmConfig();
-        cfg.layer_height         = 0.2f;
-        cfg.first_layer_height   = 0.25f;
-        cfg.line_width           = 0.4f;
-        cfg.print_speed          = 60.0f;
-        cfg.travel_speed         = 120.0f;
+        cfg.layer_height = 0.2f;
+        cfg.first_layer_height = 0.25f;
+        cfg.line_width = 0.4f;
+        cfg.print_speed = 60.0f;
+        cfg.travel_speed = 120.0f;
         cfg.extrusion_multiplier = 1.0f;
-        cfg.fill_spacing         = 0.4;
-        cfg.fill_angle           = 45.0;
-        cfg.wall_count           = 3;
-        cfg.fill_mode            = HSBA_FILL_ZIGZAG;
-        cfg.enable_support       = 1;
-        cfg.overhang_angle       = 45.0f;
-        cfg.support_density      = 0.3f;
-        cfg.support_pattern      = HSBA_SUPPORT_PLANE;
-        cfg.output_path          = "output/lib_module_sample.gcode";
+        cfg.fill_spacing = 0.4;
+        cfg.fill_angle = 45.0;
+        cfg.wall_count = 3;
+        cfg.fill_mode = HSBA_FILL_ZIGZAG;
+        cfg.enable_support = 1;
+        cfg.overhang_angle = 45.0f;
+        cfg.support_density = 0.3f;
+        cfg.support_pattern = HSBA_SUPPORT_PLANE;
+        cfg.output_path = "output/lib_module_sample.gcode";
 
         FdmPipeline pipeline(cfg);
 
@@ -92,8 +92,7 @@ int main()
 
         std::cout << std::format("  Total layers: {}", result.total_layers) << std::endl;
         std::cout << std::format("  G-code size: {} bytes", result.gcode.size()) << std::endl;
-        std::cout << "Slicing complete! G-code saved to: output/lib_module_sample.gcode"
-                  << std::endl;
+        std::cout << "Slicing complete! G-code saved to: output/lib_module_sample.gcode" << std::endl;
 
         // Model destructor automatically calls RemoveModel()
     }

@@ -112,7 +112,7 @@ extern "C"
      * @return 1 on success, 0 if model not found.
      */
     HSBA_SLICER_API int HsBaGetModelInfo(const char* name, float out_bbox_min[3], float out_bbox_max[3],
-                                          float* out_volume);
+                                         float* out_volume);
 
     /* ========================================================================
      *  Model Preprocessing - Advanced Operations (require CGAL/OCCT)
@@ -154,7 +154,7 @@ extern "C"
      * @return Opaque model handle to result, NULL on failure.
      */
     HSBA_SLICER_API void* HsBaBooleanIntersection(const char* left_name, const char* right_name,
-                                                   const char* result_name);
+                                                  const char* result_name);
 
     /**
      * @brief Boolean difference of two models (left - right).
@@ -166,8 +166,7 @@ extern "C"
      * @param result_name Result model name (UTF-8).
      * @return Opaque model handle to result, NULL on failure.
      */
-    HSBA_SLICER_API void* HsBaBooleanDifference(const char* left_name, const char* right_name,
-                                                 const char* result_name);
+    HSBA_SLICER_API void* HsBaBooleanDifference(const char* left_name, const char* right_name, const char* result_name);
 
     /**
      * @brief Boolean XOR of two models.

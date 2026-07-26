@@ -43,7 +43,7 @@ HSBA_SLICER_LIB_API std::vector<PolygonsD> GenerateAllFdmSupport(const std::vect
  * @return Support cross-section polygons per layer.
  */
 HSBA_SLICER_LIB_API std::vector<PolygonsD> GenerateAllSlaSupport(const std::vector<PolygonsD>& layers,
-                                                                  const Support::SlaSupportConfig& config);
+                                                                 const Support::SlaSupportConfig& config);
 
 /**
  * @brief Generate custom support for all layers using a Lua script.
@@ -58,9 +58,9 @@ HSBA_SLICER_LIB_API std::vector<PolygonsD> GenerateAllSlaSupport(const std::vect
  * @return Support cross-section polygons per layer.
  */
 HSBA_SLICER_LIB_API std::vector<PolygonsD> GenerateAllLuaSupport(const std::vector<PolygonsD>& layers,
-                                                                  const Support::SupportConfig& config,
-                                                                  std::string_view script,
-                                                                  std::string_view functionName = "generate_support");
+                                                                 const Support::SupportConfig& config,
+                                                                 std::string_view script,
+                                                                 std::string_view functionName = "generate_support");
 
 }  // namespace HsBa::Slicer
 

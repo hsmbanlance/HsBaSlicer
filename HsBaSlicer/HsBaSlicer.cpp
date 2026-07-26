@@ -12,8 +12,8 @@
 #include <string>
 #include <string_view>
 
-#include "DllHsBaSlicer/initialize.h"
 #include "DllHsBaSlicer/fdm_pipeline.h"
+#include "DllHsBaSlicer/initialize.h"
 #include "DllHsBaSlicer/sla_pipeline.h"
 #include "DllHsBaSlicer/sls_pipeline.h"
 #include "logger/logger.hpp"
@@ -54,23 +54,22 @@ static int RunFdmExample()
     cfg.model_path = "models/stanford_bunny.stl";
 
     // 3. 可选：自定义工艺参数
-    cfg.layer_height       = 0.2f;
+    cfg.layer_height = 0.2f;
     cfg.first_layer_height = 0.25f;
-    cfg.wall_count         = 3;
-    cfg.top_layer_count    = 4;
+    cfg.wall_count = 3;
+    cfg.top_layer_count = 4;
     cfg.bottom_layer_count = 3;
-    cfg.infill_density     = 0.2;
-    cfg.fill_mode          = HSBA_FILL_ZIGZAG;
-    cfg.enable_support     = 1;
-    cfg.overhang_angle     = 45.0f;
-    cfg.support_pattern    = HSBA_SUPPORT_PLANE;
+    cfg.infill_density = 0.2;
+    cfg.fill_mode = HSBA_FILL_ZIGZAG;
+    cfg.enable_support = 1;
+    cfg.overhang_angle = 45.0f;
+    cfg.support_pattern = HSBA_SUPPORT_PLANE;
 
     // 4. 输出路径
     cfg.output_path = "output/fdm_example.gcode";
 
     // 5. 同步运行流水线
-    HsBaFdmPipelineResult_t result =
-        HsBaRunFdmPipeline(&cfg, OnProgress, nullptr);
+    HsBaFdmPipelineResult_t result = HsBaRunFdmPipeline(&cfg, OnProgress, nullptr);
 
     // 6. 处理结果
     if (result.success)
@@ -81,19 +80,18 @@ static int RunFdmExample()
         {
             ofs << (result.gcode_content ? result.gcode_content : "");
             ofs.close();
-            LogMsg(std::format("FDM 切片成功! 层数: {}, 耗时: {:.2f}s, G-code -> {}",
-                               result.total_layers, result.elapsed_seconds, out_path.string()));
+            LogMsg(std::format("FDM 切片成功! 层数: {}, 耗时: {:.2f}s, G-code -> {}", result.total_layers,
+                               result.elapsed_seconds, out_path.string()));
         }
         else
         {
-            LogMsg(std::format("FDM 切片成功! 层数: {}, 耗时: {:.2f}s (写入文件失败)",
-                               result.total_layers, result.elapsed_seconds));
+            LogMsg(std::format("FDM 切片成功! 层数: {}, 耗时: {:.2f}s (写入文件失败)", result.total_layers,
+                               result.elapsed_seconds));
         }
     }
     else
     {
-        LogMsg(std::format("FDM 切片失败: {}",
-                           result.error_message ? result.error_message : "未知错误"));
+        LogMsg(std::format("FDM 切片失败: {}", result.error_message ? result.error_message : "未知错误"));
     }
 
     // 7. 释放内存（必须）
@@ -118,35 +116,31 @@ static int RunSlaExample()
     cfg.model_path = "models/stanford_bunny.stl";
 
     // 3. 可选：自定义参数
-    cfg.layer_height        = 0.05f;
-    cfg.first_layer_height  = 0.1f;
+    cfg.layer_height = 0.05f;
+    cfg.first_layer_height = 0.1f;
     cfg.bottom_exposure_time = 60.0f;
     cfg.normal_exposure_time = 2.5f;
-    cfg.floor_raft_offset   = 2.0f;
-    cfg.floor_border_count  = 2;
-    cfg.enable_support      = 1;
-    cfg.overhang_angle      = 45.0f;
-    cfg.support_pattern     = HSBA_SLA_SUPPORT_SACRIFICIAL;
+    cfg.floor_raft_offset = 2.0f;
+    cfg.floor_border_count = 2;
+    cfg.enable_support = 1;
+    cfg.overhang_angle = 45.0f;
+    cfg.support_pattern = HSBA_SLA_SUPPORT_SACRIFICIAL;
 
     // 4. 输出路径
     cfg.output_path = "output/sla_example.zip";
 
     // 5. 同步运行
-    HsBaSlaPipelineResult_t result =
-        HsBaRunSlaPipeline(&cfg, OnProgress, nullptr);
+    HsBaSlaPipelineResult_t result = HsBaRunSlaPipeline(&cfg, OnProgress, nullptr);
 
     // 6. 处理结果
     if (result.success)
     {
-        LogMsg(std::format("SLA 切片成功! 层数: {}, 导出: {}, 耗时: {:.2f}s",
-                           result.total_layers,
-                           result.export_path ? result.export_path : "N/A",
-                           result.elapsed_seconds));
+        LogMsg(std::format("SLA 切片成功! 层数: {}, 导出: {}, 耗时: {:.2f}s", result.total_layers,
+                           result.export_path ? result.export_path : "N/A", result.elapsed_seconds));
     }
     else
     {
-        LogMsg(std::format("SLA 切片失败: {}",
-                           result.error_message ? result.error_message : "未知错误"));
+        LogMsg(std::format("SLA 切片失败: {}", result.error_message ? result.error_message : "未知错误"));
     }
 
     // 7. 释放内存
@@ -171,37 +165,33 @@ static int RunSlsExample()
     cfg.model_path = "models/stanford_bunny.stl";
 
     // 3. 可选：自定义激光参数
-    cfg.layer_height       = 0.1f;
+    cfg.layer_height = 0.1f;
     cfg.first_layer_height = 0.15f;
-    cfg.laser_power        = 30.0f;
-    cfg.scan_speed         = 2000.0f;
-    cfg.hatch_spacing      = 0.15f;
-    cfg.hatch_rotation     = 90.0f;
-    cfg.bed_temperature    = 180.0f;
+    cfg.laser_power = 30.0f;
+    cfg.scan_speed = 2000.0f;
+    cfg.hatch_spacing = 0.15f;
+    cfg.hatch_rotation = 90.0f;
+    cfg.bed_temperature = 180.0f;
 
     // 4. Lua 导出脚本（SLS 必须指定，无标准输出格式）
     cfg.export_lua_script = "scripts/my_sls_export.lua";
-    cfg.export_lua_func   = "export_sls";
+    cfg.export_lua_func = "export_sls";
 
     // 5. 输出路径
     cfg.output_path = "output/sls_example.zip";
 
     // 6. 同步运行
-    HsBaSlsPipelineResult_t result =
-        HsBaRunSlsPipeline(&cfg, OnProgress, nullptr);
+    HsBaSlsPipelineResult_t result = HsBaRunSlsPipeline(&cfg, OnProgress, nullptr);
 
     // 7. 处理结果
     if (result.success)
     {
-        LogMsg(std::format("SLS 切片成功! 层数: {}, 导出: {}, 耗时: {:.2f}s",
-                           result.total_layers,
-                           result.export_path ? result.export_path : "N/A",
-                           result.elapsed_seconds));
+        LogMsg(std::format("SLS 切片成功! 层数: {}, 导出: {}, 耗时: {:.2f}s", result.total_layers,
+                           result.export_path ? result.export_path : "N/A", result.elapsed_seconds));
     }
     else
     {
-        LogMsg(std::format("SLS 切片失败: {}",
-                           result.error_message ? result.error_message : "未知错误"));
+        LogMsg(std::format("SLS 切片失败: {}", result.error_message ? result.error_message : "未知错误"));
     }
 
     // 8. 释放内存
@@ -231,8 +221,7 @@ static void RunAllPipelineExamples()
 #if defined(ANDROID)
 // Android：导出 JNI 函数，供 Java 直接调用
 // JNI 命名约定：Java_<包名>_<类名>_<方法名>（包名中的 '.' 替换为 '_'）
-extern "C" void Java_com_hsmbanlance_hsbaslicer_example_MainActivity_runPipelineExamples(
-    void* /*env*/, void* /*thiz*/)
+extern "C" void Java_com_hsmbanlance_hsbaslicer_example_MainActivity_runPipelineExamples(void* /*env*/, void* /*thiz*/)
 {
     initialize();
 

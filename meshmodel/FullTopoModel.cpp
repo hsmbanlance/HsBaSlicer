@@ -3,11 +3,11 @@
 #include <boost/container_hash/hash.hpp>
 #include <climits>
 #include <cmath>
+#include <numbers>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <numbers>
 
 #include "2D/LuaAdapter.hpp"
 #include <igl/per_face_normals.h>
@@ -1181,8 +1181,7 @@ Polygons FullTopoModel::SliceLua(const std::string& script, const std::string& f
 }
 
 Polygons FullTopoModel::SliceLua(const std::filesystem::path& script_file, const std::string& funcName,
-                                 const float height,
-                                 const std::vector<std::function<void(lua_State*)>>& ext_regs) const
+                                 const float height, const std::vector<std::function<void(lua_State*)>>& ext_regs) const
 {
     auto L = MakeUniqueLuaState();
     if (!L)

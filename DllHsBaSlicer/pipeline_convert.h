@@ -25,7 +25,7 @@ extern "C"
      * @return 1 on success, 0 on parse failure.
      */
     HSBA_SLICER_API int HsBaFdmConfigFromProtoBytes(const void* proto_data, int proto_size,
-                                                     HsBaFdmPipelineConfig_t* config);
+                                                    HsBaFdmPipelineConfig_t* config);
 
     /**
      * @brief Serialize FDM config to proto bytes.
@@ -34,8 +34,8 @@ extern "C"
      * @param out_size Output buffer size in bytes.
      * @return 1 on success, 0 on serialization failure.
      */
-    HSBA_SLICER_API int HsBaFdmConfigToProtoBytes(const HsBaFdmPipelineConfig_t* config,
-                                                   void** out_data, int* out_size);
+    HSBA_SLICER_API int HsBaFdmConfigToProtoBytes(const HsBaFdmPipelineConfig_t* config, void** out_data,
+                                                  int* out_size);
 
     /**
      * @brief Deserialize FDM result from proto bytes.
@@ -45,7 +45,7 @@ extern "C"
      * @return 1 on success, 0 on parse failure.
      */
     HSBA_SLICER_API int HsBaFdmResultFromProtoBytes(const void* proto_data, int proto_size,
-                                                     HsBaFdmPipelineResult_t* result);
+                                                    HsBaFdmPipelineResult_t* result);
 
     /**
      * @brief Serialize FDM result to proto bytes.
@@ -54,8 +54,8 @@ extern "C"
      * @param out_size Output buffer size in bytes.
      * @return 1 on success, 0 on serialization failure.
      */
-    HSBA_SLICER_API int HsBaFdmResultToProtoBytes(const HsBaFdmPipelineResult_t* result,
-                                                   void** out_data, int* out_size);
+    HSBA_SLICER_API int HsBaFdmResultToProtoBytes(const HsBaFdmPipelineResult_t* result, void** out_data,
+                                                  int* out_size);
 
     /**
      * @brief Deserialize SLA config from proto bytes.
@@ -65,7 +65,7 @@ extern "C"
      * @return 1 on success, 0 on parse failure.
      */
     HSBA_SLICER_API int HsBaSlaConfigFromProtoBytes(const void* proto_data, int proto_size,
-                                                     HsBaSlaPipelineConfig_t* config);
+                                                    HsBaSlaPipelineConfig_t* config);
 
     /**
      * @brief Serialize SLA config to proto bytes.
@@ -74,8 +74,8 @@ extern "C"
      * @param out_size Output buffer size in bytes.
      * @return 1 on success, 0 on serialization failure.
      */
-    HSBA_SLICER_API int HsBaSlaConfigToProtoBytes(const HsBaSlaPipelineConfig_t* config,
-                                                   void** out_data, int* out_size);
+    HSBA_SLICER_API int HsBaSlaConfigToProtoBytes(const HsBaSlaPipelineConfig_t* config, void** out_data,
+                                                  int* out_size);
 
     /**
      * @brief Deserialize SLA result from proto bytes.
@@ -85,7 +85,7 @@ extern "C"
      * @return 1 on success, 0 on parse failure.
      */
     HSBA_SLICER_API int HsBaSlaResultFromProtoBytes(const void* proto_data, int proto_size,
-                                                     HsBaSlaPipelineResult_t* result);
+                                                    HsBaSlaPipelineResult_t* result);
 
     /**
      * @brief Serialize SLA result to proto bytes.
@@ -94,8 +94,8 @@ extern "C"
      * @param out_size Output buffer size in bytes.
      * @return 1 on success, 0 on serialization failure.
      */
-    HSBA_SLICER_API int HsBaSlaResultToProtoBytes(const HsBaSlaPipelineResult_t* result,
-                                                   void** out_data, int* out_size);
+    HSBA_SLICER_API int HsBaSlaResultToProtoBytes(const HsBaSlaPipelineResult_t* result, void** out_data,
+                                                  int* out_size);
 
     /**
      * @brief Deserialize SLS config from proto bytes.
@@ -105,7 +105,7 @@ extern "C"
      * @return 1 on success, 0 on parse failure.
      */
     HSBA_SLICER_API int HsBaSlsConfigFromProtoBytes(const void* proto_data, int proto_size,
-                                                     HsBaSlsPipelineConfig_t* config);
+                                                    HsBaSlsPipelineConfig_t* config);
 
     /**
      * @brief Serialize SLS config to proto bytes.
@@ -114,8 +114,8 @@ extern "C"
      * @param out_size Output buffer size in bytes.
      * @return 1 on success, 0 on serialization failure.
      */
-    HSBA_SLICER_API int HsBaSlsConfigToProtoBytes(const HsBaSlsPipelineConfig_t* config,
-                                                   void** out_data, int* out_size);
+    HSBA_SLICER_API int HsBaSlsConfigToProtoBytes(const HsBaSlsPipelineConfig_t* config, void** out_data,
+                                                  int* out_size);
 
     /**
      * @brief Deserialize SLS result from proto bytes.
@@ -125,7 +125,7 @@ extern "C"
      * @return 1 on success, 0 on parse failure.
      */
     HSBA_SLICER_API int HsBaSlsResultFromProtoBytes(const void* proto_data, int proto_size,
-                                                     HsBaSlsPipelineResult_t* result);
+                                                    HsBaSlsPipelineResult_t* result);
 
     /**
      * @brief Serialize SLS result to proto bytes.
@@ -134,8 +134,8 @@ extern "C"
      * @param out_size Output buffer size in bytes.
      * @return 1 on success, 0 on serialization failure.
      */
-    HSBA_SLICER_API int HsBaSlsResultToProtoBytes(const HsBaSlsPipelineResult_t* result,
-                                                   void** out_data, int* out_size);
+    HSBA_SLICER_API int HsBaSlsResultToProtoBytes(const HsBaSlsPipelineResult_t* result, void** out_data,
+                                                  int* out_size);
 
     /* ========================================================================
      *  File Transfer Proto conversion

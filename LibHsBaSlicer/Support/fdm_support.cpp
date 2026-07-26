@@ -1,9 +1,9 @@
 #include "fdm_support.hpp"
 
-#include "support/FdmSupport.hpp"
-#include "support/SlaSupport.hpp"
-#include "support/LuaSupport.hpp"
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
+#include "support/FdmSupport.hpp"
+#include "support/LuaSupport.hpp"
+#include "support/SlaSupport.hpp"
 
 namespace HsBa::Slicer
 {
@@ -48,16 +48,15 @@ HSBA_SLICER_LIB_API std::vector<PolygonsD> GenerateAllFdmSupport(const std::vect
 }
 
 HSBA_SLICER_LIB_API std::vector<PolygonsD> GenerateAllSlaSupport(const std::vector<PolygonsD>& layers,
-                                                                  const Support::SlaSupportConfig& config)
+                                                                 const Support::SlaSupportConfig& config)
 {
     Support::SlaSacrificialSupport sla_support;
     return sla_support.GenerateAll(layers, config);
 }
 
 HSBA_SLICER_LIB_API std::vector<PolygonsD> GenerateAllLuaSupport(const std::vector<PolygonsD>& layers,
-                                                                  const Support::SupportConfig& config,
-                                                                  std::string_view script,
-                                                                  std::string_view functionName)
+                                                                 const Support::SupportConfig& config,
+                                                                 std::string_view script, std::string_view functionName)
 {
     Support::LuaSupport lua_support(script, functionName);
     // Compose external 2D+3D functions for support stage

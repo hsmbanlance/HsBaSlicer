@@ -5,9 +5,9 @@
 #include "pipelinetypes/pipeline_types.h"
 
 #include "fdm_pipeline.pb.h"
+#include "file_transfer_pipeline.pb.h"
 #include "sla_pipeline.pb.h"
 #include "sls_pipeline.pb.h"
-#include "file_transfer_pipeline.pb.h"
 
 namespace HsBa::Slicer
 {

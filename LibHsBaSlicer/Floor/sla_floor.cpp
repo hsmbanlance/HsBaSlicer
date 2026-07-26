@@ -10,11 +10,11 @@
 #include "2D/ImageToPolygons.hpp"
 #include "2D/LuaAdapter.hpp"
 #include "2D/PolygonFill.hpp"
-#include "base/error.hpp"
+#include "LibHsBaSlicer/Extends/EventSourceFunction.hpp"
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
+#include "base/error.hpp"
 #include "paths/imagespath.hpp"
 #include "utils/LuaNewObject.hpp"
-#include "LibHsBaSlicer/Extends/EventSourceFunction.hpp"
 
 namespace HsBa::Slicer
 {
@@ -43,12 +43,12 @@ HSBA_SLICER_LIB_API Polygons GenerateFloorBorder(const Polygons& bottom_layer, c
     Polygons footprint = ComputeFootprint(bottom_layer, config);
 
     // Outward offset to expand the footprint into raft area
-    Polygons raft_outer = Offset(footprint, config.raft_offset + config.border_width,
-                                 Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
+    Polygons raft_outer = Offset(footprint, config.raft_offset + config.border_width, Clipper2Lib::JoinType::Round,
+                                 Clipper2Lib::EndType::Polygon);
 
     // Inward offset to carve out the interior fill region
-    Polygons raft_inner = Offset(raft_outer, config.border_width * config.border_count,
-                                 Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
+    Polygons raft_inner = Offset(raft_outer, config.border_width * config.border_count, Clipper2Lib::JoinType::Round,
+                                 Clipper2Lib::EndType::Polygon);
 
     // Border = outer - inner
     return Difference(raft_outer, raft_inner);
@@ -59,12 +59,12 @@ HSBA_SLICER_LIB_API Polygons GenerateFloorFill(const Polygons& bottom_layer, con
     Polygons footprint = ComputeFootprint(bottom_layer, config);
 
     // Expand footprint to raft boundary
-    Polygons raft_outer = Offset(footprint, config.raft_offset + config.border_width,
-                                 Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
+    Polygons raft_outer = Offset(footprint, config.raft_offset + config.border_width, Clipper2Lib::JoinType::Round,
+                                 Clipper2Lib::EndType::Polygon);
 
     // Carve out border region so fill stays inside the border
-    Polygons fill_region = Offset(raft_outer, -config.border_width * config.border_count,
-                                  Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
+    Polygons fill_region = Offset(raft_outer, -config.border_width * config.border_count, Clipper2Lib::JoinType::Round,
+                                  Clipper2Lib::EndType::Polygon);
 
     if (fill_region.empty())
     {
@@ -79,18 +79,18 @@ HSBA_SLICER_LIB_API Polygons GenerateFloorRaft(const Polygons& bottom_layer, con
     Polygons footprint = ComputeFootprint(bottom_layer, config);
 
     // Step 1: Outward offset to create full raft boundary
-    Polygons raft_outer = Offset(footprint, config.raft_offset + config.border_width,
-                                 Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
+    Polygons raft_outer = Offset(footprint, config.raft_offset + config.border_width, Clipper2Lib::JoinType::Round,
+                                 Clipper2Lib::EndType::Polygon);
 
     // Step 2: Generate border loops using composite offset fill
     //   - border_count inward loops at border_width spacing
     //   - then zigzag fill for the interior
-    Polygons border_loops = Offset(raft_outer, -config.border_width / 2.0,
-                                   Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
+    Polygons border_loops =
+        Offset(raft_outer, -config.border_width / 2.0, Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
 
     // Step 3: Interior fill region (inside the last border loop)
-    Polygons fill_region = Offset(raft_outer, -config.border_width * config.border_count,
-                                  Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
+    Polygons fill_region = Offset(raft_outer, -config.border_width * config.border_count, Clipper2Lib::JoinType::Round,
+                                  Clipper2Lib::EndType::Polygon);
 
     Polygons result = std::move(border_loops);
 
@@ -132,10 +132,9 @@ void PushFloorConfigToLua(lua_State* L, const SlaFloorConfig& config)
 }
 }  // anonymous namespace
 
-HSBA_SLICER_LIB_API Polygons LuaCustomFloorByFile(
-    const Polygons& bottom_layer, const std::string& script_path,
-    const std::string& function_name, const SlaFloorConfig& config,
-    const std::function<void(lua_State*)>& lua_reg)
+HSBA_SLICER_LIB_API Polygons LuaCustomFloorByFile(const Polygons& bottom_layer, const std::string& script_path,
+                                                  const std::string& function_name, const SlaFloorConfig& config,
+                                                  const std::function<void(lua_State*)>& lua_reg)
 {
     auto L = MakeUniqueLuaState();
     if (!L)
@@ -211,10 +210,9 @@ HSBA_SLICER_LIB_API Polygons LuaCustomFloorByFile(
     return result;
 }
 
-HSBA_SLICER_LIB_API Polygons LuaCustomFloorByString(
-    const Polygons& bottom_layer, const std::string& lua_script,
-    const std::string& function_name, const SlaFloorConfig& config,
-    const std::function<void(lua_State*)>& lua_reg)
+HSBA_SLICER_LIB_API Polygons LuaCustomFloorByString(const Polygons& bottom_layer, const std::string& lua_script,
+                                                    const std::string& function_name, const SlaFloorConfig& config,
+                                                    const std::function<void(lua_State*)>& lua_reg)
 {
     auto L = MakeUniqueLuaState();
     if (!L)
@@ -299,7 +297,7 @@ HSBA_SLICER_LIB_API Polygons LuaCustomFloorByString(
 // ============================================================
 
 HSBA_SLICER_LIB_API bool RenderPolygonsToImage(const PolygonsD& polys, int width, int height,
-                                                const std::string& outPath)
+                                               const std::string& outPath)
 {
     if (polys.empty())
         return false;
@@ -320,8 +318,10 @@ HSBA_SLICER_LIB_API bool RenderPolygonsToImage(const PolygonsD& polys, int width
     int h = height > 0 ? height : 600;
     double range_x = max_x - min_x;
     double range_y = max_y - min_y;
-    if (range_x < 1e-6) range_x = 1.0;
-    if (range_y < 1e-6) range_y = 1.0;
+    if (range_x < 1e-6)
+        range_x = 1.0;
+    if (range_y < 1e-6)
+        range_y = 1.0;
     double pixel_size = std::max(range_x / w, range_y / h);
 
     return ToImage(polys, w, h, pixel_size, outPath);
@@ -388,7 +388,8 @@ HSBA_SLICER_LIB_API bool SaveSlaPackage(const SlaPackage& pkg, const std::string
             {
                 if (!pkg.layer_supports[i].empty())
                 {
-                    std::string img_data = RenderToBuffer(pkg.layer_supports[i], pkg.image_width, pkg.image_height, ext);
+                    std::string img_data =
+                        RenderToBuffer(pkg.layer_supports[i], pkg.image_width, pkg.image_height, ext);
                     if (!img_data.empty())
                     {
                         images_path.AddImage("supports/layer_" + std::to_string(i) + ext, img_data);
@@ -407,7 +408,7 @@ HSBA_SLICER_LIB_API bool SaveSlaPackage(const SlaPackage& pkg, const std::string
 }
 
 HSBA_SLICER_LIB_API bool SaveSlaPackageLua(const SlaPackage& pkg, const std::string& output_zip,
-                                            const std::string& lua_script, const std::string& lua_func)
+                                           const std::string& lua_script, const std::string& lua_func)
 {
     try
     {
@@ -443,7 +444,8 @@ HSBA_SLICER_LIB_API bool SaveSlaPackageLua(const SlaPackage& pkg, const std::str
             {
                 if (!pkg.layer_supports[i].empty())
                 {
-                    std::string img_data = RenderToBuffer(pkg.layer_supports[i], pkg.image_width, pkg.image_height, ext);
+                    std::string img_data =
+                        RenderToBuffer(pkg.layer_supports[i], pkg.image_width, pkg.image_height, ext);
                     if (!img_data.empty())
                     {
                         images_path.AddImage("supports/layer_" + std::to_string(i) + ext, img_data);
@@ -460,8 +462,8 @@ HSBA_SLICER_LIB_API bool SaveSlaPackageLua(const SlaPackage& pkg, const std::str
             for (auto& reg : GetFileFunctions())
                 reg(L);
         };
-        images_path.Save(std::filesystem::path(output_zip), std::string_view(lua_script),
-                         std::string_view(lua_func), sla_reg);
+        images_path.Save(std::filesystem::path(output_zip), std::string_view(lua_script), std::string_view(lua_func),
+                         sla_reg);
         return true;
     }
     catch (...)

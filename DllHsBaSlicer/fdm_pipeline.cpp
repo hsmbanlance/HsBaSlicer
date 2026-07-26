@@ -259,8 +259,7 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
                 // Lua custom support via LibHsBaSlicer API
                 std::string func = cfg.support_lua_func.empty() ? "generate_support" : cfg.support_lua_func;
                 std::ifstream ifs(cfg.support_lua_script);
-                std::string script_content((std::istreambuf_iterator<char>(ifs)),
-                                           std::istreambuf_iterator<char>());
+                std::string script_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
                 layer_supports = GenerateAllLuaSupport(layer_outlines, cfg.support_config,
                                                        std::string_view(script_content), std::string_view(func));
             }
@@ -278,27 +277,27 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
         // ========== 阶段4: 填充 ==========
         ReportProgress(cfg, 65, "Generating fills...");
         std::vector<PolygonsD> layer_fills(total_layers);
-        
+
         // 确定顶层/底层/中间层范围
-        const int bottom_end = cfg.bottom_layer_count;                              // [0, bottom_end) 为底层
-        const int top_start = total_layers - cfg.top_layer_count;                   // [top_start, total_layers) 为顶层
+        const int bottom_end = cfg.bottom_layer_count;             // [0, bottom_end) 为底层
+        const int top_start = total_layers - cfg.top_layer_count;  // [top_start, total_layers) 为顶层
         const bool has_lua_infill = !cfg.infill_lua_script.empty();
         const std::string infill_func = cfg.infill_lua_func.empty() ? "generate_fill" : cfg.infill_lua_func;
-        
+
         // 中间层填充间距：密度越低间距越大
         double middle_spacing = cfg.fill_spacing;
         if (cfg.infill_density > 0.0 && cfg.infill_density < 1.0)
         {
             middle_spacing = cfg.fill_spacing / cfg.infill_density;
         }
-        
+
         for (int i = 0; i < total_layers; ++i)
         {
             if (!layer_outlines[i].empty())
             {
                 Polygons int_polys = Integerization(layer_outlines[i]);
                 bool is_solid = (i < bottom_end) || (i >= top_start);  // 顶层/底层实心填充
-        
+
                 if (has_lua_infill && !is_solid)
                 {
                     // Lua custom fill via LibHsBaSlicer API
@@ -387,7 +386,8 @@ HSBA_SLICER_API void HsBaRunFdmPipelineAsync(const HsBaFdmPipelineConfig_t* conf
                                              void* result_user_data)
 {
     // 堆分配 config，确保协程执行期间生命周期安全
-    auto shared_cfg = std::make_shared<HsBa::Slicer::Pipeline::InternalConfig>(HsBa::Slicer::Pipeline::BuildConfig(config, callback, user_data));
+    auto shared_cfg = std::make_shared<HsBa::Slicer::Pipeline::InternalConfig>(
+        HsBa::Slicer::Pipeline::BuildConfig(config, callback, user_data));
     auto task = HsBa::Slicer::Pipeline::RunPipelineAsync(*shared_cfg);
     task.then(
         [shared_cfg, result_callback, result_user_data](HsBa::Slicer::Pipeline::InternalResult ir)

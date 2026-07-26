@@ -20,8 +20,7 @@ void FreeIfNotNull(char*& ptr)
 
 // ========== FDM ==========
 
-HSBA_SLICER_API int HsBaFdmConfigFromProtoBytes(const void* proto_data, int proto_size,
-                                                 HsBaFdmPipelineConfig_t* config)
+HSBA_SLICER_API int HsBaFdmConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaFdmPipelineConfig_t* config)
 {
     if (!proto_data || proto_size <= 0 || !config)
         return 0;
@@ -34,8 +33,7 @@ HSBA_SLICER_API int HsBaFdmConfigFromProtoBytes(const void* proto_data, int prot
     return 1;
 }
 
-HSBA_SLICER_API int HsBaFdmConfigToProtoBytes(const HsBaFdmPipelineConfig_t* config,
-                                               void** out_data, int* out_size)
+HSBA_SLICER_API int HsBaFdmConfigToProtoBytes(const HsBaFdmPipelineConfig_t* config, void** out_data, int* out_size)
 {
     if (!config || !out_data || !out_size)
         return 0;
@@ -59,8 +57,7 @@ HSBA_SLICER_API int HsBaFdmConfigToProtoBytes(const HsBaFdmPipelineConfig_t* con
     return 1;
 }
 
-HSBA_SLICER_API int HsBaFdmResultFromProtoBytes(const void* proto_data, int proto_size,
-                                                 HsBaFdmPipelineResult_t* result)
+HSBA_SLICER_API int HsBaFdmResultFromProtoBytes(const void* proto_data, int proto_size, HsBaFdmPipelineResult_t* result)
 {
     if (!proto_data || proto_size <= 0 || !result)
         return 0;
@@ -73,8 +70,7 @@ HSBA_SLICER_API int HsBaFdmResultFromProtoBytes(const void* proto_data, int prot
     return 1;
 }
 
-HSBA_SLICER_API int HsBaFdmResultToProtoBytes(const HsBaFdmPipelineResult_t* result,
-                                               void** out_data, int* out_size)
+HSBA_SLICER_API int HsBaFdmResultToProtoBytes(const HsBaFdmPipelineResult_t* result, void** out_data, int* out_size)
 {
     if (!result || !out_data || !out_size)
         return 0;
@@ -100,8 +96,7 @@ HSBA_SLICER_API int HsBaFdmResultToProtoBytes(const HsBaFdmPipelineResult_t* res
 
 // ========== SLA ==========
 
-HSBA_SLICER_API int HsBaSlaConfigFromProtoBytes(const void* proto_data, int proto_size,
-                                                 HsBaSlaPipelineConfig_t* config)
+HSBA_SLICER_API int HsBaSlaConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaSlaPipelineConfig_t* config)
 {
     if (!proto_data || proto_size <= 0 || !config)
         return 0;
@@ -114,8 +109,7 @@ HSBA_SLICER_API int HsBaSlaConfigFromProtoBytes(const void* proto_data, int prot
     return 1;
 }
 
-HSBA_SLICER_API int HsBaSlaConfigToProtoBytes(const HsBaSlaPipelineConfig_t* config,
-                                               void** out_data, int* out_size)
+HSBA_SLICER_API int HsBaSlaConfigToProtoBytes(const HsBaSlaPipelineConfig_t* config, void** out_data, int* out_size)
 {
     if (!config || !out_data || !out_size)
         return 0;
@@ -139,8 +133,7 @@ HSBA_SLICER_API int HsBaSlaConfigToProtoBytes(const HsBaSlaPipelineConfig_t* con
     return 1;
 }
 
-HSBA_SLICER_API int HsBaSlaResultFromProtoBytes(const void* proto_data, int proto_size,
-                                                 HsBaSlaPipelineResult_t* result)
+HSBA_SLICER_API int HsBaSlaResultFromProtoBytes(const void* proto_data, int proto_size, HsBaSlaPipelineResult_t* result)
 {
     if (!proto_data || proto_size <= 0 || !result)
         return 0;
@@ -153,8 +146,7 @@ HSBA_SLICER_API int HsBaSlaResultFromProtoBytes(const void* proto_data, int prot
     return 1;
 }
 
-HSBA_SLICER_API int HsBaSlaResultToProtoBytes(const HsBaSlaPipelineResult_t* result,
-                                               void** out_data, int* out_size)
+HSBA_SLICER_API int HsBaSlaResultToProtoBytes(const HsBaSlaPipelineResult_t* result, void** out_data, int* out_size)
 {
     if (!result || !out_data || !out_size)
         return 0;
@@ -180,8 +172,7 @@ HSBA_SLICER_API int HsBaSlaResultToProtoBytes(const HsBaSlaPipelineResult_t* res
 
 // ========== SLS ==========
 
-HSBA_SLICER_API int HsBaSlsConfigFromProtoBytes(const void* proto_data, int proto_size,
-                                                 HsBaSlsPipelineConfig_t* config)
+HSBA_SLICER_API int HsBaSlsConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaSlsPipelineConfig_t* config)
 {
     if (!proto_data || proto_size <= 0 || !config)
         return 0;
@@ -194,8 +185,7 @@ HSBA_SLICER_API int HsBaSlsConfigFromProtoBytes(const void* proto_data, int prot
     return 1;
 }
 
-HSBA_SLICER_API int HsBaSlsConfigToProtoBytes(const HsBaSlsPipelineConfig_t* config,
-                                               void** out_data, int* out_size)
+HSBA_SLICER_API int HsBaSlsConfigToProtoBytes(const HsBaSlsPipelineConfig_t* config, void** out_data, int* out_size)
 {
     if (!config || !out_data || !out_size)
         return 0;
@@ -219,8 +209,7 @@ HSBA_SLICER_API int HsBaSlsConfigToProtoBytes(const HsBaSlsPipelineConfig_t* con
     return 1;
 }
 
-HSBA_SLICER_API int HsBaSlsResultFromProtoBytes(const void* proto_data, int proto_size,
-                                                 HsBaSlsPipelineResult_t* result)
+HSBA_SLICER_API int HsBaSlsResultFromProtoBytes(const void* proto_data, int proto_size, HsBaSlsPipelineResult_t* result)
 {
     if (!proto_data || proto_size <= 0 || !result)
         return 0;
@@ -233,8 +222,7 @@ HSBA_SLICER_API int HsBaSlsResultFromProtoBytes(const void* proto_data, int prot
     return 1;
 }
 
-HSBA_SLICER_API int HsBaSlsResultToProtoBytes(const HsBaSlsPipelineResult_t* result,
-                                               void** out_data, int* out_size)
+HSBA_SLICER_API int HsBaSlsResultToProtoBytes(const HsBaSlsPipelineResult_t* result, void** out_data, int* out_size)
 {
     if (!result || !out_data || !out_size)
         return 0;
@@ -274,8 +262,8 @@ HSBA_SLICER_API int HsBaFileTransferConfigFromProtoBytes(const void* proto_data,
     return 1;
 }
 
-HSBA_SLICER_API int HsBaFileTransferConfigToProtoBytes(const HsBaFileTransferPipelineConfig_t* config,
-                                                       void** out_data, int* out_size)
+HSBA_SLICER_API int HsBaFileTransferConfigToProtoBytes(const HsBaFileTransferPipelineConfig_t* config, void** out_data,
+                                                       int* out_size)
 {
     if (!config || !out_data || !out_size)
         return 0;
@@ -313,8 +301,8 @@ HSBA_SLICER_API int HsBaFileTransferResultFromProtoBytes(const void* proto_data,
     return 1;
 }
 
-HSBA_SLICER_API int HsBaFileTransferResultToProtoBytes(const HsBaFileTransferPipelineResult_t* result,
-                                                       void** out_data, int* out_size)
+HSBA_SLICER_API int HsBaFileTransferResultToProtoBytes(const HsBaFileTransferPipelineResult_t* result, void** out_data,
+                                                       int* out_size)
 {
     if (!result || !out_data || !out_size)
         return 0;
