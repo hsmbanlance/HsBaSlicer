@@ -14,6 +14,7 @@
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
 #include "paths/imagespath.hpp"
 #include "utils/LuaNewObject.hpp"
+#include "LibHsBaSlicer/Extends/EventSourceFunction.hpp"
 
 namespace HsBa::Slicer
 {
@@ -355,7 +356,7 @@ HSBA_SLICER_LIB_API bool SaveSlaPackage(const SlaPackage& pkg, const std::string
 {
     try
     {
-        ImagesPath images_path("config.json", pkg.config_json);
+        ImagesPath images_path("config.json", pkg.config_json, {GetZipperEventCallback()});
         const int total_layers = static_cast<int>(pkg.layer_outlines.size());
         const std::string& ext = pkg.image_extension;
 
@@ -399,7 +400,7 @@ HSBA_SLICER_LIB_API bool SaveSlaPackage(const SlaPackage& pkg, const std::string
         images_path.Save(output_zip);
         return true;
     }
-    catch (...)
+    catch (const std::exception&)
     {
         return false;
     }

@@ -1,4 +1,4 @@
-#include "LuaAddFunction.hpp"
+﻿#include "LuaAddFunction.hpp"
 
 #include <map>
 

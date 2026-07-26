@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #ifndef HSBA_SLICER_LIB_SLS_EXPORT_HPP
 #define HSBA_SLICER_LIB_SLS_EXPORT_HPP
 

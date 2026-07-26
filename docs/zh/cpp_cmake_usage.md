@@ -226,6 +226,7 @@ int main()
 | `FdmPipeline` | FDM 全流程（切片→支撑→填充→路径） |
 | `SlaPipeline` | SLA 全流程（切片→支撑→底座→渲染→打包） |
 | `SlsPipeline` | SLS Lua 导出 |
+| `FileTransferPipeline` | 文件传输（校验→连接池→传输） |
 | `SlicerError` | 统一异常类型 |
 
 ### Lua 扩展函数注册（模块版）
@@ -239,6 +240,44 @@ add2DFunction([](lua_State* L) { /* 注册 2D 函数 */ });
 add3DFunction([](lua_State* L) { /* 注册 3D 函数 */ });
 addFileFunction([](lua_State* L) { /* 注册 File 函数 */ });
 addEventCallback("zipper.on_add", [](lua_State* L) { /* 事件回调 */ });
+```
+
+### C++ 事件源注册（模块版）
+
+```cpp
+import hsba.slicer;
+using namespace HsBa::Slicer;
+
+// Zipper 事件回调（进度 + 阶段）
+addZipperEventCallback([](double percent, std::string_view stage) {
+    // 处理压缩进度
+});
+
+// 数据库事件回调（键 + 值）
+addDBEventCallback([](std::string_view key, std::string_view value) {
+    // 处理 DB 事件
+});
+```
+
+### 工具函数（模块版）
+
+```cpp
+import hsba.slicer;
+using namespace HsBa::Slicer;
+
+// 版本信息
+std::string json = versionJson();
+std::string xml  = versionXml();
+
+// 多边形精度转换
+PolygonsD doubles = toDouble(int_polys);   // int -> double
+Polygons ints     = toInt(double_polys);   // double -> int
+
+// 默认配置工厂
+auto fdm_cfg  = defaultFdmConfig();
+auto sla_cfg  = defaultSlaConfig();
+auto sls_cfg  = defaultSlsConfig();
+auto ft_cfg   = defaultFileTransferConfig();
 ```
 
 ### 平台注意事项

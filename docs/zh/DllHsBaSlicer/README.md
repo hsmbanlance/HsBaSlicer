@@ -43,6 +43,7 @@ LibHsBaSlicer  ← C++ 静态库：预处理 / 切片 / 支撑 / 填充 / 路径
 | `file_transfer_pipeline.h` | 文件传输流水线接口（同步/异步） |
 | `pipeline_convert.h` | Proto 序列化字节 ↔ C 结构体转换 |
 | `lua_register.h` | Lua 扩展函数注册接口（2D/3D/File/事件回调） |
+| `event_source_register.h` | C++ 事件源注册接口（Zipper 进度 / DB 事件） |
 | `version_info.h` | 版本信息（JSON / XML 字符串） |
 | `pipelinetypes/pipeline_types.h` | 全部配置/结果结构体、枚举、回调类型与内联默认值初始化器（**无 DLL 依赖**，可独立包含） |
 
@@ -320,6 +321,41 @@ static void register_my_functions(lua_State* L) {
 int main(void) {
     initialize();
     HsBaAdd3DFunction(register_my_functions);  // 注册到切片/支撑阶段
+    // ... 运行流水线
+    return 0;
+}
+```
+
+### C++ 事件源注册
+
+注册 C 风格事件回调，用于监听 Zipper 压缩进度和数据库操作事件（非 Lua 环境，纯 C 回调）：
+
+```c
+// Zipper 事件回调（进度百分比 + 阶段描述）
+void HsBaAddZipperEventCallback(const char* event_name, void (*func)(double, const char*));
+
+// 数据库事件回调（键 + 值）
+void HsBaAddDBEventCallback(const char* event_name, void (*func)(const char*, const char*));
+```
+
+示例：
+
+```c
+#include "initialize.h"
+#include "event_source_register.h"
+
+static void on_zip_progress(double percent, const char* stage) {
+    // 处理压缩进度
+}
+
+static void on_db_event(const char* key, const char* value) {
+    // 处理数据库事件
+}
+
+int main(void) {
+    initialize();
+    HsBaAddZipperEventCallback("zipper.on_progress", on_zip_progress);
+    HsBaAddDBEventCallback("db.on_query", on_db_event);
     // ... 运行流水线
     return 0;
 }

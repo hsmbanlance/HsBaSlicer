@@ -25,7 +25,7 @@ BOOST_AUTO_TEST_CASE(test_to_string_with_encoding)
     [[maybe_unused]]
     static DisableCrt crt_;
     // create ImagesPath with dummy config
-    ImagesPath ip("cfgfile", "{}", [](double, std::string_view) {});
+    ImagesPath ip("cfgfile", "{}");
     // add two small images as base64 strings ("abc" -> "YWJj", bytes {0x01,0x02} -> "AQI=")
     std::string img1 = "YWJj";  // base64 of "abc"
     std::string img2 = "AQI=";  // base64 of bytes 0x01,0x02
@@ -52,8 +52,9 @@ return table.concat(out, "\n")
 
 BOOST_AUTO_TEST_CASE(test_save_creates_file)
 {
-    ImagesPath ip("cfgfile", "{}", [](double rate, std::string_view path)
-                  { std::cout << "Callback: " << rate << "%, " << path << "\n"; });
+    ImagesPath ip(
+        "cfgfile", "{}",
+        {[](double rate, std::string_view path) { std::cout << "Callback: " << rate << "%, " << path << "\n"; }});
     std::string img = "eA==";  // base64 of 'x'
     ip.AddImage("one.png", img);
 

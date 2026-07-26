@@ -21,6 +21,8 @@ if(IOS OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
   pipeline_convert.cpp
   lua_register.h
   lua_register.cpp
+  event_source_register.h
+  event_source_register.cpp
   version_info.h
   version_info.cpp
   )
@@ -44,6 +46,8 @@ else()
   pipeline_convert.cpp
   lua_register.h
   lua_register.cpp
+  event_source_register.h
+  event_source_register.cpp
   version_info.h
   version_info.cpp
   )

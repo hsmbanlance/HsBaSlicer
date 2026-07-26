@@ -56,6 +56,7 @@ module;
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"
 #include "LibHsBaSlicer/Transfer/file_transfer.hpp"
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
+#include "LibHsBaSlicer/Extends/EventSourceFunction.hpp"
 
 // ---- Module interface ----
 export module hsba.slicer;
@@ -107,6 +108,10 @@ using Support::SlaSupportConfig;
 
 // Re-export Lua registration function type
 using LuaRegFunc = std::function<void(lua_State*)>;
+
+// Re-export event callback function type
+using ZipperEventCallbackFunc = std::function<void(double, std::string_view)>;
+using DBEventCallbackFunc = std::function<void(std::string_view, std::string_view)>;
 
 /// @brief Create default FDM pipeline config.
 HsBaFdmPipelineConfig_t defaultFdmConfig();
@@ -311,6 +316,12 @@ inline void addFileFunction(LuaRegFunc func);
 
 /// @brief Register an event callback by name (e.g. "zipper.on_add").
 inline void addEventCallback(const std::string& event_name, LuaRegFunc func);
+
+/// @brief Register a C++ event callback for zipper events.
+inline void addZipperEventCallback(ZipperEventCallbackFunc func);
+
+// @brief Register a C++ event callback for database events.
+inline void addDBEventCallback(DBEventCallbackFunc func);
 
 // ===========================================================================
 // Version
@@ -747,6 +758,16 @@ void addFileFunction(LuaRegFunc func) { AddFileFunctions(std::move(func)); }
 void addEventCallback(const std::string& event_name, LuaRegFunc func)
 {
     AddEventCallback(event_name, std::move(func));
+}
+
+void addZipperEventCallback(ZipperEventCallbackFunc func)
+{
+    AddZipperEventCallback(std::move(func));
+}
+
+void addDBEventCallback(DBEventCallbackFunc func)
+{
+    AddDBEventCallback(std::move(func));
 }
 
 // ===========================================================================

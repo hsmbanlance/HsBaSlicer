@@ -43,6 +43,7 @@ All public headers are exported to `include/HsBaSlicer/` in the install tree.
 | `file_transfer_pipeline.h` | File transfer pipeline interface (sync/async) |
 | `pipeline_convert.h` | Proto serialized bytes ↔ C struct conversion |
 | `lua_register.h` | Lua extension function registration (2D/3D/File/Event callbacks) |
+| `event_source_register.h` | C++ event source registration (Zipper progress / DB events) |
 | `version_info.h` | Version information (JSON / XML strings) |
 | `pipelinetypes/pipeline_types.h` | All config/result structs, enums, callback types and inline default initializers (**no DLL dependency**, can be included standalone) |
 
@@ -320,6 +321,41 @@ static void register_my_functions(lua_State* L) {
 int main(void) {
     initialize();
     HsBaAdd3DFunction(register_my_functions);  // Register for slice/support stages
+    // ... run pipeline
+    return 0;
+}
+```
+
+### C++ Event Source Registration
+
+Register C-style event callbacks for monitoring Zipper compression progress and database operation events (non-Lua, pure C callbacks):
+
+```c
+// Zipper event callback (progress percentage + stage description)
+void HsBaAddZipperEventCallback(const char* event_name, void (*func)(double, const char*));
+
+// Database event callback (key + value)
+void HsBaAddDBEventCallback(const char* event_name, void (*func)(const char*, const char*));
+```
+
+Example:
+
+```c
+#include "initialize.h"
+#include "event_source_register.h"
+
+static void on_zip_progress(double percent, const char* stage) {
+    // handle compression progress
+}
+
+static void on_db_event(const char* key, const char* value) {
+    // handle database events
+}
+
+int main(void) {
+    initialize();
+    HsBaAddZipperEventCallback("zipper.on_progress", on_zip_progress);
+    HsBaAddDBEventCallback("db.on_query", on_db_event);
     // ... run pipeline
     return 0;
 }

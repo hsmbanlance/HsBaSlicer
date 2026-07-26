@@ -21,6 +21,8 @@
     Transfer/file_transfer.cpp
     Extends/LuaAddFunction.hpp
     Extends/LuaAddFunction.cpp
+    Extends/EventSourceFunction.hpp
+    Extends/EventSourceFunction.cpp
     )
 else()
     add_library(LibHsBaSlicer SHARED 
@@ -45,6 +47,8 @@ else()
     Transfer/file_transfer.cpp
     Extends/LuaAddFunction.hpp
     Extends/LuaAddFunction.cpp
+    Extends/EventSourceFunction.hpp
+    Extends/EventSourceFunction.cpp
     )
     # Define the export macro for Windows
     target_compile_definitions(LibHsBaSlicer PRIVATE HSBA_SLICER_EXPORTS)
