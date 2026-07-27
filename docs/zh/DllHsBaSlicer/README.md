@@ -40,7 +40,10 @@ LibHsBaSlicer  ← C++ 静态库：预处理 / 切片 / 支撑 / 填充 / 路径
 | `fdm_pipeline.h` | FDM 全流程接口 |
 | `sla_pipeline.h` | SLA 全流程接口 |
 | `sls_pipeline.h` | SLS 全流程接口 |
+| `file_transfer_pipeline.h` | 文件传输流水线接口（同步/异步） |
+| `pipeline_convert.h` | Proto 序列化字节 ↔ C 结构体转换 |
 | `lua_register.h` | Lua 扩展函数注册接口（2D/3D/File/事件回调） |
+| `event_source_register.h` | C++ 事件源注册接口（Zipper 进度 / DB 事件） |
 | `version_info.h` | 版本信息（JSON / XML 字符串） |
 | `pipelinetypes/pipeline_types.h` | 全部配置/结果结构体、枚举、回调类型与内联默认值初始化器（**无 DLL 依赖**，可独立包含） |
 
@@ -211,6 +214,73 @@ void HsBaFreeSlsPipelineResult(HsBaSlsPipelineResult_t* result);
 
 > SLS 的 `export_lua_script` 字段**不可为 NULL**。
 
+### 文件传输流水线
+
+校验 → 连接池建立 → 逐文件传输，将本地文件发送至远程执行器服务。
+
+```c
+HsBaFileTransferPipelineConfig_t HsBaCreateDefaultFileTransferConfig(void);
+
+HsBaFileTransferPipelineResult_t HsBaRunFileTransferPipeline(
+    const HsBaFileTransferPipelineConfig_t* config,
+    HsBaFileTransferProgressCallback callback, void* user_data);
+
+void HsBaRunFileTransferPipelineAsync(
+    const HsBaFileTransferPipelineConfig_t* config,
+    HsBaFileTransferProgressCallback callback, void* user_data,
+    HsBaFileTransferResultCallback result_callback, void* result_user_data);
+
+void HsBaFreeFileTransferPipelineResult(HsBaFileTransferPipelineResult_t* result);
+```
+
+#### 配置字段
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `host` | NULL | 远程主机地址 |
+| `port` | NULL | 远程服务端口 |
+| `pool_size` | 4 | 连接池大小 [1, 16] |
+| `file_paths` | NULL | 待传输文件路径数组 |
+| `file_count` | 0 | 文件数量 |
+
+### Proto 序列化转换
+
+提供 C 结构体与 Protobuf 序列化字节之间的双向转换，适用于跨进程 / 跨语言通信场景。所有输出缓冲区由 `malloc` 分配，调用方负责 `free`。
+
+```c
+// FDM
+int HsBaFdmConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaFdmPipelineConfig_t* config);
+int HsBaFdmConfigToProtoBytes(const HsBaFdmPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaFdmResultFromProtoBytes(const void* proto_data, int proto_size, HsBaFdmPipelineResult_t* result);
+int HsBaFdmResultToProtoBytes(const HsBaFdmPipelineResult_t* result, void** out_data, int* out_size);
+
+// SLA
+int HsBaSlaConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaSlaPipelineConfig_t* config);
+int HsBaSlaConfigToProtoBytes(const HsBaSlaPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaSlaResultFromProtoBytes(const void* proto_data, int proto_size, HsBaSlaPipelineResult_t* result);
+int HsBaSlaResultToProtoBytes(const HsBaSlaPipelineResult_t* result, void** out_data, int* out_size);
+
+// SLS
+int HsBaSlsConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaSlsPipelineConfig_t* config);
+int HsBaSlsConfigToProtoBytes(const HsBaSlsPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaSlsResultFromProtoBytes(const void* proto_data, int proto_size, HsBaSlsPipelineResult_t* result);
+int HsBaSlsResultToProtoBytes(const HsBaSlsPipelineResult_t* result, void** out_data, int* out_size);
+
+// File Transfer
+int HsBaFileTransferConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaFileTransferPipelineConfig_t* config);
+int HsBaFileTransferConfigToProtoBytes(const HsBaFileTransferPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaFileTransferResultFromProtoBytes(const void* proto_data, int proto_size, HsBaFileTransferPipelineResult_t* result);
+int HsBaFileTransferResultToProtoBytes(const HsBaFileTransferPipelineResult_t* result, void** out_data, int* out_size);
+
+// 内存释放
+void HsBaFreeFdmConfigStrings(HsBaFdmPipelineConfig_t* config);
+void HsBaFreeSlaConfigStrings(HsBaSlaPipelineConfig_t* config);
+void HsBaFreeSlsConfigStrings(HsBaSlsPipelineConfig_t* config);
+void HsBaFreeFileTransferConfigStrings(HsBaFileTransferPipelineConfig_t* config);
+```
+
+> Proto 消息定义位于 `proto/` 目录（`fdm_pipeline.proto`、`sla_pipeline.proto`、`sls_pipeline.proto`、`file_transfer_pipeline.proto`），支持 C++/C#/Java/Python/PHP 多语言输出。
+
 ### 版本信息
 
 ```c
@@ -256,6 +326,41 @@ int main(void) {
 }
 ```
 
+### C++ 事件源注册
+
+注册 C 风格事件回调，用于监听 Zipper 压缩进度和数据库操作事件（非 Lua 环境，纯 C 回调）：
+
+```c
+// Zipper 事件回调（进度百分比 + 阶段描述）
+void HsBaAddZipperEventCallback(const char* event_name, void (*func)(double, const char*));
+
+// 数据库事件回调（键 + 值）
+void HsBaAddDBEventCallback(const char* event_name, void (*func)(const char*, const char*));
+```
+
+示例：
+
+```c
+#include "initialize.h"
+#include "event_source_register.h"
+
+static void on_zip_progress(double percent, const char* stage) {
+    // 处理压缩进度
+}
+
+static void on_db_event(const char* key, const char* value) {
+    // 处理数据库事件
+}
+
+int main(void) {
+    initialize();
+    HsBaAddZipperEventCallback("zipper.on_progress", on_zip_progress);
+    HsBaAddDBEventCallback("db.on_query", on_db_event);
+    // ... 运行流水线
+    return 0;
+}
+```
+
 ## 回调与线程模型
 
 ```c
@@ -274,7 +379,8 @@ typedef void (*HsBaResultCallback)(HsBaFdmPipelineResult_t result, void* user_da
 2. 结果结构体中的 `gcode_content` / `export_path` / `error_message` 由库内部分配，**必须**调用对应的 `HsBaFree*PipelineResult()` 释放；
 3. 版本字符串必须用 `HsBaFreeVersionString()` 释放；
 4. 模型句柄（`HsBaLoadModel` / `HsBaGetModel` / `HsBaBoolean*` / `HsBaThickSolidModel` 返回的 `void*`）必须用 `HsBaReleaseModelHandle()` 释放引用；
-5. `pipeline_types.h` 还提供无 DLL 依赖的内联初始化器 `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()`，便于纯头文件场景（如 P/Invoke 结构体对照）使用。
+5. `pipeline_types.h` 还提供无 DLL 依赖的内联初始化器 `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()` / `HsBaFileTransferConfigDefault()`，便于纯头文件场景（如 P/Invoke 结构体对照）使用；
+6. Proto 反序列化（`*FromProtoBytes`）产生的字符串字段由 `malloc` 分配，必须调用对应的 `HsBaFree*ConfigStrings()` 释放；`*ToProtoBytes` 产生的 `out_data` 缓冲区由调用方 `free`。
 
 ## 最小示例（C/C++）
 

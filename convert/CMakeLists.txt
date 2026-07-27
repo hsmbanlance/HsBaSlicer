@@ -17,3 +17,4 @@ target_link_libraries(HsBaSlicerConverter PUBLIC Eigen3::Eigen HsBaSlicerProto
     HsBaSlicerMesh
     HsBaPipelineTypes
 )
+add_dependencies(HsBaSlicerConverter HsBaSlicerProto)

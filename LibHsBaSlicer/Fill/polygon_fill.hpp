@@ -45,8 +45,8 @@ HSBA_SLICER_LIB_API Polygons FillWithBorder(const Polygons& poly, double spacing
  * @return Custom fill pattern as polygons.
  */
 HSBA_SLICER_LIB_API Polygons LuaCustomFillByFile(const Polygons& poly, const std::string& scriptPath,
-                                                  const std::string& functionName = "generate_fill",
-                                                  double lineThickness = 0.5);
+                                                 const std::string& functionName = "generate_fill",
+                                                 double lineThickness = 0.5);
 
 }  // namespace HsBa::Slicer
 

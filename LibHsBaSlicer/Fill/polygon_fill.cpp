@@ -29,7 +29,7 @@ HSBA_SLICER_LIB_API Polygons FillWithBorder(const Polygons& poly, double spacing
 }
 
 HSBA_SLICER_LIB_API Polygons LuaCustomFillByFile(const Polygons& poly, const std::string& scriptPath,
-                                                  const std::string& functionName, double lineThickness)
+                                                 const std::string& functionName, double lineThickness)
 {
     // Compose external 2D functions into lua_reg callback
     std::function<void(lua_State*)> reg = [](lua_State* L)

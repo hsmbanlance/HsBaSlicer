@@ -45,9 +45,9 @@ extern "C"
      */
     typedef enum HsBaGCodeFirmware
     {
-        HSBA_GCODE_MARLIN = 0,   ///< Marlin firmware (most common)
-        HSBA_GCODE_REPRAP = 1,   ///< RepRap / RRF firmware
-        HSBA_GCODE_KLIPPER = 2   ///< Klipper firmware
+        HSBA_GCODE_MARLIN = 0,  ///< Marlin firmware (most common)
+        HSBA_GCODE_REPRAP = 1,  ///< RepRap / RRF firmware
+        HSBA_GCODE_KLIPPER = 2  ///< Klipper firmware
     } HsBaGCodeFirmware_t;
 
     /**
@@ -99,10 +99,10 @@ extern "C"
         float first_layer_speed;             ///< First layer speed (mm/s), default 20.0
 
         /* Lua Custom Configuration */
-        const char* support_lua_script;   ///< Support Lua script path (NULL to use built-in algorithm)
-        const char* support_lua_func;     ///< Support Lua function name (NULL, default "generate_support")
-        const char* infill_lua_script;    ///< Infill Lua script path (NULL to use built-in algorithm)
-        const char* infill_lua_func;      ///< Infill Lua function name (NULL, default "generate_fill")
+        const char* support_lua_script;  ///< Support Lua script path (NULL to use built-in algorithm)
+        const char* support_lua_func;    ///< Support Lua function name (NULL, default "generate_support")
+        const char* infill_lua_script;   ///< Infill Lua script path (NULL to use built-in algorithm)
+        const char* infill_lua_func;     ///< Infill Lua function name (NULL, default "generate_fill")
 
         /* Output Configuration */
         const char* output_path;  ///< Output G-code file path (can be NULL)
@@ -183,20 +183,20 @@ extern "C"
         float retract_speed;         ///< Retract speed (mm/s), default 150.0
 
         /* Floor / Raft Configuration */
-        float floor_raft_offset;     ///< Raft outward offset from footprint (mm), default 2.0
-        float floor_border_width;    ///< Floor border ring width (mm), default 1.0
-        float floor_fill_spacing;    ///< Floor fill line spacing (mm), default 0.5
-        float floor_fill_angle;      ///< Floor fill angle (degrees), default 0.0
-        int   floor_border_count;    ///< Number of floor border loops, default 2
-        int   floor_use_convex_hull; ///< Use convex hull for floor (0=false, 1=true), default 0
+        float floor_raft_offset;    ///< Raft outward offset from footprint (mm), default 2.0
+        float floor_border_width;   ///< Floor border ring width (mm), default 1.0
+        float floor_fill_spacing;   ///< Floor fill line spacing (mm), default 0.5
+        float floor_fill_angle;     ///< Floor fill angle (degrees), default 0.0
+        int floor_border_count;     ///< Number of floor border loops, default 2
+        int floor_use_convex_hull;  ///< Use convex hull for floor (0=false, 1=true), default 0
 
         /* Support Configuration */
-        int   enable_support;                    ///< Enable support (0=false, 1=true), default 1
-        float overhang_angle;                    ///< Overhang angle threshold (degrees), default 45.0
-        float support_gap;                       ///< Gap between support and model (mm), default 0.5
-        float support_diameter;                  ///< Support column diameter (mm), default 2.0
-        float support_density;                   ///< Support fill density [0,1], default 0.3
-        HsBaSlaSupportPattern_t support_pattern; ///< Support pattern, default HSBA_SLA_SUPPORT_SACRIFICIAL
+        int enable_support;                       ///< Enable support (0=false, 1=true), default 1
+        float overhang_angle;                     ///< Overhang angle threshold (degrees), default 45.0
+        float support_gap;                        ///< Gap between support and model (mm), default 0.5
+        float support_diameter;                   ///< Support column diameter (mm), default 2.0
+        float support_density;                    ///< Support fill density [0,1], default 0.3
+        HsBaSlaSupportPattern_t support_pattern;  ///< Support pattern, default HSBA_SLA_SUPPORT_SACRIFICIAL
 
         /* Lua Custom Configuration */
         const char* support_lua_script;  ///< Support Lua script path (NULL = built-in)
@@ -207,10 +207,10 @@ extern "C"
         const char* export_lua_func;     ///< Export Lua function name (NULL = "export_sla")
 
         /* Output Configuration */
-        const char* output_path;       ///< Output zip file path (can be NULL)
-        HsBaSlaImageType_t image_type; ///< Layer image format, default HSBA_SLA_IMAGE_PNG
-        int   image_width;             ///< Image width in pixels (0 = auto), default 0
-        int   image_height;            ///< Image height in pixels (0 = auto), default 0
+        const char* output_path;        ///< Output zip file path (can be NULL)
+        HsBaSlaImageType_t image_type;  ///< Layer image format, default HSBA_SLA_IMAGE_PNG
+        int image_width;                ///< Image width in pixels (0 = auto), default 0
+        int image_height;               ///< Image height in pixels (0 = auto), default 0
 
     } HsBaSlaPipelineConfig_t;
 
@@ -264,11 +264,11 @@ extern "C"
         float first_layer_height;  ///< First layer height (mm), default 0.15
 
         /* Laser Configuration */
-        float laser_power;         ///< Laser power (W), default 30.0
-        float scan_speed;          ///< Scan speed (mm/s), default 2000.0
-        float hatch_spacing;       ///< Hatch line spacing (mm), default 0.15
-        float hatch_rotation;      ///< Hatch rotation between layers (degrees), default 90.0
-        float bed_temperature;     ///< Powder bed temperature (°C), default 180.0
+        float laser_power;      ///< Laser power (W), default 30.0
+        float scan_speed;       ///< Scan speed (mm/s), default 2000.0
+        float hatch_spacing;    ///< Hatch line spacing (mm), default 0.15
+        float hatch_rotation;   ///< Hatch rotation between layers (degrees), default 90.0
+        float bed_temperature;  ///< Powder bed temperature (°C), default 180.0
 
         /* Lua Export Configuration (required - no standard output format) */
         const char* export_lua_script;  ///< Export Lua script path (must not be NULL)
@@ -305,6 +305,55 @@ extern "C"
      * @brief Result callback for async SLS pipeline.
      */
     typedef void (*HsBaSlsResultCallback)(HsBaSlsPipelineResult_t result, void* user_data);
+
+    /* ========================================================================
+     *  File Transfer Types
+     * ====================================================================== */
+
+    /**
+     * @brief File transfer pipeline configuration (C-compatible struct).
+     *
+     * Uses RemoteExecutorConnectionPool to send files to a remote service.
+     */
+    typedef struct HsBaFileTransferPipelineConfig
+    {
+        /* Connection Configuration */
+        const char* host;  ///< Remote host address (must not be NULL)
+        const char* port;  ///< Remote service port (must not be NULL)
+        int pool_size;     ///< Connection pool size [1,16], default 4
+
+        /* File Configuration */
+        const char** file_paths;  ///< Array of file paths to transfer (must not be NULL)
+        int file_count;           ///< Number of files in file_paths array
+
+    } HsBaFileTransferPipelineConfig_t;
+
+    /**
+     * @brief File transfer pipeline result (C-compatible struct).
+     *
+     * Must call HsBaFreeFileTransferPipelineResult to release memory after use.
+     */
+    typedef struct HsBaFileTransferPipelineResult
+    {
+        int success;             ///< Success flag (0=false, 1=true)
+        int files_transferred;   ///< Number of files successfully transferred
+        int total_files;         ///< Total number of files requested
+        char* error_message;     ///< Error message (UTF-8, caller must free)
+        double elapsed_seconds;  ///< Elapsed time (seconds)
+    } HsBaFileTransferPipelineResult_t;
+
+    /**
+     * @brief File transfer progress callback function type.
+     * @param percent Progress percentage (0-100).
+     * @param stage Current stage description (UTF-8 string).
+     * @param user_data User-defined data pointer.
+     */
+    typedef void (*HsBaFileTransferProgressCallback)(int percent, const char* stage, void* user_data);
+
+    /**
+     * @brief Result callback for async file transfer pipeline.
+     */
+    typedef void (*HsBaFileTransferResultCallback)(HsBaFileTransferPipelineResult_t result, void* user_data);
 
     /* ========================================================================
      *  Default config initializers (inline, no DLL dependency)
@@ -417,6 +466,21 @@ extern "C"
         cfg.export_lua_script = 0;
         cfg.export_lua_func = 0;
         cfg.output_path = 0;
+        return cfg;
+    }
+
+    /**
+     * @brief Initialize file transfer pipeline config with default values.
+     * @return Default configuration struct (string fields are NULL).
+     */
+    static inline HsBaFileTransferPipelineConfig_t HsBaFileTransferConfigDefault(void)
+    {
+        HsBaFileTransferPipelineConfig_t cfg;
+        cfg.host = 0;
+        cfg.port = 0;
+        cfg.pool_size = 4;
+        cfg.file_paths = 0;
+        cfg.file_count = 0;
         return cfg;
     }
 

@@ -4,25 +4,21 @@
 **本文档中引用的文件**  
 - [CMakePresets.json](file://CMakePresets.json)
 - [vcpkg.json](file://vcpkg.json)
-- [vcpkg-configuration.json](file://vcpkg-configuration.json)
 - [android/build.gradle](file://android/build.gradle)
 - [android/app/build.gradle](file://android/app/build.gradle)
-- [android/app/src/main/AndroidManifest.xml](file://android/app/src/main/AndroidManifest.xml)
+- [android/gradle/wrapper/gradle-wrapper.properties](file://android/gradle/wrapper/gradle-wrapper.properties)
 - [android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java](file://android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java)
 - [logger/logger.cpp](file://logger/logger.cpp)
-- [logger/logger.hpp](file://logger/logger.hpp)
 - [HsBaSlicer/CMakeLists.txt](file://HsBaSlicer/CMakeLists.txt)
-- [README.md](file://README.md)
-- [android/README.md](file://android/README.md)
-- [.github/workflows/cmake-multi-platform.yml](file://.github/workflows/cmake-multi-platform.yml)
+- [.github/workflows/build-android.yml](file://.github/workflows/build-android.yml)
 </cite>
 
 ## 更新摘要
 **变更内容**   
-- 增强了 GitHub Actions Android 构建工作流，集成 clang-scan-deps 编译器依赖扫描器
-- 改进了增量构建性能和依赖跟踪能力
-- 优化了 CMake 配置中的编译器依赖分析设置
-- 完善了 CI/CD 流水线中的构建缓存和性能优化机制
+- 升级 Android 构建基础设施至 Java JDK 21、Android SDK 34、Gradle 8.7 和 Android Gradle Plugin 8.3.2
+- 采用新的插件 DSL 格式和属性配置语法
+- 更新了 Gradle Wrapper 配置以使用最新版本的 Gradle
+- 改进了 Android 应用模块的构建配置，支持最新的 API 级别
 
 ## 目录
 1. [简介](#简介)
@@ -33,12 +29,11 @@
 6. [JNI 接口与本地库集成](#jni-接口与本地库集成)
 7. [日志系统实现机制](#日志系统实现机制)
 8. [GitHub Actions CI/CD 集成](#github-actions-cicd-集成)
-9. [增量构建与依赖追踪](#增量构建与依赖追踪)
-10. [构建流程总结](#构建流程总结)
+9. [构建流程总结](#构建流程总结)
 
 ## 简介
 
-本指南详细说明如何在 Android 平台上构建 HsBaSlicer 项目，重点介绍 `android-release` 构建预设的配置、NDK 集成、依赖过滤以及 Gradle 构建流程。项目采用 CMake 与 vcpkg 进行跨平台构建管理，并通过 Gradle 将本地库集成到 Android 应用中。**最新更新**：集成了 clang-scan-deps 编译器依赖扫描器，显著提升了增量构建性能和依赖跟踪能力。
+本指南详细说明如何在 Android 平台上构建 HsBaSlicer 项目，重点介绍 `android-release` 构建预设的配置、NDK 集成、依赖过滤以及 Gradle 构建流程。项目采用 CMake 与 vcpkg 进行跨平台构建管理，并通过 Gradle 将本地库集成到 Android 应用中。**最新更新**：Android 构建基础设施已全面升级至最新版本，包括 Java JDK 21、Android SDK 34、Gradle 8.7 和 Android Gradle Plugin 8.3.2，显著提升了构建性能和兼容性。
 
 **章节来源**
 - [README.md:180-195](file://README.md#L180-L195)
@@ -47,11 +42,13 @@
 ## 构建环境配置
 
 构建 Android 版本需要以下环境组件：
-- **Android NDK**：通过 `ANDROID_NDK_HOME` 环境变量指定路径，推荐使用 r27d 或更高版本以支持 C++20 和 clang-scan-deps
-- **Android SDK**：至少需要支持 API 级别 28
+- **Java JDK 21**：推荐使用 OpenJDK 21 以获得最佳兼容性和性能
+- **Android NDK r27d**：通过 `ANDROID_NDK_HOME` 环境变量指定路径，支持 C++20 和 clang-scan-deps
+- **Android SDK 34**：至少需要支持 API 级别 34，提供最新的 Android 功能和工具
+- **Gradle 8.7**：用于 APK 打包，与 Android Gradle Plugin 8.3.2 完美配合
+- **Android Gradle Plugin 8.3.2**：最新的 AGP 版本，支持新的 DSL 语法和构建优化
 - **vcpkg**：用于管理第三方依赖库，建议使用最新版本
 - **CMake**：版本需支持跨平台构建和依赖扫描功能
-- **Gradle**：版本 7.5.1，用于 APK 打包（AGP 7.4.2 需要 Gradle 7.5+）
 
 `ANDROID_NDK_HOME` 必须正确设置，以便 CMake 能够找到 `android.toolchain.cmake` 工具链文件和 `clang-scan-deps` 依赖扫描器，实现 Android 平台的交叉编译和增量构建优化。
 
@@ -59,8 +56,8 @@
 
 **章节来源**
 - [CMakePresets.json:83-108](file://CMakePresets.json#L83-L108)
-- [android/README.md:7-11](file://android/README.md#L7-L11)
-- [.github/workflows/cmake-multi-platform.yml:222-276](file://.github/workflows/cmake-multi-platform.yml#L222-L276)
+- [.github/workflows/build-android.yml:16](file://.github/workflows/build-android.yml#L16)
+- [.github/workflows/build-android.yml:37](file://.github/workflows/build-android.yml#L37)
 
 ## CMake 预设配置详解
 
@@ -70,23 +67,23 @@
 
 ```mermaid
 flowchart TD
-A[android-release 预设] --> B[生成器: Ninja]
-A --> C[二进制目录: out/build/android-release]
-A --> D[安装目录: out/install/android-release]
-A --> E[工具链文件: vcpkg.cmake]
-A --> F[缓存变量]
-F --> F1[CMAKE_BUILD_TYPE: Release]
-F --> F2[VCPKG_TARGET_TRIPLET: arm64-android]
-F --> F3[VCPKG_CHAINLOAD_TOOLCHAIN_FILE: $env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake]
-F --> F4[ANDROID_NDK: $env{ANDROID_NDK_HOME}]
-F --> F5[ANDROID_ABI: arm64-v8a]
-F --> F6[ANDROID_PLATFORM: android-28]
-F --> F7[CMAKE_SYSTEM_NAME: Android]
-A --> G[条件: hostSystemName == Linux]
-A --> H[增量构建支持]
-H --> H1[clang-scan-deps 集成]
-H --> H2[依赖关系追踪]
-H --> H3[部分重编译优化]
+A["android-release 预设"] --> B["生成器: Ninja"]
+A --> C["二进制目录: out/build/android-release"]
+A --> D["安装目录: out/install/android-release"]
+A --> E["工具链文件: vcpkg.cmake"]
+A --> F["缓存变量"]
+F --> F1["CMAKE_BUILD_TYPE: Release"]
+F --> F2["VCPKG_TARGET_TRIPLET: arm64-android"]
+F --> F3["VCPKG_CHAINLOAD_TOOLCHAIN_FILE: $env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake"]
+F --> F4["ANDROID_NDK: $env{ANDROID_NDK_HOME}"]
+F --> F5["ANDROID_ABI: arm64-v8a"]
+F --> F6["ANDROID_PLATFORM: android-28"]
+F --> F7["CMAKE_SYSTEM_NAME: Android"]
+A --> G["条件: hostSystemName == Linux"]
+A --> H["增量构建支持"]
+H --> H1["clang-scan-deps 集成"]
+H --> H2["依赖关系追踪"]
+H --> H3["部分重编译优化"]
 ```
 
 **图表来源**
@@ -165,51 +162,55 @@ DEPENDENCY ||--o{ "cgal" : "enabled on android"
 
 ### 项目级构建配置
 
-`android/build.gradle` 文件定义了项目级的构建脚本，配置了 Gradle 插件仓库和依赖。
+`android/build.gradle` 文件采用了新的插件 DSL 格式，定义了项目级的构建脚本。
 
 ```mermaid
 flowchart TD
-A[buildscript] --> B[repositories]
-B --> B1[google()]
-B --> B2[mavenCentral()]
-A --> C[dependencies]
-C --> C1[classpath 'com.android.tools.build:gradle:7.4.2']
-D[allprojects] --> E[repositories]
-E --> E1[google()]
-E --> E2[mavenCentral()]
+A[plugins 块] --> B[id: com.android.application]
+B --> B1[version: 8.3.2]
+B --> B2[apply: false]
 ```
 
 **图表来源**
-- [android/build.gradle:1-17](file://android/build.gradle#L1-L17)
+- [android/build.gradle:1-4](file://android/build.gradle#L1-L4)
 
 **章节来源**
-- [android/build.gradle:1-17](file://android/build.gradle#L1-L17)
+- [android/build.gradle:1-4](file://android/build.gradle#L1-L4)
 
 ### 模块级构建配置
 
-`android/app/build.gradle` 文件配置了应用模块的详细构建参数。
+`android/app/build.gradle` 文件配置了应用模块的详细构建参数，使用了新的 DSL 语法。
 
 ```mermaid
 flowchart TD
-A[android] --> B[namespace: com.hsmbanlance.hsbaslicer.example]
-A --> C[compileSdk: 31]
-A --> D[defaultConfig]
+A[android 块] --> B[namespace: com.hsmbanlance.hsbaslicer.example]
+A --> C[compileSdk: 34]
+A --> D[defaultConfig 块]
 D --> D1[applicationId: com.hsmbanlance.hsbaslicer.example]
 D --> D2[minSdk: 21]
-D --> D3[targetSdk: 31]
-A --> E[buildTypes]
+D --> D3[targetSdk: 34]
+A --> E[buildTypes 块]
 E --> E1[release: minifyEnabled false]
-A --> F[sourceSets]
+A --> F[sourceSets 块]
 F --> F1[jniLibs.srcDirs: src/main/jniLibs]
-A --> G[ndk]
+A --> G[ndk 配置]
 G --> G1[abiFilters: arm64-v8a]
 ```
 
 **图表来源**
-- [android/app/build.gradle:11-44](file://android/app/build.gradle#L11-L44)
+- [android/app/build.gradle:5-33](file://android/app/build.gradle#L5-L33)
 
 **章节来源**
-- [android/app/build.gradle:11-44](file://android/app/build.gradle#L11-L44)
+- [android/app/build.gradle:5-33](file://android/app/build.gradle#L5-L33)
+
+### Gradle Wrapper 配置
+
+`android/gradle/wrapper/gradle-wrapper.properties` 文件指定了 Gradle 版本为 8.7，确保构建的一致性和可重现性。
+
+**更新** Gradle Wrapper 已更新至 8.7 版本，提供更好的构建性能和内存管理。
+
+**章节来源**
+- [android/gradle/wrapper/gradle-wrapper.properties:1-8](file://android/gradle/wrapper/gradle-wrapper.properties#L1-L8)
 
 ## JNI 接口与本地库集成
 
@@ -230,10 +231,10 @@ A->>A : onCreate : 显示加载成功信息
 ```
 
 **图表来源**
-- [android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java:7-19](file://android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java#L7-L19)
+- [android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java:17-20](file://android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java#L17-L20)
 
 **章节来源**
-- [android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java:7-19](file://android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java#L7-L19)
+- [android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java:17-20](file://android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java#L17-L20)
 
 ### 库文件集成路径
 
@@ -243,7 +244,7 @@ CMake 构建系统将生成的 `.so` 文件输出到 `android_libs/arm64-v8a/` �
 
 **章节来源**
 - [HsBaSlicer/CMakeLists.txt:16-39](file://HsBaSlicer/CMakeLists.txt#L16-L39)
-- [android/app/build.gradle:32-35](file://android/app/build.gradle#L32-L35)
+- [android/app/build.gradle:24-28](file://android/app/build.gradle#L24-L28)
 
 ## 日志系统实现机制
 
@@ -275,7 +276,6 @@ D --> D6[fatal]
 
 **章节来源**
 - [logger/logger.cpp:238-339](file://logger/logger.cpp#L238-L339)
-- [logger/logger.hpp:8-10](file://logger/logger.hpp#L8-L10)
 
 ### 实现逻辑
 
@@ -286,8 +286,7 @@ D --> D6[fatal]
 **更新** 完善了日志系统的实现细节，包括 iOS 平台的日志支持和更详细的错误处理。
 
 **章节来源**
-- [logger/logger.cpp:103-129](file://logger/logger.cpp#L103-L129)
-- [logger/logger.cpp:208-217](file://logger/logger.cpp#L208-L217)
+- [logger/logger.cpp:238-339](file://logger/logger.cpp#L238-L339)
 
 ## GitHub Actions CI/CD 集成
 
@@ -310,71 +309,27 @@ J --> K[Upload Artifact]
 ```
 
 **图表来源**
-- [.github/workflows/cmake-multi-platform.yml:210-351](file://.github/workflows/cmake-multi-platform.yml#L210-351)
+- [.github/workflows/build-android.yml:12-143](file://.github/workflows/build-android.yml#L12-L143)
 
 ### 关键改进特性
 
 | 特性 | 描述 |
 |------|------|
+| **Java JDK 21 支持** | 使用最新的 OpenJDK 21 获得更好的性能和安全性 |
+| **Android SDK 34** | 支持最新的 Android API 级别和功能 |
+| **Gradle 8.7** | 使用最新的 Gradle 版本提升构建性能 |
+| **Android Gradle Plugin 8.3.2** | 采用最新的 AGP 版本，支持新的 DSL 语法 |
 | **依赖安装顺序优化** | 按依赖关系顺序安装 Java、Android SDK、NDK 和 vcpkg |
 | **CMake 错误检查** | 在配置前验证 CMakeLists.txt 文件存在性 |
 | **路径参数处理** | 改进 VCPKG 工具链文件和 Android NDK 路径参数处理 |
 | **缓存机制** | 使用 actions/cache 缓存 vcpkg 下载和构建产物 |
-| **Gradle 版本管理** | 固定使用 Gradle 7.5.1 以确保兼容性 |
 | **APK 上传** | 自动上传构建的 APK 作为构建产物 |
 | **clang-scan-deps 集成** | 启用编译器依赖扫描器，提升增量构建性能 |
 
 **更新** 大幅增强了 CI/CD 工作流的健壮性和可维护性，添加了完善的错误检查和缓存机制，并集成了先进的编译器依赖扫描功能。
 
 **章节来源**
-- [.github/workflows/cmake-multi-platform.yml:210-351](file://.github/workflows/cmake-multi-platform.yml#L210-351)
-
-## 增量构建与依赖追踪
-
-### clang-scan-deps 编译器依赖扫描器集成
-
-**新增功能**：项目现已集成 clang-scan-deps 编译器依赖扫描器，为 Android 构建提供强大的增量构建和依赖追踪能力。
-
-#### 工作原理
-
-```mermaid
-flowchart TD
-A[源代码修改] --> B[clang-scan-deps 分析]
-B --> C[生成依赖关系图]
-C --> D[识别受影响文件]
-D --> E[选择性重新编译]
-E --> F[增量链接]
-F --> G[快速构建完成]
-```
-
-#### 配置方式
-
-在 GitHub Actions 工作流中，clang-scan-deps 通过以下方式自动配置：
-
-```bash
--D CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang-scan-deps"
-```
-
-#### 性能优势
-
-| 指标 | 传统构建 | 增量构建 | 提升幅度 |
-|------|----------|----------|----------|
-| 首次构建时间 | 基准 | 基准 | - |
-| 小改动构建时间 | 100% | 15-30% | 70-85% |
-| 大改动构建时间 | 100% | 40-60% | 40-60% |
-| 内存占用 | 基准 | 略高 | +5-10% |
-
-#### 适用场景
-
-- **开发阶段**：频繁的小规模代码修改和调试
-- **CI/CD 流水线**：减少构建队列等待时间
-- **大规模项目**：复杂依赖关系的精确追踪
-- **团队协作**：提高并行开发效率
-
-**更新** 新增了 clang-scan-deps 集成，显著提升了 Android 构建的性能和开发体验。
-
-**章节来源**
-- [.github/workflows/cmake-multi-platform.yml:268-276](file://.github/workflows/cmake-multi-platform.yml#L268-276)
+- [.github/workflows/build-android.yml:12-143](file://.github/workflows/build-android.yml#L12-L143)
 
 ## 构建流程总结
 
@@ -396,7 +351,7 @@ I --> J[生成最终 APK]
 **图表来源**
 - [CMakePresets.json:83-108](file://CMakePresets.json#L83-L108)
 - [HsBaSlicer/CMakeLists.txt:16-39](file://HsBaSlicer/CMakeLists.txt#L16-L39)
-- [android/app/build.gradle:32-35](file://android/app/build.gradle#L32-L35)
+- [android/app/build.gradle:24-28](file://android/app/build.gradle#L24-L28)
 
 ### 手动构建步骤
 
@@ -430,4 +385,4 @@ I --> J[生成最终 APK]
 **章节来源**
 - [android/README.md:7-17](file://android/README.md#L7-L17)
 - [HsBaSlicer/CMakeLists.txt:11-39](file://HsBaSlicer/CMakeLists.txt#L11-L39)
-- [README.md:180-195](file://README.md#L180-L195)
+- [.github/workflows/build-android.yml:79-137](file://.github/workflows/build-android.yml#L79-L137)

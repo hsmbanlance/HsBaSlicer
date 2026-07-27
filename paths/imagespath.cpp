@@ -17,8 +17,8 @@
 namespace HsBa::Slicer
 {
 ImagesPath::ImagesPath(std::string_view config_file, std::string_view config_str,
-                       const std::function<void(double, std::string_view)>& callback)
-    : config_{std::string{config_file}, std::string{config_str}}, images_{}, callback_{callback}
+                       const std::vector<std::function<void(double, std::string_view)>>& callbacks)
+    : config_{std::string{config_file}, std::string{config_str}}, images_{}, callbacks_{callbacks}
 {
 }
 
@@ -30,7 +30,10 @@ void ImagesPath::AddImage(std::string_view path, std::string_view image_str)
 void ImagesPath::Save(const std::filesystem::path& path) const
 {
     Zipper zipper;
-    zipper += callback_;
+    for (const auto& callback : callbacks_)
+    {
+        zipper += callback;
+    }
     zipper.AddByteFile(config_.path, config_.configStr);
     for (const auto& [path, image] : images_)
     {
@@ -324,7 +327,10 @@ std::string ImagesPath::ToString(const std::filesystem::path& script_file, const
 
 std::string ImagesPath::ToString() const
 {
-    callback_(0.0, "save as string, no use callback");
+    for (const auto& callback : callbacks_)
+    {
+        callback(0.0, "save as string, no use callback");
+    }
     std::ostringstream oss;
     oss << "#" << config_.path << "\n";
     oss << config_.configStr << "\n";

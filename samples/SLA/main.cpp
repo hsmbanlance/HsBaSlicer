@@ -64,21 +64,17 @@ static int RunBasicSlaPipeline()
     cfg.output_path = "output/sla_basic_output.zip";
 
     // 4. Run pipeline synchronously
-    HsBaSlaPipelineResult_t result =
-        HsBaRunSlaPipeline(&cfg, OnProgress, nullptr);
+    HsBaSlaPipelineResult_t result = HsBaRunSlaPipeline(&cfg, OnProgress, nullptr);
 
     // 5. Check result
     if (result.success)
     {
-        LogMsg(std::format("SLA slicing OK! Layers: {}, Export: {}, Time: {:.2f}s",
-                           result.total_layers,
-                           result.export_path ? result.export_path : "N/A",
-                           result.elapsed_seconds));
+        LogMsg(std::format("SLA slicing OK! Layers: {}, Export: {}, Time: {:.2f}s", result.total_layers,
+                           result.export_path ? result.export_path : "N/A", result.elapsed_seconds));
     }
     else
     {
-        LogMsg(std::format("SLA slicing FAILED: {}",
-                           result.error_message ? result.error_message : "Unknown error"));
+        LogMsg(std::format("SLA slicing FAILED: {}", result.error_message ? result.error_message : "Unknown error"));
     }
 
     // 6. Free result memory (required)
@@ -105,44 +101,42 @@ static int RunCustomSlaPipeline()
     cfg.first_layer_height = 0.1f;  // 0.1mm
 
     // Exposure parameters
-    cfg.bottom_exposure_time = 60.0f;   // Bottom exposure 60s
-    cfg.normal_exposure_time = 2.5f;    // Normal exposure 2.5s
-    cfg.bottom_lift_distance = 5.0f;    // Bottom lift 5mm
-    cfg.lift_distance = 3.0f;           // Normal lift 3mm
-    cfg.lift_speed = 60.0f;             // Lift speed 60mm/s
-    cfg.retract_speed = 150.0f;         // Retract speed 150mm/s
+    cfg.bottom_exposure_time = 60.0f;  // Bottom exposure 60s
+    cfg.normal_exposure_time = 2.5f;   // Normal exposure 2.5s
+    cfg.bottom_lift_distance = 5.0f;   // Bottom lift 5mm
+    cfg.lift_distance = 3.0f;          // Normal lift 3mm
+    cfg.lift_speed = 60.0f;            // Lift speed 60mm/s
+    cfg.retract_speed = 150.0f;        // Retract speed 150mm/s
 
     // Floor/Raft parameters
-    cfg.floor_raft_offset = 3.0f;       // Raft offset 3mm
-    cfg.floor_border_width = 1.5f;      // Border width 1.5mm
-    cfg.floor_fill_spacing = 0.5f;      // Fill spacing 0.5mm
-    cfg.floor_border_count = 3;         // 3 border loops
-    cfg.floor_use_convex_hull = 1;      // Use convex hull
+    cfg.floor_raft_offset = 3.0f;   // Raft offset 3mm
+    cfg.floor_border_width = 1.5f;  // Border width 1.5mm
+    cfg.floor_fill_spacing = 0.5f;  // Fill spacing 0.5mm
+    cfg.floor_border_count = 3;     // 3 border loops
+    cfg.floor_use_convex_hull = 1;  // Use convex hull
 
     // Support parameters
     cfg.enable_support = 1;
-    cfg.overhang_angle = 45.0f;         // Overhang threshold 45 deg
-    cfg.support_gap = 0.5f;             // Support gap 0.5mm
-    cfg.support_diameter = 2.0f;        // Support diameter 2mm
-    cfg.support_density = 0.3f;         // Support density 30%
+    cfg.overhang_angle = 45.0f;   // Overhang threshold 45 deg
+    cfg.support_gap = 0.5f;       // Support gap 0.5mm
+    cfg.support_diameter = 2.0f;  // Support diameter 2mm
+    cfg.support_density = 0.3f;   // Support density 30%
     cfg.support_pattern = HSBA_SLA_SUPPORT_SACRIFICIAL;
 
     // Output
     cfg.output_path = "output/sla_custom_output.zip";
 
     // Run
-    HsBaSlaPipelineResult_t result =
-        HsBaRunSlaPipeline(&cfg, OnProgress, nullptr);
+    HsBaSlaPipelineResult_t result = HsBaRunSlaPipeline(&cfg, OnProgress, nullptr);
 
     if (result.success)
     {
-        LogMsg(std::format("SLA custom slicing done! Layers: {}, Time: {:.2f}s",
-                           result.total_layers, result.elapsed_seconds));
+        LogMsg(std::format("SLA custom slicing done! Layers: {}, Time: {:.2f}s", result.total_layers,
+                           result.elapsed_seconds));
     }
     else
     {
-        LogMsg(std::format("SLA slicing FAILED: {}",
-                           result.error_message ? result.error_message : "Unknown error"));
+        LogMsg(std::format("SLA slicing FAILED: {}", result.error_message ? result.error_message : "Unknown error"));
     }
 
     HsBaFreeSlaPipelineResult(&result);
@@ -181,8 +175,7 @@ static int RunLuaCustomSlaPipeline()
     cfg.output_path = "output/sla_lua_custom_output.zip";
 
     // Run
-    HsBaSlaPipelineResult_t result =
-        HsBaRunSlaPipeline(&cfg, OnProgress, nullptr);
+    HsBaSlaPipelineResult_t result = HsBaRunSlaPipeline(&cfg, OnProgress, nullptr);
 
     if (result.success)
     {
@@ -190,8 +183,7 @@ static int RunLuaCustomSlaPipeline()
     }
     else
     {
-        LogMsg(std::format("SLA slicing FAILED: {}",
-                           result.error_message ? result.error_message : "Unknown error"));
+        LogMsg(std::format("SLA slicing FAILED: {}", result.error_message ? result.error_message : "Unknown error"));
     }
 
     HsBaFreeSlaPipelineResult(&result);
@@ -209,16 +201,13 @@ static void OnSlaPipelineComplete(HsBaSlaPipelineResult_t result, void* user_dat
 
     if (result.success)
     {
-        LogMsg(std::format("[Async] SLA done! Layers: {}, Export: {}, Time: {:.2f}s",
-                           result.total_layers,
-                           result.export_path ? result.export_path : "N/A",
-                           result.elapsed_seconds));
+        LogMsg(std::format("[Async] SLA done! Layers: {}, Export: {}, Time: {:.2f}s", result.total_layers,
+                           result.export_path ? result.export_path : "N/A", result.elapsed_seconds));
         *flag = 1;
     }
     else
     {
-        LogMsg(std::format("[Async] SLA FAILED: {}",
-                           result.error_message ? result.error_message : "Unknown error"));
+        LogMsg(std::format("[Async] SLA FAILED: {}", result.error_message ? result.error_message : "Unknown error"));
         *flag = -1;
     }
 
@@ -237,8 +226,7 @@ static int RunAsyncSlaPipeline()
     int done_flag = 0;
 
     // Start async (non-blocking)
-    HsBaRunSlaPipelineAsync(&cfg, OnProgress, nullptr,
-                            OnSlaPipelineComplete, &done_flag);
+    HsBaRunSlaPipelineAsync(&cfg, OnProgress, nullptr, OnSlaPipelineComplete, &done_flag);
 
     // In real applications, do other work here or wait for done_flag
     while (done_flag == 0)

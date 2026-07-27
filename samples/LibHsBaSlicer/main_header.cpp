@@ -18,27 +18,27 @@
 #include <vector>
 
 // LibHsBaSlicer public API headers
+#include "2D/FloatPolygons.hpp"
+#include "LibHsBaSlicer/Fill/polygon_fill.hpp"
+#include "LibHsBaSlicer/Path/path_generator.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
-#include "LibHsBaSlicer/Fill/polygon_fill.hpp"
-#include "LibHsBaSlicer/Path/path_generator.hpp"
-#include "2D/FloatPolygons.hpp"
 
 using namespace HsBa::Slicer;
 
 // ---------------------------------------------------------------------------
 // Process parameters
 // ---------------------------------------------------------------------------
-static constexpr float kLayerHeight       = 0.2f;    // layer height (mm)
-static constexpr float kFirstLayerHeight  = 0.25f;   // first layer height (mm)
-static constexpr float kLineWidth         = 0.4f;    // line width (mm)
-static constexpr float kPrintSpeed        = 60.0f;   // print speed (mm/s)
-static constexpr float kTravelSpeed       = 120.0f;  // travel speed (mm/s)
-static constexpr double kFillSpacing      = 0.4;     // fill spacing (mm)
-static constexpr double kFillAngle        = 45.0;    // fill angle (deg)
-static constexpr int kWallCount           = 3;       // wall loop count
-static constexpr float kOverhangAngle     = 45.0f;   // overhang threshold (deg)
+static constexpr float kLayerHeight = 0.2f;        // layer height (mm)
+static constexpr float kFirstLayerHeight = 0.25f;  // first layer height (mm)
+static constexpr float kLineWidth = 0.4f;          // line width (mm)
+static constexpr float kPrintSpeed = 60.0f;        // print speed (mm/s)
+static constexpr float kTravelSpeed = 120.0f;      // travel speed (mm/s)
+static constexpr double kFillSpacing = 0.4;        // fill spacing (mm)
+static constexpr double kFillAngle = 45.0;         // fill angle (deg)
+static constexpr int kWallCount = 3;               // wall loop count
+static constexpr float kOverhangAngle = 45.0f;     // overhang threshold (deg)
 
 // ---------------------------------------------------------------------------
 // Main workflow
@@ -71,9 +71,9 @@ int main()
 
     // Query model info
     ModelInfo info = GetModelInfo(model_name);
-    std::cout << std::format("  BBox: ({:.2f}, {:.2f}, {:.2f}) ~ ({:.2f}, {:.2f}, {:.2f})",
-                             info.bbox_min.x(), info.bbox_min.y(), info.bbox_min.z(),
-                             info.bbox_max.x(), info.bbox_max.y(), info.bbox_max.z())
+    std::cout << std::format("  BBox: ({:.2f}, {:.2f}, {:.2f}) ~ ({:.2f}, {:.2f}, {:.2f})", info.bbox_min.x(),
+                             info.bbox_min.y(), info.bbox_min.z(), info.bbox_max.x(), info.bbox_max.y(),
+                             info.bbox_max.z())
               << std::endl;
     std::cout << std::format("  Volume: {:.2f} mm^3", info.volume) << std::endl;
 
@@ -87,7 +87,7 @@ int main()
     std::cout << "[2/5] Slicing..." << std::endl;
 
     const float model_height = info.bbox_max.z() - info.bbox_min.z();
-    const int total_layers   = static_cast<int>(model_height / kLayerHeight) + 1;
+    const int total_layers = static_cast<int>(model_height / kLayerHeight) + 1;
 
     std::vector<Polygons> layer_contours;
     layer_contours.reserve(total_layers);
@@ -115,9 +115,9 @@ int main()
 
     Support::FdmSupportConfig support_cfg;
     support_cfg.overhang_angle_threshold = kOverhangAngle;
-    support_cfg.layer_height             = kLayerHeight;
-    support_cfg.support_density          = 0.3f;
-    support_cfg.support_pattern          = 0;  // Plane
+    support_cfg.layer_height = kLayerHeight;
+    support_cfg.support_density = 0.3f;
+    support_cfg.support_pattern = 0;  // Plane
 
     std::vector<PolygonsD> supports = GenerateAllFdmSupport(layers_d, support_cfg);
     std::cout << std::format("  Support layers: {}", supports.size()) << std::endl;
@@ -141,8 +141,7 @@ int main()
         // Infill
         if (!layer_contours[i].empty())
         {
-            Polygons filled = FillWithBorder(layer_contours[i], kFillSpacing,
-                                             kWallCount, FillMode::Zigzag, kFillAngle);
+            Polygons filled = FillWithBorder(layer_contours[i], kFillSpacing, kWallCount, FillMode::Zigzag, kFillAngle);
             // Convert to floating-point
             layer_data.fills = UnIntegerization(filled);
         }
@@ -163,12 +162,12 @@ int main()
     std::cout << "[5/5] Generating G-code paths..." << std::endl;
 
     FdmPathConfig path_cfg;
-    path_cfg.layer_height         = kLayerHeight;
-    path_cfg.line_width           = kLineWidth;
-    path_cfg.print_speed          = kPrintSpeed;
-    path_cfg.travel_speed         = kTravelSpeed;
+    path_cfg.layer_height = kLayerHeight;
+    path_cfg.line_width = kLineWidth;
+    path_cfg.print_speed = kPrintSpeed;
+    path_cfg.travel_speed = kTravelSpeed;
     path_cfg.extrusion_multiplier = 1.0f;
-    path_cfg.units                = GCodeUnits::mm;
+    path_cfg.units = GCodeUnits::mm;
 
     auto gcode_path = GenerateGCodePath(all_layer_data, path_cfg);
 

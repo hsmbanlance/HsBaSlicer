@@ -110,9 +110,9 @@ HSBA_SLICER_LIB_API std::shared_ptr<IModel> ThickSolidModel(const std::string& s
     return GetLoader().ThickSolidModel(sourceName, resultName, thickness);
 }
 
-HSBA_SLICER_LIB_API std::shared_ptr<IModel> ThickSolidModel(
-    const std::string& sourceName, const std::string& resultName,
-    const std::vector<std::vector<Eigen::Vector3f>>& closingFaces, float thickness)
+HSBA_SLICER_LIB_API std::shared_ptr<IModel>
+ThickSolidModel(const std::string& sourceName, const std::string& resultName,
+                const std::vector<std::vector<Eigen::Vector3f>>& closingFaces, float thickness)
 {
     return GetLoader().ThickSolidModel(sourceName, resultName, closingFaces, thickness);
 }
@@ -123,15 +123,13 @@ HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanUnion(const std::string& left
     return GetLoader().BooleanUnion(leftName, rightName, resultName);
 }
 
-HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanIntersection(const std::string& leftName,
-                                                                const std::string& rightName,
-                                                                const std::string& resultName)
+HSBA_SLICER_LIB_API std::shared_ptr<IModel>
+BooleanIntersection(const std::string& leftName, const std::string& rightName, const std::string& resultName)
 {
     return GetLoader().BooleanIntersection(leftName, rightName, resultName);
 }
 
-HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanDifference(const std::string& leftName,
-                                                              const std::string& rightName,
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanDifference(const std::string& leftName, const std::string& rightName,
                                                               const std::string& resultName)
 {
     return GetLoader().BooleanDifference(leftName, rightName, resultName);

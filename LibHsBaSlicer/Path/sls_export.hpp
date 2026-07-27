@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #ifndef HSBA_SLICER_LIB_SLS_EXPORT_HPP
 #define HSBA_SLICER_LIB_SLS_EXPORT_HPP
 
@@ -43,8 +43,7 @@ struct SlsPackage
  * @return true if export succeeded, false otherwise.
  */
 HSBA_SLICER_LIB_API bool SaveSlsPackageLua(const SlsPackage& pkg, const std::string& output_zip,
-                                            const std::string& lua_script,
-                                            const std::string& lua_func = "export_sls");
+                                           const std::string& lua_script, const std::string& lua_func = "export_sls");
 
 }  // namespace HsBa::Slicer
 

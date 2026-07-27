@@ -17,6 +17,9 @@
 - [cmake/deploy_dlls.cmake](file://cmake/deploy_dlls.cmake)
 - [android/build.gradle](file://android/build.gradle)
 - [android/app/build.gradle](file://android/app/build.gradle)
+- [android/settings.gradle](file://android/settings.gradle)
+- [android/gradle.properties](file://android/gradle.properties)
+- [android/gradle/wrapper/gradle-wrapper.properties](file://android/gradle/wrapper/gradle-wrapper.properties)
 - [static_check/feature_check.cmake](file://static_check/feature_check.cmake)
 - [base/coroutine.hpp](file://base/coroutine.hpp)
 - [LibHsBaSlicer/Slice/mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp)
@@ -29,9 +32,11 @@
 
 ## Update Summary
 **Changes Made**
-- Enhanced Android build system with clang-scan-deps support for improved incremental build performance
-- Updated GitHub Actions workflows to include CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS configuration parameter
-- Added comprehensive documentation for Android build optimization and dependency tracking improvements
+- Updated Android build system with Java JDK 21, Android SDK 34, Gradle 8.7, and Android Gradle Plugin 8.3.2
+- Enhanced clang-scan-deps integration for improved incremental build performance across all workflows
+- Modernized Android toolchain configuration with latest NDK r27d support
+- Updated GitHub Actions workflows with comprehensive Android SDK and NDK setup
+- Added detailed documentation for Android build optimization and dependency tracking improvements
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -364,17 +369,23 @@ Copy --> Done["Deployment complete"]
 - [cmake/deploy_dlls.cmake:1-27](file://cmake/deploy_dlls.cmake#L1-L27)
 - [CMakeLists.txt:277-286](file://CMakeLists.txt#L277-L286)
 
-### Enhanced Android Build System with clang-scan-deps
-**New** Significantly improved Android build performance through clang-scan-deps integration:
-- **Incremental Build Optimization**: clang-scan-deps enables precise dependency tracking for faster rebuilds.
-- **GitHub Actions Integration**: Both Android workflow files now include CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS parameter.
-- **NDK Integration**: Leverages Android NDK's built-in clang-scan-deps tool for optimal performance.
-- **CI/CD Enhancement**: Automated builds benefit from reduced compilation times in continuous integration environments.
+### Enhanced Android Build System with Modern Toolchain
+**Updated** Significantly upgraded Android build system with latest toolchain versions:
+- **Java JDK 21**: Upgraded from JDK 11 to JDK 21 for improved performance and security.
+- **Android SDK 34**: Updated from SDK 31 to SDK 34 with latest APIs and platform support.
+- **Gradle 8.7**: Upgraded from Gradle 7.5.1 to 8.7 for enhanced build performance.
+- **Android Gradle Plugin 8.3.2**: Updated from 7.4.2 to 8.3.2 with modern build features.
+- **NDK r27d**: Latest Android NDK with improved clang-scan-deps integration.
+- **Enhanced CI/CD**: Both workflow files now include comprehensive Android SDK and NDK setup.
 
 ```mermaid
 flowchart TD
-AndroidWorkflow[".github/workflows/build-android.yml"] --> CMakeConfig["CMake Configuration"]
-CMakeConfig --> ScanDeps["CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS"]
+AndroidWorkflow[".github/workflows/build-android.yml"] --> JDK21["OpenJDK 21 Installation"]
+AndroidWorkflow --> SDK34["Android SDK 34 Setup"]
+AndroidWorkflow --> NDK27d["Android NDK r27d Installation"]
+AndroidWorkflow --> Gradle87["Gradle 8.7 Configuration"]
+AndroidWorkflow --> AGP832["AGP 8.3.2 Plugin"]
+AndroidWorkflow --> ScanDeps["CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS"]
 ScanDeps --> NDKTool["Android NDK clang-scan-deps"]
 NDKTool --> Incremental["Improved Incremental Builds"]
 Incremental --> FasterRebuild["Faster Compilation Times"]
@@ -386,12 +397,24 @@ Incremental2 --> FasterRebuild2["Faster Compilation Times"]
 ```
 
 **Diagram sources**
-- [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
-- [.github/workflows/cmake-multi-platform.yml:268-276](file://.github/workflows/cmake-multi-platform.yml#L268-L276)
+- [.github/workflows/build-android.yml:16](file://.github/workflows/build-android.yml#L16)
+- [.github/workflows/build-android.yml:37](file://.github/workflows/build-android.yml#L37)
+- [.github/workflows/build-android.yml:46](file://.github/workflows/build-android.yml#L46)
+- [.github/workflows/build-android.yml:95](file://.github/workflows/build-android.yml#L95)
+- [.github/workflows/cmake-multi-platform.yml:203](file://.github/workflows/cmake-multi-platform.yml#L203)
+- [.github/workflows/cmake-multi-platform.yml:217](file://.github/workflows/cmake-multi-platform.yml#L217)
+- [.github/workflows/cmake-multi-platform.yml:227](file://.github/workflows/cmake-multi-platform.yml#L227)
+- [.github/workflows/cmake-multi-platform.yml:276](file://.github/workflows/cmake-multi-platform.yml#L276)
 
 **Section sources**
-- [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
-- [.github/workflows/cmake-multi-platform.yml:268-276](file://.github/workflows/cmake-multi-platform.yml#L268-L276)
+- [.github/workflows/build-android.yml:16](file://.github/workflows/build-android.yml#L16)
+- [.github/workflows/build-android.yml:37](file://.github/workflows/build-android.yml#L37)
+- [.github/workflows/build-android.yml:46](file://.github/workflows/build-android.yml#L46)
+- [.github/workflows/build-android.yml:95](file://.github/workflows/build-android.yml#L95)
+- [.github/workflows/cmake-multi-platform.yml:203](file://.github/workflows/cmake-multi-platform.yml#L203)
+- [.github/workflows/cmake-multi-platform.yml:217](file://.github/workflows/cmake-multi-platform.yml#L217)
+- [.github/workflows/cmake-multi-platform.yml:227](file://.github/workflows/cmake-multi-platform.yml#L227)
+- [.github/workflows/cmake-multi-platform.yml:276](file://.github/workflows/cmake-multi-platform.yml#L276)
 
 ### Module: base (HsBaSlicerBase)
 - Static library providing core utilities, coroutine primitives, object pools, thread pool, units, reflection helpers.
@@ -597,29 +620,52 @@ class FdmHoneycombSupport {
 - [preprocess/ModelLoader.hpp:1-131](file://preprocess/ModelLoader.hpp#L1-L131)
 - [support/FdmSupport.hpp:1-63](file://support/FdmSupport.hpp#L1-L63)
 
-### Android Integration
-- Gradle wrapper and app module configure namespace, SDK versions, ABI filters, and jniLibs directory.
-- Native libraries are consumed from prebuilt artifacts produced by CMake presets.
-- **Unified output consumption**: Gradle expects artifacts in standardized locations.
-- **Enhanced CI Integration**: GitHub Actions workflows now leverage clang-scan-deps for faster Android builds.
+### Enhanced Android Integration with Modern Toolchain
+**Updated** Modernized Android build system with latest toolchain versions:
+- **Gradle Wrapper**: Configured with Gradle 8.7 for optimal build performance.
+- **Android Gradle Plugin 8.3.2**: Latest plugin with enhanced build features and optimizations.
+- **Android SDK 34**: Target SDK updated to latest with modern APIs and security patches.
+- **Java JDK 21**: Upgraded from JDK 11 for improved performance and security.
+- **NDK r27d**: Latest NDK with enhanced clang-scan-deps support for faster builds.
+- **Enhanced CI Integration**: Both workflow files now include comprehensive Android SDK and NDK setup with proper caching.
 
 ```mermaid
 graph TB
-Gradle["android/build.gradle"] --> AppGradle["android/app/build.gradle"]
+Gradle["android/build.gradle<br/>AGP 8.3.2"] --> AppGradle["android/app/build.gradle<br/>SDK 34, JDK 21"]
 AppGradle --> JNILibs["jniLibs.srcDirs = src/main/jniLibs"]
 AppGradle --> ABIs["abiFilters arm64-v8a"]
 AppGradle --> CMakeOut["CMake output: out/build/android-release/bin/Release"]
-AndroidCI[".github/workflows/build-android.yml<br/>clang-scan-deps enabled"] --> CMakeOut
+AndroidCI[".github/workflows/build-android.yml<br/>JDK 21, SDK 34, NDK r27d"] --> CMakeOut
+MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>JDK 21, SDK 34, NDK r27d"] --> CMakeOut
+GradleWrapper["gradle-wrapper.properties<br/>Gradle 8.7"] --> AppGradle
+SettingsGradle["settings.gradle<br/>Repository configuration"] --> AppGradle
 ```
 
 **Diagram sources**
-- [android/build.gradle:1-17](file://android/build.gradle#L1-L17)
-- [android/app/build.gradle:1-45](file://android/app/build.gradle#L1-L45)
-- [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
+- [android/build.gradle:2](file://android/build.gradle#L2)
+- [android/app/build.gradle:7](file://android/app/build.gradle#L7)
+- [android/app/build.gradle:12](file://android/app/build.gradle#L12)
+- [android/gradle/wrapper/gradle-wrapper.properties:3](file://android/gradle/wrapper/gradle-wrapper.properties#L3)
+- [android/settings.gradle:17](file://android/settings.gradle#L17)
+- [.github/workflows/build-android.yml:16](file://.github/workflows/build-android.yml#L16)
+- [.github/workflows/build-android.yml:37](file://.github/workflows/build-android.yml#L37)
+- [.github/workflows/build-android.yml:46](file://.github/workflows/build-android.yml#L46)
+- [.github/workflows/cmake-multi-platform.yml:203](file://.github/workflows/cmake-multi-platform.yml#L203)
+- [.github/workflows/cmake-multi-platform.yml:217](file://.github/workflows/cmake-multi-platform.yml#L217)
+- [.github/workflows/cmake-multi-platform.yml:227](file://.github/workflows/cmake-multi-platform.yml#L227)
 
 **Section sources**
-- [android/build.gradle:1-17](file://android/build.gradle#L1-L17)
-- [android/app/build.gradle:1-45](file://android/app/build.gradle#L1-L45)
+- [android/build.gradle:2](file://android/build.gradle#L2)
+- [android/app/build.gradle:7](file://android/app/build.gradle#L7)
+- [android/app/build.gradle:12](file://android/app/build.gradle#L12)
+- [android/gradle/wrapper/gradle-wrapper.properties:3](file://android/gradle/wrapper/gradle-wrapper.properties#L3)
+- [android/settings.gradle:17](file://android/settings.gradle#L17)
+- [.github/workflows/build-android.yml:16](file://.github/workflows/build-android.yml#L16)
+- [.github/workflows/build-android.yml:37](file://.github/workflows/build-android.yml#L37)
+- [.github/workflows/build-android.yml:46](file://.github/workflows/build-android.yml#L46)
+- [.github/workflows/cmake-multi-platform.yml:203](file://.github/workflows/cmake-multi-platform.yml#L203)
+- [.github/workflows/cmake-multi-platform.yml:217](file://.github/workflows/cmake-multi-platform.yml#L217)
+- [.github/workflows/cmake-multi-platform.yml:227](file://.github/workflows/cmake-multi-platform.yml#L227)
 
 ## Dependency Analysis
 High-level linkage between major components:
@@ -638,8 +684,8 @@ Lib --> Module["ModuleHsBaSlicer (C++20)"]
 Module --> Dll["DllHsBaSlicer"]
 Dll --> Install["Installation & Export"]
 Install --> External["External Projects"]
-AndroidCI[".github/workflows/build-android.yml<br/>clang-scan-deps"] --> Lib
-MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>clang-scan-deps"] --> Lib
+AndroidCI[".github/workflows/build-android.yml<br/>JDK 21, SDK 34, NDK r27d"] --> Lib
+MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>JDK 21, SDK 34, NDK r27d"] --> Lib
 ```
 
 **Diagram sources**
@@ -647,10 +693,14 @@ MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>clang-scan-deps"] 
 - [ModuleHsBaSlicer/CMakeLists.txt:23-29](file://ModuleHsBaSlicer/CMakeLists.txt#L23-L29)
 - [DllHsBaSlicer/CMakeLists.txt:12-20](file://DllHsBaSlicer/CMakeLists.txt#L12-L20)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
-- [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
-- [.github/workflows/cmake-multi-platform.yml:268-276](file://.github/workflows/cmake-multi-platform.yml#L268-L276)
+- [.github/workflows/build-android.yml:16](file://.github/workflows/build-android.yml#L16)
+- [.github/workflows/build-android.yml:37](file://.github/workflows/build-android.yml#L37)
+- [.github/workflows/build-android.yml:46](file://.github/workflows/build-android.yml#L46)
+- [.github/workflows/cmake-multi-platform.yml:203](file://.github/workflows/cmake-multi-platform.yml#L203)
+- [.github/workflows/cmake-multi-platform.yml:217](file://.github/workflows/cmake-multi-platform.yml#L217)
+- [.github/workflows/cmake-multi-platform.yml:227](file://.github/workflows/cmake-multi-platform.yml#L227)
 
-**Updated** Added C++20 module layer, enhanced installation/export layer for external project usage, and Android clang-scan-deps optimization.
+**Updated** Added C++20 module layer, enhanced installation/export layer for external project usage, and modernized Android toolchain with JDK 21, SDK 34, and NDK r27d.
 
 **Section sources**
 - [LibHsBaSlicer/CMakeLists.txt:37-50](file://LibHsBaSlicer/CMakeLists.txt#L37-L50)
@@ -666,15 +716,20 @@ MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>clang-scan-deps"] 
 - **Game console optimizations**: Specific feature gating for console platforms to minimize resource usage.
 - **C++20 modules benefits**: Faster compile times and improved build performance for module consumers.
 - **Android clang-scan-deps optimization**: Significantly improved incremental build performance through precise dependency tracking, reducing unnecessary recompilation during development and CI/CD processes.
+- **Modern toolchain benefits**: JDK 21 provides better garbage collection and performance improvements over JDK 11.
+- **Gradle 8.7 enhancements**: Improved build cache, parallel execution, and dependency resolution performance.
 
-**Updated** Added C++20 modules performance benefits, game console optimization considerations, and Android clang-scan-deps incremental build improvements.
+**Updated** Added modern toolchain performance benefits including JDK 21 improvements, Gradle 8.7 enhancements, and Android SDK 34 optimizations.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
 - Missing C++20 support: Ensure compiler meets requirements; CMake enforces C++20 and will fail early if concepts/ranges/source_location are unavailable.
 - **CMake 3.28 requirement**: Upgrade CMake to 3.28+ for C++20 module support and FILE_SET functionality.
 - vcpkg not found: Provide VCPKG_ROOT environment variable or pass -DCMAKE_TOOLCHAIN_FILE explicitly; verify vcpkg-configuration.json registries and baselines.
-- Android build fails: Confirm ANDROID_NDK_HOME is set; use android-release preset; ensure ABI matches app module abiFilters.
+- **Android build fails**: Confirm ANDROID_NDK_HOME is set; use android-release preset; ensure ABI matches app module abiFilters.
+- **Android SDK issues**: Verify Android SDK 34 is installed; check sdkmanager configuration; ensure platform-tools are up to date.
+- **Java JDK 21 problems**: Ensure JDK 21 is properly installed and JAVA_HOME is set correctly; verify gradle.properties JVM args.
+- **Gradle 8.7 compatibility**: Check that all plugins are compatible with Gradle 8.7; update deprecated configurations.
 - iOS build fails: Verify Xcode generator preset and deployment target >= 16.3; confirm arm64 architecture.
 - Debug slowdowns: Switch to Release; boolean operations are intentionally disabled in Debug.
 - **Installation issues**: Ensure proper CMake package configuration files are installed; check namespace usage (`HsBaSlicer::`).
@@ -683,8 +738,9 @@ Common issues and resolutions:
 - **C++20 modules not building**: Check compiler version (MSVC 19.34+, GCC 14+, Clang 16+) and HSBA_SLICER_MODULE option.
 - **Module import errors**: Ensure consumer project also uses CMake 3.28+ and supports C++20 modules.
 - **Android clang-scan-deps issues**: Verify Android NDK r27d+ is installed; ensure clang-scan-deps path is accessible; check that CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS points to correct NDK toolchain location.
+- **NDK r27d configuration**: Verify NDK path is correctly set; check that clang-scan-deps binary exists at expected location.
 
-**Updated** Added troubleshooting for CMake 3.28 requirement, C++20 modules, installation, game console builds, DLL deployment, and Android clang-scan-deps configuration.
+**Updated** Added troubleshooting for Android SDK 34, Java JDK 21, Gradle 8.7 compatibility, and NDK r27d configuration issues.
 
 **Section sources**
 - [CMakeLists.txt:17-38](file://CMakeLists.txt#L17-38)
@@ -696,11 +752,15 @@ Common issues and resolutions:
 - [CMakeLists.txt:110-126](file://CMakeLists.txt#L110-L126)
 - [cmake/deploy_dlls.cmake:1-27](file://cmake/deploy_dlls.cmake#L1-L27)
 - [static_check/feature_check.cmake:96-111](file://static_check/feature_check.cmake#L96-L111)
-- [.github/workflows/build-android.yml:41-50](file://.github/workflows/build-android.yml#L41-L50)
-- [.github/workflows/cmake-multi-platform.yml:222-231](file://.github/workflows/cmake-multi-platform.yml#L222-L231)
+- [.github/workflows/build-android.yml:16](file://.github/workflows/build-android.yml#L16)
+- [.github/workflows/build-android.yml:37](file://.github/workflows/build-android.yml#L37)
+- [.github/workflows/build-android.yml:46](file://.github/workflows/build-android.yml#L46)
+- [.github/workflows/cmake-multi-platform.yml:203](file://.github/workflows/cmake-multi-platform.yml#L203)
+- [.github/workflows/cmake-multi-platform.yml:217](file://.github/workflows/cmake-multi-platform.yml#L217)
+- [.github/workflows/cmake-multi-platform.yml:227](file://.github/workflows/cmake-multi-platform.yml#L227)
 
 ## Conclusion
-The HsBaSlicer build system leverages modern CMake 3.28+ practices, vcpkg for dependency management, and platform presets to deliver a consistent, extensible, and efficient build across desktop and mobile environments. The recent enhancements introduce C++20 module support through ModuleHsBaSlicer, comprehensive installation capabilities with FILE_SET support, improved cross-platform compatibility including game console targets, and significantly optimized Android builds with clang-scan-deps for superior incremental compilation performance. The modular design cleanly separates core utilities, geometry kernels, and pipeline stages, while the dual API approach (traditional C ABI in DllHsBaSlicer and modern C++20 modules in ModuleHsBaSlicer) exposes ergonomic interfaces for both legacy and modern applications. The enhanced CMake package configuration enables seamless integration into external projects with proper dependency resolution and module support. The new Android build optimizations through clang-scan-deps integration provide substantial performance improvements in both development and continuous integration environments.
+The HsBaSlicer build system leverages modern CMake 3.28+ practices, vcpkg for dependency management, and platform presets to deliver a consistent, extensible, and efficient build across desktop and mobile environments. The recent enhancements introduce C++20 module support through ModuleHsBaSlicer, comprehensive installation capabilities with FILE_SET support, improved cross-platform compatibility including game console targets, and significantly optimized Android builds with clang-scan-deps for superior incremental compilation performance. The modular design cleanly separates core utilities, geometry kernels, and pipeline stages, while the dual API approach (traditional C ABI in DllHsBaSlicer and modern C++20 modules in ModuleHsBaSlicer) exposes ergonomic interfaces for both legacy and modern applications. The enhanced CMake package configuration enables seamless integration into external projects with proper dependency resolution and module support. The new Android build optimizations through clang-scan-deps integration provide substantial performance improvements in both development and continuous integration environments. The modernized Android toolchain with JDK 21, SDK 34, Gradle 8.7, and AGP 8.3.2 ensures cutting-edge performance, security, and compatibility with the latest Android ecosystem features.
 
 ## Appendices
 
@@ -712,9 +772,9 @@ The HsBaSlicer build system leverages modern CMake 3.28+ practices, vcpkg for de
 - **Installation**: cmake --install out/build/windows-release --prefix ./install
 - **External project usage**: find_package(HsBaSlicer REQUIRED) in consumer CMakeLists.txt
 - **C++20 modules**: Enable HSBA_SLICER_MODULE=ON for module support (requires CMake 3.28+)
-- **Android with clang-scan-deps**: Ensure ANDROID_NDK is set to r27d+ and CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS is configured automatically in CI workflows.
+- **Android with modern toolchain**: Ensure JDK 21, Android SDK 34, and NDK r27d are installed; workflows automatically configure clang-scan-deps.
 
-**Updated** Added C++20 modules build instructions, updated CMake version requirements, and Android clang-scan-deps configuration guidance.
+**Updated** Added modern Android toolchain build instructions with JDK 21, SDK 34, and NDK r27d configuration guidance.
 
 **Section sources**
 - [README.md:47-194](file://README.md#L47-L194)
@@ -778,20 +838,41 @@ int main() {
 - [ModuleHsBaSlicer/hsba_slicer.cppm:114-276](file://ModuleHsBaSlicer/hsba_slicer.cppm#L114-L276)
 - [ModuleHsBaSlicer/CMakeLists.txt:1-46](file://ModuleHsBaSlicer/CMakeLists.txt#L1-L46)
 
-### Android clang-scan-deps Configuration Details
-**New** Technical details for Android build optimization:
+### Android Modern Toolchain Configuration Details
+**Updated** Technical details for Android build system upgrades:
 
-The clang-scan-deps integration is configured through the following parameters in GitHub Actions workflows:
+The Android build system has been comprehensively upgraded with the following versions:
 
-- **Parameter**: `-DCMAKE_CXX_COMPILER_CLANG_SCAN_DEPS="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang-scan-deps"`
-- **NDK Requirement**: Android NDK r27d or later
-- **Benefit**: Enables precise dependency tracking for incremental builds
-- **Impact**: Significantly reduces compilation time during development and CI/CD processes
+- **Java JDK 21**: Upgraded from JDK 11 for improved performance, security, and modern Java features.
+- **Android SDK 34**: Updated from SDK 31 with latest APIs, security patches, and platform support.
+- **Gradle 8.7**: Upgraded from Gradle 7.5.1 with enhanced build performance and caching.
+- **Android Gradle Plugin 8.3.2**: Updated from 7.4.2 with modern build features and optimizations.
+- **Android NDK r27d**: Latest NDK with enhanced clang-scan-deps support and improved toolchain.
 
-Both workflow files have been updated to include this configuration:
-- `.github/workflows/build-android.yml`: Line 95
-- `.github/workflows/cmake-multi-platform.yml`: Line 276
+Both workflow files have been updated to include comprehensive setup:
+- **.github/workflows/build-android.yml**: Lines 16, 37, 46, 95
+- **.github/workflows/cmake-multi-platform.yml**: Lines 203, 217, 227, 276
+
+**Key Configuration Parameters**:
+- **CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS**: Points to `$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang-scan-deps`
+- **ANDROID_PLATFORM**: Set to android-28 for compatibility
+- **ABI Filters**: arm64-v8a for 64-bit ARM devices
+- **JVM Args**: `-Xmx2048m -Dfile.encoding=UTF-8` in gradle.properties
+
+**Benefits**:
+- **Performance**: JDK 21 provides better garbage collection and JIT compilation
+- **Security**: Latest SDK and NDK include critical security patches
+- **Compatibility**: Support for latest Android APIs and device features
+- **Build Speed**: Gradle 8.7 with improved caching and parallel execution
+- **Incremental Builds**: clang-scan-deps enables precise dependency tracking
 
 **Section sources**
-- [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
-- [.github/workflows/cmake-multi-platform.yml:268-276](file://.github/workflows/cmake-multi-platform.yml#L268-L276)
+- [.github/workflows/build-android.yml:16](file://.github/workflows/build-android.yml#L16)
+- [.github/workflows/build-android.yml:37](file://.github/workflows/build-android.yml#L37)
+- [.github/workflows/build-android.yml:46](file://.github/workflows/build-android.yml#L46)
+- [.github/workflows/build-android.yml:95](file://.github/workflows/build-android.yml#L95)
+- [.github/workflows/cmake-multi-platform.yml:203](file://.github/workflows/cmake-multi-platform.yml#L203)
+- [.github/workflows/cmake-multi-platform.yml:217](file://.github/workflows/cmake-multi-platform.yml#L217)
+- [.github/workflows/cmake-multi-platform.yml:227](file://.github/workflows/cmake-multi-platform.yml#L227)
+- [.github/workflows/cmake-multi-platform.yml:276](file://.github/workflows/cmake-multi-platform.yml#L276)
+- [android/gradle.properties:1](file://android/gradle.properties#L1)

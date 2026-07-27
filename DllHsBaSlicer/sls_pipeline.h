@@ -27,7 +27,7 @@ extern "C"
      * @return Pipeline result, call HsBaFreeSlsPipelineResult to release after use.
      */
     HSBA_SLICER_API HsBaSlsPipelineResult_t HsBaRunSlsPipeline(const HsBaSlsPipelineConfig_t* config,
-                                                                HsBaSlsProgressCallback callback, void* user_data);
+                                                               HsBaSlsProgressCallback callback, void* user_data);
 
     /**
      * @brief Run SLS full pipeline asynchronously (non-blocking).
@@ -39,9 +39,8 @@ extern "C"
      * @param result_user_data Result callback user data (can be NULL).
      */
     HSBA_SLICER_API void HsBaRunSlsPipelineAsync(const HsBaSlsPipelineConfig_t* config,
-                                                  HsBaSlsProgressCallback callback, void* user_data,
-                                                  HsBaSlsResultCallback result_callback,
-                                                  void* result_user_data);
+                                                 HsBaSlsProgressCallback callback, void* user_data,
+                                                 HsBaSlsResultCallback result_callback, void* result_user_data);
 
     /**
      * @brief Free memory allocated in SLS pipeline result.

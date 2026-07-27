@@ -10,15 +10,20 @@
 #ifndef HSBA_SLICER_COROUTINE_HPP
 #define HSBA_SLICER_COROUTINE_HPP
 
-#if __cpp_lib_coroutine && __cpp_impl_coroutine
+#if __cpp_impl_coroutine
 #include <coroutine>
+#endif
+// On GCC, __cpp_lib_coroutine is defined by <coroutine> (not predefined).
+// After inclusion, both macros are available for subsequent guards.
+#if __cpp_lib_coroutine && __cpp_impl_coroutine
+#define HSBA_COROUTINES_AVAILABLE 1
 #endif
 #ifdef __cpp_lib_generator
 #include <generator>
 #endif  // __cpp_lib_generator
 
 #include "template_helper.hpp"
-#if __cpp_lib_coroutine && __cpp_impl_coroutine
+#ifdef HSBA_COROUTINES_AVAILABLE
 #include <condition_variable>
 #include <exception>
 #include <functional>
@@ -35,7 +40,7 @@
 
 namespace HsBa::Slicer::Utils
 {
-#if __cpp_lib_coroutine && __cpp_impl_coroutine
+#ifdef HSBA_COROUTINES_AVAILABLE
 /**
  * @brief coroutine executor interface
  */
@@ -765,9 +770,9 @@ public:
 private:
     Handle handle_;
 };
-#endif  // __cpp_lib_coroutine && __cpp_impl_coroutine
+#endif  // HSBA_COROUTINES_AVAILABLE
 
-#if __cpp_lib_coroutine && __cpp_impl_coroutine
+#ifdef HSBA_COROUTINES_AVAILABLE
 
 // personal couroutine Generator
 // see it in https://zh.cppreference.com/w/cpp/coroutine/coroutine_handle
@@ -1063,7 +1068,7 @@ template <typename Arg, template <typename> typename Container, typename Callbac
     }
     return ret;
 }
-#endif  // __cpp_lib_coroutine && __cpp_impl_coroutine
+#endif  // HSBA_COROUTINES_AVAILABLE
 
 }  // namespace HsBa::Slicer::Utils
 

@@ -10,9 +10,9 @@
 #include <utility>
 #include <vector>
 
+#include "LibHsBaSlicer/Path/sls_export.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
-#include "LibHsBaSlicer/Path/sls_export.hpp"
 #include "base/coroutine.hpp"
 
 namespace HsBa::Slicer::Pipeline
@@ -279,7 +279,7 @@ HSBA_SLICER_API HsBaSlsPipelineConfig_t HsBaCreateDefaultSlsConfig(void)
 }
 
 HSBA_SLICER_API HsBaSlsPipelineResult_t HsBaRunSlsPipeline(const HsBaSlsPipelineConfig_t* config,
-                                                            HsBaSlsProgressCallback callback, void* user_data)
+                                                           HsBaSlsProgressCallback callback, void* user_data)
 {
     auto ic = HsBa::Slicer::Pipeline::BuildSlsConfig(config, callback, user_data);
     auto task = HsBa::Slicer::Pipeline::RunSlsPipelineAsync(ic);
@@ -287,10 +287,9 @@ HSBA_SLICER_API HsBaSlsPipelineResult_t HsBaRunSlsPipeline(const HsBaSlsPipeline
     return HsBa::Slicer::Pipeline::ToCResult(ir);
 }
 
-HSBA_SLICER_API void HsBaRunSlsPipelineAsync(const HsBaSlsPipelineConfig_t* config,
-                                              HsBaSlsProgressCallback callback, void* user_data,
-                                              HsBaSlsResultCallback result_callback,
-                                              void* result_user_data)
+HSBA_SLICER_API void HsBaRunSlsPipelineAsync(const HsBaSlsPipelineConfig_t* config, HsBaSlsProgressCallback callback,
+                                             void* user_data, HsBaSlsResultCallback result_callback,
+                                             void* result_user_data)
 {
     auto shared_cfg = std::make_shared<HsBa::Slicer::Pipeline::InternalSlsConfig>(
         HsBa::Slicer::Pipeline::BuildSlsConfig(config, callback, user_data));

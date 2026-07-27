@@ -54,7 +54,9 @@ module;
 #include "LibHsBaSlicer/Path/path_generator.hpp"
 #include "LibHsBaSlicer/Path/sls_export.hpp"
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"
+#include "LibHsBaSlicer/Transfer/file_transfer.hpp"
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
+#include "LibHsBaSlicer/Extends/EventSourceFunction.hpp"
 
 // ---- Module interface ----
 export module hsba.slicer;
@@ -96,6 +98,8 @@ using ::HsBaSlaPipelineConfig_t;
 using ::HsBaSlaPipelineResult_t;
 using ::HsBaSlsPipelineConfig_t;
 using ::HsBaSlsPipelineResult_t;
+using ::HsBaFileTransferPipelineConfig_t;
+using ::HsBaFileTransferPipelineResult_t;
 
 // Re-export support config types into HsBa::Slicer namespace
 using Support::SupportConfig;
@@ -105,12 +109,18 @@ using Support::SlaSupportConfig;
 // Re-export Lua registration function type
 using LuaRegFunc = std::function<void(lua_State*)>;
 
+// Re-export event callback function type
+using ZipperEventCallbackFunc = std::function<void(double, std::string_view)>;
+using DBEventCallbackFunc = std::function<void(std::string_view, std::string_view)>;
+
 /// @brief Create default FDM pipeline config.
 HsBaFdmPipelineConfig_t defaultFdmConfig();
 /// @brief Create default SLA pipeline config.
 HsBaSlaPipelineConfig_t defaultSlaConfig();
 /// @brief Create default SLS pipeline config.
 HsBaSlsPipelineConfig_t defaultSlsConfig();
+/// @brief Create default file transfer pipeline config.
+HsBaFileTransferPipelineConfig_t defaultFileTransferConfig();
 
 // ===========================================================================
 // Model (RAII wrapper)
@@ -243,6 +253,36 @@ private:
 };
 
 // ===========================================================================
+// File Transfer Pipeline
+// ===========================================================================
+
+/// @brief File transfer result (C++ style).
+struct FileTransferOutcome
+{
+    bool success = false;
+    int files_transferred = 0;
+    int total_files = 0;
+};
+
+/// @brief File transfer pipeline: Validate -> Connect -> Transfer.
+class FileTransferPipeline
+{
+public:
+    explicit FileTransferPipeline(HsBaFileTransferPipelineConfig_t cfg = HsBaFileTransferConfigDefault());
+
+    /// @brief Run file transfer to remote executor.
+    /// @throws SlicerError on failure.
+    inline FileTransferOutcome run() const;
+
+    /// @brief Run file transfer with progress reporting.
+    /// @throws SlicerError on failure.
+    inline FileTransferOutcome run(FileTransferProgressFunc progress) const;
+
+private:
+    HsBaFileTransferPipelineConfig_t cfg_;
+};
+
+// ===========================================================================
 // Lua custom functions
 // ===========================================================================
 
@@ -276,6 +316,12 @@ inline void addFileFunction(LuaRegFunc func);
 
 /// @brief Register an event callback by name (e.g. "zipper.on_add").
 inline void addEventCallback(const std::string& event_name, LuaRegFunc func);
+
+/// @brief Register a C++ event callback for zipper events.
+inline void addZipperEventCallback(ZipperEventCallbackFunc func);
+
+// @brief Register a C++ event callback for database events.
+inline void addDBEventCallback(DBEventCallbackFunc func);
 
 // ===========================================================================
 // Version
@@ -311,6 +357,7 @@ namespace HsBa::Slicer
 HsBaFdmPipelineConfig_t defaultFdmConfig() { return HsBaFdmConfigDefault(); }
 HsBaSlaPipelineConfig_t defaultSlaConfig() { return HsBaSlaConfigDefault(); }
 HsBaSlsPipelineConfig_t defaultSlsConfig() { return HsBaSlsConfigDefault(); }
+HsBaFileTransferPipelineConfig_t defaultFileTransferConfig() { return HsBaFileTransferConfigDefault(); }
 
 // ===========================================================================
 // Model
@@ -639,6 +686,45 @@ bool SlsPipeline::run(const Model& model) const
 }
 
 // ===========================================================================
+// FileTransferPipeline
+// ===========================================================================
+
+FileTransferPipeline::FileTransferPipeline(HsBaFileTransferPipelineConfig_t cfg) : cfg_(cfg) {}
+
+FileTransferOutcome FileTransferPipeline::run() const
+{
+    return run(nullptr);
+}
+
+FileTransferOutcome FileTransferPipeline::run(FileTransferProgressFunc progress) const
+{
+    FileTransferConfig lib_cfg;
+    lib_cfg.host = cfg_.host ? cfg_.host : "";
+    lib_cfg.port = cfg_.port ? cfg_.port : "";
+    lib_cfg.pool_size = cfg_.pool_size > 0 ? static_cast<std::size_t>(cfg_.pool_size) : 4;
+
+    if (cfg_.file_paths && cfg_.file_count > 0)
+    {
+        lib_cfg.files.reserve(static_cast<std::size_t>(cfg_.file_count));
+        for (int i = 0; i < cfg_.file_count; ++i)
+        {
+            if (cfg_.file_paths[i])
+                lib_cfg.files.emplace_back(cfg_.file_paths[i]);
+        }
+    }
+
+    FileTransferResult result = TransferFiles(lib_cfg, progress);
+    if (!result.success)
+        throw SlicerError(result.error_message);
+
+    FileTransferOutcome outcome;
+    outcome.success = result.success;
+    outcome.files_transferred = result.files_transferred;
+    outcome.total_files = result.total_files;
+    return outcome;
+}
+
+// ===========================================================================
 // Lua custom functions
 // ===========================================================================
 
@@ -672,6 +758,16 @@ void addFileFunction(LuaRegFunc func) { AddFileFunctions(std::move(func)); }
 void addEventCallback(const std::string& event_name, LuaRegFunc func)
 {
     AddEventCallback(event_name, std::move(func));
+}
+
+void addZipperEventCallback(ZipperEventCallbackFunc func)
+{
+    AddZipperEventCallback(std::move(func));
+}
+
+void addDBEventCallback(DBEventCallbackFunc func)
+{
+    AddDBEventCallback(std::move(func));
 }
 
 // ===========================================================================

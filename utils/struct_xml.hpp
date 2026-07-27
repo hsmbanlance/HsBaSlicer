@@ -131,9 +131,8 @@ void add_element(tinyxml2::XMLElement* parent, std::string_view name, const Fiel
 }
 
 template <typename FieldType>
-requires(std::is_same_v<FieldType, std::string> || std::is_same_v<FieldType, std::string_view>)
-void add_element(tinyxml2::XMLElement* parent, std::string_view name,
-                 const FieldType& field, tinyxml2::XMLDocument* doc)
+requires(std::is_same_v<FieldType, std::string> || std::is_same_v<FieldType, std::string_view>) void add_element(
+    tinyxml2::XMLElement* parent, std::string_view name, const FieldType& field, tinyxml2::XMLDocument* doc)
 {
     tinyxml2::XMLElement* field_element = doc->NewElement(name.data());
     field_element->SetText(std::string(field).c_str());
@@ -157,9 +156,9 @@ requires std::is_arithmetic_v<FieldType> void add_element(tinyxml2::XMLElement* 
 }
 
 template <std::ranges::range Range>
-requires(!std::is_same_v<Range, std::string> && !std::is_same_v<Range, std::string_view>)
-void add_element(tinyxml2::XMLElement* parent, std::string_view name,
-                 const Range& rng, tinyxml2::XMLDocument* doc)
+requires(!std::is_same_v<Range, std::string> &&
+         !std::is_same_v<Range, std::string_view>) void add_element(tinyxml2::XMLElement* parent, std::string_view name,
+                                                                    const Range& rng, tinyxml2::XMLDocument* doc)
 {
     tinyxml2::XMLElement* array_element = doc->NewElement(name.data());
     for (const auto& item : rng)

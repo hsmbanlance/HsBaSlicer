@@ -217,20 +217,18 @@ std::string GCodePath::GenerateLayerGCode(int layer_idx, GCodeFirmware fw) const
                               cfg.retract_speed * kSpeedFactor);
         }
 
-        ss << std::format("G0 X{:.3f} Y{:.3f} F{:.0f}\n",
-                          polygon.front().x, polygon.front().y, travel_feed);
+        ss << std::format("G0 X{:.3f} Y{:.3f} F{:.0f}\n", polygon.front().x, polygon.front().y, travel_feed);
 
         if (cfg.enable_retraction && !first_move)
         {
             if (cfg.relative_extrusion)
             {
-                ss << std::format("G1 E{:.5f} F{:.0f} ; unretract\n",
-                                  cfg.retract_length, cfg.retract_speed * kSpeedFactor);
+                ss << std::format("G1 E{:.5f} F{:.0f} ; unretract\n", cfg.retract_length,
+                                  cfg.retract_speed * kSpeedFactor);
             }
             else
             {
-                ss << std::format("G1 E{:.5f} F{:.0f} ; unretract\n",
-                                  cumulative_e, cfg.retract_speed * kSpeedFactor);
+                ss << std::format("G1 E{:.5f} F{:.0f} ; unretract\n", cumulative_e, cfg.retract_speed * kSpeedFactor);
             }
         }
 
@@ -247,14 +245,12 @@ std::string GCodePath::GenerateLayerGCode(int layer_idx, GCodeFirmware fw) const
 
             if (cfg.relative_extrusion)
             {
-                ss << std::format("G1 X{:.3f} Y{:.3f} E{:.5f} F{:.0f}\n",
-                                  pt.x, pt.y, e_value, feed_rate);
+                ss << std::format("G1 X{:.3f} Y{:.3f} E{:.5f} F{:.0f}\n", pt.x, pt.y, e_value, feed_rate);
             }
             else
             {
                 cumulative_e += e_value;
-                ss << std::format("G1 X{:.3f} Y{:.3f} E{:.5f} F{:.0f}\n",
-                                  pt.x, pt.y, cumulative_e, feed_rate);
+                ss << std::format("G1 X{:.3f} Y{:.3f} E{:.5f} F{:.0f}\n", pt.x, pt.y, cumulative_e, feed_rate);
             }
         }
 

@@ -39,9 +39,8 @@ extern "C"
      * @param result_user_data Result callback user data (can be NULL).
      */
     HSBA_SLICER_API void HsBaRunSlaPipelineAsync(const HsBaSlaPipelineConfig_t* config,
-                                                  HsBaSlaProgressCallback callback, void* user_data,
-                                                  HsBaSlaResultCallback result_callback,
-                                                  void* result_user_data);
+                                                 HsBaSlaProgressCallback callback, void* user_data,
+                                                 HsBaSlaResultCallback result_callback, void* result_user_data);
 
     /**
      * @brief Free memory allocated in SLA pipeline result.

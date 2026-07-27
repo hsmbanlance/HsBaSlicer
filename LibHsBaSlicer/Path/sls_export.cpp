@@ -1,4 +1,4 @@
-#include "sls_export.hpp"
+﻿#include "sls_export.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -6,9 +6,9 @@
 #include <string>
 
 
-#include "paths/imagespath.hpp"
-#include "fileoperator/LuaAdapter.hpp"
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
+#include "fileoperator/LuaAdapter.hpp"
+#include "paths/imagespath.hpp"
 
 namespace HsBa::Slicer
 {
@@ -49,8 +49,7 @@ std::string PolygonsToJson(const PolygonsD& polys)
 }  // anonymous namespace
 
 HSBA_SLICER_LIB_API bool SaveSlsPackageLua(const SlsPackage& pkg, const std::string& output_zip,
-                                            const std::string& lua_script,
-                                            const std::string& lua_func)
+                                           const std::string& lua_script, const std::string& lua_func)
 {
     try
     {
@@ -66,8 +65,7 @@ HSBA_SLICER_LIB_API bool SaveSlsPackageLua(const SlsPackage& pkg, const std::str
                 float z = (i < static_cast<int>(pkg.layer_z_heights.size())) ? pkg.layer_z_heights[i] : 0.0f;
                 // Embed z_height in a wrapper JSON
                 std::ostringstream wrapper;
-                wrapper << "{\"layer\":" << i << ",\"z_height\":" << z
-                        << ",\"outlines\":" << layer_json << "}";
+                wrapper << "{\"layer\":" << i << ",\"z_height\":" << z << ",\"outlines\":" << layer_json << "}";
                 images_path.AddImage("layers/" + std::to_string(i) + ".json", wrapper.str());
             }
         }

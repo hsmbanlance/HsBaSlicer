@@ -27,7 +27,7 @@
 #include <utility>
 #include <vector>
 
-#if __cpp_lib_coroutine && __cpp_impl_coroutine
+#if __cpp_impl_coroutine
 #include <coroutine>
 #endif
 #ifdef __cpp_lib_generator

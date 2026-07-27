@@ -226,6 +226,7 @@ int main()
 | `FdmPipeline` | FDM full pipeline (slice→support→fill→path) |
 | `SlaPipeline` | SLA full pipeline (slice→support→floor→render→package) |
 | `SlsPipeline` | SLS Lua-driven export |
+| `FileTransferPipeline` | File transfer (validate→connect pool→transfer) |
 | `SlicerError` | Unified exception type |
 
 ### Lua Extension Function Registration (Module Version)
@@ -239,6 +240,44 @@ add2DFunction([](lua_State* L) { /* register 2D functions */ });
 add3DFunction([](lua_State* L) { /* register 3D functions */ });
 addFileFunction([](lua_State* L) { /* register File functions */ });
 addEventCallback("zipper.on_add", [](lua_State* L) { /* event callback */ });
+```
+
+### C++ Event Source Registration (Module Version)
+
+```cpp
+import hsba.slicer;
+using namespace HsBa::Slicer;
+
+// Zipper event callback (progress + stage)
+addZipperEventCallback([](double percent, std::string_view stage) {
+    // handle compression progress
+});
+
+// Database event callback (key + value)
+addDBEventCallback([](std::string_view key, std::string_view value) {
+    // handle DB events
+});
+```
+
+### Utility Functions (Module Version)
+
+```cpp
+import hsba.slicer;
+using namespace HsBa::Slicer;
+
+// Version information
+std::string json = versionJson();
+std::string xml  = versionXml();
+
+// Polygon precision conversion
+PolygonsD doubles = toDouble(int_polys);   // int -> double
+Polygons ints     = toInt(double_polys);   // double -> int
+
+// Default config factories
+auto fdm_cfg  = defaultFdmConfig();
+auto sla_cfg  = defaultSlaConfig();
+auto sls_cfg  = defaultSlsConfig();
+auto ft_cfg   = defaultFileTransferConfig();
 ```
 
 ### Platform Notes

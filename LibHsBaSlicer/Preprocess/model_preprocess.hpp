@@ -137,9 +137,9 @@ HSBA_SLICER_LIB_API std::shared_ptr<IModel> ThickSolidModel(const std::string& s
  * @param thickness Shell thickness.
  * @return Shared pointer to the resulting model.
  */
-HSBA_SLICER_LIB_API std::shared_ptr<IModel> ThickSolidModel(
-    const std::string& sourceName, const std::string& resultName,
-    const std::vector<std::vector<Eigen::Vector3f>>& closingFaces, float thickness);
+HSBA_SLICER_LIB_API std::shared_ptr<IModel>
+ThickSolidModel(const std::string& sourceName, const std::string& resultName,
+                const std::vector<std::vector<Eigen::Vector3f>>& closingFaces, float thickness);
 
 /**
  * @brief Boolean union of two models.
@@ -158,9 +158,8 @@ HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanUnion(const std::string& left
  * @param resultName Name to store the result under.
  * @return Shared pointer to the resulting model.
  */
-HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanIntersection(const std::string& leftName,
-                                                                const std::string& rightName,
-                                                                const std::string& resultName);
+HSBA_SLICER_LIB_API std::shared_ptr<IModel>
+BooleanIntersection(const std::string& leftName, const std::string& rightName, const std::string& resultName);
 
 /**
  * @brief Boolean difference of two models (left - right).
@@ -169,8 +168,7 @@ HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanIntersection(const std::strin
  * @param resultName Name to store the result under.
  * @return Shared pointer to the resulting model.
  */
-HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanDifference(const std::string& leftName,
-                                                              const std::string& rightName,
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanDifference(const std::string& leftName, const std::string& rightName,
                                                               const std::string& resultName);
 
 /**

@@ -9,6 +9,7 @@
     Path/path_generator.hpp
     Path/sls_export.hpp
     Floor/sla_floor.hpp
+    Transfer/file_transfer.hpp
     version_info.cpp
     Slice/mesh_slice.cpp
     Preprocess/model_preprocess.cpp
@@ -17,8 +18,11 @@
     Path/path_generator.cpp
     Path/sls_export.cpp
     Floor/sla_floor.cpp
+    Transfer/file_transfer.cpp
     Extends/LuaAddFunction.hpp
     Extends/LuaAddFunction.cpp
+    Extends/EventSourceFunction.hpp
+    Extends/EventSourceFunction.cpp
     )
 else()
     add_library(LibHsBaSlicer SHARED 
@@ -31,6 +35,7 @@ else()
     Path/path_generator.hpp
     Path/sls_export.hpp
     Floor/sla_floor.hpp
+    Transfer/file_transfer.hpp
     version_info.cpp
     Slice/mesh_slice.cpp
     Preprocess/model_preprocess.cpp
@@ -39,8 +44,11 @@ else()
     Path/path_generator.cpp
     Path/sls_export.cpp
     Floor/sla_floor.cpp
+    Transfer/file_transfer.cpp
     Extends/LuaAddFunction.hpp
     Extends/LuaAddFunction.cpp
+    Extends/EventSourceFunction.hpp
+    Extends/EventSourceFunction.cpp
     )
     # Define the export macro for Windows
     target_compile_definitions(LibHsBaSlicer PRIVATE HSBA_SLICER_EXPORTS)
@@ -64,6 +72,7 @@ target_link_libraries(LibHsBaSlicer PRIVATE
 HsBaSlicerUtils
 HsBaPreprocess
 HsBaVersion
+HsBaSlicerFileOperator
 )
 
 # OCCT / CAD kernel is not available on Android, iOS, or game consoles

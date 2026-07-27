@@ -5,6 +5,7 @@
 #include "pipelinetypes/pipeline_types.h"
 
 #include "fdm_pipeline.pb.h"
+#include "file_transfer_pipeline.pb.h"
 #include "sla_pipeline.pb.h"
 #include "sls_pipeline.pb.h"
 
@@ -28,6 +29,12 @@ void SlsConfigToMsg(const HsBaSlsPipelineConfig_t& config, HsbaProto::sls_pipe_c
 
 /// @brief Convert SLS pipeline C result to proto message.
 void SlsResultToMsg(const HsBaSlsPipelineResult_t& result, HsbaProto::sls_pipe_result* msg);
+
+/// @brief Convert file transfer pipeline C config to proto message.
+void FileTransferConfigToMsg(const HsBaFileTransferPipelineConfig_t& config, HsbaProto::file_transfer_pipe_config* msg);
+
+/// @brief Convert file transfer pipeline C result to proto message.
+void FileTransferResultToMsg(const HsBaFileTransferPipelineResult_t& result, HsbaProto::file_transfer_pipe_result* msg);
 
 }  // namespace HsBa::Slicer
 

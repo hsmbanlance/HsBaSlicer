@@ -19,13 +19,13 @@ namespace HsBa::Slicer
  */
 struct SlaFloorConfig
 {
-    double raft_offset = 2.0;        ///< Raft outward offset from model footprint in mm
-    double border_width = 1.0;       ///< Border ring width in mm
-    double fill_spacing = 0.5;       ///< Internal fill line spacing in mm
-    double fill_angle_deg = 0.0;     ///< Fill pattern angle in degrees
-    int border_count = 2;            ///< Number of border offset loops
-    bool use_convex_hull = false;    ///< Use convex hull instead of direct footprint
-    int concave_hull_points = 0;     ///< Additional points for concave hull (0 = disabled)
+    double raft_offset = 2.0;      ///< Raft outward offset from model footprint in mm
+    double border_width = 1.0;     ///< Border ring width in mm
+    double fill_spacing = 0.5;     ///< Internal fill line spacing in mm
+    double fill_angle_deg = 0.0;   ///< Fill pattern angle in degrees
+    int border_count = 2;          ///< Number of border offset loops
+    bool use_convex_hull = false;  ///< Use convex hull instead of direct footprint
+    int concave_hull_points = 0;   ///< Additional points for concave hull (0 = disabled)
 };
 
 /**
@@ -91,10 +91,9 @@ HSBA_SLICER_LIB_API Polygons GenerateFloorFill(const Polygons& bottom_layer, con
  * @param lua_reg Optional callback to register additional Lua functions.
  * @return Custom floor polygons.
  */
-HSBA_SLICER_LIB_API Polygons LuaCustomFloorByFile(
-    const Polygons& bottom_layer, const std::string& script_path,
-    const std::string& function_name, const SlaFloorConfig& config,
-    const std::function<void(lua_State*)>& lua_reg = {});
+HSBA_SLICER_LIB_API Polygons LuaCustomFloorByFile(const Polygons& bottom_layer, const std::string& script_path,
+                                                  const std::string& function_name, const SlaFloorConfig& config,
+                                                  const std::function<void(lua_State*)>& lua_reg = {});
 
 /**
  * @brief Generate floor using an inline Lua script string.
@@ -108,10 +107,9 @@ HSBA_SLICER_LIB_API Polygons LuaCustomFloorByFile(
  * @param lua_reg Optional callback to register additional Lua functions.
  * @return Custom floor polygons.
  */
-HSBA_SLICER_LIB_API Polygons LuaCustomFloorByString(
-    const Polygons& bottom_layer, const std::string& lua_script,
-    const std::string& function_name, const SlaFloorConfig& config,
-    const std::function<void(lua_State*)>& lua_reg = {});
+HSBA_SLICER_LIB_API Polygons LuaCustomFloorByString(const Polygons& bottom_layer, const std::string& lua_script,
+                                                    const std::string& function_name, const SlaFloorConfig& config,
+                                                    const std::function<void(lua_State*)>& lua_reg = {});
 
 // ============================================================
 // SLA image rendering
@@ -130,7 +128,7 @@ HSBA_SLICER_LIB_API Polygons LuaCustomFloorByString(
  * @return true if rendering succeeded, false otherwise.
  */
 HSBA_SLICER_LIB_API bool RenderPolygonsToImage(const PolygonsD& polys, int width, int height,
-                                                const std::string& outPath);
+                                               const std::string& outPath);
 
 // ============================================================
 // SLA package export
@@ -141,15 +139,15 @@ HSBA_SLICER_LIB_API bool RenderPolygonsToImage(const PolygonsD& polys, int width
  */
 struct SlaPackage
 {
-    std::vector<PolygonsD> layer_outlines;       ///< Per-layer slice outlines
-    std::vector<PolygonsD> layer_supports;       ///< Per-layer support polygons (empty if no support)
-    PolygonsD floor_polygons;                    ///< Floor / raft polygons (empty if no floor)
-    std::string config_json;                     ///< Configuration JSON content
-    int image_width = 0;                         ///< Image width (0 = auto)
-    int image_height = 0;                        ///< Image height (0 = auto)
-    std::string image_extension = ".png";        ///< Image file extension (.png, .jpg, .svg)
-    bool include_floor_images = true;            ///< Generate floor image
-    bool include_support_images = true;          ///< Generate support images
+    std::vector<PolygonsD> layer_outlines;  ///< Per-layer slice outlines
+    std::vector<PolygonsD> layer_supports;  ///< Per-layer support polygons (empty if no support)
+    PolygonsD floor_polygons;               ///< Floor / raft polygons (empty if no floor)
+    std::string config_json;                ///< Configuration JSON content
+    int image_width = 0;                    ///< Image width (0 = auto)
+    int image_height = 0;                   ///< Image height (0 = auto)
+    std::string image_extension = ".png";   ///< Image file extension (.png, .jpg, .svg)
+    bool include_floor_images = true;       ///< Generate floor image
+    bool include_support_images = true;     ///< Generate support images
 };
 
 /**
@@ -174,8 +172,7 @@ HSBA_SLICER_LIB_API bool SaveSlaPackage(const SlaPackage& pkg, const std::string
  * @return true if save succeeded, false otherwise.
  */
 HSBA_SLICER_LIB_API bool SaveSlaPackageLua(const SlaPackage& pkg, const std::string& output_zip,
-                                            const std::string& lua_script,
-                                            const std::string& lua_func = "export_sla");
+                                           const std::string& lua_script, const std::string& lua_func = "export_sla");
 
 }  // namespace HsBa::Slicer
 

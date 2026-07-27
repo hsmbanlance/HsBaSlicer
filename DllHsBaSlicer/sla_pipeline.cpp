@@ -141,9 +141,12 @@ std::string GetImageExtension(SlaImageType type)
 {
     switch (type)
     {
-        case SlaImageType::Jpg: return ".jpg";
-        case SlaImageType::Svg: return ".svg";
-        default: return ".png";
+    case SlaImageType::Jpg:
+        return ".jpg";
+    case SlaImageType::Svg:
+        return ".svg";
+    default:
+        return ".png";
     }
 }
 
@@ -185,7 +188,11 @@ std::string BuildConfigJson(const InternalSlaConfig& cfg, int total_layers)
     json << "    \"pattern\": " << cfg.support_pattern << "\n";
     json << "  },\n";
     json << "  \"image\": {\n";
-    json << "    \"type\": \"" << (cfg.image_type == SlaImageType::Jpg ? "jpg" : cfg.image_type == SlaImageType::Svg ? "svg" : "png") << "\",\n";
+    json << "    \"type\": \""
+         << (cfg.image_type == SlaImageType::Jpg   ? "jpg"
+             : cfg.image_type == SlaImageType::Svg ? "svg"
+                                                   : "png")
+         << "\",\n";
     json << "    \"width\": " << cfg.image_width << ",\n";
     json << "    \"height\": " << cfg.image_height << "\n";
     json << "  },\n";
@@ -196,7 +203,8 @@ std::string BuildConfigJson(const InternalSlaConfig& cfg, int total_layers)
         json << "    {\n";
         json << "      \"layer\": " << i << ",\n";
         json << "      \"image_path\": \"layers/layer_" << i << ext << "\",\n";
-        json << "      \"exposure_time\": " << (is_bottom ? cfg.bottom_exposure_time : cfg.normal_exposure_time) << "\n";
+        json << "      \"exposure_time\": " << (is_bottom ? cfg.bottom_exposure_time : cfg.normal_exposure_time)
+             << "\n";
         json << "    }";
         if (i < total_layers - 1)
             json << ",";
@@ -356,9 +364,8 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
             {
                 // Lua custom support via LibHsBaSlicer API
                 std::string func = cfg.support_lua_func.empty() ? "generate_support" : cfg.support_lua_func;
-                layer_supports = GenerateAllLuaSupport(layer_outlines, sla_support_cfg,
-                                                       std::string_view(cfg.support_lua_script),
-                                                       std::string_view(func));
+                layer_supports = GenerateAllLuaSupport(
+                    layer_outlines, sla_support_cfg, std::string_view(cfg.support_lua_script), std::string_view(func));
             }
             else
             {
@@ -447,10 +454,9 @@ HSBA_SLICER_API HsBaSlaPipelineResult_t HsBaRunSlaPipeline(const HsBaSlaPipeline
     return HsBa::Slicer::Pipeline::ToCResult(ir);
 }
 
-HSBA_SLICER_API void HsBaRunSlaPipelineAsync(const HsBaSlaPipelineConfig_t* config,
-                                              HsBaSlaProgressCallback callback, void* user_data,
-                                              HsBaSlaResultCallback result_callback,
-                                              void* result_user_data)
+HSBA_SLICER_API void HsBaRunSlaPipelineAsync(const HsBaSlaPipelineConfig_t* config, HsBaSlaProgressCallback callback,
+                                             void* user_data, HsBaSlaResultCallback result_callback,
+                                             void* result_user_data)
 {
     auto shared_cfg = std::make_shared<HsBa::Slicer::Pipeline::InternalSlaConfig>(
         HsBa::Slicer::Pipeline::BuildSlaConfig(config, callback, user_data));

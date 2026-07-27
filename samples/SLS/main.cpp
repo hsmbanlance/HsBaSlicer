@@ -72,21 +72,17 @@ static int RunBasicSlsPipeline()
     cfg.output_path = "output/sls_basic_output.zip";
 
     // 5. Run pipeline synchronously
-    HsBaSlsPipelineResult_t result =
-        HsBaRunSlsPipeline(&cfg, OnProgress, nullptr);
+    HsBaSlsPipelineResult_t result = HsBaRunSlsPipeline(&cfg, OnProgress, nullptr);
 
     // 6. Check result
     if (result.success)
     {
-        LogMsg(std::format("SLS slicing OK! Layers: {}, Export: {}, Time: {:.2f}s",
-                           result.total_layers,
-                           result.export_path ? result.export_path : "N/A",
-                           result.elapsed_seconds));
+        LogMsg(std::format("SLS slicing OK! Layers: {}, Export: {}, Time: {:.2f}s", result.total_layers,
+                           result.export_path ? result.export_path : "N/A", result.elapsed_seconds));
     }
     else
     {
-        LogMsg(std::format("SLS slicing FAILED: {}",
-                           result.error_message ? result.error_message : "Unknown error"));
+        LogMsg(std::format("SLS slicing FAILED: {}", result.error_message ? result.error_message : "Unknown error"));
     }
 
     // 7. Free result memory (required)
@@ -109,15 +105,15 @@ static int RunCustomSlsPipeline()
     cfg.model_path = "models/stanford_bunny.stl";
 
     // Slice parameters
-    cfg.layer_height = 0.08f;         // 0.08mm layer thickness
-    cfg.first_layer_height = 0.12f;   // 0.12mm first layer
+    cfg.layer_height = 0.08f;        // 0.08mm layer thickness
+    cfg.first_layer_height = 0.12f;  // 0.12mm first layer
 
     // Laser parameters
-    cfg.laser_power = 45.0f;          // 45W laser power
-    cfg.scan_speed = 3500.0f;         // 3500 mm/s scan speed
-    cfg.hatch_spacing = 0.12f;        // 0.12mm hatch spacing
-    cfg.hatch_rotation = 67.0f;       // 67 degrees rotation between layers
-    cfg.bed_temperature = 175.0f;     // 175°C powder bed temperature
+    cfg.laser_power = 45.0f;       // 45W laser power
+    cfg.scan_speed = 3500.0f;      // 3500 mm/s scan speed
+    cfg.hatch_spacing = 0.12f;     // 0.12mm hatch spacing
+    cfg.hatch_rotation = 67.0f;    // 67 degrees rotation between layers
+    cfg.bed_temperature = 175.0f;  // 175°C powder bed temperature
 
     // Lua export
     cfg.export_lua_script = "scripts/my_sls_export.lua";
@@ -127,18 +123,16 @@ static int RunCustomSlsPipeline()
     cfg.output_path = "output/sls_custom_output.zip";
 
     // Run
-    HsBaSlsPipelineResult_t result =
-        HsBaRunSlsPipeline(&cfg, OnProgress, nullptr);
+    HsBaSlsPipelineResult_t result = HsBaRunSlsPipeline(&cfg, OnProgress, nullptr);
 
     if (result.success)
     {
-        LogMsg(std::format("SLS custom slicing done! Layers: {}, Time: {:.2f}s",
-                           result.total_layers, result.elapsed_seconds));
+        LogMsg(std::format("SLS custom slicing done! Layers: {}, Time: {:.2f}s", result.total_layers,
+                           result.elapsed_seconds));
     }
     else
     {
-        LogMsg(std::format("SLS slicing FAILED: {}",
-                           result.error_message ? result.error_message : "Unknown error"));
+        LogMsg(std::format("SLS slicing FAILED: {}", result.error_message ? result.error_message : "Unknown error"));
     }
 
     HsBaFreeSlsPipelineResult(&result);
@@ -156,16 +150,13 @@ static void OnSlsPipelineComplete(HsBaSlsPipelineResult_t result, void* user_dat
 
     if (result.success)
     {
-        LogMsg(std::format("[Async] SLS done! Layers: {}, Export: {}, Time: {:.2f}s",
-                           result.total_layers,
-                           result.export_path ? result.export_path : "N/A",
-                           result.elapsed_seconds));
+        LogMsg(std::format("[Async] SLS done! Layers: {}, Export: {}, Time: {:.2f}s", result.total_layers,
+                           result.export_path ? result.export_path : "N/A", result.elapsed_seconds));
         *flag = 1;
     }
     else
     {
-        LogMsg(std::format("[Async] SLS FAILED: {}",
-                           result.error_message ? result.error_message : "Unknown error"));
+        LogMsg(std::format("[Async] SLS FAILED: {}", result.error_message ? result.error_message : "Unknown error"));
         *flag = -1;
     }
 
@@ -186,8 +177,7 @@ static int RunAsyncSlsPipeline()
     int done_flag = 0;
 
     // Start async (non-blocking)
-    HsBaRunSlsPipelineAsync(&cfg, OnProgress, nullptr,
-                            OnSlsPipelineComplete, &done_flag);
+    HsBaRunSlsPipelineAsync(&cfg, OnProgress, nullptr, OnSlsPipelineComplete, &done_flag);
 
     // In real applications, do other work here or wait for done_flag
     while (done_flag == 0)

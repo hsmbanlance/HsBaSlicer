@@ -133,8 +133,8 @@ HSBA_SLICER_LOG_API LoggerSingletone::LoggerSingletone(LoggerSingletone::Private
 {
 #ifdef _WIN32
     // Don't need for boost.log
-    //SetConsoleOutputCP(CP_UTF8);
-    //SetConsoleCP(CP_UTF8);
+    // SetConsoleOutputCP(CP_UTF8);
+    // SetConsoleCP(CP_UTF8);
 #endif
 
 #if defined(TARGET_OS_IOS) && TARGET_OS_IOS

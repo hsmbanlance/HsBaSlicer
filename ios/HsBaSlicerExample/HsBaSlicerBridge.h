@@ -12,16 +12,17 @@
 #define HsBaSlicerBridge_h
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-/**
- * @brief 运行 FDM / SLA / SLS 三种工艺流水线示例。
- *
- * 内部调用 initialize() 后依次执行 FDM、SLA、SLS 流水线。
- * 仅供示例演示和功能测试，非生产环境实际入口。
- */
-void HsBaRunPipelineExamples(void);
+    /**
+     * @brief 运行 FDM / SLA / SLS 三种工艺流水线示例。
+     *
+     * 内部调用 initialize() 后依次执行 FDM、SLA、SLS 流水线。
+     * 仅供示例演示和功能测试，非生产环境实际入口。
+     */
+    void HsBaRunPipelineExamples(void);
 
 #ifdef __cplusplus
 }
