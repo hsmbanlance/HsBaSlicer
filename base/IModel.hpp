@@ -101,6 +101,8 @@ enum class ModelFormat : uint32_t
     // point cloud
     /** @brief XYZ format. */
     XYZ = 40,
+    /** @brief VDB format. */
+    VDB,
     // Unknown
     Unknown = 100
 };

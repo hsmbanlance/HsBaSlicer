@@ -144,6 +144,8 @@ bool IsPointCloudFormat(ModelFormat format)
     {
     case ModelFormat::XYZ:
         return true;
+    case ModelFormat::VDB:
+        return true;
     default:
         return false;
     }

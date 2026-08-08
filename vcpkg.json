@@ -61,6 +61,10 @@
       "name": "opencascade",
       "platform": "windows | linux | osx "
     },
+    {
+      "name": "openvdb",
+      "platform": "windows | linux | osx"
+    },
     "protobuf",
     "rapidjson",
     "tinyxml2",

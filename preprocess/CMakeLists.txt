@@ -9,5 +9,5 @@ target_link_libraries(HsBaPreprocess PUBLIC
 
 # OCCT / CAD kernel is not available on Android, iOS, or game consoles
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
-    target_link_libraries(HsBaPreprocess PUBLIC HsBaSlicerCADModel)
+    target_link_libraries(HsBaPreprocess PUBLIC HsBaSlicerCADModel HsBaSlicerPointCloud)
 endif()

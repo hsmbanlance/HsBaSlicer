@@ -43,6 +43,7 @@
 | opencv | ✓ | ✓ | ✓ | ✓ | ✗ |
 | opencascade | ✓ | ✓ | ✓ | ✗ | ✗ |
 | sqlpp11 (MySQL/PG) | ✓ | ✓ | ✓ | ✗ | ✗ |
+| opencascade | ✓ | ✓ | ✓ | ✗ | ✗ |
 
 ## 构建建议
 

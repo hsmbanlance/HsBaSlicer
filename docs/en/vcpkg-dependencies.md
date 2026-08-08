@@ -43,6 +43,7 @@ The following packages are excluded on Android because they either have compatib
 | opencv | ✓ | ✓ | ✓ | ✓ | ✗ |
 | opencascade | ✓ | ✓ | ✓ | ✗ | ✗ |
 | sqlpp11 (MySQL/PG) | ✓ | ✓ | ✓ | ✗ | ✗ |
+| openvdb | ✓ | ✓ | ✓ | ✗ | ✗ |
 
 ## Build Recommendations
 

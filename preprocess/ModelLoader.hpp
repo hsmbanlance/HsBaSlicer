@@ -10,7 +10,7 @@
 #include "base/IModel.hpp"
 #include "base/object_pool.hpp"
 
-#ifdef USE_CGAL
+#if defined(USE_CGAL) || defined(USE_OPENVDB)
 #include <Eigen/Core>
 #endif
 
@@ -120,6 +120,71 @@ public:
     /** @brief Boolean XOR of two models. */
     std::shared_ptr<IModel> BooleanXor(const std::string& leftName, const std::string& rightName,
                                        const std::string& resultName);
+#endif
+
+#ifdef USE_OPENVDB
+    // ----- Point cloud operations (require OpenVDB) -----
+
+    /** @brief Convert a point cloud model to a triangle mesh via level set reconstruction.
+     * @param sourceName Name of the point cloud model in the pool (must be an OpenVdbModel).
+     * @param resultName Name to store the resulting mesh model under.
+     * @param voxelSize Voxel size for reconstruction (0 = auto estimate).
+     * @param particleRadius Particle radius for sphere rasterization (0 = auto estimate).
+     * @return Shared pointer to the resulting IglModel mesh.
+     * @throws RuntimeError if the source is not an OpenVdbModel.
+     */
+    std::shared_ptr<IModel> PointCloudToMesh(const std::string& sourceName, const std::string& resultName,
+                                             float voxelSize = 0.0f, float particleRadius = 0.0f);
+
+    /** @brief Merge two point cloud models into one.
+     * @param leftName Name of the first point cloud.
+     * @param rightName Name of the second point cloud.
+     * @param resultName Name to store the merged result under.
+     * @return Shared pointer to the merged OpenVdbModel.
+     * @throws RuntimeError if either source is not an OpenVdbModel.
+     */
+    std::shared_ptr<IModel> MergePointClouds(const std::string& leftName, const std::string& rightName,
+                                             const std::string& resultName);
+
+    /** @brief Downsample a point cloud using voxel grid filtering.
+     * @param sourceName Name of the point cloud model.
+     * @param resultName Name to store the downsampled result under.
+     * @param voxelSize Voxel size for downsampling.
+     * @return Shared pointer to the downsampled OpenVdbModel.
+     */
+    std::shared_ptr<IModel> DownsamplePointCloud(const std::string& sourceName, const std::string& resultName,
+                                                 float voxelSize);
+
+    /** @brief Remove statistical outliers from a point cloud.
+     * @param sourceName Name of the point cloud model.
+     * @param resultName Name to store the filtered result under.
+     * @param k Number of neighbors for mean distance estimation.
+     * @param multiplier Standard deviation multiplier threshold.
+     * @return Shared pointer to the filtered OpenVdbModel.
+     */
+    std::shared_ptr<IModel> RemovePointCloudOutliers(const std::string& sourceName, const std::string& resultName,
+                                                     std::size_t k, float multiplier = 1.0f);
+
+    /** @brief Compute the centroid of a point cloud.
+     * @param sourceName Name of the point cloud model.
+     * @return The centroid position.
+     * @throws RuntimeError if the source is not an OpenVdbModel.
+     */
+    Eigen::Vector3f PointCloudCentroid(const std::string& sourceName) const;
+
+    /** @brief Compute per-point normals for a point cloud.
+     * @param sourceName Name of the point cloud model.
+     * @param k Number of neighbors used for normal estimation.
+     * @return Nx3 matrix of unit normals.
+     * @throws RuntimeError if the source is not an OpenVdbModel.
+     */
+    Eigen::MatrixXf PointCloudNormals(const std::string& sourceName, std::size_t k = 12) const;
+
+    /** @brief Get the point count of a point cloud model.
+     * @param sourceName Name of the point cloud model.
+     * @return Number of points.
+     */
+    std::size_t PointCloudCount(const std::string& sourceName) const;
 #endif
 
 private:

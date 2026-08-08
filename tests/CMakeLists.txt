@@ -265,6 +265,7 @@ set(ALL_TEST_TARGETS
   static_reflect_test
   support_test
   model_loader_test
+  openvdb_model_test
 )
 
 if(TARGET HsBaSlicerCADModel)
@@ -817,6 +818,35 @@ add_test(
 if(HSBA_RUN_TESTS_AFTER_BUILD)
   add_custom_command(TARGET model_loader_test POST_BUILD
     COMMAND ${CMAKE_CTEST_COMMAND} -V -R model_loader_test
+  )
+endif()
+
+## OpenVDB model tests
+add_executable(openvdb_model_test
+    "Models/openvdb_model_test.cpp"
+)
+
+target_link_libraries(openvdb_model_test
+    HsBaSlicerPointCloud
+    HsBaSlicerBase
+    Eigen3::Eigen
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(openvdb_model_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME openvdb_model_test
+  COMMAND $<TARGET_FILE:openvdb_model_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET openvdb_model_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R openvdb_model_test
   )
 endif()
 
