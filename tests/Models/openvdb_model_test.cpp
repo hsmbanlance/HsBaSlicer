@@ -7,10 +7,25 @@
 
 #include "pointcloud/OpenVdbModel.hpp"
 
+// Disable CRT memory leak check in debug builds to avoid false positives from OpenVDB
+// The reason from OpenVDB's own documentation: "OpenVDB uses a custom memory management system"
+struct DisableCrt
+{
+    DisableCrt()
+    {
+#if defined(_MSC_VER) && defined(_DEBUG)
+        _CrtSetDbgFlag(_CrtSetDbgFlag(_CRTDBG_REPORT_FLAG) & ~_CRTDBG_LEAK_CHECK_DF);
+#endif  // defined(_MSC_VER) && defined(_DEBUG)
+    }
+};
+
+
 using namespace HsBa::Slicer;
 
 BOOST_AUTO_TEST_CASE(point_cloud_operations)
 {
+    static DisableCrt disableCrt;  // ensure CRT memory leak check is disabled for the duration of this test
+    (void)disableCrt;              // suppress unused variable warning
     OpenVdbModel model;
     model.AddPoint(Eigen::Vector3f{0.0f, 0.0f, 0.0f});
     model.AddPoint(Eigen::Vector3f{1.0f, 2.0f, 3.0f});
@@ -104,6 +119,8 @@ BOOST_AUTO_TEST_CASE(point_cloud_operations)
 
 BOOST_AUTO_TEST_CASE(point_cloud_neighbors_and_filter)
 {
+    static DisableCrt disableCrt;  // ensure CRT memory leak check is disabled for the duration of this test
+    (void)disableCrt;              // suppress unused variable warning
     OpenVdbModel model;
     model.AddPoint(Eigen::Vector3f{0.0f, 0.0f, 0.0f});
     model.AddPoint(Eigen::Vector3f{1.0f, 0.0f, 0.0f});

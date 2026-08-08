@@ -17,6 +17,7 @@ const std::string kMockDllPath = []
 {
 #ifdef MOCK_CAD_DLL_DIR
     std::filesystem::path dllPath(MOCK_CAD_DLL_DIR);
+#ifdef NDEBUG
 #ifdef _WIN32
     dllPath /= "mock_cad_dll.dll";
 #elif __APPLE__
@@ -24,6 +25,15 @@ const std::string kMockDllPath = []
 #else
     dllPath /= "libmock_cad_dll.so";
 #endif
+#else
+#ifdef _WIN32
+    dllPath /= "mock_cad_dlld.dll";
+#elif __APPLE__
+    dllPath /= "libmock_cad_dlld.dylib";
+#else
+    dllPath /= "libmock_cad_dlld.so";
+#endif  // debug build
+#endif  // NDEBUG
     return dllPath.string();
 #else
     return std::string("mock_cad_dll");

@@ -17,6 +17,7 @@ const std::string kMockDllPath = []
 {
 #ifdef MOCK_POINT_CLOUD_DLL_DIR
     std::filesystem::path dllPath(MOCK_POINT_CLOUD_DLL_DIR);
+#ifdef NDEBUG
 #ifdef _WIN32
     dllPath /= "mock_point_cloud_dll.dll";
 #elif __APPLE__
@@ -24,6 +25,15 @@ const std::string kMockDllPath = []
 #else
     dllPath /= "libmock_point_cloud_dll.so";
 #endif
+#else
+#ifdef _WIN32
+    dllPath /= "mock_point_cloud_dlld.dll";
+#elif __APPLE__
+    dllPath /= "libmock_point_cloud_dlld.dylib";
+#else
+    dllPath /= "libmock_point_cloud_dlld.so";
+#endif  // debug build
+#endif  // NDEBUG
     return dllPath.string();
 #else
     return std::string("mock_point_cloud_dll");
