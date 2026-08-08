@@ -6,7 +6,7 @@ VersionInfo GetVersionInfo()
 {
     VersionInfo info;
     info.librariesName = "HsBaSlicer";
-    info.license = "AGPL-3.0-or-later";
+    info.license = "GPL-3.0-or-later";  // 由 Generator_Version.ps1 动态判定：使用 GPL/LGPL 依赖为 GPL，否则为 MIT
     info.version = "1.0.0";
     info.buildType = "@CMAKE_BUILD_TYPE@";
     info.buildPlatform = "@PLATFORM_NAME@";

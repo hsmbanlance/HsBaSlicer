@@ -2,6 +2,16 @@
 
 This document describes the platform compatibility configuration for dependencies in `vcpkg.json`.
 
+## Licensing
+
+The project license depends on whether the build links copyleft kernels:
+
+- **CGAL** (`GPL-3.0-or-later`) and **OpenCascade** (`LGPL-2.1-only`) are copyleft. They are only available on the platforms shown in the dependency matrix below (desktop Windows/Linux/macOS, plus CGAL on Android).
+- A build that includes any copyleft kernel is licensed under **GPL-3.0-or-later**.
+- A build that includes none (iOS and game-console builds) is licensed under **MIT**.
+
+In `vcpkg.json` this is expressed with a top-level `license` of `MIT` plus a `copyleft` feature whose `license` is `GPL-3.0-or-later`. The `copyleft` feature is enabled by default on `windows | linux | osx | android`. The effective license of a build is generated at configure time into `version.cpp` and exposed via `GetVersionInfo()` / `HsBaGetVersionJson()`.
+
 ## Platform Exclusions
 
 ### Packages excluded for Android

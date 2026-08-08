@@ -29,7 +29,11 @@ $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 function Get-PlatformFromTriplet {
     param([string]$triplet)
     
-    if ($triplet -match "android") {
+    # 游戏主机 triplet 常含 windows/linux 字样（如 xbox-scarlet-windows），需优先判定
+    if ($triplet -match "xbox" -or $triplet -match "switch" -or $triplet -match "playstation" -or $triplet -match "stadia") {
+        return "GameConsole"
+    }
+    elseif ($triplet -match "android") {
         return "Android"
     }
     elseif ($triplet -match "ios") {
@@ -83,6 +87,8 @@ $targetPlatform = Get-PlatformFromTriplet $VcpkgTriplet
 # 解析 vcpkg.json 文件
 $vcpkgJsonPath = if ($VcpkgJsonPath) { $VcpkgJsonPath } else { Join-Path $PSScriptRoot "..\vcpkg.json" }
 $thirdLibsCode = ""
+# 是否包含 GPL/LGPL 等 Copyleft 依赖，用于决定项目许可证（GPL 或 MIT）
+$hasCopyleft = $false
 
 if (Test-Path $vcpkgJsonPath) {
     try {
@@ -95,6 +101,8 @@ if (Test-Path $vcpkgJsonPath) {
             "macOS" = "osx"
             "Android" = "android"
             "iOS" = "ios"
+            # 游戏主机不属于 vcpkg.json 中任何 platform 列表，用独立标识以排除 CGAL/OCCT 等平台受限依赖
+            "GameConsole" = "gameconsole"
         }
         $currentPlatform = $platformMap[$targetPlatform]
         
@@ -131,6 +139,7 @@ if (Test-Path $vcpkgJsonPath) {
             "magic-enum" = @{ license = "MIT"; homepage = "https://github.com/Neargye/magic_enum" }
             "bit7z" = @{ license = "MPL-2.0"; homepage = "https://github.com/mcmilk/bit7z" }
             "fontconfig" = @{ license = "MIT"; homepage = "https://fontconfig.org/" }
+            "openvdb" = @{ license = "Apache-2.0"; homepage = "https://www.openvdb.org/" }
         }
         
         # 遍历依赖并生成代码
@@ -161,6 +170,10 @@ if (Test-Path $vcpkgJsonPath) {
             
             if ($shouldInclude -and $libInfoMap.ContainsKey($depName) -and -not $addedLibs.ContainsKey($depName)) {
                 $info = $libInfoMap[$depName]
+                # 许可证含 GPL/LGPL 且非 "X OR GPL" 双许可时，视为 Copyleft 依赖
+                if ($info.license -match "GPL" -and $info.license -notmatch "\sOR\s") {
+                    $hasCopyleft = $true
+                }
                 $thirdLibsCode += "    info.thirdLibraries.push_back({`"$depName`", `"$($info.license)`", `"$($info.homepage)`"});`
 "
                 $addedLibs[$depName] = $true
@@ -179,6 +192,9 @@ else {
 "
 }
 
+# 根据是否包含 GPL/LGPL 依赖确定项目许可证：未使用 Copyleft 依赖为 MIT，否则为 GPL
+$projectLicense = if ($hasCopyleft) { "GPL-3.0-or-later" } else { "MIT" }
+
 # 生成version.cpp内容
 $versionCppContent = @"
 #include "version.hpp"
@@ -189,7 +205,7 @@ VersionInfo GetVersionInfo()
 {
     VersionInfo info;
     info.librariesName = "HsBaSlicer";
-    info.license = "AGPL-3.0-or-later";
+    info.license = "$projectLicense";
     info.version = "1.0.0";
     info.buildType = "$BuildType";
     info.buildPlatform = "$buildPlatform";
@@ -217,4 +233,5 @@ Write-Host "Generated version.cpp at: $OutputPath"
 Write-Host "Build Type: $BuildType"
 Write-Host "Platform: $Platform"
 Write-Host "Vcpkg Triplet: $VcpkgTriplet"
+Write-Host "Project License: $projectLicense"
 Write-Host "Configure Time: $timestamp"
