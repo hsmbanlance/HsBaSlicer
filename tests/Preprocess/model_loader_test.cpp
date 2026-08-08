@@ -1,11 +1,14 @@
 #define BOOST_TEST_MODULE model_loader_test
 #include <boost/test/included/unit_test.hpp>
 
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
 
 #include "base/error.hpp"
 #include "meshmodel/IglModel.hpp"
+#include "pointcloud/OpenVdbModel.hpp"
 #include "preprocess/ModelLoader.hpp"
 
 #ifdef USE_OCCT
@@ -125,6 +128,25 @@ BOOST_AUTO_TEST_CASE(cleanup_keeps_active_models)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_CASE(load_xyz_point_cloud_through_loader)
+{
+    ModelLoader loader;
+    const auto tempPath = std::filesystem::temp_directory_path() / "hsba_openvdb_loader_test.xyz";
+    {
+        std::ofstream output(tempPath);
+        output << "0 0 0\n1 0 0\n2 0 0\n";
+    }
+
+    auto model = loader.LoadModel("points", tempPath.string());
+    BOOST_REQUIRE(model != nullptr);
+
+    auto* pointCloud = dynamic_cast<OpenVdbModel*>(model.get());
+    BOOST_REQUIRE(pointCloud != nullptr);
+    BOOST_CHECK_EQUAL(pointCloud->PointCount(), 3u);
+
+    std::filesystem::remove(tempPath);
+}
 
 // ============================================================================
 // Boolean operations tests (require CGAL)

@@ -1,15 +1,22 @@
 ﻿#include "CgalModel.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <numbers>
 #include <vector>
 
+#include <CGAL/AABB_face_graph_triangle_primitive.h>
+#include <CGAL/AABB_traits_3.h>
+#include <CGAL/AABB_tree.h>
 #include <CGAL/Boolean_set_operations_2.h>
 #include <CGAL/IO/io.h>
 #include <CGAL/Polyhedron_3.h>
 #include <CGAL/Polyhedron_incremental_builder_3.h>
 #include <CGAL/Simple_cartesian.h>
+#include <CGAL/Surface_mesh.h>
+#include <CGAL/Surface_mesh_shortest_path.h>
 #include <CGAL/boost/graph/IO/polygon_mesh_io.h>
+#include <CGAL/boost/graph/copy_face_graph.h>
 #include <CGAL/boost/graph/generators.h>
 #include <CGAL/polygon_mesh_processing.h>
 
@@ -659,6 +666,12 @@ CgalModel CgalModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& di
         bottom_tris.push_back(idx);
     }
 
+    // Clipper2 Triangulate 对已是三角形的输入不产出三角形，回退直接以原三角形作底面
+    if (bottom_tris.empty() && n == 3)
+    {
+        bottom_tris.push_back({0, 1, 2});
+    }
+
     // Build using IglModel first, then convert to CgalModel
     const Eigen::Vector3f dir(direction.x(), direction.y(), direction.z());
 
@@ -704,7 +717,15 @@ CgalModel CgalModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& di
     // Create IglModel and convert to CgalModel
     IglModel igl_model(V, F.topRows(f), false);
     auto [v, fa] = igl_model.TriangleMesh();
-    return CgalModel(v, fa);
+    CgalModel model(v, fa);
+    // mesh_to_polyhedron 可能将共面三角形合并为多边形面片，导致体积计算丢失部分四面体分量；
+    // 强制三角化并修正面朝向，保证体积为正
+    CGAL::Polygon_mesh_processing::triangulate_faces(model.mesh_);
+    if (CGAL::Polygon_mesh_processing::volume(model.mesh_) < 0.0)
+    {
+        CGAL::Polygon_mesh_processing::reverse_face_orientations(model.mesh_);
+    }
+    return model;
 }
 
 CgalModel CgalModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& direction)
@@ -714,8 +735,53 @@ CgalModel CgalModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
         throw InvalidArgumentError("Paths must not be empty");
     }
 
+    // 归一化绕序：外轮廓 CCW（笛卡尔坐标下 Area > 0），孔洞 CW（Area < 0）。
+    // Clipper2 Triangulate 按此约定识别孔洞；若外轮廓与孔洞同号，
+    // 孔洞会被当作独立实体三角化导致体积偏大。
+    // 通过几何包含关系判定孔洞，不依赖调用方传入的绕序。
+    Clipper2Lib::PathsD norm_paths = paths;
+    std::vector<bool> is_hole(norm_paths.size(), false);
+    // 通过嵌套深度奇偶判定孔洞：路径 i 的深度 = 严格包含它的其他路径数，深度为奇即孔洞。
+    // 包含判定用"多数顶点在内部"而非质心——质心可能落在内层子路径内
+    // （如外方框质心恰在内孔中），导致外轮廓被误判为孔洞而整体反转绕序。
+    // 注意：不能直接对 double 路径调用 Clipper2Lib::PointInPolygon——其 MSVC 分支按
+    // int64 精确算术编写（TriSign 仅有 int64_t 重载，double 被隐式截断），
+    // 非整数坐标会被误判共线而返回 IsOn。故按项目惯例先整型化（×integerization）
+    // 到 Path64 再做包含判定（int64 精确算术），包含关系在缩放下不变，无需反整型化。
+    const Clipper2Lib::Paths64 int_paths = Integerization(norm_paths);
+    for (size_t i = 0; i < norm_paths.size(); ++i)
+    {
+        int depth = 0;
+        for (size_t j = 0; j < norm_paths.size(); ++j)
+        {
+            if (i == j)
+                continue;
+            int inside = 0;
+            for (const auto& pt : int_paths[i])
+            {
+                if (Clipper2Lib::PointInPolygon(pt, int_paths[j]) == Clipper2Lib::PointInPolygonResult::IsInside)
+                {
+                    ++inside;
+                }
+            }
+            if (inside * 2 > static_cast<int>(norm_paths[i].size()))
+            {
+                ++depth;
+            }
+        }
+        is_hole[i] = (depth % 2) == 1;
+    }
+    for (size_t i = 0; i < norm_paths.size(); ++i)
+    {
+        const double a = Clipper2Lib::Area(norm_paths[i]);
+        if ((is_hole[i] && a > 0.0) || (!is_hole[i] && a < 0.0))
+        {
+            std::reverse(norm_paths[i].begin(), norm_paths[i].end());
+        }
+    }
+
     Clipper2Lib::PathsD triangles;
-    auto result = Clipper2Lib::Triangulate(paths, 0, triangles, true);
+    auto result = Clipper2Lib::Triangulate(norm_paths, 0, triangles, true);
     if (result != Clipper2Lib::TriangulateResult::success)
     {
         throw RuntimeError("Triangulation failed");
@@ -736,7 +802,7 @@ CgalModel CgalModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
         return static_cast<int>(unique_verts.size()) - 1;
     };
 
-    for (const auto& path : paths)
+    for (const auto& path : norm_paths)
     {
         for (const auto& pt : path)
         {
@@ -766,7 +832,37 @@ CgalModel CgalModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
         {
             idx[i] = findOrAdd(tri[i]);
         }
+        // 强制底面三角形为 CCW（笛卡尔坐标下有向面积为正），不依赖 Triangulate 的输出绕序
+        if (Clipper2Lib::Area(tri) < 0.0)
+        {
+            std::swap(idx[1], idx[2]);
+        }
         bottom_tris.push_back(idx);
+    }
+
+    // Clipper2 Triangulate 对三角形路径不产出三角形，追加原始三角形路径补全底面，避免盖面丢失；
+    // 外轮廓三角形归一化为 CCW，孔洞三角形归一化为 CW（盖面贡献相消）
+    const size_t trianglePathCount = std::count_if(norm_paths.begin(), norm_paths.end(),
+                                                   [](const PolygonD& p) { return p.size() == 3; });
+    if (bottom_tris.size() < trianglePathCount)
+    {
+        for (size_t pi = 0; pi < norm_paths.size(); ++pi)
+        {
+            const auto& path = norm_paths[pi];
+            if (path.size() != 3)
+                continue;
+            std::array<int, 3> idx;
+            for (int i = 0; i < 3; ++i)
+            {
+                idx[i] = findOrAdd(path[i]);
+            }
+            const double a = Clipper2Lib::Area(path);
+            if ((is_hole[pi] && a > 0.0) || (!is_hole[pi] && a < 0.0))
+            {
+                std::swap(idx[1], idx[2]);
+            }
+            bottom_tris.push_back(idx);
+        }
     }
 
     // ========== 4. 构建 3D 顶点 ==========
@@ -781,9 +877,9 @@ CgalModel CgalModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
     // ========== 5. 构建面 ==========
     const int n_bottom = static_cast<int>(bottom_tris.size());
 
-    // 侧面：基于原始 paths 的每条边
+    // 侧面：基于归一化 paths 的每条边（孔洞为 CW，保证侧壁法向指向孔内）
     int n_side_tris = 0;
-    for (const auto& path : paths)
+    for (const auto& path : norm_paths)
     {
         n_side_tris += 2 * static_cast<int>(path.size());
     }
@@ -817,7 +913,7 @@ CgalModel CgalModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
         throw RuntimeError("Vertex not found");
     };
 
-    for (const auto& path : paths)
+    for (const auto& path : norm_paths)
     {
         const size_t m = path.size();
         for (size_t i = 0; i < m; ++i)
@@ -842,8 +938,253 @@ CgalModel CgalModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
         throw RuntimeError("IglModel TriangleMesh returned empty result for multi-path");
     }
 
-    return CgalModel(v, fa);
+    CgalModel model(v, fa);
+    // 与单多边形重载相同：强制三角化并修正面朝向，保证体积为正
+    CGAL::Polygon_mesh_processing::triangulate_faces(model.mesh_);
+    if (CGAL::Polygon_mesh_processing::volume(model.mesh_) < 0.0)
+    {
+        CGAL::Polygon_mesh_processing::reverse_face_orientations(model.mesh_);
+    }
+    return model;
 }
+
+// ========== Surface geodesic / curve / helix operations ==========
+
+namespace detail
+{
+using SurfaceMesh = CGAL::Surface_mesh<CgalModel::Point_3>;
+using ShortestPathTraits = CGAL::Surface_mesh_shortest_path_traits<CgalModel::EpicKernel, SurfaceMesh>;
+using ShortestPath = CGAL::Surface_mesh_shortest_path<ShortestPathTraits>;
+using AABBPrimitive = CGAL::AABB_face_graph_triangle_primitive<SurfaceMesh>;
+using AABBTraits = CGAL::AABB_traits_3<CgalModel::EpicKernel, AABBPrimitive>;
+using AABBTree = CGAL::AABB_tree<AABBTraits>;
+
+inline CgalModel::Point_3 ToCgalPoint(const Eigen::Vector3f& p)
+{
+    return {static_cast<double>(p.x()), static_cast<double>(p.y()), static_cast<double>(p.z())};
+}
+
+template <typename PointT>
+inline Eigen::Vector3f ToEigen(const PointT& p)
+{
+    return {static_cast<float>(p.x()), static_cast<float>(p.y()), static_cast<float>(p.z())};
+}
+
+/// Convert Polyhedron_3 to a triangulated Surface_mesh
+inline SurfaceMesh ToSurfaceMesh(const CgalModel::Polyhedron_3& poly)
+{
+    SurfaceMesh sm;
+    CGAL::copy_face_graph(poly, sm);
+    CGAL::Polygon_mesh_processing::triangulate_faces(sm);
+    return sm;
+}
+
+/// Build AABB tree on a SurfaceMesh
+inline AABBTree BuildAABBTree(const SurfaceMesh& sm)
+{
+    AABBTree tree(sm.faces().begin(), sm.faces().end(), sm);
+    tree.accelerate_distance_queries();
+    return tree;
+}
+
+/// Compute a Face_location (face + barycentric coords) for the closest point on mesh to query
+inline ShortestPath::Face_location MakeFaceLocation(const SurfaceMesh& sm, const AABBTree& tree,
+                                                    const Eigen::Vector3f& query)
+{
+    auto pt = ToCgalPoint(query);
+    auto projection = tree.closest_point_and_primitive(pt);
+    auto closestPt = projection.first;
+    auto f = projection.second;  // face_descriptor
+
+    // Get the 3 vertices of the triangular face via member functions
+    auto h0 = sm.halfedge(f);
+    auto h1 = sm.next(h0);
+    auto h2 = sm.next(h1);
+    auto va = sm.target(h0);
+    auto vb = sm.target(h1);
+    auto vc = sm.target(h2);
+    const auto& a = sm.point(va);
+    const auto& b = sm.point(vb);
+    const auto& c = sm.point(vc);
+
+    // Barycentric coordinates via dot products
+    auto v0 = c - a;
+    auto v1 = b - a;
+    auto v2 = closestPt - a;
+    double d00 = v0 * v0;
+    double d01 = v0 * v1;
+    double d11 = v1 * v1;
+    double d20 = v2 * v0;
+    double d21 = v2 * v1;
+    double denom = d00 * d11 - d01 * d01;
+    if (std::abs(denom) < 1e-15)
+        denom = 1e-15;
+    double bw = (d11 * d20 - d01 * d21) / denom;
+    double bv = (d00 * d21 - d01 * d20) / denom;
+    double bu = 1.0 - bv - bw;
+
+    // Clamp and normalize
+    bu = (std::max)(0.0, (std::min)(1.0, bu));
+    bv = (std::max)(0.0, (std::min)(1.0, bv));
+    bw = (std::max)(0.0, (std::min)(1.0, bw));
+    double sum = bu + bv + bw;
+    if (sum > 0.0) { bu /= sum; bv /= sum; bw /= sum; }
+
+    // Face_location convention:
+    // w0 = source(halfedge(f,sm),sm), w1 = target(halfedge(f,sm),sm), w2 = target(next(halfedge(f,sm),sm),sm)
+    auto src0 = sm.source(h0);
+    double w0 = 0, w1 = 0, w2 = 0;
+    if (src0 == va) { w0 = bu; w1 = bv; w2 = bw; }
+    else if (src0 == vb) { w0 = bv; w1 = bw; w2 = bu; }
+    else { w0 = bw; w1 = bu; w2 = bv; }
+
+    ShortestPath::Barycentric_coordinates bary;
+    bary[0] = w0;
+    bary[1] = w1;
+    bary[2] = w2;
+    return {f, bary};
+}
+}  // namespace detail
+
+std::vector<Eigen::Vector3f> CgalModel::GeodesicPath(const Eigen::Vector3f& source,
+                                                     const Eigen::Vector3f& target) const
+{
+    auto sm = detail::ToSurfaceMesh(mesh_);
+    auto tree = detail::BuildAABBTree(sm);
+
+    detail::ShortestPath shortestPath(sm);
+    auto srcLoc = detail::MakeFaceLocation(sm, tree, source);
+    shortestPath.add_source_point(srcLoc);
+
+    // Get path to the closest vertex to target
+    auto tgtPt = detail::ToCgalPoint(target);
+    auto projection = tree.closest_point_and_primitive(tgtPt);
+    auto f = projection.second;
+    auto h0 = sm.halfedge(f);
+    auto v = sm.target(h0);
+
+    std::vector<CgalModel::Point_3> pathPoints;
+    shortestPath.shortest_path_points_to_source_points(v, std::back_inserter(pathPoints));
+
+    std::vector<Eigen::Vector3f> result;
+    result.reserve(pathPoints.size());
+    for (const auto& p : pathPoints)
+    {
+        result.push_back(detail::ToEigen(p));
+    }
+    return result;
+}
+
+std::vector<float> CgalModel::GeodesicDistance(const Eigen::Vector3f& source) const
+{
+    auto sm = detail::ToSurfaceMesh(mesh_);
+    auto tree = detail::BuildAABBTree(sm);
+
+    detail::ShortestPath shortestPath(sm);
+    auto srcLoc = detail::MakeFaceLocation(sm, tree, source);
+    shortestPath.add_source_point(srcLoc);
+
+    std::vector<float> distances;
+    distances.reserve(sm.number_of_vertices());
+    for (const auto& vd : sm.vertices())
+    {
+        auto res = shortestPath.shortest_distance_to_source_points(vd);
+        distances.push_back(static_cast<float>(res.first));
+    }
+    return distances;
+}
+
+Eigen::Vector3f CgalModel::ProjectPointOnSurface(const Eigen::Vector3f& point) const
+{
+    auto sm = detail::ToSurfaceMesh(mesh_);
+    auto tree = detail::BuildAABBTree(sm);
+    auto closest = tree.closest_point(detail::ToCgalPoint(point));
+    return detail::ToEigen(closest);
+}
+
+std::vector<Eigen::Vector3f> CgalModel::SurfaceSpiral(const Eigen::Vector3f& axisOrigin,
+                                                      const Eigen::Vector3f& axisDirection, float turns,
+                                                      int samplesPerTurn, float startRadius,
+                                                      float endRadius) const
+{
+    if (turns <= 0.0f || samplesPerTurn < 3)
+    {
+        throw InvalidArgumentError("SurfaceSpiral: turns must be > 0 and samplesPerTurn >= 3");
+    }
+
+    auto sm = detail::ToSurfaceMesh(mesh_);
+    auto tree = detail::BuildAABBTree(sm);
+
+    Eigen::Vector3f axis = axisDirection.normalized();
+    Eigen::Vector3f u = axis.unitOrthogonal();
+    Eigen::Vector3f w = axis.cross(u).normalized();
+
+    Eigen::Vector3f bmin, bmax;
+    BoundingBox(bmin, bmax);
+    float projMin = axis.dot(bmin - axisOrigin);
+    float projMax = axis.dot(bmax - axisOrigin);
+    float heightRange = projMax - projMin;
+
+    if (endRadius < 0.0f)
+    {
+        endRadius = (bmax - bmin).norm() * 0.5f;
+    }
+    if (startRadius <= 0.0f)
+    {
+        startRadius = endRadius * 0.1f;
+    }
+
+    const int totalSamples = static_cast<int>(turns * samplesPerTurn);
+    std::vector<Eigen::Vector3f> result;
+    result.reserve(totalSamples);
+
+    for (int i = 0; i < totalSamples; ++i)
+    {
+        float t = static_cast<float>(i) / static_cast<float>(totalSamples - 1);
+        float angle = t * turns * 2.0f * std::numbers::pi_v<float>;
+        float radius = startRadius + (endRadius - startRadius) * t;
+        float height = projMin + heightRange * t;
+
+        Eigen::Vector3f candidate = axisOrigin + axis * height + radius * (u * std::cos(angle) + w * std::sin(angle));
+        auto closest = tree.closest_point(detail::ToCgalPoint(candidate));
+        result.push_back(detail::ToEigen(closest));
+    }
+    return result;
+}
+
+std::vector<Eigen::Vector3f> CgalModel::SurfaceHelix(const Eigen::Vector3f& axisOrigin,
+                                                     const Eigen::Vector3f& axisDirection, float turns, float pitch,
+                                                     float radius, int samplesPerTurn) const
+{
+    if (turns <= 0.0f || samplesPerTurn < 3)
+    {
+        throw InvalidArgumentError("SurfaceHelix: turns must be > 0 and samplesPerTurn >= 3");
+    }
+
+    auto sm = detail::ToSurfaceMesh(mesh_);
+    auto tree = detail::BuildAABBTree(sm);
+
+    Eigen::Vector3f axis = axisDirection.normalized();
+    Eigen::Vector3f u = axis.unitOrthogonal();
+    Eigen::Vector3f w = axis.cross(u).normalized();
+
+    const int totalSamples = static_cast<int>(turns * samplesPerTurn);
+    std::vector<Eigen::Vector3f> result;
+    result.reserve(totalSamples);
+
+    for (int i = 0; i < totalSamples; ++i)
+    {
+        float t = static_cast<float>(i) / static_cast<float>(totalSamples - 1);
+        float angle = t * turns * 2.0f * std::numbers::pi_v<float>;
+        float height = t * turns * pitch;
+
+        Eigen::Vector3f candidate = axisOrigin + axis * height + radius * (u * std::cos(angle) + w * std::sin(angle));
+        auto closest = tree.closest_point(detail::ToCgalPoint(candidate));
+        result.push_back(detail::ToEigen(closest));
+    }
+    return result;
+}
+
 }  // namespace HsBa::Slicer
 
 std::size_t std::hash<HsBa::Slicer::CgalModel>::operator()(const HsBa::Slicer::CgalModel& cgalmodel)

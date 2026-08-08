@@ -34,16 +34,20 @@ BOOST_AUTO_TEST_CASE(fromimage_and_toimage_roundtrip)
     auto tmpPath = std::filesystem::temp_directory_path() / "hsbaslicer_test_img.png";
     cv::imwrite(tmpPath.string(), img);
 
-    // single threshold (should detect the brighter rectangle)
+    // single threshold (should detect the brighter rectangle only)
     PolygonsD polys = FromImage(tmpPath.string(), 180, 1.0);
-    BOOST_CHECK(!polys.empty());
+    // 只有亮度 200 的矩形超过阈值 180 → 恰好 1 个轮廓
+    BOOST_REQUIRE_EQUAL(polys.size(), 1u);
+    BOOST_CHECK_GE(polys[0].size(), 4u);
 
     // multi-threshold: detect both layers
     std::vector<int> thresholds = {100, 180};
     auto layers = FromImageMulti(tmpPath.string(), thresholds, 1.0);
-    BOOST_CHECK_EQUAL(layers.size(), 2u);
-    BOOST_CHECK(!layers[0].empty());
-    BOOST_CHECK(!layers[1].empty());
+    BOOST_REQUIRE_EQUAL(layers.size(), 2u);
+    // 阈值 100：两个矩形（200 与 120）均被检出 → 2 个轮廓
+    BOOST_CHECK_EQUAL(layers[0].size(), 2u);
+    // 阈值 180：仅亮度 200 的矩形被检出 → 1 个轮廓
+    BOOST_CHECK_EQUAL(layers[1].size(), 1u);
 
     // test ToImage: write PNG and SVG
     PolygonsD simple;

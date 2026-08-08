@@ -42,7 +42,10 @@ BOOST_AUTO_TEST_CASE(no_prev_layer_entire_current_is_overhang)
     PolygonsD prev;
 
     auto result = OverhangDetector::Detect(current, prev, 0.2f, 45.0f);
-    BOOST_CHECK_EQUAL(result.size(), current.size());
+    // 无上一层时，当前层整体即为悬垂，原样返回
+    BOOST_REQUIRE_EQUAL(result.size(), current.size());
+    BOOST_CHECK_EQUAL(result[0].size(), current[0].size());
+    BOOST_CHECK(AreaApprox(result, 100.0));
 }
 
 BOOST_AUTO_TEST_CASE(identical_layers_no_overhang)
@@ -61,9 +64,13 @@ BOOST_AUTO_TEST_CASE(small_overhang_filtered_by_angle)
 
     // With a large angle threshold (80 degrees), small overhangs should be filtered
     auto result = OverhangDetector::Detect(current, prev, 0.2f, 80.0f);
-    // The overhang is 2mm, bridge distance at 80 deg with 0.2mm layer = ~0.034mm
-    // So the overhang should NOT be filtered
+    // 80° 下桥接距离 = 0.2/tan(80°) ≈ 0.035，远小于 2mm 悬垂，不应被过滤
     BOOST_CHECK(!result.empty());
+    // 环形区域用有符号面积求和（孔洞面积自动相消）：原面积 96，侵蚀 0.035mm 后 ≈ 92.6
+    double signedArea = 0.0;
+    for (const auto& p : result)
+        signedArea += Area(p);
+    BOOST_CHECK_CLOSE(std::abs(signedArea), 92.6, 10.0);
 }
 
 BOOST_AUTO_TEST_CASE(max_bridge_distance_calculation)
@@ -109,6 +116,13 @@ BOOST_AUTO_TEST_CASE(overhang_generates_support)
 
     auto result = support.Generate(current, prev, 0.2f, config);
     BOOST_CHECK(!result.empty());
+    // 悬垂环形面积 = 20² - 10² = 300，支撑外扩半径 1mm（圆角连接）后面积大于原区域，
+    // 实测约 536，上限取 600 容忍圆角附加面积
+    double totalArea = 0.0;
+    for (const auto& p : result)
+        totalArea += std::abs(Area(p));
+    BOOST_CHECK_GT(totalArea, 300.0);
+    BOOST_CHECK_LT(totalArea, 600.0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
