@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <format>
 #include <string_view>
 
 #include "base/ModelFormat.hpp"
@@ -27,12 +28,11 @@ namespace
         auto model = std::make_shared<OpenVdbModel>();
         if (!model->Load(filePath))
         {
-            throw RuntimeError("Failed to load point cloud model: " + std::string(filePath));
+            throw RuntimeError(std::format("Failed to load point cloud model: {}", std::string(filePath)));
         }
         return model;
 #else
-        throw RuntimeError("Point cloud formats are not supported on this platform (OpenVDB not
-    available): " + std::string(filePath));
+        throw RuntimeError(std::format("Point cloud formats are not supported on this platform (OpenVDB not available): {}", std::string(filePath)));
 #endif
     }
 }
@@ -41,7 +41,7 @@ std::shared_ptr<IModel> ModelLoader::LoadModel(const std::string& name, std::str
 {
     if (pool_.Contains(name))
     {
-        throw InvalidArgumentError("Model with name '" + name + "' already exists in pool");
+        throw InvalidArgumentError(std::format("Model with name '{}' already exists in pool", name));
     }
 
     const auto format = ModelTypeFromExtName(std::string(filePath));
@@ -55,7 +55,7 @@ std::shared_ptr<IModel> ModelLoader::LoadModel(const std::string& name, std::str
         auto model = std::make_shared<IglModel>();
         if (!model->Load(filePath))
         {
-            throw RuntimeError("Failed to load mesh model: " + std::string(filePath));
+            throw RuntimeError(std::format("Failed to load mesh model: {}", std::string(filePath)));
         }
         return pool_.insert(name, std::static_pointer_cast<IModel>(model));
     }
@@ -66,16 +66,15 @@ std::shared_ptr<IModel> ModelLoader::LoadModel(const std::string& name, std::str
         auto model = std::make_shared<OcctModel>();
         if (!model->Load(filePath))
         {
-            throw RuntimeError("Failed to load BRep model: " + std::string(filePath));
+            throw RuntimeError(std::format("Failed to load BRep model: {}", std::string(filePath)));
         }
         return pool_.insert(name, std::static_pointer_cast<IModel>(model));
 #else
-        throw RuntimeError("BRep format is not supported on this platform (OCCT not available): " +
-                           std::string(filePath));
+        throw RuntimeError(std::format("BRep format is not supported on this platform (OCCT not available): {}", std::string(filePath)));
 #endif
     }
 
-    throw InvalidArgumentError("Unsupported model format: " + std::string(filePath));
+    throw InvalidArgumentError(std::format("Unsupported model format: {}", std::string(filePath)));
 }
 
 const std::shared_ptr<IModel> ModelLoader::GetModel(const std::string& name) const
@@ -171,12 +170,12 @@ std::shared_ptr<IModel> ModelLoader::ThickSolidModel(const std::string& sourceNa
     auto src = GetModel(sourceName);
     if (!src)
     {
-        throw InvalidArgumentError("Source model '" + sourceName + "' not found");
+        throw InvalidArgumentError(std::format("Source model '{}' not found", sourceName));
     }
     auto* occtSrc = dynamic_cast<OcctModel*>(src.get());
     if (!occtSrc)
     {
-        throw RuntimeError("ThickSolid requires an OcctModel, but '" + sourceName + "' is not an OcctModel");
+        throw RuntimeError(std::format("ThickSolid requires an OcctModel, but '{}' is not an OcctModel", sourceName));
     }
     auto result = std::make_shared<OcctModel>(ThickSolid(*occtSrc, thickness));
     return pool_.insert(resultName, std::static_pointer_cast<IModel>(result));
@@ -193,12 +192,12 @@ std::shared_ptr<IModel> ModelLoader::ThickSolidModel(const std::string& sourceNa
     auto src = GetModel(sourceName);
     if (!src)
     {
-        throw InvalidArgumentError("Source model '" + sourceName + "' not found");
+        throw InvalidArgumentError(std::format("Source model '{}' not found", sourceName));
     }
     auto* occtSrc = dynamic_cast<OcctModel*>(src.get());
     if (!occtSrc)
     {
-        throw RuntimeError("ThickSolid requires an OcctModel, but '" + sourceName + "' is not an OcctModel");
+        throw RuntimeError(std::format("ThickSolid requires an OcctModel, but '{}' is not an OcctModel", sourceName));
     }
     auto result = std::make_shared<OcctModel>(ThickSolid(*occtSrc, closingFaces, thickness));
     return pool_.insert(resultName, std::static_pointer_cast<IModel>(result));
@@ -243,9 +242,9 @@ std::shared_ptr<IModel> ModelLoader::BooleanIntersection(const std::string& left
     auto left = GetModel(leftName);
     auto right = GetModel(rightName);
     if (!left)
-        throw InvalidArgumentError("Left model '" + leftName + "' not found");
+        throw InvalidArgumentError(std::format("Left model '{}' not found", leftName));
     if (!right)
-        throw InvalidArgumentError("Right model '" + rightName + "' not found");
+        throw InvalidArgumentError(std::format("Right model '{}' not found", rightName));
 
 #ifdef USE_OCCT
     auto* occtL = dynamic_cast<OcctModel*>(left.get());
@@ -269,9 +268,9 @@ std::shared_ptr<IModel> ModelLoader::BooleanDifference(const std::string& leftNa
     auto left = GetModel(leftName);
     auto right = GetModel(rightName);
     if (!left)
-        throw InvalidArgumentError("Left model '" + leftName + "' not found");
+        throw InvalidArgumentError(std::format("Left model '{}' not found", leftName));
     if (!right)
-        throw InvalidArgumentError("Right model '" + rightName + "' not found");
+        throw InvalidArgumentError(std::format("Right model '{}' not found", rightName));
 
 #ifdef USE_OCCT
     auto* occtL = dynamic_cast<OcctModel*>(left.get());
@@ -295,9 +294,9 @@ std::shared_ptr<IModel> ModelLoader::BooleanXor(const std::string& leftName, con
     auto left = GetModel(leftName);
     auto right = GetModel(rightName);
     if (!left)
-        throw InvalidArgumentError("Left model '" + leftName + "' not found");
+        throw InvalidArgumentError(std::format("Left model '{}' not found", leftName));
     if (!right)
-        throw InvalidArgumentError("Right model '" + rightName + "' not found");
+        throw InvalidArgumentError(std::format("Right model '{}' not found", rightName));
 
 #ifdef USE_OCCT
     auto* occtL = dynamic_cast<OcctModel*>(left.get());
@@ -327,7 +326,7 @@ static OpenVdbModel& AsOpenVdbModel(const std::shared_ptr<IModel>& model, const 
     auto* vdb = dynamic_cast<OpenVdbModel*>(model.get());
     if (!vdb)
     {
-        throw RuntimeError("Model '" + name + "' is not a point cloud (OpenVdbModel)");
+        throw RuntimeError(std::format("Model '{}' is not a point cloud (OpenVdbModel)", name));
     }
     return *vdb;
 }
@@ -341,7 +340,7 @@ std::shared_ptr<IModel> ModelLoader::PointCloudToMesh(const std::string& sourceN
     auto src = GetModel(sourceName);
     if (!src)
     {
-        throw InvalidArgumentError("Source model '" + sourceName + "' not found");
+        throw InvalidArgumentError(std::format("Source model '{}' not found", sourceName));
     }
 
     auto& vdbModel = AsOpenVdbModel(src, sourceName);
@@ -349,7 +348,7 @@ std::shared_ptr<IModel> ModelLoader::PointCloudToMesh(const std::string& sourceN
 
     if (faces.rows() == 0)
     {
-        throw RuntimeError("Point cloud to mesh reconstruction failed for '" + sourceName + "'");
+        throw RuntimeError(std::format("Point cloud to mesh reconstruction failed for '{}'", sourceName));
     }
 
     auto result = std::make_shared<IglModel>(std::move(vertices), std::move(faces));
@@ -363,11 +362,11 @@ std::shared_ptr<IModel> ModelLoader::MergePointClouds(const std::string& leftNam
     auto right = GetModel(rightName);
     if (!left)
     {
-        throw InvalidArgumentError("Left model '" + leftName + "' not found");
+        throw InvalidArgumentError(std::format("Left model '{}' not found", leftName));
     }
     if (!right)
     {
-        throw InvalidArgumentError("Right model '" + rightName + "' not found");
+        throw InvalidArgumentError(std::format("Right model '{}' not found", rightName));
     }
 
     auto& vdbLeft = AsOpenVdbModel(left, leftName);
@@ -384,7 +383,7 @@ std::shared_ptr<IModel> ModelLoader::DownsamplePointCloud(const std::string& sou
     auto src = GetModel(sourceName);
     if (!src)
     {
-        throw InvalidArgumentError("Source model '" + sourceName + "' not found");
+        throw InvalidArgumentError(std::format("Source model '{}' not found", sourceName));
     }
 
     auto& vdbModel = AsOpenVdbModel(src, sourceName);
@@ -400,7 +399,7 @@ std::shared_ptr<IModel> ModelLoader::RemovePointCloudOutliers(const std::string&
     auto src = GetModel(sourceName);
     if (!src)
     {
-        throw InvalidArgumentError("Source model '" + sourceName + "' not found");
+        throw InvalidArgumentError(std::format("Source model '{}' not found", sourceName));
     }
 
     auto& vdbModel = AsOpenVdbModel(src, sourceName);
@@ -414,7 +413,7 @@ Eigen::Vector3f ModelLoader::PointCloudCentroid(const std::string& sourceName) c
     auto src = GetModel(sourceName);
     if (!src)
     {
-        throw InvalidArgumentError("Source model '" + sourceName + "' not found");
+        throw InvalidArgumentError(std::format("Source model '{}' not found", sourceName));
     }
 
     auto& vdbModel = AsOpenVdbModel(src, sourceName);
@@ -426,7 +425,7 @@ Eigen::MatrixXf ModelLoader::PointCloudNormals(const std::string& sourceName, st
     auto src = GetModel(sourceName);
     if (!src)
     {
-        throw InvalidArgumentError("Source model '" + sourceName + "' not found");
+        throw InvalidArgumentError(std::format("Source model '{}' not found", sourceName));
     }
 
     auto& vdbModel = AsOpenVdbModel(src, sourceName);
@@ -438,7 +437,7 @@ std::size_t ModelLoader::PointCloudCount(const std::string& sourceName) const
     auto src = GetModel(sourceName);
     if (!src)
     {
-        throw InvalidArgumentError("Source model '" + sourceName + "' not found");
+        throw InvalidArgumentError(std::format("Source model '{}' not found", sourceName));
     }
 
     auto& vdbModel = AsOpenVdbModel(src, sourceName);
