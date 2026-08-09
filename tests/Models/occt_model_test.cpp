@@ -8,19 +8,25 @@ using namespace HsBa::Slicer;
 BOOST_AUTO_TEST_CASE(create_box_and_properties)
 {
     auto box = OcctModel::CreateBox(Eigen::Vector3f{1.0f, 2.0f, 3.0f});
-    BOOST_CHECK(!box.TriangleMesh().first.size() || true);  // Triangle mesh may be empty without tessellation
-    float vol = box.Volume();
-    BOOST_CHECK(vol > 0.0f);
+    // OCCT 实体体积精确为 1×2×3 = 6.0
+    BOOST_CHECK_CLOSE(box.Volume(), 6.0f, 1e-3);
     Eigen::Vector3f mn, mx;
     box.BoundingBox(mn, mx);
-    BOOST_CHECK(mx.x() - mn.x() > 0.0f);
+    // CreateBox 以原点为角点，包围盒尺寸精确为 (1, 2, 3)
+    BOOST_CHECK_SMALL(mn.x(), 1e-6f);
+    BOOST_CHECK_SMALL(mn.y(), 1e-6f);
+    BOOST_CHECK_SMALL(mn.z(), 1e-6f);
+    BOOST_CHECK_CLOSE(mx.x(), 1.0f, 1e-3);
+    BOOST_CHECK_CLOSE(mx.y(), 2.0f, 1e-3);
+    BOOST_CHECK_CLOSE(mx.z(), 3.0f, 1e-3);
 }
 
 BOOST_AUTO_TEST_CASE(create_sphere_and_volume)
 {
     auto s = OcctModel::CreateSphere(0.5f, 2);
-    float vol = s.Volume();
-    BOOST_CHECK(vol > 0.0f);
+    // OCCT 球体体积精确为 4/3·π·r³
+    const float expectedVolume = 4.0f / 3.0f * 3.14159265358979f * 0.5f * 0.5f * 0.5f;
+    BOOST_CHECK_CLOSE(s.Volume(), expectedVolume, 1e-2);
 }
 
 // OCCT boolean tests guarded by build-time availability — OCCT test only added when
@@ -30,18 +36,15 @@ BOOST_AUTO_TEST_CASE(boolean_operations)
     auto a = OcctModel::CreateBox(Eigen::Vector3f{1.0f, 1.0f, 1.0f});
     auto b = OcctModel::CreateBox(Eigen::Vector3f{1.0f, 1.0f, 1.0f});
     b.Translate(Eigen::Vector3f{0.5f, 0.0f, 0.0f});
+    // 两个单位立方体 x 方向重叠 0.5：并集 1.5、交集 0.5、差集 0.5、异或 1.0
     auto u = Union(a, b);
     auto inter = Intersection(a, b);
     auto diff = Difference(a, b);
     auto xr = Xor(a, b);
-    BOOST_CHECK(u.Volume() > 0.0f);
-    BOOST_CHECK(inter.Volume() > 0.0f);
-    BOOST_CHECK(diff.Volume() >= 0.0f);
-    BOOST_CHECK(xr.Volume() > 0.0f);
-    auto [uv, uf] = u.TriangleMesh();
-    auto [iv, ifa] = inter.TriangleMesh();
-    BOOST_CHECK(uv.rows() >= 0);
-    BOOST_CHECK(iv.rows() >= 0);
+    BOOST_CHECK_CLOSE(u.Volume(), 1.5f, 1e-2);
+    BOOST_CHECK_CLOSE(inter.Volume(), 0.5f, 1e-2);
+    BOOST_CHECK_CLOSE(diff.Volume(), 0.5f, 1e-2);
+    BOOST_CHECK_CLOSE(xr.Volume(), 1.0f, 1e-2);
 }
 
 BOOST_AUTO_TEST_CASE(create_prime_single_polygon)
@@ -92,13 +95,14 @@ BOOST_AUTO_TEST_CASE(create_prime_polygon_with_hole)
     // Extrude with height 1.5
     auto prism = OcctModel::CreatePrime(paths, Eigen::Vector3f{0.0f, 0.0f, 1.5f});
 
-    // Volume calculation depends on how OCCT handles the polygon with holes
-    // The actual volume may vary based on triangulation and boolean operations
-    float vol = prism.Volume();
-    BOOST_CHECK(vol > 0.0f);  // Just verify it's positive
+    // 外方 2×2 减去洞 1×1，底面积 3.0 × 高度 1.5 = 体积精确 4.5
+    BOOST_CHECK_CLOSE(prism.Volume(), 4.5f, 1e-2);
 
-    // Expected: if hole is properly handled, volume should be between 3.0 and 6.0
-    BOOST_CHECK(vol >= 3.0f && vol <= 6.0f);
+    Eigen::Vector3f mn, mx;
+    prism.BoundingBox(mn, mx);
+    BOOST_CHECK_CLOSE(mx.x() - mn.x(), 2.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.y() - mn.y(), 2.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.z() - mn.z(), 1.5f, 1e-2);
 
     // Note: TriangleMesh() requires explicit tessellation for CAD models
 }
@@ -115,14 +119,16 @@ BOOST_AUTO_TEST_CASE(create_prime_non_planar_direction)
     // Extrude in diagonal direction
     auto prism = OcctModel::CreatePrime(rect, Eigen::Vector3f{1.0f, 1.0f, 1.0f});
 
-    // Check that the prism was created successfully
-    float vol = prism.Volume();
-    BOOST_CHECK(vol > 0.0f);
+    // 斜拉伸体积 = 底面积 × z 方向分量 = 1.0
+    BOOST_CHECK_CLOSE(prism.Volume(), 1.0f, 1e-2);
 
-    // Check bounding box extends in all directions
+    // 包围盒：底面 [0,1]² 沿 (1,1,1) 拉伸，范围精确为 [0,2]×[0,2]×[0,1]
     Eigen::Vector3f mn, mx;
     prism.BoundingBox(mn, mx);
-    BOOST_CHECK(mx.x() > mn.x());
-    BOOST_CHECK(mx.y() > mn.y());
-    BOOST_CHECK(mx.z() > mn.z());
+    BOOST_CHECK_SMALL(mn.x(), 1e-6f);
+    BOOST_CHECK_SMALL(mn.y(), 1e-6f);
+    BOOST_CHECK_SMALL(mn.z(), 1e-6f);
+    BOOST_CHECK_CLOSE(mx.x(), 2.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.y(), 2.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.z(), 1.0f, 1e-2);
 }

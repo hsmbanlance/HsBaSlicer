@@ -265,6 +265,7 @@ set(ALL_TEST_TARGETS
   static_reflect_test
   support_test
   model_loader_test
+  openvdb_model_test
 )
 
 if(TARGET HsBaSlicerCADModel)
@@ -820,6 +821,35 @@ if(HSBA_RUN_TESTS_AFTER_BUILD)
   )
 endif()
 
+## OpenVDB model tests
+add_executable(openvdb_model_test
+    "Models/openvdb_model_test.cpp"
+)
+
+target_link_libraries(openvdb_model_test
+    HsBaSlicerPointCloud
+    HsBaSlicerBase
+    Eigen3::Eigen
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(openvdb_model_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME openvdb_model_test
+  COMMAND $<TARGET_FILE:openvdb_model_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET openvdb_model_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R openvdb_model_test
+  )
+endif()
+
 ## StructXml tests
 add_executable(struct_xml_test
     "ConfigMap/struct_xml_test.cpp"
@@ -872,4 +902,94 @@ if(HSBA_RUN_TESTS_AFTER_BUILD)
   add_custom_command(TARGET struct_yaml_test POST_BUILD
     COMMAND ${CMAKE_CTEST_COMMAND} -V -R struct_yaml_test
   )
+endif()
+
+## UserCustomPointCloudModel (mock dll) tests
+if(TARGET HsBaSlicerPointCloud AND HSBA_USE_DLL_LOADER)
+  # mock point cloud dll loaded at runtime by the test, exports "mockpc_" prefixed functions
+  add_library(mock_point_cloud_dll SHARED
+      "PointCloud/mock_point_cloud_dll.cpp"
+  )
+
+  target_link_libraries(mock_point_cloud_dll
+      PRIVATE
+      HsBaSlicerBase
+      Eigen3::Eigen
+  )
+
+  add_executable(user_custom_point_cloud_model_test
+      "PointCloud/user_custom_point_cloud_model_test.cpp"
+  )
+
+  # the mock dll must exist before the test runs right after build
+  add_dependencies(user_custom_point_cloud_model_test mock_point_cloud_dll)
+
+  target_link_libraries(user_custom_point_cloud_model_test
+      PRIVATE
+      HsBaSlicerPointCloud
+  )
+
+  # locate the mock dll by absolute path in the test, relative loading depends on the cwd
+  target_compile_definitions(user_custom_point_cloud_model_test
+      PRIVATE
+      MOCK_POINT_CLOUD_DLL_DIR="$<TARGET_FILE_DIR:mock_point_cloud_dll>"
+  )
+
+  enable_testing()
+  add_test(
+    NAME user_custom_point_cloud_model_test
+    COMMAND $<TARGET_FILE:user_custom_point_cloud_model_test>
+    WORKING_DIRECTORY $<TARGET_FILE_DIR:user_custom_point_cloud_model_test>
+  )
+
+  if(HSBA_RUN_TESTS_AFTER_BUILD)
+    add_custom_command(TARGET user_custom_point_cloud_model_test POST_BUILD
+      COMMAND ${CMAKE_CTEST_COMMAND} -V -R user_custom_point_cloud_model_test
+    )
+  endif()
+endif()
+
+## UserCustomCADModel (mock dll) tests
+if(TARGET HsBaSlicerCADModel AND HSBA_USE_DLL_LOADER)
+  # mock cad dll loaded at runtime by the test, exports "mockcad_" prefixed functions
+  add_library(mock_cad_dll SHARED
+      "CADModel/mock_cad_dll.cpp"
+  )
+
+  target_link_libraries(mock_cad_dll
+      PRIVATE
+      HsBaSlicerBase
+      Eigen3::Eigen
+  )
+
+  add_executable(user_custom_cad_model_test
+      "CADModel/user_custom_cad_model_test.cpp"
+  )
+
+  # the mock dll must exist before the test runs right after build
+  add_dependencies(user_custom_cad_model_test mock_cad_dll)
+
+  target_link_libraries(user_custom_cad_model_test
+      PRIVATE
+      HsBaSlicerCADModel
+  )
+
+  # locate the mock dll by absolute path in the test, relative loading depends on the cwd
+  target_compile_definitions(user_custom_cad_model_test
+      PRIVATE
+      MOCK_CAD_DLL_DIR="$<TARGET_FILE_DIR:mock_cad_dll>"
+  )
+
+  enable_testing()
+  add_test(
+    NAME user_custom_cad_model_test
+    COMMAND $<TARGET_FILE:user_custom_cad_model_test>
+    WORKING_DIRECTORY $<TARGET_FILE_DIR:user_custom_cad_model_test>
+  )
+
+  if(HSBA_RUN_TESTS_AFTER_BUILD)
+    add_custom_command(TARGET user_custom_cad_model_test POST_BUILD
+      COMMAND ${CMAKE_CTEST_COMMAND} -V -R user_custom_cad_model_test
+    )
+  endif()
 endif()

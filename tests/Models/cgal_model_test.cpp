@@ -1,6 +1,9 @@
 #define BOOST_TEST_MODULE CgalModelTests
 #include <boost/test/included/unit_test.hpp>
 
+#include <cmath>
+#include <numbers>
+
 #include "meshmodel/CgalModel.hpp"
 
 using namespace HsBa::Slicer;
@@ -9,10 +12,18 @@ BOOST_AUTO_TEST_CASE(create_box_and_trianglemesh)
 {
     auto box = CgalModel::CreateBox(Eigen::Vector3f{1.0f, 1.0f, 1.0f});
     auto [v, f] = box.TriangleMesh();
-    BOOST_CHECK(v.rows() > 0);
-    BOOST_CHECK(f.rows() > 0);
-    float vol = box.Volume();
-    BOOST_CHECK(vol > 0.0f);
+    // 单位立方体：8 个顶点，6 个面三角化后 12 个三角形
+    BOOST_CHECK_EQUAL(v.rows(), 8);
+    BOOST_CHECK_EQUAL(f.rows(), 12);
+    BOOST_CHECK_CLOSE(box.Volume(), 1.0f, 1e-3);
+    Eigen::Vector3f mn, mx;
+    box.BoundingBox(mn, mx);
+    BOOST_CHECK_CLOSE(mn.x(), -0.5f, 1e-3);
+    BOOST_CHECK_CLOSE(mn.y(), -0.5f, 1e-3);
+    BOOST_CHECK_CLOSE(mn.z(), -0.5f, 1e-3);
+    BOOST_CHECK_CLOSE(mx.x(), 0.5f, 1e-3);
+    BOOST_CHECK_CLOSE(mx.y(), 0.5f, 1e-3);
+    BOOST_CHECK_CLOSE(mx.z(), 0.5f, 1e-3);
 }
 
 BOOST_AUTO_TEST_CASE(create_torus_and_properties)
@@ -21,6 +32,9 @@ BOOST_AUTO_TEST_CASE(create_torus_and_properties)
     auto [v, f] = t.TriangleMesh();
     BOOST_CHECK(v.rows() > 0);
     BOOST_CHECK(f.rows() > 0);
+    // 理论体积 2π²Rr² ≈ 1.2337，离散网格略小，允许 25% 容差
+    const float expectedVolume = 2.0f * std::numbers::pi_v<float> * std::numbers::pi_v<float> * 1.0f * 0.25f * 0.25f;
+    BOOST_CHECK_CLOSE(t.Volume(), expectedVolume, 25.0);
 }
 
 // Boolean operations for CGAL guarded by compile-time macro to allow skipping in Debug.
@@ -31,18 +45,19 @@ BOOST_AUTO_TEST_CASE(boolean_operations)
     auto a = CgalModel::CreateBox(Eigen::Vector3f{1.0f, 1.0f, 1.0f});
     auto b = CgalModel::CreateBox(Eigen::Vector3f{1.0f, 1.0f, 1.0f});
     b.Translate(Eigen::Vector3f{0.4f, 0.0f, 0.0f});
+    // 两个单位立方体 x 方向重叠 0.6：并集 1.4、交集 0.6、差集 0.4、异或 0.8
     auto u = Union(a, b);
-    // auto inter = Intersection(a, b);
-    // auto diff = Difference(a, b);
-    // auto xr = Xor(a, b);
-    BOOST_CHECK(u.Volume() > 0.0f);
-    // BOOST_CHECK(inter.Volume() > 0.0f);
-    // BOOST_CHECK(diff.Volume() >= 0.0f);
-    // BOOST_CHECK(xr.Volume() > 0.0f);
+    auto inter = Intersection(a, b);
+    auto diff = Difference(a, b);
+    auto xr = Xor(a, b);
+    BOOST_CHECK_CLOSE(u.Volume(), 1.4f, 1e-2);
+    BOOST_CHECK_CLOSE(inter.Volume(), 0.6f, 1e-2);
+    BOOST_CHECK_CLOSE(diff.Volume(), 0.4f, 1e-2);
+    BOOST_CHECK_CLOSE(xr.Volume(), 0.8f, 1e-2);
     auto [uv, uf] = u.TriangleMesh();
-    // auto [iv, ifa] = inter.TriangleMesh();
     BOOST_CHECK(uv.rows() > 0);
-    // BOOST_CHECK(iv.rows() >= 0);
+    BOOST_CHECK(uf.rows() > 0);
+    BOOST_CHECK(uv.rows() >= 8);  // 并集体至少 8 个顶点
 }
 #endif  // !DISABLE_BOOLEAN_OPERATIONS_TESTS
 
@@ -65,18 +80,18 @@ BOOST_AUTO_TEST_CASE(create_prime_single_polygon)
         BOOST_CHECK(v.rows() > 0);
         BOOST_CHECK(f.rows() > 0);
 
-        // Check volume
-        float vol = prism.Volume();
-
-        // Just verify it's positive and reasonable
-        BOOST_CHECK(vol > 0.0f);
-        BOOST_CHECK(vol < 3.0f);
+        // 三角形底面积 0.5 × 高度 2.0 = 体积 1.0（CGAL 精确，取绝对值容忍面朝向差异）
+        BOOST_CHECK_CLOSE(std::abs(prism.Volume()), 1.0f, 1e-2);
 
         // Verify bounding box
         Eigen::Vector3f mn, mx;
         prism.BoundingBox(mn, mx);
-        BOOST_CHECK_CLOSE(mn.z(), 0.0f, 0.01);
-        BOOST_CHECK_CLOSE(mx.z(), 2.0f, 0.01);
+        BOOST_CHECK_CLOSE(mn.x(), 0.0f, 1e-2);
+        BOOST_CHECK_CLOSE(mn.y(), 0.0f, 1e-2);
+        BOOST_CHECK_CLOSE(mn.z(), 0.0f, 1e-2);
+        BOOST_CHECK_CLOSE(mx.x(), 1.0f, 1e-2);
+        BOOST_CHECK_CLOSE(mx.y(), 1.0f, 1e-2);
+        BOOST_CHECK_CLOSE(mx.z(), 2.0f, 1e-2);
     }
     catch (const std::exception& e)
     {
@@ -117,12 +132,14 @@ BOOST_AUTO_TEST_CASE(create_prime_polygon_with_hole)
         BOOST_CHECK(v.rows() > 0);
         BOOST_CHECK(f.rows() > 0);
 
-        // Volume calculation for polygon with holes
-        float vol = prism.Volume();
+        // 外方 2×2 减去洞 1×1，底面积 3.0 × 高度 1.5 = 体积 4.5
+        BOOST_CHECK_CLOSE(std::abs(prism.Volume()), 4.5f, 1e-2);
 
-        // Just verify it's positive and reasonable
-        BOOST_CHECK(vol > 0.0f);
-        BOOST_CHECK(vol < 10.0f);  // Allow wide margin
+        Eigen::Vector3f mn, mx;
+        prism.BoundingBox(mn, mx);
+        BOOST_CHECK_CLOSE(mx.x() - mn.x(), 2.0f, 1e-2);
+        BOOST_CHECK_CLOSE(mx.y() - mn.y(), 2.0f, 1e-2);
+        BOOST_CHECK_CLOSE(mx.z() - mn.z(), 1.5f, 1e-2);
     }
     catch (const std::exception& e)
     {
@@ -150,15 +167,13 @@ BOOST_AUTO_TEST_CASE(create_prime_complex_polygon)
     BOOST_CHECK(v.rows() > 0);
     BOOST_CHECK(f.rows() > 0);
 
-    // L-shape area = 2*1 + 1*1 = 3.0, volume = 3.0 * 3.0 = 9.0
-    float vol = prism.Volume();
+    // L 形面积 = 2*1 + 1*1 = 3.0，体积 = 3.0 * 3.0 = 9.0（CGAL 精确）
+    BOOST_CHECK_CLOSE(std::abs(prism.Volume()), 9.0f, 1e-2);
 
-    // The actual volume may differ due to triangulation
-    // Just verify it's positive and reasonable
-    BOOST_CHECK(vol > 0.0f);
-    BOOST_CHECK(vol < 15.0f);  // Should be around 9.0, allow margin
-
-    // Note: Direct access to mesh_ is not available in tests (private member)
-    // The Volume() and TriangleMesh() checks are sufficient validation
+    Eigen::Vector3f mn, mx;
+    prism.BoundingBox(mn, mx);
+    BOOST_CHECK_CLOSE(mx.x() - mn.x(), 2.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.y() - mn.y(), 2.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.z() - mn.z(), 3.0f, 1e-2);
 }
 #endif  // !DISABLE_ADVANCE_OPERATIONS_TESTS

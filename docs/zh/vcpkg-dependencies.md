@@ -2,6 +2,16 @@
 
 本文档说明了`vcpkg.json`中各依赖包的平台兼容性配置。
 
+## 许可证
+
+项目许可取决于构建是否链接 Copyleft 内核：
+
+- **CGAL**（`GPL-3.0-or-later`）与 **OpenCascade**（`LGPL-2.1-only`）为 Copyleft 许可，仅在下方依赖矩阵所列平台可用（桌面 Windows/Linux/macOS，另 Android 可用 CGAL）。
+- 包含任一 Copyleft 内核的构建，采用 **GPL-3.0-or-later** 许可。
+- 不包含任何 Copyleft 内核的构建（iOS 与游戏主机），采用 **MIT** 许可。
+
+在 `vcpkg.json` 中通过顶层 `license` 为 `MIT`、外加 `license` 为 `GPL-3.0-or-later` 的 `copyleft` feature 来表达；该 feature 在 `windows | linux | osx | android` 平台默认启用。构建的实际许可以在配置期生成到 `version.cpp`，并通过 `GetVersionInfo()` / `HsBaGetVersionJson()` 查询。
+
 ## 平台排除说明
 
 ### Android平台排除的包
@@ -43,6 +53,7 @@
 | opencv | ✓ | ✓ | ✓ | ✓ | ✗ |
 | opencascade | ✓ | ✓ | ✓ | ✗ | ✗ |
 | sqlpp11 (MySQL/PG) | ✓ | ✓ | ✓ | ✗ | ✗ |
+| opencascade | ✓ | ✓ | ✓ | ✗ | ✗ |
 
 ## 构建建议
 

@@ -195,4 +195,16 @@ cmake --install <build_dir> --prefix <install_prefix> --config Release
 
 ## 许可证 / License
 
-见项目根目录下的 LICENSE.txt。
+本项目采用**条件双许可（Conditional Dual License）**，具体取决于构建是否链接 Copyleft 内核（CGAL、OpenCascade）：
+
+- 构建**不包含**任何 GPL/LGPL 组件时（如 iOS、游戏主机平台，不使用 CGAL / OpenCascade），采用 **MIT** 许可。
+- 构建**包含** GPL/LGPL 组件时（如桌面与 Android 平台，使用 CGAL或OpenCascade），采用 **GPL-3.0-or-later** 许可。
+
+某一构建的实际许可以在配置期由 `vcpkg.json` 判定，并可在运行时通过 `GetVersionInfo()` / `HsBaGetVersionJson()` 的 `license` 字段查询。完整条款见根目录 [LICENSE.txt](./LICENSE.txt)。
+
+This project uses a **conditional dual license**, depending on whether the build links copyleft kernels (CGAL, OpenCascade):
+
+- Builds that do **not** include any GPL/LGPL component (e.g. iOS, game consoles — without CGAL / OpenCascade) are licensed under **MIT**.
+- Builds that **do** include a GPL/LGPL component (e.g. desktop and Android — with CGAL or OpenCascade) are licensed under **GPL-3.0-or-later**.
+
+The effective license of a given build is determined from `vcpkg.json` at configure time and can be queried at runtime via the `license` field of `GetVersionInfo()` / `HsBaGetVersionJson()`. See [LICENSE.txt](./LICENSE.txt) for the full terms.

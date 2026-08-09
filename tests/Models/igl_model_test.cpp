@@ -1,6 +1,9 @@
 #define BOOST_TEST_MODULE IglModelTests
 #include <boost/test/included/unit_test.hpp>
 
+#include <cmath>
+#include <numbers>
+
 #include "meshmodel/IglModel.hpp"
 
 using namespace HsBa::Slicer;
@@ -9,20 +12,33 @@ BOOST_AUTO_TEST_CASE(create_box_and_normals)
 {
     auto box = IglModel::CreateBox(Eigen::Vector3f{1.0f, 1.0f, 1.0f});
     auto [v, f] = box.TriangleMesh();
-    BOOST_CHECK(v.rows() > 0);
-    BOOST_CHECK(f.rows() > 0);
+    // 单位立方体：8 顶点 12 三角形，体积精确为 1.0
+    BOOST_CHECK_EQUAL(v.rows(), 8);
+    BOOST_CHECK_EQUAL(f.rows(), 12);
+    BOOST_CHECK_CLOSE(box.Volume(), 1.0f, 1e-3);
     auto normals = box.ComputeFaceNormals();
-    BOOST_CHECK(normals.rows() == f.rows());
+    BOOST_CHECK_EQUAL(normals.rows(), f.rows());
+    // 面法线必须为单位向量
+    for (Eigen::Index i = 0; i < normals.rows(); ++i)
+    {
+        BOOST_CHECK_CLOSE(normals.row(i).norm(), 1.0f, 1e-3);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(volume_and_transform)
 {
     auto cyl = IglModel::CreateCylinder(0.5f, 1.0f, 16);
-    float vol = cyl.Volume();
-    BOOST_CHECK(vol > 0.0f);
+    // 体积 = 正 16 边形面积 × 高 = (n/2)·r²·sin(2π/n)·h
+    const float expectedVolume = 8.0f * 0.25f * std::sin(2.0f * std::numbers::pi_v<float> / 16.0f) * 1.0f;
+    BOOST_CHECK_CLOSE(cyl.Volume(), expectedVolume, 0.1);
     Eigen::Vector3f mn, mx;
     cyl.BoundingBox(mn, mx);
-    BOOST_CHECK((mx - mn).norm() > 0.0f);
+    BOOST_CHECK_CLOSE(mn.x(), -0.5f, 1e-3);
+    BOOST_CHECK_CLOSE(mx.x(), 0.5f, 1e-3);
+    BOOST_CHECK_CLOSE(mn.y(), -0.5f, 1e-3);
+    BOOST_CHECK_CLOSE(mx.y(), 0.5f, 1e-3);
+    BOOST_CHECK_CLOSE(mn.z(), -0.5f, 1e-3);
+    BOOST_CHECK_CLOSE(mx.z(), 0.5f, 1e-3);
 }
 
 // Boolean operations for IGL guarded by compile-time macro to allow skipping in Debug.
@@ -31,7 +47,9 @@ BOOST_AUTO_TEST_CASE(boolean_operations)
 {
     auto a = IglModel::CreateBox(Eigen::Vector3f{1.0f, 1.0f, 1.0f});
     auto b = IglModel::CreateBox(Eigen::Vector3f{1.0f, 1.0f, 1.0f});
-    b.Translate(Eigen::Vector3f{0.3f, 0.0f, 0.0f});
+    // 沿对角线平移，以避免 y/z 方向面片共面（igl::mesh_boolean 对共面输入会返回空结果）
+    b.Translate(Eigen::Vector3f{0.3f, 0.3f, 0.3f});
+    // 重叠区为 0.7³ = 0.343：并集 1.657、交集 0.343、差集 0.657、异或 1.314
     auto u = Union(a, b);
     auto inter = Intersection(a, b);
     auto diff = Difference(a, b);
@@ -41,38 +59,14 @@ BOOST_AUTO_TEST_CASE(boolean_operations)
     auto [dv, dF] = diff.TriangleMesh();
     auto [xv, xF] = xr.TriangleMesh();
 
-    if (uv.rows() > 0)
-    {
-        BOOST_CHECK(uv.rows() > 0);
-    }
-    else
-    {
-        BOOST_TEST_MESSAGE("IGL Union produced empty mesh (operation may not be supported for these inputs);");
-    }
-    if (iv.rows() > 0)
-    {
-        BOOST_CHECK(iv.rows() >= 0);
-    }
-    else
-    {
-        BOOST_TEST_MESSAGE("IGL Intersection produced empty mesh (possible, acceptable result);");
-    }
-    if (dv.rows() > 0)
-    {
-        BOOST_CHECK(dv.rows() >= 0);
-    }
-    else
-    {
-        BOOST_TEST_MESSAGE("IGL Difference produced empty mesh (possible, acceptable result);");
-    }
-    if (xv.rows() > 0)
-    {
-        BOOST_CHECK(xv.rows() > 0);
-    }
-    else
-    {
-        BOOST_TEST_MESSAGE("IGL Xor produced empty mesh (operation may not be supported for these inputs);");
-    }
+    BOOST_REQUIRE(uv.rows() > 0);
+    BOOST_CHECK_CLOSE(u.Volume(), 1.657f, 1e-2);
+    BOOST_REQUIRE(iv.rows() > 0);
+    BOOST_CHECK_CLOSE(inter.Volume(), 0.343f, 1e-2);
+    BOOST_REQUIRE(dv.rows() > 0);
+    BOOST_CHECK_CLOSE(diff.Volume(), 0.657f, 1e-2);
+    BOOST_REQUIRE(xv.rows() > 0);
+    BOOST_CHECK_CLOSE(xr.Volume(), 1.314f, 1e-2);
 }
 #endif
 
@@ -89,26 +83,26 @@ BOOST_AUTO_TEST_CASE(create_prime_single_polygon)
 
     // Check mesh is valid first
     auto [v, f] = prism.TriangleMesh();
-    BOOST_CHECK(v.rows() > 0);
-    BOOST_CHECK(f.rows() > 0);
+    // 三角棱柱：上下各 3 顶点（去重后共 6 个），底面 2 三角形 + 侧面 6 三角形
+    BOOST_CHECK_EQUAL(v.rows(), 6);
+    BOOST_CHECK_EQUAL(f.rows(), 8);
 
-    // Check volume: triangle area = 0.5, height = 2.0, volume = 1.0
-    float vol = prism.Volume();
-
-    // The actual volume may differ due to triangulation and face orientation
-    // Just verify it's positive and reasonable
-    BOOST_CHECK(vol > 0.0f);
-    BOOST_CHECK(vol < 3.0f);  // Should be around 1.0, allow some margin
+    // 三角形面积 = 0.5，高度 = 2.0，体积精确为 1.0
+    BOOST_CHECK_CLOSE(prism.Volume(), 1.0f, 1e-2);
 
     // Verify bounding box
     Eigen::Vector3f mn, mx;
     prism.BoundingBox(mn, mx);
-    BOOST_CHECK_CLOSE(mn.z(), 0.0f, 0.01);
-    BOOST_CHECK_CLOSE(mx.z(), 2.0f, 0.01);
+    BOOST_CHECK_CLOSE(mn.x(), 0.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mn.y(), 0.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mn.z(), 0.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.x(), 1.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.y(), 1.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.z(), 2.0f, 1e-2);
 
     // Check normals were computed
     auto normals = prism.ComputeFaceNormals();
-    BOOST_CHECK(normals.rows() == f.rows());
+    BOOST_CHECK_EQUAL(normals.rows(), f.rows());
 }
 
 BOOST_AUTO_TEST_CASE(create_prime_polygon_with_hole)
@@ -139,15 +133,14 @@ BOOST_AUTO_TEST_CASE(create_prime_polygon_with_hole)
     BOOST_CHECK(v.rows() > 0);
     BOOST_CHECK(f.rows() > 0);
 
-    // Volume calculation for polygon with holes
-    // The actual volume depends on how Clipper2 handles the triangulation
-    float vol = prism.Volume();
+    // 外方 2×2 减去洞 1×1，底面积 3.0 × 高度 1.5 = 体积精确 4.5
+    BOOST_CHECK_CLOSE(prism.Volume(), 4.5f, 1e-2);
 
-    // Just verify it's positive and reasonable
-    // Expected range: if hole is properly subtracted, should be around 4.5
-    // But may vary based on triangulation
-    BOOST_CHECK(vol > 0.0f);
-    BOOST_CHECK(vol < 10.0f);  // Allow wide margin
+    Eigen::Vector3f mn, mx;
+    prism.BoundingBox(mn, mx);
+    BOOST_CHECK_CLOSE(mx.x() - mn.x(), 2.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.y() - mn.y(), 2.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.z() - mn.z(), 1.5f, 1e-2);
 }
 
 BOOST_AUTO_TEST_CASE(create_prime_complex_polygon)
@@ -169,16 +162,17 @@ BOOST_AUTO_TEST_CASE(create_prime_complex_polygon)
     BOOST_CHECK(v.rows() > 0);
     BOOST_CHECK(f.rows() > 0);
 
-    // L-shape area = 2*1 + 1*1 = 3.0, volume = 3.0 * 3.0 = 9.0
-    float vol = prism.Volume();
+    // L 形面积 = 2*1 + 1*1 = 3.0，体积 = 3.0 * 3.0 = 9.0（精确）
+    BOOST_CHECK_CLOSE(prism.Volume(), 9.0f, 1e-2);
 
-    // The actual volume may differ due to triangulation
-    // Just verify it's positive and reasonable
-    BOOST_CHECK(vol > 0.0f);
-    BOOST_CHECK(vol < 15.0f);  // Should be around 9.0, allow margin
+    // 顶点数 = 6 个轮廓点 × 上下两层
+    BOOST_CHECK_EQUAL(v.rows(), 12);
 
-    // Verify vertex count matches expected (6 vertices * 2 for top/bottom)
-    BOOST_CHECK(v.rows() >= 12);
+    Eigen::Vector3f mn, mx;
+    prism.BoundingBox(mn, mx);
+    BOOST_CHECK_CLOSE(mx.x() - mn.x(), 2.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.y() - mn.y(), 2.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.z() - mn.z(), 3.0f, 1e-2);
 }
 
 BOOST_AUTO_TEST_CASE(create_prime_non_planar_direction)
@@ -193,14 +187,16 @@ BOOST_AUTO_TEST_CASE(create_prime_non_planar_direction)
     // Extrude in diagonal direction
     auto prism = IglModel::CreatePrime(rect, Eigen::Vector3f{1.0f, 1.0f, 1.0f});
 
-    // Check that the prism was created successfully
-    float vol = prism.Volume();
-    BOOST_CHECK(vol > 0.0f);
+    // 斜切棱柱体积 = 底面积 × z 方向分量 = 1.0 × 1.0
+    BOOST_CHECK_CLOSE(prism.Volume(), 1.0f, 1e-2);
 
     // Check bounding box extends in all directions
     Eigen::Vector3f mn, mx;
     prism.BoundingBox(mn, mx);
-    BOOST_CHECK(mx.x() > mn.x());
-    BOOST_CHECK(mx.y() > mn.y());
-    BOOST_CHECK(mx.z() > mn.z());
+    BOOST_CHECK_CLOSE(mn.x(), 0.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mn.y(), 0.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mn.z(), 0.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.x(), 2.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.y(), 2.0f, 1e-2);
+    BOOST_CHECK_CLOSE(mx.z(), 1.0f, 1e-2);
 }

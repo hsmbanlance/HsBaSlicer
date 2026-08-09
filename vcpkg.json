@@ -1,5 +1,12 @@
 {
-  "license": "AGPL-3.0-or-later",
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "license": "MIT",
+  "default-features": [
+    {
+      "name": "copyleft",
+      "platform": "windows | linux | osx | android"
+    }
+  ],
   "dependencies": [
     {
       "name": "bit7z",
@@ -61,6 +68,10 @@
       "name": "opencascade",
       "platform": "windows | linux | osx "
     },
+    {
+      "name": "openvdb",
+      "platform": "windows | linux | osx"
+    },
     "protobuf",
     "rapidjson",
     "tinyxml2",
@@ -88,5 +99,11 @@
       "platform": "windows | linux | osx "
     },
     "magic-enum"
-  ]
+  ],
+  "features": {
+    "copyleft": {
+      "description": "Build with copyleft kernels (CGAL GPL-3.0-or-later, OpenCascade LGPL-2.1-only). Enabling this feature switches the project license from MIT to GPL-3.0-or-later.",
+      "license": "GPL-3.0-or-later"
+    }
+  }
 }

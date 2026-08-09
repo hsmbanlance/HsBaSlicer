@@ -5,6 +5,7 @@
 #include <Eigen/Dense>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <CGAL/Aff_transformation_3.h>
 #include <CGAL/Cartesian_converter.h>
@@ -67,6 +68,55 @@ public:
                                  const int minorSegments = 16);
     static CgalModel CreatePrime(const PolygonD& paths, const Eigen::Vector3f& direction);
     static CgalModel CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& direction);
+
+    // ========== Surface geodesic / curve / helix operations ==========
+
+    /** @brief Compute the shortest geodesic path on the surface between two points.
+     * @param source The starting point on the surface.
+     * @param target The ending point on the surface.
+     * @return A sequence of 3D points forming the geodesic path on the surface.
+     */
+    std::vector<Eigen::Vector3f> GeodesicPath(const Eigen::Vector3f& source,
+                                              const Eigen::Vector3f& target) const;
+
+    /** @brief Compute geodesic distances from a source point to all mesh vertices.
+     * @param source The source point on the surface.
+     * @return A vector of geodesic distances, one per mesh vertex (same order as TriangleMesh vertices).
+     */
+    std::vector<float> GeodesicDistance(const Eigen::Vector3f& source) const;
+
+    /** @brief Project a 3D point onto the closest position on the mesh surface.
+     * @param point The query point in 3D space.
+     * @return The closest point on the mesh surface.
+     */
+    Eigen::Vector3f ProjectPointOnSurface(const Eigen::Vector3f& point) const;
+
+    /** @brief Generate a spiral path on the mesh surface around a given axis.
+     * @param axisOrigin The origin of the spiral axis.
+     * @param axisDirection The direction of the spiral axis (normalized internally).
+     * @param turns Number of full turns of the spiral.
+     * @param samplesPerTurn Number of sample points per full turn.
+     * @param startRadius Starting radius from the axis.
+     * @param endRadius Ending radius from the axis.
+     * @return A sequence of 3D points forming the spiral on the surface.
+     */
+    std::vector<Eigen::Vector3f> SurfaceSpiral(const Eigen::Vector3f& axisOrigin,
+                                               const Eigen::Vector3f& axisDirection, float turns,
+                                               int samplesPerTurn = 64, float startRadius = 0.0f,
+                                               float endRadius = -1.0f) const;
+
+    /** @brief Generate a helix path on the mesh surface around a given axis.
+     * @param axisOrigin The origin of the helix axis.
+     * @param axisDirection The direction of the helix axis (normalized internally).
+     * @param turns Number of full turns of the helix.
+     * @param pitch Axial distance per full turn.
+     * @param radius Radius of the helix from the axis.
+     * @param samplesPerTurn Number of sample points per full turn.
+     * @return A sequence of 3D points forming the helix on the surface.
+     */
+    std::vector<Eigen::Vector3f> SurfaceHelix(const Eigen::Vector3f& axisOrigin,
+                                              const Eigen::Vector3f& axisDirection, float turns, float pitch,
+                                              float radius, int samplesPerTurn = 64) const;
 
 private:
     CGAL::Polyhedron_3<EpicKernel> mesh_;

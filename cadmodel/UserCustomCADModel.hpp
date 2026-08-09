@@ -60,7 +60,7 @@ class UserCustomCADModel : public IModel
 {
 public:
     UserCustomCADModel() = default;
-    ~UserCustomCADModel() = default;
+    ~UserCustomCADModel();
     void LoadDll(std::string_view dllPath, std::string_view addedFunName);          // load the dll
     void UnloadDll();                                                               // unload the dll
     bool Load(std::string_view fileName) override;                                  // load the model from a file
@@ -78,7 +78,8 @@ public:
                                                           // "union", "intersection", "difference"
     void BoundingBox(Eigen::Vector3f& min,
                      Eigen::Vector3f& max) const override;  // get the AA bounding box of the model
-    float Volume() const override;                          // get the volume of the model
+    float Volume() const override;                                                    // get the volume of the model
+    std::pair<Eigen::MatrixXf, Eigen::MatrixXi> TriangleMesh() const override;  // get igl style trianglemesh
 
 private:
     std::shared_ptr<UserCustomCADDll> dll_;

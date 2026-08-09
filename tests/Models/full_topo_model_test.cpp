@@ -2,6 +2,8 @@
 // Use the header-only variant to provide the test runner (avoids linking issues)
 #include <boost/test/included/unit_test.hpp>
 
+#include <cmath>
+
 #include "2D/IntPolygon.hpp"
 #include "base/IModel.hpp"
 #include "meshmodel/FullTopoModel.hpp"
@@ -56,34 +58,20 @@ BOOST_AUTO_TEST_CASE(slice_cube_at_zero)
     FullTopoModel topo(model);
 
     auto polys = topo.Slice(0.0f);
-    BOOST_CHECK(!polys.empty());
+    // [-1,1]³ 立方体在 z=0 处的截面是唯一的 2×2 正方形；
+    // z=0 恰为三角化对角线所在的退化切面，实现可能输出含共线点的 8 点轮廓，
+    // 因此只约束点数下限与精确面积，不强制最小点数表示
+    BOOST_REQUIRE_EQUAL(polys.size(), 1u);
+    BOOST_CHECK_GE(polys[0].size(), 4u);
+    // 整数化坐标下面积 = 4.0 × integerization²
+    const double expectedArea = 4.0 * integerization * integerization;
+    BOOST_CHECK_CLOSE(std::abs(Area(polys[0])), expectedArea, 1e-3);
 
-    // Expect at least one closed polygon with >= 4 vertices (square)
-    bool found = false;
-    for (const auto& poly : polys)
-    {
-        if (poly.size() >= 4)
-        {
-            found = true;
-            double area = Area(poly);
-            BOOST_CHECK_GT(area, 0.0);
-            break;
-        }
-    }
-    BOOST_CHECK(found);
-
-    // Also test UnSafeSlice returns some closed polygon
+    // UnSafeSlice 同样应返回唯一的闭合正方形
     auto ups = topo.UnSafeSlice(0.0f);
-    bool has_closed = false;
-    for (const auto& up : ups)
-    {
-        if (up.closed && up.path.size() >= 4)
-        {
-            has_closed = true;
-            break;
-        }
-    }
-    BOOST_CHECK(has_closed);
+    BOOST_REQUIRE_EQUAL(ups.size(), 1u);
+    BOOST_CHECK(ups[0].closed);
+    BOOST_CHECK_GE(ups[0].path.size(), 4u);
 }
 
 BOOST_AUTO_TEST_CASE(slice_cube_with_lua)
@@ -140,29 +128,17 @@ return polys
  )lua";
 
     auto polys = topo.SliceLua(script, 0.0f);
-    BOOST_CHECK(!polys.empty());
-    bool ok = false;
-    for (const auto& poly : polys)
-    {
-        if (poly.size() >= 4)
-        {
-            ok = true;
-            break;
-        }
-    }
-    BOOST_CHECK(ok);
+    // Lua 凸包应返回唯一的 4 顶点正方形凸包，面积 = 4.0
+    BOOST_REQUIRE_EQUAL(polys.size(), 1u);
+    BOOST_CHECK_EQUAL(polys[0].size(), 4u);
+    const double expectedArea = 4.0 * integerization * integerization;
+    BOOST_CHECK_CLOSE(std::abs(Area(polys[0])), expectedArea, 1e-3);
 
     // test UnSafeSliceLua as well
     auto ups = topo.UnSafeSliceLua(script, 0.0f);
-    BOOST_CHECK(!ups.empty());
-    bool has_closed = false;
-    for (const auto& up : ups)
-        if (up.closed && up.path.size() >= 4)
-        {
-            has_closed = true;
-            break;
-        }
-    BOOST_CHECK(has_closed);
+    BOOST_REQUIRE_EQUAL(ups.size(), 1u);
+    BOOST_CHECK(ups[0].closed);
+    BOOST_CHECK_EQUAL(ups[0].path.size(), 4u);
 }
 
 BOOST_AUTO_TEST_CASE(slice_accepts_repeated_vertex_closure)
@@ -174,17 +150,11 @@ BOOST_AUTO_TEST_CASE(slice_accepts_repeated_vertex_closure)
     FullTopoModel topo(vertices, triangles);
     auto polys = topo.Slice(0.5f);
 
-    BOOST_CHECK(!polys.empty());
-    bool found = false;
-    for (const auto& poly : polys)
-    {
-        if (poly.size() >= 3)
-        {
-            found = true;
-            break;
-        }
-    }
-    BOOST_CHECK(found);
+    // 四棱锥在 z=0.5 处的截面是边长 0.5 的正方形（面积 0.25）
+    BOOST_REQUIRE_EQUAL(polys.size(), 1u);
+    BOOST_CHECK_EQUAL(polys[0].size(), 4u);
+    const double expectedArea = 0.25 * integerization * integerization;
+    BOOST_CHECK_CLOSE(std::abs(Area(polys[0])), expectedArea, 1e-3);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

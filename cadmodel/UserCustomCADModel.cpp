@@ -32,7 +32,9 @@ UserCustomCADDll::CreateModelFunc UserCustomCADDll::GetCreateModelFunc() const
 {
     if (impl_->dll_.has(impl_->addedFunName_ + "_create_model"))
     {
-        return impl_->dll_.get<CreateModelFunc>(impl_->addedFunName_ + "_create_model");
+        // get requires the function type itself, not a function pointer typedef:
+        // with a pointer typedef it would dereference the symbol address
+        return impl_->dll_.get<IModel*()>(impl_->addedFunName_ + "_create_model");
     }
     return nullptr;
 }
@@ -40,7 +42,7 @@ UserCustomCADDll::CreateBox UserCustomCADDll::GetCreateBoxFunc() const
 {
     if (impl_->dll_.has(impl_->addedFunName_ + "_create_box"))
     {
-        return impl_->dll_.get<CreateBox>(impl_->addedFunName_);
+        return impl_->dll_.get<IModel*(float, float, float)>(impl_->addedFunName_ + "_create_box");
     }
     return nullptr;
 }
@@ -49,7 +51,7 @@ UserCustomCADDll::CreateSphere UserCustomCADDll::GetCreateSphereFunc() const
 {
     if (impl_->dll_.has(impl_->addedFunName_ + "_create_sphere"))
     {
-        return impl_->dll_.get<CreateSphere>(impl_->addedFunName_ + "_create_sphere");
+        return impl_->dll_.get<IModel*(float, int)>(impl_->addedFunName_ + "_create_sphere");
     }
     return nullptr;
 }
@@ -58,7 +60,7 @@ UserCustomCADDll::CreateCylinder UserCustomCADDll::GetCreateCylinderFunc() const
 {
     if (impl_->dll_.has(impl_->addedFunName_ + "_create_cylinder"))
     {
-        return impl_->dll_.get<CreateCylinder>(impl_->addedFunName_ + "_create_cylinder");
+        return impl_->dll_.get<IModel*(float, float, int)>(impl_->addedFunName_ + "_create_cylinder");
     }
     return nullptr;
 }
@@ -67,7 +69,7 @@ UserCustomCADDll::SetThicknessFunc UserCustomCADDll::GetSetThicknessFunc() const
 {
     if (impl_->dll_.has(impl_->addedFunName_ + "_set_thickness"))
     {
-        return impl_->dll_.get<SetThicknessFunc>(impl_->addedFunName_ + "_set_thickness");
+        return impl_->dll_.get<void(IModel*, float)>(impl_->addedFunName_ + "_set_thickness");
     }
     return nullptr;
 }
@@ -76,7 +78,7 @@ UserCustomCADDll::CreatePrismFunc UserCustomCADDll::GetCreatePrismFunc() const
 {
     if (impl_->dll_.has(impl_->addedFunName_ + "_create_prism"))
     {
-        return impl_->dll_.get<CreatePrismFunc>(impl_->addedFunName_ + "_create_prism");
+        return impl_->dll_.get<IModel*(HsBaPoly2D_t, HsBaVector3f_t)>(impl_->addedFunName_ + "_create_prism");
     }
     return nullptr;
 }
@@ -85,7 +87,7 @@ UserCustomCADDll::CreatePrismExFunc UserCustomCADDll::GetCreatePrismExFunc() con
 {
     if (impl_->dll_.has(impl_->addedFunName_ + "_create_prism_ex"))
     {
-        return impl_->dll_.get<CreatePrismExFunc>(impl_->addedFunName_ + "_create_prism_ex");
+        return impl_->dll_.get<IModel*(HsBaPolys2D_t, HsBaVector3f_t)>(impl_->addedFunName_ + "_create_prism_ex");
     }
     return nullptr;
 }
@@ -94,7 +96,7 @@ UserCustomCADDll::DestroyModelFunc UserCustomCADDll::GetDestroyModelFunc() const
 {
     if (impl_->dll_.has(impl_->addedFunName_ + "_destroy_model"))
     {
-        return impl_->dll_.get<DestroyModelFunc>(impl_->addedFunName_ + "_destroy_model");
+        return impl_->dll_.get<void(IModel*)>(impl_->addedFunName_ + "_destroy_model");
     }
     return nullptr;
 }
@@ -103,7 +105,7 @@ UserCustomCADDll::BooleanOperationFunc UserCustomCADDll::GetBooleanOperationFunc
 {
     if (impl_->dll_.has(impl_->addedFunName_ + "_boolean_operation"))
     {
-        return impl_->dll_.get<BooleanOperationFunc>(impl_->addedFunName_ + "_boolean_operation");
+        return impl_->dll_.get<bool(IModel*, const IModel*, const char*)>(impl_->addedFunName_ + "_boolean_operation");
     }
     return nullptr;
 }
@@ -113,6 +115,17 @@ UserCustomCADDll::~UserCustomCADDll()
 {
 }
 
+
+UserCustomCADModel::~UserCustomCADModel()
+{
+    if (model_ && dll_)
+    {
+        if (auto destroyModelFunc = dll_->GetDestroyModelFunc())
+        {
+            destroyModelFunc(model_);
+        }
+    }
+}
 
 void UserCustomCADModel::LoadDll(std::string_view dllPath, std::string_view addedFunName)
 {
@@ -133,7 +146,25 @@ void UserCustomCADModel::UnloadDll()
 
 bool UserCustomCADModel::Load(std::string_view fileName)
 {
-    model_ = dll_->GetCreateModelFunc()();
+    if (!dll_)
+    {
+        throw RuntimeError("Dll not loaded");
+    }
+    auto createModelFunc = dll_->GetCreateModelFunc();
+    if (!createModelFunc)
+    {
+        throw RuntimeError("Create model function not found in DLL");
+    }
+    // release the previous model to avoid leaking it when Load is called again
+    if (model_)
+    {
+        if (auto destroyModelFunc = dll_->GetDestroyModelFunc())
+        {
+            destroyModelFunc(model_);
+        }
+        model_ = nullptr;
+    }
+    model_ = createModelFunc();
     return model_->Load(fileName);
 }
 
@@ -270,6 +301,18 @@ float UserCustomCADModel::Volume() const
     if (model_)
     {
         return model_->Volume();
+    }
+    else
+    {
+        throw RuntimeError("Model not loaded");
+    }
+}
+
+std::pair<Eigen::MatrixXf, Eigen::MatrixXi> UserCustomCADModel::TriangleMesh() const
+{
+    if (model_)
+    {
+        return model_->TriangleMesh();
     }
     else
     {

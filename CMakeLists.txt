@@ -260,6 +260,15 @@ if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
   add_compile_definitions(USE_CAD_KERNEL)
 endif()
 
+#Point Cloud Library
+#openvdb
+#disable if andoird and IOS
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
+  find_package(OpenVDB CONFIG REQUIRED)
+  message("Use openvdb for point cloud and volumetric data.")
+  add_compile_definitions(USE_OPENVDB)
+endif()
+
 #sqlpp11 with SQLite3 MySQL PostgreSQL
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
 	find_package(Sqlpp11 CONFIG REQUIRED COMPONENTS SQLite3 MySQL PostgreSQL)
@@ -341,6 +350,9 @@ add_subdirectory("meshmodel")
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
   add_subdirectory("cadmodel")
 endif()
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
+  add_subdirectory("pointcloud")
+endif()
 add_subdirectory("preprocess")
 add_subdirectory("support")
 add_subdirectory("pipelinetypes")
@@ -381,7 +393,7 @@ set(_HSBA_INSTALL_TARGETS
     HsBaPipelineTypes
 )
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
-  list(APPEND _HSBA_INSTALL_TARGETS HsBaSlicerCADModel)
+  list(APPEND _HSBA_INSTALL_TARGETS HsBaSlicerCADModel HsBaSlicerPointCloud)
 endif()
 
 # LibHsBaSlicer
