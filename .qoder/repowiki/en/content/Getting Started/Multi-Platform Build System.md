@@ -27,17 +27,19 @@
 - [preprocess/ModelLoader.hpp](file://preprocess/ModelLoader.hpp)
 - [version/Generator_Version.ps1](file://version/Generator_Version.ps1)
 - [LICENSE.txt](file://LICENSE.txt)
+- [cadmodel/CMakeLists.txt](file://cadmodel/CMakeLists.txt)
+- [meshmodel/CMakeLists.txt](file://meshmodel/CMakeLists.txt)
 - [docs/en/vcpkg-dependencies.md](file://docs/en/vcpkg-dependencies.md)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive OpenVDB dependency support for point cloud processing capabilities
-- Implemented conditional compilation flags (USE_OPENVDB) for point cloud features across desktop platforms
-- Enhanced vcpkg configuration with dual licensing strategy supporting both MIT and GPL-3.0-or-later licenses
-- Integrated OpenVDB as a platform-specific dependency with proper conditional linking
-- Updated version generation system to track OpenVDB licensing information
-- Added point cloud model implementation with advanced spatial operations and mesh reconstruction
+- Added comprehensive HSBA_COPL CMake option for conditional compilation of copyleft kernels (CGAL/OpenCascade)
+- Implemented automatic detection logic for copyleft kernel availability through environment variables and package probing
+- Enhanced dual licensing strategy with runtime license reporting via MIT/GPL-3.0-or-later based on build configuration
+- Integrated conditional compilation flags throughout the build system for copyleft-dependent features
+- Updated version generation system to dynamically determine effective license based on vcpkg dependencies
+- Added comprehensive documentation for copyleft kernel management and licensing compliance
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -52,7 +54,7 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document explains the multi-platform build system for HsBaSlicer, focusing on how CMake 3.28+, vcpkg, and platform-specific presets orchestrate a consistent build across Windows, Linux, macOS, Android, iOS, and game consoles. The system has been significantly enhanced with C++20 module support, comprehensive installation capabilities, improved cross-platform compatibility, optimized Android builds with clang-scan-deps for superior incremental build performance, and **newly added OpenVDB-based point cloud processing capabilities**. It documents the modernized module layout, dependency management, shared vs static library configuration, dual licensing strategy, and the integration points that enable the FDM pipeline (preprocess, slice, support, fill, path generation) to be built and linked uniformly using both traditional headers and C++20 modules.
+This document explains the multi-platform build system for HsBaSlicer, focusing on how CMake 3.28+, vcpkg, and platform-specific presets orchestrate a consistent build across Windows, Linux, macOS, Android, iOS, and game consoles. The system has been significantly enhanced with C++20 module support, comprehensive installation capabilities, improved cross-platform compatibility, optimized Android builds with clang-scan-deps for superior incremental build performance, **newly added OpenVDB-based point cloud processing capabilities**, and **advanced dual licensing strategy with conditional copyleft kernel support**. It documents the modernized module layout, dependency management, shared vs static library configuration, sophisticated dual licensing strategy that automatically switches between MIT and GPL-3.0-or-later licenses based on copyleft kernel usage, and the integration points that enable the FDM pipeline (preprocess, slice, support, fill, path generation) to be built and linked uniformly using both traditional headers and C++20 modules.
 
 ## Project Structure
 The repository is organized into feature-based modules with a top-level CMake orchestrating subprojects. Key aspects:
@@ -64,6 +66,7 @@ The repository is organized into feature-based modules with a top-level CMake or
 - Unified output directories place all artifacts under `bin/<configuration>` for consistent deployment.
 - Android project uses Gradle to consume prebuilt native artifacts; iOS/macOS use Xcode generator presets.
 - **Enhanced**: Android builds now leverage clang-scan-deps for significantly improved incremental compilation performance.
+- **Advanced**: Sophisticated dual licensing system with automatic copyleft kernel detection and conditional compilation.
 
 ```mermaid
 graph TB
@@ -86,6 +89,8 @@ Root --> Docs["docs"]
 Root --> Install["Installation & Export<br/>CMake Package Config + FILE_SET"]
 AndroidCI[".github/workflows/build-android.yml<br/>clang-scan-deps enabled"] --> Root
 MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>clang-scan-deps enabled"] --> Root
+Copyleft["HSBA_COPL Option<br/>Automatic Detection"] --> Mesh
+Copyleft --> CAD
 ```
 
 **Diagram sources**
@@ -95,6 +100,7 @@ MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>clang-scan-deps en
 - [pointcloud/CMakeLists.txt:1-58](file://pointcloud/CMakeLists.txt#L1-L58)
 - [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
 - [.github/workflows/cmake-multi-platform.yml:268-276](file://.github/workflows/cmake-multi-platform.yml#L268-L276)
+- [CMakeLists.txt:151-185](file://CMakeLists.txt#L151-L185)
 
 **Section sources**
 - [CMakeLists.txt:1-107](file://CMakeLists.txt#L1-L107)
@@ -111,7 +117,7 @@ MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>clang-scan-deps en
 - Unified output directories: All binaries placed in `bin/<configuration>` for consistent deployment.
 - **Comprehensive Installation Support**: Full CMake package configuration with export targets, header installation, and FILE_SET for C++20 modules.
 - **Optimized Android Builds**: Enhanced with clang-scan-deps for superior incremental compilation performance.
-- **Dual Licensing Strategy**: Conditional license switching between MIT and GPL-3.0-or-later based on copyleft kernel usage.
+- **Sophisticated Dual Licensing Strategy**: Automatic license switching between MIT and GPL-3.0-or-later based on copyleft kernel usage with runtime reporting.
 
 Key behaviors:
 - HSBA_DESKTOP, HSBA_MOBILE, HSBA_GAME_CONSOLE flags gate optional subsystems including **OpenVDB point cloud processing**.
@@ -120,9 +126,10 @@ Key behaviors:
 - Game console detection via VCPKG_TARGET_TRIPLET patterns (xbox, switch, playstation, stadia).
 - **C++20 Modules**: Optional module building with automatic compiler capability detection.
 - **OpenVDB Integration**: Conditional compilation with USE_OPENVDB flag for point cloud features on desktop platforms only.
+- **HSBA_COPL Management**: Tri-state option (AUTO/ON/OFF) with automatic detection of copyleft kernels (CGAL, OpenCascade) and conditional compilation.
 - **Android Optimization**: clang-scan-deps integration enables faster rebuilds by tracking precise file dependencies.
 
-**Updated** Enhanced with CMake 3.28 minimum requirement, optional C++20 module support, OpenVDB point cloud processing, and Android clang-scan-deps optimization.
+**Updated** Enhanced with CMake 3.28 minimum requirement, optional C++20 module support, OpenVDB point cloud processing, Android clang-scan-deps optimization, and sophisticated dual licensing strategy with automatic copyleft kernel detection.
 
 **Section sources**
 - [CMakeLists.txt:17-38](file://CMakeLists.txt#L17-L38)
@@ -131,13 +138,12 @@ Key behaviors:
 - [CMakeLists.txt:160-194](file://CMakeLists.txt#L160-L194)
 - [CMakeLists.txt:226-237](file://CMakeLists.txt#L226-L237)
 - [CMakeLists.txt:280-302](file://CMakeLists.txt#L280-L302)
-- [CMakeLists.txt:108-119](file://CMakeLists.txt#L108-L119)
-- [CMakeLists.txt:263-270](file://CMakeLists.txt#L263-L270)
+- [CMakeLists.txt:151-185](file://CMakeLists.txt#L151-L185)
 - [static_check/feature_check.cmake:96-111](file://static_check/feature_check.cmake#L96-L111)
 
 ## Architecture Overview
 The build architecture integrates four layers:
-- Configuration layer: CMake 3.28+ + CMakePresets + vcpkg configuration with **dual licensing support**.
+- Configuration layer: CMake 3.28+ + CMakePresets + vcpkg configuration with **sophisticated dual licensing support**.
 - Module layer: Feature-based libraries and executables with optional C++20 modules and **OpenVDB point cloud processing**.
 - Platform layer: OS-specific toolchains, generators, and ABI settings.
 - Installation layer: CMake package configuration, target export system, and FILE_SET support.
@@ -163,6 +169,7 @@ Install --> ConfigFile["HsBaSlicerConfig.cmake.in"]
 Install --> Targets["HsBaSlicerTargets.cmake"]
 Install --> Version["HsBaSlicerConfigVersion.cmake"]
 Install --> ModulesSet["FILE_SET hsba_slicer_modules"]
+Copyleft["HSBA_COPL Detection<br/>MIT/GPL-3.0-or-later"] --> LicenseGen["Generator_Version.ps1<br/>Runtime License Reporting"]
 ```
 
 **Diagram sources**
@@ -175,6 +182,7 @@ Install --> ModulesSet["FILE_SET hsba_slicer_modules"]
 - [ModuleHsBaSlicer/CMakeLists.txt:17-20](file://ModuleHsBaSlicer/CMakeLists.txt#L17-20)
 - [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
 - [.github/workflows/cmake-multi-platform.yml:268-276](file://.github/workflows/cmake-multi-platform.yml#L268-L276)
+- [version/Generator_Version.ps1:206-248](file://version/Generator_Version.ps1#L206-L248)
 
 ## Detailed Component Analysis
 
@@ -196,7 +204,8 @@ flowchart TD
 Start(["Configure"]) --> Standards["Set C++20 / C23"]
 Standards --> Features["Run feature checks + C++20 modules"]
 Features --> Platform["Detect platform family"]
-Platform --> Deps["Find dependencies (Boost, Clipper2, miniz, protobuf, etc.)"]
+Platform --> Copyleft["HSBA_COPL Detection<br/>AUTO/ON/OFF Logic"]
+Copyleft --> Deps["Find dependencies (Boost, Clipper2, miniz, protobuf, etc.)"]
 Deps --> Options["Apply platform options (bit7z, DLL loader, CGAL, OCCT, SQL, OpenVDB)"]
 Options --> Linkage["Decide static vs shared via triplet"]
 Linkage --> OutputDirs["Set unified output dirs (bin/<config>)"]
@@ -213,8 +222,9 @@ Subdirs --> End(["Configure complete"])
 - [CMakeLists.txt:304-328](file://CMakeLists.txt#L304-L328)
 - [CMakeLists.txt:277-286](file://CMakeLists.txt#L277-L286)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
+- [CMakeLists.txt:151-185](file://CMakeLists.txt#L151-L185)
 
-**Updated** Enhanced with CMake 3.28 minimum requirement, C++20 modules support, and OpenVDB point cloud processing integration.
+**Updated** Enhanced with CMake 3.28 minimum requirement, C++20 modules support, OpenVDB point cloud processing integration, and sophisticated HSBA_COPL dual licensing system.
 
 **Section sources**
 - [CMakeLists.txt:1-107](file://CMakeLists.txt#L1-L107)
@@ -224,6 +234,50 @@ Subdirs --> End(["Configure complete"])
 - [CMakeLists.txt:304-328](file://CMakeLists.txt#L304-L328)
 - [CMakeLists.txt:277-286](file://CMakeLists.txt#L277-L286)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
+- [CMakeLists.txt:151-185](file://CMakeLists.txt#L151-L185)
+
+### HSBA_COPL Dual Licensing System
+**New** Comprehensive dual licensing system with automatic copyleft kernel detection:
+- **Tri-State Option**: HSBA_COPL supports AUTO/ON/OFF modes for flexible copyleft kernel management.
+- **Automatic Detection**: Environment variable checking (VCPKG_MANIFEST_FEATURES, VCPKG_MANIFEST_NO_DEFAULT_FEATURES) followed by package probing.
+- **Conditional Compilation**: CGAL and OpenCascade are only linked when HSBA_COPL is enabled.
+- **Runtime License Reporting**: Effective license determined at configure time and reported via GetVersionInfo().
+- **Platform-Specific Behavior**: Copyleft kernels disabled on mobile and game console platforms.
+
+```mermaid
+classDiagram
+class HSBA_COPL_System {
++Tri-state option : AUTO/ON/OFF
++Environment variable detection
++Package probing for CGAL/OpenCASCADE
++Conditional compilation flags
++Runtime license reporting
+}
+class License_Detection {
++Check VCPKG_MANIFEST_FEATURES
++Check VCPKG_MANIFEST_NO_DEFAULT_FEATURES
++find_package(CGAL CONFIG QUIET)
++find_package(OpenCASCADE CONFIG QUIET)
+}
+class Runtime_License {
++GetVersionInfo() returns license
++HsBaGetVersionJson() returns JSON
++License : "MIT" or "GPL-3.0-or-later"
+}
+HSBA_COPL_System --> License_Detection : "uses"
+HSBA_COPL_System --> Runtime_License : "reports"
+```
+
+**Diagram sources**
+- [CMakeLists.txt:151-185](file://CMakeLists.txt#L151-L185)
+- [version/Generator_Version.ps1:90-248](file://version/Generator_Version.ps1#L90-L248)
+- [LICENSE.txt:1-23](file://LICENSE.txt#L1-L23)
+
+**Section sources**
+- [CMakeLists.txt:151-185](file://CMakeLists.txt#L151-L185)
+- [version/Generator_Version.ps1:90-248](file://version/Generator_Version.ps1#L90-L248)
+- [LICENSE.txt:1-23](file://LICENSE.txt#L1-L23)
+- [README.md:205-211](file://README.md#L205-L211)
 
 ### OpenVDB Point Cloud Processing Module
 **New** Comprehensive OpenVDB-based point cloud processing capabilities:
@@ -348,13 +402,14 @@ CMake-->>Dev : Configure complete (output : out/build/<preset>/bin/<config>)
 - [CMakePresets.json:1-179](file://CMakePresets.json#L1-L179)
 
 ### Enhanced vcpkg Integration and Dual Licensing Strategy
-**Updated** Comprehensive vcpkg integration with dual licensing support:
+**Updated** Comprehensive vcpkg integration with sophisticated dual licensing support:
 - **Centralized dependency list** with platform scoping and features.
 - **Dual licensing strategy**: MIT license by default, switches to GPL-3.0-or-later when copyleft kernels are used.
 - **Registries include** default git baseline and Microsoft artifact registry.
 - **Overlay ports and triplets** allow local overrides.
 - **Platform-specific dependencies**: Different dependency sets for desktop, mobile, and game console targets.
 - **OpenVDB integration**: Apache-2.0 licensed dependency for point cloud processing.
+- **Copyleft feature management**: CGAL (GPL-3.0-or-later), libigl[cgal], and OpenCascade (LGPL-2.1-only) included via "copyleft" feature.
 
 ```mermaid
 graph LR
@@ -362,7 +417,6 @@ VcpkgCfg["vcpkg-configuration.json"] --> Reg["Default registry (git baseline)"]
 VcpkgCfg --> ArtReg["Microsoft artifact registry"]
 VcpkgCfg --> Overlays["overlay-ports / overlay-triplets"]
 VcpkgJson["vcpkg.json<br/>MIT license + copyleft feature"] --> Deps["Dependencies by platform/features"]
-Deps --> CMake["find_package() / pkg_check_modules()"]
 Deps --> Mobile["Mobile-specific deps (SQLite only)"]
 Deps --> Desktop["Desktop-specific deps (MySQL, PostgreSQL, OpenVDB)"]
 Deps --> Copyleft["CGAL (GPL), OpenCascade (LGPL)"]
@@ -374,7 +428,7 @@ Copyleft --> LicenseSwitch["License switches to GPL-3.0-or-later"]
 - [vcpkg.json:1-110](file://vcpkg.json#L1-L110)
 - [version/Generator_Version.ps1:142-170](file://version/Generator_Version.ps1#L142-L170)
 
-**Updated** Enhanced platform-specific dependency management with mobile vs desktop configurations and dual licensing support.
+**Updated** Enhanced platform-specific dependency management with mobile vs desktop configurations and sophisticated dual licensing support with automatic copyleft kernel detection.
 
 **Section sources**
 - [vcpkg-configuration.json:1-21](file://vcpkg-configuration.json#L1-L21)
@@ -759,6 +813,8 @@ Dll --> Install["Installation & Export"]
 Install --> External["External Projects"]
 AndroidCI[".github/workflows/build-android.yml<br/>JDK 21, SDK 34, NDK r27d"] --> Lib
 MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>JDK 21, SDK 34, NDK r27d"] --> Lib
+Copyleft["HSBA_COPL<br/>Conditional Dependencies"] --> Mesh
+Copyleft --> CAD
 ```
 
 **Diagram sources**
@@ -773,8 +829,9 @@ MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>JDK 21, SDK 34, ND
 - [.github/workflows/cmake-multi-platform.yml:203](file://.github/workflows/cmake-multi-platform.yml#L203)
 - [.github/workflows/cmake-multi-platform.yml:217](file://.github/workflows/cmake-multi-platform.yml#L217)
 - [.github/workflows/cmake-multi-platform.yml:227](file://.github/workflows/cmake-multi-platform.yml#L227)
+- [CMakeLists.txt:151-185](file://CMakeLists.txt#L151-L185)
 
-**Updated** Added C++20 module layer, enhanced installation/export layer for external project usage, OpenVDB point cloud processing module, and modernized Android toolchain with JDK 21, SDK 34, and NDK r27d.
+**Updated** Added C++20 module layer, enhanced installation/export layer for external project usage, OpenVDB point cloud processing module, modernized Android toolchain with JDK 21, SDK 34, and NDK r27d, and sophisticated HSBA_COPL dual licensing system with conditional dependency management.
 
 **Section sources**
 - [LibHsBaSlicer/CMakeLists.txt:37-50](file://LibHsBaSlicer/CMakeLists.txt#L37-L50)
@@ -782,6 +839,7 @@ MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>JDK 21, SDK 34, ND
 - [DllHsBaSlicer/CMakeLists.txt:12-20](file://DllHsBaSlicer/CMakeLists.txt#L12-L20)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
 - [pointcloud/CMakeLists.txt:1-58](file://pointcloud/CMakeLists.txt#L1-L58)
+- [CMakeLists.txt:151-185](file://CMakeLists.txt#L151-L185)
 
 ## Performance Considerations
 - Boolean operations disabled in Debug builds to avoid high memory usage and slow CGAL/IGL performance.
@@ -794,8 +852,9 @@ MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>JDK 21, SDK 34, ND
 - **Modern toolchain benefits**: JDK 21 provides better garbage collection and performance improvements over JDK 11.
 - **Gradle 8.7 enhancements**: Improved build cache, parallel execution, and dependency resolution performance.
 - **OpenVDB performance**: TBB integration enables parallel processing of large point clouds; Blosc compression reduces memory footprint.
+- **HSBA_COPL optimization**: Conditional compilation ensures copyleft kernels are only included when needed, reducing build times and binary sizes for MIT-licensed builds.
 
-**Updated** Added modern toolchain performance benefits including JDK 21 improvements, Gradle 8.7 enhancements, Android SDK 34 optimizations, and OpenVDB parallel processing capabilities.
+**Updated** Added modern toolchain performance benefits including JDK 21 improvements, Gradle 8.7 enhancements, Android SDK 34 optimizations, OpenVDB parallel processing capabilities, and HSBA_COPL conditional compilation optimizations.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -817,9 +876,11 @@ Common issues and resolutions:
 - **NDK r27d configuration**: Verify NDK path is correctly set; check that clang-scan-deps binary exists at expected location.
 - **OpenVDB build failures**: Ensure desktop platform (not Android/iOS/game console); verify OpenVDB dependencies (TBB, Imath, Blosc, ZLIB) are available.
 - **USE_OPENVDB compilation errors**: Check that USE_OPENVDB is defined; verify OpenVDB is found during configuration; ensure pointcloud module is included in build.
-- **Dual licensing issues**: Verify copyleft kernel detection; check generated version.cpp for correct license determination.
+- **HSBA_COPL configuration issues**: Use `-DHSBA_COPL=ON/OFF` to force copyleft kernel inclusion/exclusion; check environment variables VCPKG_MANIFEST_FEATURES and VCPKG_MANIFEST_NO_DEFAULT_FEATURES.
+- **Dual licensing conflicts**: Verify copyleft kernel detection logic; check generated version.cpp for correct license determination; ensure vcpkg.json copyleft feature is properly configured.
+- **CGAL/OpenCascade not found**: When HSBA_COPL=AUTO, ensure CGAL and OpenCascade are installed via vcpkg; check find_package results in CMake output.
 
-**Updated** Added troubleshooting for Android SDK 34, Java JDK 21, Gradle 8.7 compatibility, NDK r27d configuration, OpenVDB integration, and dual licensing issues.
+**Updated** Added troubleshooting for Android SDK 34, Java JDK 21, Gradle 8.7 compatibility, NDK r27d configuration, OpenVDB integration, HSBA_COPL dual licensing system, and copyleft kernel management.
 
 **Section sources**
 - [CMakeLists.txt:17-38](file://CMakeLists.txt#L17-38)
@@ -839,9 +900,10 @@ Common issues and resolutions:
 - [.github/workflows/cmake-multi-platform.yml:227](file://.github/workflows/cmake-multi-platform.yml#L227)
 - [CMakeLists.txt:263-270](file://CMakeLists.txt#L263-L270)
 - [pointcloud/CMakeLists.txt:1-58](file://pointcloud/CMakeLists.txt#L1-L58)
+- [CMakeLists.txt:151-185](file://CMakeLists.txt#L151-L185)
 
 ## Conclusion
-The HsBaSlicer build system leverages modern CMake 3.28+ practices, vcpkg for dependency management, and platform presets to deliver a consistent, extensible, and efficient build across desktop and mobile environments. The recent enhancements introduce C++20 module support through ModuleHsBaSlicer, comprehensive installation capabilities with FILE_SET support, improved cross-platform compatibility including game console targets, significantly optimized Android builds with clang-scan-deps for superior incremental compilation performance, and **newly integrated OpenVDB-based point cloud processing capabilities**. The modular design cleanly separates core utilities, geometry kernels, and pipeline stages, while the dual API approach (traditional C ABI in DllHsBaSlicer and modern C++20 modules in ModuleHsBaSlicer) exposes ergonomic interfaces for both legacy and modern applications. The enhanced CMake package configuration enables seamless integration into external projects with proper dependency resolution and module support. The new Android build optimizations through clang-scan-deps integration provide substantial performance improvements in both development and continuous integration environments. The modernized Android toolchain with JDK 21, SDK 34, Gradle 8.7, and AGP 8.3.2 ensures cutting-edge performance, security, and compatibility with the latest Android ecosystem features. **The addition of OpenVDB support enables advanced point cloud processing with spatial queries, mesh reconstruction, and parallel processing capabilities**, while the dual licensing strategy ensures compliance with various open-source licensing requirements.
+The HsBaSlicer build system leverages modern CMake 3.28+ practices, vcpkg for dependency management, and platform presets to deliver a consistent, extensible, and efficient build across desktop and mobile environments. The recent enhancements introduce C++20 module support through ModuleHsBaSlicer, comprehensive installation capabilities with FILE_SET support, improved cross-platform compatibility including game console targets, significantly optimized Android builds with clang-scan-deps for superior incremental compilation performance, **newly integrated OpenVDB-based point cloud processing capabilities**, and **advanced dual licensing strategy with automatic copyleft kernel detection**. The modular design cleanly separates core utilities, geometry kernels, and pipeline stages, while the dual API approach (traditional C ABI in DllHsBaSlicer and modern C++20 modules in ModuleHsBaSlicer) exposes ergonomic interfaces for both legacy and modern applications. The enhanced CMake package configuration enables seamless integration into external projects with proper dependency resolution and module support. The new Android build optimizations through clang-scan-deps integration provide substantial performance improvements in both development and continuous integration environments. The modernized Android toolchain with JDK 21, SDK 34, Gradle 8.7, and AGP 8.3.2 ensures cutting-edge performance, security, and compatibility with the latest Android ecosystem features. **The addition of OpenVDB support enables advanced point cloud processing with spatial queries, mesh reconstruction, and parallel processing capabilities**, while the **sophisticated HSBA_COPL dual licensing strategy ensures compliance with various open-source licensing requirements through automatic detection and conditional compilation of copyleft kernels (CGAL, OpenCascade)**. The system now provides developers with full control over licensing compliance while maintaining maximum flexibility for different deployment scenarios.
 
 ## Appendices
 
@@ -855,8 +917,9 @@ The HsBaSlicer build system leverages modern CMake 3.28+ practices, vcpkg for de
 - **C++20 modules**: Enable HSBA_SLICER_MODULE=ON for module support (requires CMake 3.28+)
 - **Android with modern toolchain**: Ensure JDK 21, Android SDK 34, and NDK r27d are installed; workflows automatically configure clang-scan-deps.
 - **OpenVDB point cloud processing**: Available automatically on desktop platforms; USE_OPENVDB flag enables point cloud operations.
+- **HSBA_COPL configuration**: Use `-DHSBA_COPL=ON` to force copyleft kernels, `-DHSBA_COPL=OFF` to disable them, or `-DHSBA_COPL=AUTO` for automatic detection.
 
-**Updated** Added modern Android toolchain build instructions with JDK 21, SDK 34, and NDK r27d configuration guidance, plus OpenVDB point cloud processing availability.
+**Updated** Added modern Android toolchain build instructions with JDK 21, SDK 34, and NDK r27d configuration guidance, plus OpenVDB point cloud processing availability and HSBA_COPL dual licensing configuration options.
 
 **Section sources**
 - [README.md:47-194](file://README.md#L47-L194)
@@ -864,6 +927,7 @@ The HsBaSlicer build system leverages modern CMake 3.28+ practices, vcpkg for de
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
 - [CMakeLists.txt:108-119](file://CMakeLists.txt#L108-L119)
 - [CMakeLists.txt:263-270](file://CMakeLists.txt#L263-L270)
+- [CMakeLists.txt:151-185](file://CMakeLists.txt#L151-L185)
 
 ### CMake Package Configuration
 **Enhanced** External projects can now easily integrate HsBaSlicer with full C++20 module support:
@@ -886,6 +950,7 @@ The package configuration automatically handles:
 - Version checking and compatibility
 - **C++20 module FILE_SET installation**
 - **OpenVDB point cloud processing** (when available)
+- **HSBA_COPL conditional dependencies** (CGAL, OpenCascade when enabled)
 
 **Section sources**
 - [cmake/HsBaSlicerConfig.cmake.in:1-16](file://cmake/HsBaSlicerConfig.cmake.in#L1-L16)
@@ -1000,10 +1065,10 @@ The OpenVDB point cloud processing module provides advanced 3D point cloud opera
 - [CMakeLists.txt:263-270](file://CMakeLists.txt#L263-L270)
 - [preprocess/ModelLoader.hpp:125-188](file://preprocess/ModelLoader.hpp#L125-L188)
 
-### Dual Licensing Strategy Details
-**New** Technical details for conditional licensing:
+### HSBA_COPL Dual Licensing Strategy Details
+**New** Technical details for conditional licensing system:
 
-The project implements a sophisticated dual licensing system:
+The project implements a sophisticated dual licensing system with automatic copyleft kernel detection:
 
 **License Determination**:
 - **Default**: MIT License for builds without copyleft dependencies
@@ -1024,11 +1089,19 @@ The project implements a sophisticated dual licensing system:
 - **vcpkg.json**: Defines "copyleft" feature with GPL-3.0-or-later license
 - **Generator_Version.ps1**: Parses vcpkg.json to determine effective license
 - **Runtime API**: License information available through version queries
+- **HSBA_COPL Option**: Tri-state (AUTO/ON/OFF) with automatic detection logic
+
+**Detection Logic**:
+1. Check VCPKG_MANIFEST_FEATURES environment variable for "copyleft"
+2. Check VCPKG_MANIFEST_NO_DEFAULT_FEATURES for explicit disabling
+3. Probe for installed CGAL/OpenCascade packages via find_package
+4. Set HSBA_COPL accordingly and apply conditional compilation
 
 **Benefits**:
 - **Flexibility**: Users can choose appropriate license based on their needs
 - **Compliance**: Automatic license determination prevents legal issues
 - **Transparency**: Runtime license reporting ensures clarity
+- **Performance**: Conditional compilation reduces binary size for MIT builds
 
 **Section sources**
 - [vcpkg.json:1-110](file://vcpkg.json#L1-L110)
@@ -1036,3 +1109,4 @@ The project implements a sophisticated dual licensing system:
 - [LICENSE.txt:1-32](file://LICENSE.txt#L1-L32)
 - [docs/en/vcpkg-dependencies.md:1-62](file://docs/en/vcpkg-dependencies.md#L1-L62)
 - [README.md:205-211](file://README.md#L205-L211)
+- [CMakeLists.txt:151-185](file://CMakeLists.txt#L151-L185)
