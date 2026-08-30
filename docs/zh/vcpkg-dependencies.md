@@ -8,9 +8,17 @@
 
 - **CGAL**（`GPL-3.0-or-later`）与 **OpenCascade**（`LGPL-2.1-only`）为 Copyleft 许可，仅在下方依赖矩阵所列平台可用（桌面 Windows/Linux/macOS，另 Android 可用 CGAL）。
 - 包含任一 Copyleft 内核的构建，采用 **GPL-3.0-or-later** 许可。
-- 不包含任何 Copyleft 内核的构建（iOS 与游戏主机），采用 **MIT** 许可。
+- 不包含任何 Copyleft 内核的构建（iOS 与游戏主机，或未启用 `copyleft` feature 的构建），采用 **MIT** 许可。
 
-在 `vcpkg.json` 中通过顶层 `license` 为 `MIT`、外加 `license` 为 `GPL-3.0-or-later` 的 `copyleft` feature 来表达；该 feature 在 `windows | linux | osx | android` 平台默认启用。构建的实际许可以在配置期生成到 `version.cpp`，并通过 `GetVersionInfo()` / `HsBaGetVersionJson()` 查询。
+在 `vcpkg.json` 中通过顶层 `license` 为 `MIT`、外加 `license` 为 `GPL-3.0-or-later` 的 `copyleft` feature 来表达；该 feature 在 `windows | linux | osx | android` 平台默认启用，**CGAL、libigl[cgal]、OpenCascade 仅作为该 feature 的依赖安装**，未启用时不会安装也不会链接。构建的实际许可以在配置期生成到 `version.cpp`，并通过 `GetVersionInfo()` / `HsBaGetVersionJson()` 查询。
+
+CMake 侧通过 `HSBA_COPL` 选项控制是否查找并链接 CGAL 与 OpenCascade（并定义 `USE_CGAL`/`USE_OCCT` 宏）。该选项为三态（默认 `AUTO`）：`AUTO` 时依次按 `VCPKG_MANIFEST_FEATURES` 环境变量、`VCPKG_MANIFEST_NO_DEFAULT_FEATURES` 环境变量、探测 CGAL/OpenCascade 是否已安装来判定（注意 vcpkg 的 default-features 不会出现在 `VCPKG_MANIFEST_FEATURES` 中，因此需依赖安装探测）；也可用 `-DHSBA_COPL=ON/OFF` 强制。如需以 MIT 许可构建，在配置前以环境变量关闭默认 feature，使 vcpkg 不安装 Copyleft 内核：
+
+```powershell
+# 禁用 default-features（含 copyleft），CGAL/OpenCascade 不会被安装与链接，HSBA_COPL 自动为 OFF
+$env:VCPKG_MANIFEST_NO_DEFAULT_FEATURES=1   # bash 下为 export VCPKG_MANIFEST_NO_DEFAULT_FEATURES=1
+cmake -B build --preset x64-release
+```
 
 ## 平台排除说明
 

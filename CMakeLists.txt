@@ -148,6 +148,42 @@ else()
   message(STATUS "Building for unknown platform: ${CMAKE_SYSTEM_NAME}")
 endif()
 
+# Copyleft kernels (CGAL, OpenCascade) are only installed by the vcpkg "copyleft"
+# manifest feature. HSBA_COPL is tri-state:
+#   AUTO - detect: VCPKG_MANIFEST_FEATURES env -> VCPKG_MANIFEST_NO_DEFAULT_FEATURES env
+#          -> probe whether CGAL/OpenCascade are installed (vcpkg manifest install
+#          happens during toolchain load, so packages are already in place here;
+#          note default-features are NOT listed in VCPKG_MANIFEST_FEATURES)
+#   ON/OFF - force explicitly
+set(HSBA_COPL "AUTO" CACHE STRING "Link copyleft kernels (CGAL, OpenCascade); switches project license to GPL-3.0-or-later (AUTO/ON/OFF)")
+set_property(CACHE HSBA_COPL PROPERTY STRINGS AUTO ON OFF)
+
+if(HSBA_COPL STREQUAL "AUTO")
+  if(DEFINED ENV{VCPKG_MANIFEST_FEATURES} AND "$ENV{VCPKG_MANIFEST_FEATURES}" MATCHES "copyleft")
+    set(_HSBA_COPL_DETECTED ON)
+  elseif(DEFINED ENV{VCPKG_MANIFEST_NO_DEFAULT_FEATURES} AND NOT "$ENV{VCPKG_MANIFEST_NO_DEFAULT_FEATURES}" MATCHES "^(0|OFF|FALSE|N)$")
+    # Default features (incl. copyleft) explicitly disabled
+    set(_HSBA_COPL_DETECTED OFF)
+  else()
+    # Probe for installed copyleft kernels (vcpkg manifest default-features or system install)
+    find_package(CGAL CONFIG QUIET)
+    find_package(OpenCASCADE CONFIG QUIET)
+    if(CGAL_FOUND OR OpenCASCADE_FOUND)
+      set(_HSBA_COPL_DETECTED ON)
+    else()
+      set(_HSBA_COPL_DETECTED OFF)
+    endif()
+  endif()
+  set(HSBA_COPL ${_HSBA_COPL_DETECTED})
+endif()
+
+if(HSBA_COPL)
+  message(STATUS "Copyleft kernels enabled (CGAL, OpenCascade); project license will be GPL-3.0-or-later")
+  add_compile_definitions(HSBA_COPL)
+else()
+  message(STATUS "Copyleft kernels disabled; project license will be MIT")
+endif()
+
 find_package(PkgConfig REQUIRED)
 
 #Tripartite library needed
@@ -228,7 +264,7 @@ endif()
 
 #Mesh_kernel
 find_package(libigl CONFIG REQUIRED)
-if(NOT IOS AND NOT HSBA_GAME_CONSOLE)
+if(NOT IOS AND NOT HSBA_GAME_CONSOLE AND HSBA_COPL)
   find_package(CGAL CONFIG REQUIRED)
   add_compile_definitions(USE_CGAL)
   message("Use CGAL and igl enable boolean operations or other features.")
@@ -242,8 +278,9 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   message("Boolean operations may be slow and cause high memory usage in Debug mode.")
 endif()
 
-# Model object pool size: 10 when CGAL is available, 1 otherwise
-if(NOT IOS AND NOT HSBA_GAME_CONSOLE)
+# Model object pool size: 10 when copyleft kernels (CGAL/OCCT) are available so
+# boolean operations can hold multiple models, 1 otherwise
+if(NOT IOS AND NOT HSBA_GAME_CONSOLE AND HSBA_COPL)
   add_compile_definitions(HSBA_MODEL_POOL_SIZE=10)
 else()
   add_compile_definitions(HSBA_MODEL_POOL_SIZE=1)
@@ -251,9 +288,10 @@ endif()
 
 #CAD_kernel
 #OpenCascade
+#copyleft kernel, only linked when HSBA_COPL is enabled
 #disable if andoird and IOS
 #Todo: disable if not support OpenCascade, or use other CAD kernel
-if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE AND HSBA_COPL)
   find_package(OpenCASCADE CONFIG REQUIRED)
   message("Use occt as cad kernel.")
   add_compile_definitions(USE_OCCT)
@@ -347,7 +385,7 @@ add_subdirectory("2D")
 add_subdirectory("paths")
 add_subdirectory("fileoperator")
 add_subdirectory("meshmodel")
-if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE AND HSBA_COPL)
   add_subdirectory("cadmodel")
 endif()
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
@@ -393,7 +431,10 @@ set(_HSBA_INSTALL_TARGETS
     HsBaPipelineTypes
 )
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
-  list(APPEND _HSBA_INSTALL_TARGETS HsBaSlicerCADModel HsBaSlicerPointCloud)
+  list(APPEND _HSBA_INSTALL_TARGETS HsBaSlicerPointCloud)
+  if(HSBA_COPL)
+    list(APPEND _HSBA_INSTALL_TARGETS HsBaSlicerCADModel)
+  endif()
 endif()
 
 # LibHsBaSlicer

@@ -32,6 +32,7 @@ execute_process(
             -Platform "ignored"  # Platform parameter is ignored, determined by triplet
             -VcpkgTriplet "${VCPKG_TARGET_TRIPLET}"
             -VcpkgJsonPath "${CMAKE_SOURCE_DIR}/vcpkg.json"
+            -Copyleft "${HSBA_COPL}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     RESULT_VARIABLE SCRIPT_RESULT
     OUTPUT_VARIABLE SCRIPT_OUTPUT

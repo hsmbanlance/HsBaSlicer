@@ -79,8 +79,8 @@ HsBaVersion
 HsBaSlicerFileOperator
 )
 
-# OCCT / CAD kernel is not available on Android, iOS, or game consoles
-if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
+# OCCT / CAD kernel is a copyleft kernel, not available without HSBA_COPL or on Android, iOS, or game consoles
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE AND HSBA_COPL)
     target_link_libraries(LibHsBaSlicer PRIVATE HsBaSlicerCADModel)
 endif()
 
