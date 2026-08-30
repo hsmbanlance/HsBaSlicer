@@ -21,22 +21,23 @@
 - [android/gradle.properties](file://android/gradle.properties)
 - [android/gradle/wrapper/gradle-wrapper.properties](file://android/gradle/wrapper/gradle-wrapper.properties)
 - [static_check/feature_check.cmake](file://static_check/feature_check.cmake)
-- [base/coroutine.hpp](file://base/coroutine.hpp)
-- [LibHsBaSlicer/Slice/mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp)
-- [DllHsBaSlicer/fdm_pipeline.h](file://DllHsBaSlicer/fdm_pipeline.h)
+- [pointcloud/CMakeLists.txt](file://pointcloud/CMakeLists.txt)
+- [pointcloud/OpenVdbModel.hpp](file://pointcloud/OpenVdbModel.hpp)
+- [pointcloud/OpenVdbModel_analysis.cpp](file://pointcloud/OpenVdbModel_analysis.cpp)
 - [preprocess/ModelLoader.hpp](file://preprocess/ModelLoader.hpp)
-- [support/FdmSupport.hpp](file://support/FdmSupport.hpp)
-- [.github/workflows/build-android.yml](file://.github/workflows/build-android.yml)
-- [.github/workflows/cmake-multi-platform.yml](file://.github/workflows/cmake-multi-platform.yml)
+- [version/Generator_Version.ps1](file://version/Generator_Version.ps1)
+- [LICENSE.txt](file://LICENSE.txt)
+- [docs/en/vcpkg-dependencies.md](file://docs/en/vcpkg-dependencies.md)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Updated Android build system with Java JDK 21, Android SDK 34, Gradle 8.7, and Android Gradle Plugin 8.3.2
-- Enhanced clang-scan-deps integration for improved incremental build performance across all workflows
-- Modernized Android toolchain configuration with latest NDK r27d support
-- Updated GitHub Actions workflows with comprehensive Android SDK and NDK setup
-- Added detailed documentation for Android build optimization and dependency tracking improvements
+- Added comprehensive OpenVDB dependency support for point cloud processing capabilities
+- Implemented conditional compilation flags (USE_OPENVDB) for point cloud features across desktop platforms
+- Enhanced vcpkg configuration with dual licensing strategy supporting both MIT and GPL-3.0-or-later licenses
+- Integrated OpenVDB as a platform-specific dependency with proper conditional linking
+- Updated version generation system to track OpenVDB licensing information
+- Added point cloud model implementation with advanced spatial operations and mesh reconstruction
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -51,13 +52,14 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document explains the multi-platform build system for HsBaSlicer, focusing on how CMake 3.28+, vcpkg, and platform-specific presets orchestrate a consistent build across Windows, Linux, macOS, Android, iOS, and game consoles. The system has been significantly enhanced with C++20 module support, comprehensive installation capabilities, improved cross-platform compatibility, and optimized Android builds with clang-scan-deps for superior incremental build performance. It documents the modernized module layout, dependency management, shared vs static library configuration, and the integration points that enable the FDM pipeline (preprocess, slice, support, fill, path generation) to be built and linked uniformly using both traditional headers and C++20 modules.
+This document explains the multi-platform build system for HsBaSlicer, focusing on how CMake 3.28+, vcpkg, and platform-specific presets orchestrate a consistent build across Windows, Linux, macOS, Android, iOS, and game consoles. The system has been significantly enhanced with C++20 module support, comprehensive installation capabilities, improved cross-platform compatibility, optimized Android builds with clang-scan-deps for superior incremental build performance, and **newly added OpenVDB-based point cloud processing capabilities**. It documents the modernized module layout, dependency management, shared vs static library configuration, dual licensing strategy, and the integration points that enable the FDM pipeline (preprocess, slice, support, fill, path generation) to be built and linked uniformly using both traditional headers and C++20 modules.
 
 ## Project Structure
 The repository is organized into feature-based modules with a top-level CMake orchestrating subprojects. Key aspects:
 - Top-level CMake configures compiler standards, feature detection, platform flags, and third-party dependencies via vcpkg/pkg-config.
 - Subdirectories define libraries and executables (e.g., base, 2D, paths, preprocess, support, meshmodel, convert, LibHsBaSlicer, DllHsBaSlicer, HsBaSlicer).
 - **New**: ModuleHsBaSlicer provides C++20 module interface for modern consumers.
+- **New**: PointCloud module provides OpenVDB-based point cloud processing capabilities.
 - CMake presets standardize cross-platform builds using Ninja or Xcode generators and integrate vcpkg toolchains.
 - Unified output directories place all artifacts under `bin/<configuration>` for consistent deployment.
 - Android project uses Gradle to consume prebuilt native artifacts; iOS/macOS use Xcode generator presets.
@@ -74,6 +76,7 @@ Root --> Support["support (HsBaSupport)"]
 Root --> Mesh["meshmodel (HsBaSlicerMesh)"]
 Root --> Convert["convert"]
 Root --> CAD["cadmodel (HsBaSlicerCADModel)"]
+Root --> PointCloud["pointcloud (HsBaSlicerPointCloud)"]
 Root --> Lib["LibHsBaSlicer (static/shared)"]
 Root --> Module["ModuleHsBaSlicer (C++20 module)"]
 Root --> Dll["DllHsBaSlicer (shared)"]
@@ -89,6 +92,7 @@ MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>clang-scan-deps en
 - [CMakeLists.txt:304-328](file://CMakeLists.txt#L304-L328)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
 - [ModuleHsBaSlicer/CMakeLists.txt:1-46](file://ModuleHsBaSlicer/CMakeLists.txt#L1-L46)
+- [pointcloud/CMakeLists.txt:1-58](file://pointcloud/CMakeLists.txt#L1-L58)
 - [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
 - [.github/workflows/cmake-multi-platform.yml:268-276](file://.github/workflows/cmake-multi-platform.yml#L268-L276)
 
@@ -101,22 +105,24 @@ MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>clang-scan-deps en
 - **Enhanced CMake Requirements**: Minimum CMake 3.28 for C++20 module support and FILE_SET functionality.
 - Compiler and language standards: Enforces C++20 and conditional C23 where supported.
 - **Advanced Feature Detection**: Concepts, ranges, source_location, NTTP, template-template matching, coroutines, explicit this, and C++20 modules.
-- Platform detection: Desktop vs mobile vs game console toggles features like logging, dynamic loader, CGAL, OpenCASCADE, SQL backends.
-- Dependency resolution: vcpkg-managed packages with platform-scoped features (e.g., sqlpp11 SQLite-only on mobile).
+- Platform detection: Desktop vs mobile vs game console toggles features like logging, dynamic loader, CGAL, OpenCASCADE, SQL backends, and **OpenVDB point cloud processing**.
+- Dependency resolution: vcpkg-managed packages with platform-scoped features (e.g., sqlpp11 SQLite-only on mobile) and **conditional OpenVDB support**.
 - Library type control: Shared vs static based on VCPKG_TARGET_TRIPLET or user option.
 - Unified output directories: All binaries placed in `bin/<configuration>` for consistent deployment.
 - **Comprehensive Installation Support**: Full CMake package configuration with export targets, header installation, and FILE_SET for C++20 modules.
 - **Optimized Android Builds**: Enhanced with clang-scan-deps for superior incremental compilation performance.
+- **Dual Licensing Strategy**: Conditional license switching between MIT and GPL-3.0-or-later based on copyleft kernel usage.
 
 Key behaviors:
-- HSBA_DESKTOP, HSBA_MOBILE, HSBA_GAME_CONSOLE flags gate optional subsystems.
+- HSBA_DESKTOP, HSBA_MOBILE, HSBA_GAME_CONSOLE flags gate optional subsystems including **OpenVDB point cloud processing**.
 - Optional bit7z compression and dynamic loader disabled on non-desktop platforms.
 - Boolean operations disabled in Debug due to performance/memory constraints.
 - Game console detection via VCPKG_TARGET_TRIPLET patterns (xbox, switch, playstation, stadia).
 - **C++20 Modules**: Optional module building with automatic compiler capability detection.
+- **OpenVDB Integration**: Conditional compilation with USE_OPENVDB flag for point cloud features on desktop platforms only.
 - **Android Optimization**: clang-scan-deps integration enables faster rebuilds by tracking precise file dependencies.
 
-**Updated** Enhanced with CMake 3.28 minimum requirement, optional C++20 module support, and Android clang-scan-deps optimization.
+**Updated** Enhanced with CMake 3.28 minimum requirement, optional C++20 module support, OpenVDB point cloud processing, and Android clang-scan-deps optimization.
 
 **Section sources**
 - [CMakeLists.txt:17-38](file://CMakeLists.txt#L17-L38)
@@ -126,12 +132,13 @@ Key behaviors:
 - [CMakeLists.txt:226-237](file://CMakeLists.txt#L226-L237)
 - [CMakeLists.txt:280-302](file://CMakeLists.txt#L280-L302)
 - [CMakeLists.txt:108-119](file://CMakeLists.txt#L108-L119)
+- [CMakeLists.txt:263-270](file://CMakeLists.txt#L263-L270)
 - [static_check/feature_check.cmake:96-111](file://static_check/feature_check.cmake#L96-L111)
 
 ## Architecture Overview
 The build architecture integrates four layers:
-- Configuration layer: CMake 3.28+ + CMakePresets + vcpkg configuration.
-- Module layer: Feature-based libraries and executables with optional C++20 modules.
+- Configuration layer: CMake 3.28+ + CMakePresets + vcpkg configuration with **dual licensing support**.
+- Module layer: Feature-based libraries and executables with optional C++20 modules and **OpenVDB point cloud processing**.
 - Platform layer: OS-specific toolchains, generators, and ABI settings.
 - Installation layer: CMake package configuration, target export system, and FILE_SET support.
 - **Enhanced CI layer**: Optimized workflows with clang-scan-deps for Android builds.
@@ -140,10 +147,11 @@ The build architecture integrates four layers:
 graph TB
 Presets["CMakePresets.json<br/>Windows/Linux/macOS/iOS/Android presets"] --> CMakeRoot["Top-level CMakeLists.txt (3.28+)"]
 VcpkgCfg["vcpkg-configuration.json<br/>registries, overlays, triplets"] --> CMakeRoot
-VcpkgJson["vcpkg.json<br/>dependencies per platform"] --> CMakeRoot
+VcpkgJson["vcpkg.json<br/>dependencies per platform<br/>dual licensing support"] --> CMakeRoot
 BuildAndroid[".github/workflows/build-android.yml<br/>clang-scan-deps enabled"] --> CMakeRoot
 CMakeMulti[".github/workflows/cmake-multi-platform.yml<br/>clang-scan-deps enabled"] --> CMakeRoot
 CMakeRoot --> Modules["Submodules (base, utils, 2D, paths, preprocess, support, meshmodel, convert, cadmodel)"]
+Modules --> PointCloud["pointcloud (OpenVDB-based)<br/>Conditional: USE_OPENVDB"]
 Modules --> LibHsBaSlicer["LibHsBaSlicer (static/shared)"]
 LibHsBaSlicer --> ModuleHsBaSlicer["ModuleHsBaSlicer (C++20 module)"]
 ModuleHsBaSlicer --> DllHsBaSlicer["DllHsBaSlicer (shared)"]
@@ -160,8 +168,9 @@ Install --> ModulesSet["FILE_SET hsba_slicer_modules"]
 **Diagram sources**
 - [CMakePresets.json:1-179](file://CMakePresets.json#L1-L179)
 - [vcpkg-configuration.json:1-21](file://vcpkg-configuration.json#L1-L21)
-- [vcpkg.json:1-93](file://vcpkg.json#L1-L93)
+- [vcpkg.json:1-110](file://vcpkg.json#L1-L110)
 - [CMakeLists.txt:304-328](file://CMakeLists.txt#L304-L328)
+- [CMakeLists.txt:263-270](file://CMakeLists.txt#L263-L270)
 - [cmake/HsBaSlicerConfig.cmake.in:1-16](file://cmake/HsBaSlicerConfig.cmake.in#L1-L16)
 - [ModuleHsBaSlicer/CMakeLists.txt:17-20](file://ModuleHsBaSlicer/CMakeLists.txt#L17-20)
 - [.github/workflows/build-android.yml:87-95](file://.github/workflows/build-android.yml#L87-L95)
@@ -176,7 +185,7 @@ Responsibilities:
 - Run static feature checks including C++20 modules capability detection.
 - Detect platform family and set desktop/mobile/console flags.
 - Resolve third-party libraries via pkg-config and find_package.
-- Toggle optional features (bit7z, dynamic loader, boolean ops, CAD kernel, SQL backends).
+- Toggle optional features (bit7z, dynamic loader, boolean ops, CAD kernel, SQL backends, **OpenVDB point cloud processing**).
 - Control BUILD_SHARED_LIBS based on VCPKG_TARGET_TRIPLET.
 - Include subdirectories for all modules and optional tests/docs.
 - **Unified output directories**: All binaries placed in `bin/<configuration>`.
@@ -188,7 +197,7 @@ Start(["Configure"]) --> Standards["Set C++20 / C23"]
 Standards --> Features["Run feature checks + C++20 modules"]
 Features --> Platform["Detect platform family"]
 Platform --> Deps["Find dependencies (Boost, Clipper2, miniz, protobuf, etc.)"]
-Deps --> Options["Apply platform options (bit7z, DLL loader, CGAL, OCCT, SQL)"]
+Deps --> Options["Apply platform options (bit7z, DLL loader, CGAL, OCCT, SQL, OpenVDB)"]
 Options --> Linkage["Decide static vs shared via triplet"]
 Linkage --> OutputDirs["Set unified output dirs (bin/<config>)"]
 OutputDirs --> Install["Configure installation & export + FILE_SET"]
@@ -205,7 +214,7 @@ Subdirs --> End(["Configure complete"])
 - [CMakeLists.txt:277-286](file://CMakeLists.txt#L277-L286)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
 
-**Updated** Enhanced with CMake 3.28 minimum requirement and C++20 modules support.
+**Updated** Enhanced with CMake 3.28 minimum requirement, C++20 modules support, and OpenVDB point cloud processing integration.
 
 **Section sources**
 - [CMakeLists.txt:1-107](file://CMakeLists.txt#L1-L107)
@@ -215,6 +224,51 @@ Subdirs --> End(["Configure complete"])
 - [CMakeLists.txt:304-328](file://CMakeLists.txt#L304-L328)
 - [CMakeLists.txt:277-286](file://CMakeLists.txt#L277-L286)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
+
+### OpenVDB Point Cloud Processing Module
+**New** Comprehensive OpenVDB-based point cloud processing capabilities:
+- **Conditional Compilation**: Only available on desktop platforms (Windows, Linux, macOS) with USE_OPENVDB flag.
+- **Advanced Operations**: Spatial queries, downsampling, normal computation, statistical filtering, and mesh reconstruction.
+- **TBB Integration**: Parallel processing support for large point clouds using Intel TBB.
+- **Imath Math Library**: High-performance mathematical operations for 3D geometry processing.
+- **Blosc Compression**: Efficient storage and transfer of point cloud data.
+- **MSVC Optimization**: Special handling for large object files with /bigobj flag.
+
+```mermaid
+classDiagram
+class OpenVdbModel {
++Point cloud operations
++Spatial queries (RadiusSearch, KNN)
++Downsampling and filtering
++Normal computation
++Mesh reconstruction
++Statistical outlier removal
+}
+class HsBaSlicerPointCloud {
++Static library
++OpenVDB integration
++TBB parallel processing
++Imath math operations
++Blosc compression support
+}
+OpenVdbModel --> HsBaSlicerPointCloud : "implemented in"
+HsBaSlicerPointCloud --> OpenVDB : : openvdb : "links"
+HsBaSlicerPointCloud --> TBB : : tbb : "links"
+HsBaSlicerPointCloud --> Imath : : Imath : "links"
+HsBaSlicerPointCloud --> blosc : "links"
+HsBaSlicerPointCloud --> ZLIB : : ZLIB : "links"
+```
+
+**Diagram sources**
+- [pointcloud/CMakeLists.txt:1-58](file://pointcloud/CMakeLists.txt#L1-L58)
+- [pointcloud/OpenVdbModel.hpp:1-92](file://pointcloud/OpenVdbModel.hpp#L1-L92)
+- [pointcloud/OpenVdbModel_analysis.cpp:1-47](file://pointcloud/OpenVdbModel_analysis.cpp#L1-L47)
+
+**Section sources**
+- [pointcloud/CMakeLists.txt:1-58](file://pointcloud/CMakeLists.txt#L1-L58)
+- [pointcloud/OpenVdbModel.hpp:1-92](file://pointcloud/OpenVdbModel.hpp#L1-L92)
+- [pointcloud/OpenVdbModel_analysis.cpp:1-47](file://pointcloud/OpenVdbModel_analysis.cpp#L1-L47)
+- [CMakeLists.txt:263-270](file://CMakeLists.txt#L263-L270)
 
 ### C++20 Module System (ModuleHsBaSlicer)
 **New** Comprehensive C++20 module support with class-based API:
@@ -293,32 +347,40 @@ CMake-->>Dev : Configure complete (output : out/build/<preset>/bin/<config>)
 **Section sources**
 - [CMakePresets.json:1-179](file://CMakePresets.json#L1-L179)
 
-### vcpkg Integration and Dependencies
-- Centralized dependency list with platform scoping and features.
-- Registries include default git baseline and Microsoft artifact registry.
-- Overlay ports and triplets allow local overrides.
+### Enhanced vcpkg Integration and Dual Licensing Strategy
+**Updated** Comprehensive vcpkg integration with dual licensing support:
+- **Centralized dependency list** with platform scoping and features.
+- **Dual licensing strategy**: MIT license by default, switches to GPL-3.0-or-later when copyleft kernels are used.
+- **Registries include** default git baseline and Microsoft artifact registry.
+- **Overlay ports and triplets** allow local overrides.
 - **Platform-specific dependencies**: Different dependency sets for desktop, mobile, and game console targets.
+- **OpenVDB integration**: Apache-2.0 licensed dependency for point cloud processing.
 
 ```mermaid
 graph LR
 VcpkgCfg["vcpkg-configuration.json"] --> Reg["Default registry (git baseline)"]
 VcpkgCfg --> ArtReg["Microsoft artifact registry"]
 VcpkgCfg --> Overlays["overlay-ports / overlay-triplets"]
-VcpkgJson["vcpkg.json"] --> Deps["Dependencies by platform/features"]
+VcpkgJson["vcpkg.json<br/>MIT license + copyleft feature"] --> Deps["Dependencies by platform/features"]
 Deps --> CMake["find_package() / pkg_check_modules()"]
 Deps --> Mobile["Mobile-specific deps (SQLite only)"]
-Deps --> Desktop["Desktop-specific deps (MySQL, PostgreSQL)"]
+Deps --> Desktop["Desktop-specific deps (MySQL, PostgreSQL, OpenVDB)"]
+Deps --> Copyleft["CGAL (GPL), OpenCascade (LGPL)"]
+Copyleft --> LicenseSwitch["License switches to GPL-3.0-or-later"]
 ```
 
 **Diagram sources**
 - [vcpkg-configuration.json:1-21](file://vcpkg-configuration.json#L1-L21)
-- [vcpkg.json:1-93](file://vcpkg.json#L1-L93)
+- [vcpkg.json:1-110](file://vcpkg.json#L1-L110)
+- [version/Generator_Version.ps1:142-170](file://version/Generator_Version.ps1#L142-L170)
 
-**Updated** Enhanced platform-specific dependency management with mobile vs desktop configurations.
+**Updated** Enhanced platform-specific dependency management with mobile vs desktop configurations and dual licensing support.
 
 **Section sources**
 - [vcpkg-configuration.json:1-21](file://vcpkg-configuration.json#L1-L21)
-- [vcpkg.json:1-93](file://vcpkg.json#L1-L93)
+- [vcpkg.json:1-110](file://vcpkg.json#L1-L110)
+- [version/Generator_Version.ps1:142-170](file://version/Generator_Version.ps1#L142-L170)
+- [docs/en/vcpkg-dependencies.md:1-62](file://docs/en/vcpkg-dependencies.md#L1-L62)
 
 ### Installation and Package Configuration
 **Enhanced** Comprehensive installation support with CMake package configuration:
@@ -586,6 +648,7 @@ Client->>API : HsBaFreePipelineResult(result)
 ### Preprocessing and Support Primitives
 - ModelLoader manages named models with automatic format selection and optional CGAL boolean/shell operations.
 - FDM support implementations provide plane, tree, and honeycomb strategies.
+- **Enhanced with OpenVDB**: Point cloud operations available when USE_OPENVDB is defined.
 
 ```mermaid
 classDiagram
@@ -598,6 +661,13 @@ class ModelLoader {
 +ModelCount()
 +GetModelNames()
 +Cleanup()
++PointCloudToMesh(sourceName, resultName, voxelSize, particleRadius)
++MergePointClouds(leftName, rightName, resultName)
++DownsamplePointCloud(sourceName, resultName, voxelSize)
++RemovePointCloudOutliers(sourceName, resultName, k, multiplier)
++PointCloudCentroid(sourceName)
++PointCloudNormals(sourceName, k)
++PointCloudCount(sourceName)
 }
 class FdmPlaneSupport {
 +Generate(current_layer, prev_layer, layer_height, config)
@@ -613,11 +683,13 @@ class FdmHoneycombSupport {
 ```
 
 **Diagram sources**
-- [preprocess/ModelLoader.hpp:1-131](file://preprocess/ModelLoader.hpp#L1-L131)
+- [preprocess/ModelLoader.hpp:1-195](file://preprocess/ModelLoader.hpp#L1-L195)
 - [support/FdmSupport.hpp:1-63](file://support/FdmSupport.hpp#L1-L63)
 
+**Updated** Enhanced with OpenVDB-based point cloud operations when USE_OPENVDB is defined.
+
 **Section sources**
-- [preprocess/ModelLoader.hpp:1-131](file://preprocess/ModelLoader.hpp#L1-L131)
+- [preprocess/ModelLoader.hpp:1-195](file://preprocess/ModelLoader.hpp#L1-L195)
 - [support/FdmSupport.hpp:1-63](file://support/FdmSupport.hpp#L1-L63)
 
 ### Enhanced Android Integration with Modern Toolchain
@@ -680,6 +752,7 @@ Supp["HsBaSupport"] --> Lib
 Mesh["HsBaSlicerMesh"] --> Lib
 Paths["HsBaPaths"] --> Lib
 CAD["HsBaSlicerCADModel"] -. desktop only .-> Lib
+PointCloud["HsBaSlicerPointCloud"] -. desktop only .-> Lib
 Lib --> Module["ModuleHsBaSlicer (C++20)"]
 Module --> Dll["DllHsBaSlicer"]
 Dll --> Install["Installation & Export"]
@@ -693,6 +766,7 @@ MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>JDK 21, SDK 34, ND
 - [ModuleHsBaSlicer/CMakeLists.txt:23-29](file://ModuleHsBaSlicer/CMakeLists.txt#L23-L29)
 - [DllHsBaSlicer/CMakeLists.txt:12-20](file://DllHsBaSlicer/CMakeLists.txt#L12-L20)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
+- [pointcloud/CMakeLists.txt:1-58](file://pointcloud/CMakeLists.txt#L1-L58)
 - [.github/workflows/build-android.yml:16](file://.github/workflows/build-android.yml#L16)
 - [.github/workflows/build-android.yml:37](file://.github/workflows/build-android.yml#L37)
 - [.github/workflows/build-android.yml:46](file://.github/workflows/build-android.yml#L46)
@@ -700,13 +774,14 @@ MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>JDK 21, SDK 34, ND
 - [.github/workflows/cmake-multi-platform.yml:217](file://.github/workflows/cmake-multi-platform.yml#L217)
 - [.github/workflows/cmake-multi-platform.yml:227](file://.github/workflows/cmake-multi-platform.yml#L227)
 
-**Updated** Added C++20 module layer, enhanced installation/export layer for external project usage, and modernized Android toolchain with JDK 21, SDK 34, and NDK r27d.
+**Updated** Added C++20 module layer, enhanced installation/export layer for external project usage, OpenVDB point cloud processing module, and modernized Android toolchain with JDK 21, SDK 34, and NDK r27d.
 
 **Section sources**
 - [LibHsBaSlicer/CMakeLists.txt:37-50](file://LibHsBaSlicer/CMakeLists.txt#L37-L50)
 - [ModuleHsBaSlicer/CMakeLists.txt:23-29](file://ModuleHsBaSlicer/CMakeLists.txt#L23-L29)
 - [DllHsBaSlicer/CMakeLists.txt:12-20](file://DllHsBaSlicer/CMakeLists.txt#L12-L20)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
+- [pointcloud/CMakeLists.txt:1-58](file://pointcloud/CMakeLists.txt#L1-L58)
 
 ## Performance Considerations
 - Boolean operations disabled in Debug builds to avoid high memory usage and slow CGAL/IGL performance.
@@ -718,8 +793,9 @@ MultiPlatform[".github/workflows/cmake-multi-platform.yml<br/>JDK 21, SDK 34, ND
 - **Android clang-scan-deps optimization**: Significantly improved incremental build performance through precise dependency tracking, reducing unnecessary recompilation during development and CI/CD processes.
 - **Modern toolchain benefits**: JDK 21 provides better garbage collection and performance improvements over JDK 11.
 - **Gradle 8.7 enhancements**: Improved build cache, parallel execution, and dependency resolution performance.
+- **OpenVDB performance**: TBB integration enables parallel processing of large point clouds; Blosc compression reduces memory footprint.
 
-**Updated** Added modern toolchain performance benefits including JDK 21 improvements, Gradle 8.7 enhancements, and Android SDK 34 optimizations.
+**Updated** Added modern toolchain performance benefits including JDK 21 improvements, Gradle 8.7 enhancements, Android SDK 34 optimizations, and OpenVDB parallel processing capabilities.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -739,8 +815,11 @@ Common issues and resolutions:
 - **Module import errors**: Ensure consumer project also uses CMake 3.28+ and supports C++20 modules.
 - **Android clang-scan-deps issues**: Verify Android NDK r27d+ is installed; ensure clang-scan-deps path is accessible; check that CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS points to correct NDK toolchain location.
 - **NDK r27d configuration**: Verify NDK path is correctly set; check that clang-scan-deps binary exists at expected location.
+- **OpenVDB build failures**: Ensure desktop platform (not Android/iOS/game console); verify OpenVDB dependencies (TBB, Imath, Blosc, ZLIB) are available.
+- **USE_OPENVDB compilation errors**: Check that USE_OPENVDB is defined; verify OpenVDB is found during configuration; ensure pointcloud module is included in build.
+- **Dual licensing issues**: Verify copyleft kernel detection; check generated version.cpp for correct license determination.
 
-**Updated** Added troubleshooting for Android SDK 34, Java JDK 21, Gradle 8.7 compatibility, and NDK r27d configuration issues.
+**Updated** Added troubleshooting for Android SDK 34, Java JDK 21, Gradle 8.7 compatibility, NDK r27d configuration, OpenVDB integration, and dual licensing issues.
 
 **Section sources**
 - [CMakeLists.txt:17-38](file://CMakeLists.txt#L17-38)
@@ -758,9 +837,11 @@ Common issues and resolutions:
 - [.github/workflows/cmake-multi-platform.yml:203](file://.github/workflows/cmake-multi-platform.yml#L203)
 - [.github/workflows/cmake-multi-platform.yml:217](file://.github/workflows/cmake-multi-platform.yml#L217)
 - [.github/workflows/cmake-multi-platform.yml:227](file://.github/workflows/cmake-multi-platform.yml#L227)
+- [CMakeLists.txt:263-270](file://CMakeLists.txt#L263-L270)
+- [pointcloud/CMakeLists.txt:1-58](file://pointcloud/CMakeLists.txt#L1-L58)
 
 ## Conclusion
-The HsBaSlicer build system leverages modern CMake 3.28+ practices, vcpkg for dependency management, and platform presets to deliver a consistent, extensible, and efficient build across desktop and mobile environments. The recent enhancements introduce C++20 module support through ModuleHsBaSlicer, comprehensive installation capabilities with FILE_SET support, improved cross-platform compatibility including game console targets, and significantly optimized Android builds with clang-scan-deps for superior incremental compilation performance. The modular design cleanly separates core utilities, geometry kernels, and pipeline stages, while the dual API approach (traditional C ABI in DllHsBaSlicer and modern C++20 modules in ModuleHsBaSlicer) exposes ergonomic interfaces for both legacy and modern applications. The enhanced CMake package configuration enables seamless integration into external projects with proper dependency resolution and module support. The new Android build optimizations through clang-scan-deps integration provide substantial performance improvements in both development and continuous integration environments. The modernized Android toolchain with JDK 21, SDK 34, Gradle 8.7, and AGP 8.3.2 ensures cutting-edge performance, security, and compatibility with the latest Android ecosystem features.
+The HsBaSlicer build system leverages modern CMake 3.28+ practices, vcpkg for dependency management, and platform presets to deliver a consistent, extensible, and efficient build across desktop and mobile environments. The recent enhancements introduce C++20 module support through ModuleHsBaSlicer, comprehensive installation capabilities with FILE_SET support, improved cross-platform compatibility including game console targets, significantly optimized Android builds with clang-scan-deps for superior incremental compilation performance, and **newly integrated OpenVDB-based point cloud processing capabilities**. The modular design cleanly separates core utilities, geometry kernels, and pipeline stages, while the dual API approach (traditional C ABI in DllHsBaSlicer and modern C++20 modules in ModuleHsBaSlicer) exposes ergonomic interfaces for both legacy and modern applications. The enhanced CMake package configuration enables seamless integration into external projects with proper dependency resolution and module support. The new Android build optimizations through clang-scan-deps integration provide substantial performance improvements in both development and continuous integration environments. The modernized Android toolchain with JDK 21, SDK 34, Gradle 8.7, and AGP 8.3.2 ensures cutting-edge performance, security, and compatibility with the latest Android ecosystem features. **The addition of OpenVDB support enables advanced point cloud processing with spatial queries, mesh reconstruction, and parallel processing capabilities**, while the dual licensing strategy ensures compliance with various open-source licensing requirements.
 
 ## Appendices
 
@@ -773,14 +854,16 @@ The HsBaSlicer build system leverages modern CMake 3.28+ practices, vcpkg for de
 - **External project usage**: find_package(HsBaSlicer REQUIRED) in consumer CMakeLists.txt
 - **C++20 modules**: Enable HSBA_SLICER_MODULE=ON for module support (requires CMake 3.28+)
 - **Android with modern toolchain**: Ensure JDK 21, Android SDK 34, and NDK r27d are installed; workflows automatically configure clang-scan-deps.
+- **OpenVDB point cloud processing**: Available automatically on desktop platforms; USE_OPENVDB flag enables point cloud operations.
 
-**Updated** Added modern Android toolchain build instructions with JDK 21, SDK 34, and NDK r27d configuration guidance.
+**Updated** Added modern Android toolchain build instructions with JDK 21, SDK 34, and NDK r27d configuration guidance, plus OpenVDB point cloud processing availability.
 
 **Section sources**
 - [README.md:47-194](file://README.md#L47-L194)
 - [CMakePresets.json:1-179](file://CMakePresets.json#L1-L179)
 - [CMakeLists.txt:345-457](file://CMakeLists.txt#L345-L457)
 - [CMakeLists.txt:108-119](file://CMakeLists.txt#L108-L119)
+- [CMakeLists.txt:263-270](file://CMakeLists.txt#L263-L270)
 
 ### CMake Package Configuration
 **Enhanced** External projects can now easily integrate HsBaSlicer with full C++20 module support:
@@ -802,6 +885,7 @@ The package configuration automatically handles:
 - Cross-platform compatibility
 - Version checking and compatibility
 - **C++20 module FILE_SET installation**
+- **OpenVDB point cloud processing** (when available)
 
 **Section sources**
 - [cmake/HsBaSlicerConfig.cmake.in:1-16](file://cmake/HsBaSlicerConfig.cmake.in#L1-L16)
@@ -876,3 +960,79 @@ Both workflow files have been updated to include comprehensive setup:
 - [.github/workflows/cmake-multi-platform.yml:227](file://.github/workflows/cmake-multi-platform.yml#L227)
 - [.github/workflows/cmake-multi-platform.yml:276](file://.github/workflows/cmake-multi-platform.yml#L276)
 - [android/gradle.properties:1](file://android/gradle.properties#L1)
+
+### OpenVDB Point Cloud Processing Details
+**New** Technical details for OpenVDB integration:
+
+The OpenVDB point cloud processing module provides advanced 3D point cloud operations:
+
+**Available Platforms**: Desktop only (Windows, Linux, macOS) - disabled on Android, iOS, and game consoles.
+
+**Key Dependencies**:
+- **OpenVDB**: Core point cloud and volumetric data library
+- **Intel TBB**: Parallel processing framework for large datasets
+- **Imath**: High-performance mathematical operations
+- **Blosc**: Data compression for efficient storage
+- **ZLIB**: Additional compression support
+- **Boost iostreams**: File I/O operations
+
+**Capabilities**:
+- **Spatial Queries**: Radius search, K-nearest neighbors, nearest neighbor finding
+- **Point Cloud Operations**: Downsampling, filtering, statistical outlier removal
+- **Geometry Processing**: Normal computation, centroid calculation, merging
+- **Mesh Reconstruction**: Level set-based triangle mesh generation
+- **Data Management**: Voxelization, point storage, serialization
+
+**Compilation Flags**:
+- **USE_OPENVDB**: Defined when OpenVDB is available
+- **/bigobj**: MSVC-specific flag for large object files
+- **Parallel Processing**: TBB-enabled for performance optimization
+
+**Integration Points**:
+- **ModelLoader**: Point cloud operations exposed through preprocessing API
+- **Conditional Compilation**: All point cloud features guarded by USE_OPENVDB
+- **Platform Detection**: Automatic disablement on unsupported platforms
+
+**Section sources**
+- [pointcloud/CMakeLists.txt:1-58](file://pointcloud/CMakeLists.txt#L1-L58)
+- [pointcloud/OpenVdbModel.hpp:1-92](file://pointcloud/OpenVdbModel.hpp#L1-L92)
+- [pointcloud/OpenVdbModel_analysis.cpp:1-47](file://pointcloud/OpenVdbModel_analysis.cpp#L1-L47)
+- [CMakeLists.txt:263-270](file://CMakeLists.txt#L263-L270)
+- [preprocess/ModelLoader.hpp:125-188](file://preprocess/ModelLoader.hpp#L125-L188)
+
+### Dual Licensing Strategy Details
+**New** Technical details for conditional licensing:
+
+The project implements a sophisticated dual licensing system:
+
+**License Determination**:
+- **Default**: MIT License for builds without copyleft dependencies
+- **Conditional**: GPL-3.0-or-later when CGAL or OpenCascade are used
+- **Runtime Detection**: License reported via GetVersionInfo() and HsBaGetVersionJson()
+
+**Copyleft Dependencies**:
+- **CGAL**: GPL-3.0-or-later (computational geometry algorithms)
+- **OpenCascade**: LGPL-2.1-only (CAD modeling kernel)
+- **OpenVDB**: Apache-2.0 (no impact on licensing)
+
+**Platform-Specific Behavior**:
+- **Desktop (Windows/Linux/macOS)**: May include copyleft kernels → GPL license
+- **Mobile (Android/iOS)**: Excludes copyleft kernels → MIT license  
+- **Game Consoles**: Excludes copyleft kernels → MIT license
+
+**Implementation**:
+- **vcpkg.json**: Defines "copyleft" feature with GPL-3.0-or-later license
+- **Generator_Version.ps1**: Parses vcpkg.json to determine effective license
+- **Runtime API**: License information available through version queries
+
+**Benefits**:
+- **Flexibility**: Users can choose appropriate license based on their needs
+- **Compliance**: Automatic license determination prevents legal issues
+- **Transparency**: Runtime license reporting ensures clarity
+
+**Section sources**
+- [vcpkg.json:1-110](file://vcpkg.json#L1-L110)
+- [version/Generator_Version.ps1:142-170](file://version/Generator_Version.ps1#L142-L170)
+- [LICENSE.txt:1-32](file://LICENSE.txt#L1-L32)
+- [docs/en/vcpkg-dependencies.md:1-62](file://docs/en/vcpkg-dependencies.md#L1-L62)
+- [README.md:205-211](file://README.md#L205-L211)

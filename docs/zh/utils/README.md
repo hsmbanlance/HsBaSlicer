@@ -10,6 +10,8 @@ Utils 模块提供了多个实用的 C++ 工具和功能，包括应用程序配
 - [LuaAnyObject (Lua 任意对象管理)](./luaanyobject.md) - 提供在 Lua 中注册和使用 AnyObject 类型的功能
 - [PCH Headers (预编译头文件)](./pch_headers.md) - 预编译头文件，包含常用库头文件
 - [LogCfg (日志配置文件)](./logcfg.md) - INI 格式的日志系统配置文件
+- [Graph (图结构与算法)](./graph.md) - 基于 Boost.Graph 的以业务 ID 为主键的通用图结构与算法集合
+- [AreaGraph (区域-门禁图)](./areagraph.md) - 区域/门禁两级图模型，支持门禁级最短路、区域巡回（TSP）求解
 
 ## 使用方法
 

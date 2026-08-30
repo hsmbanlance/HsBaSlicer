@@ -7,6 +7,7 @@
     Support/fdm_support.hpp
     Fill/polygon_fill.hpp
     Path/path_generator.hpp
+    Path/path_optimizer.hpp
     Path/sls_export.hpp
     Floor/sla_floor.hpp
     Transfer/file_transfer.hpp
@@ -16,6 +17,7 @@
     Support/fdm_support.cpp
     Fill/polygon_fill.cpp
     Path/path_generator.cpp
+    Path/path_optimizer.cpp
     Path/sls_export.cpp
     Floor/sla_floor.cpp
     Transfer/file_transfer.cpp
@@ -33,6 +35,7 @@ else()
     Support/fdm_support.hpp
     Fill/polygon_fill.hpp
     Path/path_generator.hpp
+    Path/path_optimizer.hpp
     Path/sls_export.hpp
     Floor/sla_floor.hpp
     Transfer/file_transfer.hpp
@@ -42,6 +45,7 @@ else()
     Support/fdm_support.cpp
     Fill/polygon_fill.cpp
     Path/path_generator.cpp
+    Path/path_optimizer.cpp
     Path/sls_export.cpp
     Floor/sla_floor.cpp
     Transfer/file_transfer.cpp

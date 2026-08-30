@@ -153,6 +153,37 @@ if(HSBA_RUN_TESTS_AFTER_BUILD)
   )
 endif()
 
+# graph_test
+add_executable(graph_test Graph/graph_test.cpp)
+
+# Boost.Graph 模板实例化超出 MSVC 65535 段限制
+if(MSVC)
+set_source_files_properties(Graph/graph_test.cpp PROPERTIES COMPILE_OPTIONS "/bigobj")
+endif()
+
+target_link_libraries(graph_test
+	HsBaSlicerBase
+    HsBaSlicerUtils
+	Boost::unit_test_framework
+)
+
+target_compile_definitions(graph_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME graph_test
+  COMMAND $<TARGET_FILE:graph_test>
+  )
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET graph_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R graph_test
+  )
+endif()
+
 #filename check and operator
 #test for filename check
 add_executable(filename_check_test
@@ -661,6 +692,7 @@ add_executable(polygon_fill_test
 
 target_link_libraries(polygon_fill_test
     HsBaSlicer2D
+    LibHsBaSlicer
     Boost::unit_test_framework
 )
 
