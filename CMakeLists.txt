@@ -233,7 +233,7 @@ endif()
 
 if(HSBA_HSBA_USE_BIT7Z)
 	add_compile_definitions(HSBA_USE_BIT7Z)
-	find_package(unofficial-bit7z CONFIG REQUIRED)
+	find_package(bit7z CONFIG REQUIRED)
 endif()
 
 option(HSBA_ENABLE_THREAD_POOL_COROUTINE "Enable coroutine support in thread pool" ON)
@@ -360,7 +360,7 @@ if(DEFINED VCPKG_TARGET_TRIPLET)
 	message("Set BUILD_SHARED_LIBS to ON for dynamic.")
   elseif(VCPKG_TARGET_TRIPLET MATCHES "linux" OR VCPKG_TARGET_TRIPLET MATCHES "android" OR VCPKG_TARGET_TRIPLET MATCHES "static")
 	set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build using shared libraries" FORCE)
-	message("Set BUILD_SHARED_LIBS to OFF for Linux or Android static.")
+	message("Set BUILD_SHARED_LIBS to OFF for Linux or Android or MacOS static.")
 #other use static
   else()
 	set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build using shared libraries" FORCE)
