@@ -375,7 +375,7 @@ private:
 
     void buildExpandedGraph()
     {
-        expandedGraph_ = ExpandedGraphType();
+        ExpandedGraphType().swap(expandedGraph_);
         expandedVertexMap_.clear();
 
         for (const auto& [areaId, area] : areas_)

@@ -204,6 +204,7 @@ int l_offsetFill(lua_State* L)
         else if (strcmp(jt_str, "Miter") == 0)
             join_type = Clipper2Lib::JoinType::Miter;
     }
+    lua_pop(L, 1);
     Polygons res = OffsetFill(poly, spacing, join_type);
     PolygonsD resD;
     for (const auto& p : res)
@@ -296,6 +297,7 @@ int l_compositeOffsetFill(lua_State* L)
         else if (strcmp(jt_str, "Miter") == 0)
             join_type = Clipper2Lib::JoinType::Miter;
     }
+    lua_pop(L, 1);
     Polygons res;
     res = CompositeOffsetFill(poly, spacing, offsetStep, outwardCount, inwardCount, mode, angle_deg, lineThickness,
                               join_type);
@@ -339,6 +341,7 @@ int l_hybridFill(lua_State* L)
         else if (strcmp(jt_str, "Miter") == 0)
             join_type = Clipper2Lib::JoinType::Miter;
     }
+    lua_pop(L, 1);
     Polygons res;
     res = HybridFill(poly, spacing, offsetStep, outwardCount, inwardCount, mode, angle_deg, lineThickness, join_type);
     PolygonsD resD;
@@ -370,6 +373,7 @@ int l_offsetOnly(lua_State* L)
         else if (strcmp(jt_str, "Miter") == 0)
             join_type = Clipper2Lib::JoinType::Miter;
     }
+    lua_pop(L, 1);
     std::pair<Polygons, Polygons> out_inner_outer;
     Polygons res = OffsetOnly(poly, delta, inner, outer, join_type, out_inner_outer);
     PolygonsD resD;
@@ -1307,7 +1311,6 @@ Polygons LuaCustomFill(const Polygons& poly, const std::string& scriptPath, cons
     // call function with 1 arg, 1 result
     if (lua_pcall(L.get(), 1, 1, 0) != LUA_OK)
     {
-        lua_close(L.get());
         throw RuntimeError("Error calling Lua function: " + std::string(lua_tostring(L.get(), -1)));
     }
 

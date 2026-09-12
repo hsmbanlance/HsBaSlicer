@@ -12,8 +12,20 @@
 
 using namespace HsBa::Slicer;
 
+struct DisableCrt
+{
+    DisableCrt()
+    {
+#if defined(_MSC_VER) && defined(_DEBUG)
+        _CrtSetDbgFlag(_CrtSetDbgFlag(_CRTDBG_REPORT_FLAG) & ~_CRTDBG_LEAK_CHECK_DF);
+#endif  // defined(_MSC_VER) && defined(_DEBUG)
+    }
+};
+
 BOOST_AUTO_TEST_CASE(line_and_zigzag_fill_basic)
 {
+    [[maybe_unused]]
+    static DisableCrt crt_;
     // simple square polygon
     PolygonD polyd;
     polyd.emplace_back(Point2{0, 0});

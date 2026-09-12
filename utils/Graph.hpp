@@ -836,10 +836,12 @@ public:
                     dist_[i][j] = graph_.weight(cities_[i], cities_[j]);
             }
         }
-        initPopulation();
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        initPopulation(gen);
         Result bestResult{{}, W{}, 0};
         bool first = true;
-        for (std::size_t gen = 0; gen < maxGen_; ++gen)
+        for (std::size_t gen_i = 0; gen_i < maxGen_; ++gen_i)
         {
             evaluate();
             W currentCost = tourCost(population_[bestIdx_]);
@@ -848,17 +850,17 @@ public:
                 first = false;
                 bestResult.totalCost = currentCost;
                 bestResult.tour = decode(population_[bestIdx_]);
-                bestResult.generations = gen + 1;
+                bestResult.generations = gen_i + 1;
             }
             std::vector<std::vector<std::size_t>> newPop;
             newPop.push_back(population_[bestIdx_]);
             while (newPop.size() < popSize_)
             {
-                auto p1 = tournamentSelect();
-                auto p2 = tournamentSelect();
-                auto [c1, c2] = crossover(population_[p1], population_[p2]);
-                mutate(c1);
-                mutate(c2);
+                auto p1 = tournamentSelect(gen);
+                auto p2 = tournamentSelect(gen);
+                auto [c1, c2] = crossover(population_[p1], population_[p2], gen);
+                mutate(c1, gen);
+                mutate(c2, gen);
                 newPop.push_back(std::move(c1));
                 if (newPop.size() < popSize_)
                     newPop.push_back(std::move(c2));
@@ -877,13 +879,11 @@ public:
     }
 
 private:
-    void initPopulation()
+    void initPopulation(std::mt19937& gen)
     {
         population_.clear();
         std::vector<std::size_t> base(n_);
         std::iota(base.begin(), base.end(), 0);
-        std::random_device rd;
-        std::mt19937 gen(rd());
         for (std::size_t i = 0; i < popSize_; ++i)
         {
             auto p = base;
@@ -932,10 +932,8 @@ private:
             tour.push_back(cities_[idx]);
         return tour;
     }
-    std::size_t tournamentSelect(std::size_t tsize = 3)
+    std::size_t tournamentSelect(std::mt19937& gen, std::size_t tsize = 3)
     {
-        std::random_device rd;
-        std::mt19937 gen(rd());
         std::uniform_int_distribution<std::size_t> dist(0, popSize_ - 1);
         std::size_t best = dist(gen);
         W bestCost = tourCost(population_[best]);
@@ -952,10 +950,9 @@ private:
         return best;
     }
     std::pair<std::vector<std::size_t>, std::vector<std::size_t>> crossover(const std::vector<std::size_t>& p1,
-                                                                            const std::vector<std::size_t>& p2)
+                                                                            const std::vector<std::size_t>& p2,
+                                                                            std::mt19937& gen)
     {
-        std::random_device rd;
-        std::mt19937 gen(rd());
         std::uniform_real_distribution<double> prob(0.0, 1.0);
         if (prob(gen) > cxRate_)
             return {p1, p2};
@@ -987,10 +984,8 @@ private:
         };
         return {makeChild(p1, p2), makeChild(p2, p1)};
     }
-    void mutate(std::vector<std::size_t>& perm)
+    void mutate(std::vector<std::size_t>& perm, std::mt19937& gen)
     {
-        std::random_device rd;
-        std::mt19937 gen(rd());
         std::uniform_real_distribution<double> prob(0.0, 1.0);
         std::uniform_int_distribution<std::size_t> dist(0, n_ - 1);
         for (std::size_t i = 0; i < n_; ++i)
