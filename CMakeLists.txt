@@ -370,6 +370,23 @@ else()
   message("VCPKG_TARGET_TRIPLET is not defined.")
 endif()
 
+#test
+# Declared before the subdirectory section on purpose: HsBaSlicerBase gates the
+# AnyObject mockit-like stubbing facility on HSBA_SLICER_USE_TESTS (see
+# base/CMakeLists.txt), so the option must already exist when "base" is added.
+option(HSBA_SLICER_USE_TESTS "use tests" ON)
+if(ANDROID OR IOS OR HSBA_GAME_CONSOLE)
+  set(HSBA_SLICER_USE_TESTS OFF CACHE BOOL "use tests" FORCE)
+  message(STATUS "Tests disabled on Android, iOS, or game consoles due to output limitations.")
+endif()
+if(NOT DEFINED HSBA_SLICER_RUN_TESTS_AFTER_BUILD)
+  set(HSBA_SLICER_RUN_TESTS_AFTER_BUILD ON CACHE BOOL "Run tests after build" ON)
+endif()
+if(CMAKE_CROSSCOMPILING)
+  set(HSBA_SLICER_RUN_TESTS_AFTER_BUILD OFF CACHE BOOL "Run tests after build" FORCE)
+  message(STATUS "Cross-compiling: test executables will be built but not executed.")
+endif()
+
 # subdirectory。
 add_subdirectory("third_parts_without_vcpkg")
 add_subdirectory("proto")
@@ -409,6 +426,7 @@ if(HSBA_SLICER_BUILD_SAMPLES)
   add_subdirectory("samples/FDM")
   add_subdirectory("samples/SLA")
   add_subdirectory("samples/SLS")
+  add_subdirectory("samples/Custom")
   add_subdirectory("samples/LibHsBaSlicer")
 endif()
 
@@ -470,6 +488,7 @@ install(FILES
     DllHsBaSlicer/fdm_pipeline.h
     DllHsBaSlicer/sla_pipeline.h
     DllHsBaSlicer/sls_pipeline.h
+    DllHsBaSlicer/custom_pipeline.h
     DllHsBaSlicer/pipeline_convert.h
     DllHsBaSlicer/initialize.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer
@@ -512,6 +531,7 @@ install(FILES
     LibHsBaSlicer/Path/path_generator.hpp
     LibHsBaSlicer/Path/sls_export.hpp
     LibHsBaSlicer/Floor/sla_floor.hpp
+    LibHsBaSlicer/Extends/lua_pipeline.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/LibHsBaSlicer
 )
 
@@ -610,20 +630,8 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HsBaSlicer
 )
 
-#test
-option(HSBA_SLICER_USE_TESTS "use tests" ON)
-if(ANDROID OR IOS OR HSBA_GAME_CONSOLE)
-  set(HSBA_SLICER_USE_TESTS OFF CACHE BOOL "use tests" FORCE)
-  message(STATUS "Tests disabled on Android, iOS, or game consoles due to output limitations.")
-endif()
-if(NOT DEFINED HSBA_SLICER_RUN_TESTS_AFTER_BUILD)
-  set(HSBA_SLICER_RUN_TESTS_AFTER_BUILD ON CACHE BOOL "Run tests after build" ON)
-endif()
-if(CMAKE_CROSSCOMPILING)
-  set(HSBA_SLICER_RUN_TESTS_AFTER_BUILD OFF CACHE BOOL "Run tests after build" FORCE)
-  message(STATUS "Cross-compiling: test executables will be built but not executed.")
-endif()
-
+#test (the HSBA_SLICER_USE_TESTS / HSBA_SLICER_RUN_TESTS_AFTER_BUILD options are
+# declared above the subdirectory section, see the note there)
 if(HSBA_SLICER_USE_TESTS)
 	add_subdirectory("tests")
 endif()
