@@ -17,16 +17,21 @@
 - [file_transfer.hpp](file://LibHsBaSlicer/Transfer/file_transfer.hpp)
 - [EventSourceFunction.hpp](file://LibHsBaSlicer/Extends/EventSourceFunction.hpp)
 - [LuaAddFunction.hpp](file://LibHsBaSlicer/Extends/LuaAddFunction.hpp)
+- [lua_pipeline.hpp](file://LibHsBaSlicer/Extends/lua_pipeline.hpp)
+- [lua_pipeline.cpp](file://LibHsBaSlicer/Extends/lua_pipeline.cpp)
+- [custom_pipeline.h](file://DllHsBaSlicer/custom_pipeline.h)
+- [custom_pipeline.cpp](file://DllHsBaSlicer/custom_pipeline.cpp)
 - [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive FileTransferPipeline class with synchronous and asynchronous execution support
+- Added comprehensive CustomLuaPipeline class with full Lua-driven workflow orchestration
+- Enhanced module exports with new Lua pipeline functionality and context management
 - Expanded event callback system with Zipper and Database event handlers
-- Enhanced Lua integration with new function registration capabilities for different pipeline stages
-- Updated type aliases and configuration structures to support file transfer operations
-- Added progress reporting mechanisms for file transfer operations
+- Updated type aliases and configuration structures to support custom pipeline operations
+- Added progress reporting mechanisms for custom Lua pipelines
+- Integrated asynchronous execution capabilities using C++20 coroutines
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -40,14 +45,15 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document describes the C++20 module wrapper named ModuleHsBaSlicer, which provides a modern class-based API over LibHsBaSlicer's free functions. The module exposes a cohesive set of classes and utilities for FDM, SLA, SLS workflows, along with Lua-driven customization points and **new file transfer capabilities**. It is designed to be imported via `import hsba.slicer;` and linked as a static library, while internally forwarding calls to LibHsBaSlicer.
+This document describes the C++20 module wrapper named ModuleHsBaSlicer, which provides a modern class-based API over LibHsBaSlicer's free functions. The module exposes a cohesive set of classes and utilities for FDM, SLA, SLS workflows, along with **new custom Lua pipeline capabilities** and **enhanced file transfer functionality**. It is designed to be imported via `import hsba.slicer;` and linked as a static library, while internally forwarding calls to LibHsBaSlicer.
 
 Key goals:
 - Provide RAII model management and exception-based error handling.
-- Offer high-level pipeline classes that encapsulate slicing, support generation, filling, path generation, floor creation, rendering, packaging, and **file transfer operations**.
+- Offer high-level pipeline classes that encapsulate slicing, support generation, filling, path generation, floor creation, rendering, packaging, **file transfer operations**, and **fully customizable Lua-driven workflows**.
 - Maintain compatibility with existing LibHsBaSlicer APIs and configuration types.
 - **Optimize runtime performance through strategic inline function declarations for frequently-called methods.**
 - **Enable comprehensive event-driven programming through robust callback systems.**
+- **Provide flexible customization points through Lua scripting for complex multi-stage workflows.**
 
 ## Project Structure
 The module resides under ModuleHsBaSlicer and consists of:
@@ -75,6 +81,10 @@ L_SLS["Path/sls_export.hpp"]
 L_TRANSFER["Transfer/file_transfer.hpp"]
 L_EVENT["Extends/EventSourceFunction.hpp"]
 L_LUA["Extends/LuaAddFunction.hpp"]
+L_LUAPIPE["Extends/lua_pipeline.hpp"]
+end
+subgraph "DllHsBaSlicer"
+D_CUSTOM["custom_pipeline.h/.cpp"]
 end
 M_CMAKE --> M_IMPL
 M_CMAKE --> M_ANCHOR
@@ -88,30 +98,24 @@ M_IMPL --> L_SLS
 M_IMPL --> L_TRANSFER
 M_IMPL --> L_EVENT
 M_IMPL --> L_LUA
+M_IMPL --> L_LUAPIPE
 M_CMAKE --> L_CMAKE
 M_CMAKE --> L_EXPORT
+D_CUSTOM --> L_LUAPIPE
 ```
 
 **Diagram sources**
 - [CMakeLists.txt:1-46](file://ModuleHsBaSlicer/CMakeLists.txt#L1-L46)
-- [hsba_slicer.cppm:1-788](file://ModuleHsBaSlicer/hsba_slicer.cppm#L1-L788)
+- [hsba_slicer.cppm:1-867](file://ModuleHsBaSlicer/hsba_slicer.cppm#L1-L867)
 - [module_anchor.cpp:1-13](file://ModuleHsBaSlicer/module_anchor.cpp#L1-L13)
 - [CMakeLists.txt:1-78](file://LibHsBaSlicer/CMakeLists.txt#L1-L78)
 - [export.h:1-15](file://LibHsBaSlicer/export.h#L1-L15)
-- [model_preprocess.hpp:1-88](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L1-L88)
-- [mesh_slice.hpp:1-41](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L1-L41)
-- [fdm_support.hpp:1-68](file://LibHsBaSlicer/Support/fdm_support.hpp#L1-L68)
-- [polygon_fill.hpp:1-54](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L1-L54)
-- [path_generator.hpp:1-62](file://LibHsBaSlicer/Path/path_generator.hpp#L1-L62)
-- [sla_floor.hpp:1-183](file://LibHsBaSlicer/Floor/sla_floor.hpp#L1-L183)
-- [sls_export.hpp:1-52](file://LibHsBaSlicer/Path/sls_export.hpp#L1-L52)
-- [file_transfer.hpp:1-61](file://LibHsBaSlicer/Transfer/file_transfer.hpp#L1-L61)
-- [EventSourceFunction.hpp:1-40](file://LibHsBaSlicer/Extends/EventSourceFunction.hpp#L1-L40)
-- [LuaAddFunction.hpp:1-39](file://LibHsBaSlicer/Extends/LuaAddFunction.hpp#L1-L39)
+- [lua_pipeline.hpp:1-84](file://LibHsBaSlicer/Extends/lua_pipeline.hpp#L1-L84)
+- [custom_pipeline.h:1-66](file://DllHsBaSlicer/custom_pipeline.h#L1-L66)
 
 **Section sources**
 - [CMakeLists.txt:1-46](file://ModuleHsBaSlicer/CMakeLists.txt#L1-L46)
-- [hsba_slicer.cppm:1-788](file://ModuleHsBaSlicer/hsba_slicer.cppm#L1-L788)
+- [hsba_slicer.cppm:1-867](file://ModuleHsBaSlicer/hsba_slicer.cppm#L1-L867)
 - [module_anchor.cpp:1-13](file://ModuleHsBaSlicer/module_anchor.cpp#L1-L13)
 
 ## Core Components
@@ -124,7 +128,7 @@ The module exports a cohesive API surface under namespace HsBa::Slicer:
   - Clipper2 polygon types: Point2, Polygon, Polygons, Point2D, PolygonD, PolygonsD.
   - Pipeline config/result enums and structs from pipeline_types.h.
   - Support configuration types from Support namespace.
-  - Default config factories: defaultFdmConfig(), defaultSlaConfig(), defaultSlsConfig(), **defaultFileTransferConfig()**.
+  - Default config factories: defaultFdmConfig(), defaultSlaConfig(), defaultSlsConfig(), **defaultFileTransferConfig()**, **defaultCustomConfig()**.
   - **Event callback function types: ZipperEventCallbackFunc, DBEventCallbackFunc**.
   - **File transfer progress callback type: FileTransferProgressFunc**.
 
@@ -141,6 +145,8 @@ The module exports a cohesive API surface under namespace HsBa::Slicer:
     - **Performance Optimization**: run() method is declared inline.
   - **FileTransferPipeline**: Complete file transfer workflow with validation, connection pooling, and progress reporting.
     - **Performance Optimization**: run() methods are declared inline for optimal performance.
+  - **CustomLuaPipeline**: Fully Lua-driven workflow where the entire process is orchestrated by Lua scripts.
+    - **Performance Enhancement**: Provides flexible customization through Lua environment with all pipeline building blocks exposed.
 
 - **Event System**:
   - addEventCallback(): Register event callbacks by name (e.g., "zipper.on_add", "db.on_query").
@@ -158,39 +164,39 @@ The module exports a cohesive API surface under namespace HsBa::Slicer:
 These components wrap LibHsBaSlicer free functions and provide a consistent, exception-based, object-oriented interface with optimized inline implementations for frequently-called operations.
 
 **Section sources**
-- [hsba_slicer.cppm:60-344](file://ModuleHsBaSlicer/hsba_slicer.cppm#L60-L344)
+- [hsba_slicer.cppm:60-383](file://ModuleHsBaSlicer/hsba_slicer.cppm#L60-L383)
 - [pipeline_types.h:1-491](file://pipelinetypes/pipeline_types.h#L1-L491)
 
 ## Architecture Overview
-At runtime, consumers import the module and call methods on the exported classes. Internally, these methods forward to LibHsBaSlicer functions such as LoadModel, Slice, GenerateAllFdmSupport, FillWithBorder, GenerateGCodePath, GenerateFloorRaft, RenderPolygonsToImage, SaveSlaPackage, SaveSlsPackageLua, **TransferFiles**, and various event callback functions.
+At runtime, consumers import the module and call methods on the exported classes. Internally, these methods forward to LibHsBaSlicer functions such as LoadModel, Slice, GenerateAllFdmSupport, FillWithBorder, GenerateGCodePath, GenerateFloorRaft, RenderPolygonsToImage, SaveSlaPackage, SaveSlsPackageLua, **TransferFiles**, **RunLuaPipeline**, and various event callback functions.
 
-The inline function optimization ensures that frequently-called methods like slicing operations, accessor functions, simple transformations, and file transfer operations are inlined at compile-time, reducing function call overhead and improving overall performance.
+The inline function optimization ensures that frequently-called methods like slicing operations, accessor functions, simple transformations, file transfer operations, and custom pipeline executions are inlined at compile-time, reducing function call overhead and improving overall performance.
 
 ```mermaid
 sequenceDiagram
 participant App as "Consumer App"
 participant Mod as "ModuleHsBaSlicer<br/>Inline Optimized"
 participant Lib as "LibHsBaSlicer"
+participant Lua as "Lua Environment"
 App->>Mod : "import hsba.slicer;"
 App->>Mod : "Model m(name, file)"
 Note over Mod : "Inline constructor & destructor"
 Mod->>Lib : "LoadModel(name, file)"
-App->>Mod : "FileTransferPipeline.run(config)"
+App->>Mod : "CustomLuaPipeline.run()"
 Note over Mod : "Inline run() method"
-Mod->>Lib : "TransferFiles(config, progress)"
-loop "For each file"
-Mod->>Lib : "Validate file existence"
-Mod->>Lib : "Establish connection pool"
-Mod->>Lib : "Send file with progress"
-end
-Mod-->>App : "FileTransferOutcome { success, files_transferred }"
+Mod->>Lib : "SetupLuaPipelineEnvironment()"
+Lib->>Lua : "Create Lua state with HsBa table"
+Lua->>Lua : "Execute user script"
+Lua->>Lib : "Call pipeline building blocks"
+Lib-->>Mod : "Return results"
+Mod-->>App : "CustomLuaResult { success, layers, output }"
 ```
 
 **Diagram sources**
-- [hsba_slicer.cppm:689-725](file://ModuleHsBaSlicer/hsba_slicer.cppm#L689-L725)
-- [file_transfer.hpp:45-56](file://LibHsBaSlicer/Transfer/file_transfer.hpp#L45-L56)
-- [EventSourceFunction.hpp:21-26](file://LibHsBaSlicer/Extends/EventSourceFunction.hpp#L21-L26)
-- [LuaAddFunction.hpp:19-24](file://LibHsBaSlicer/Extends/LuaAddFunction.hpp#L19-L24)
+- [hsba_slicer.cppm:771-804](file://ModuleHsBaSlicer/hsba_slicer.cppm#L771-L804)
+- [lua_pipeline.hpp:25-84](file://LibHsBaSlicer/Extends/lua_pipeline.hpp#L25-L84)
+- [lua_pipeline.cpp:728-855](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L728-L855)
+- [custom_pipeline.cpp:165-191](file://DllHsBaSlicer/custom_pipeline.cpp#L165-L191)
 
 ## Detailed Component Analysis
 
@@ -225,13 +231,13 @@ class Model {
 ```
 
 **Diagram sources**
-- [hsba_slicer.cppm:130-168](file://ModuleHsBaSlicer/hsba_slicer.cppm#L130-L168)
-- [hsba_slicer.cppm:366-414](file://ModuleHsBaSlicer/hsba_slicer.cppm#L366-L414)
+- [hsba_slicer.cppm:130-173](file://ModuleHsBaSlicer/hsba_slicer.cppm#L130-L173)
+- [hsba_slicer.cppm:406-454](file://ModuleHsBaSlicer/hsba_slicer.cppm#L406-L454)
 - [model_preprocess.hpp:35-83](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L35-L83)
 
 **Section sources**
-- [hsba_slicer.cppm:130-168](file://ModuleHsBaSlicer/hsba_slicer.cppm#L130-L168)
-- [hsba_slicer.cppm:366-414](file://ModuleHsBaSlicer/hsba_slicer.cppm#L366-L414)
+- [hsba_slicer.cppm:130-173](file://ModuleHsBaSlicer/hsba_slicer.cppm#L130-L173)
+- [hsba_slicer.cppm:406-454](file://ModuleHsBaSlicer/hsba_slicer.cppm#L406-L454)
 - [model_preprocess.hpp:35-83](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L35-L83)
 
 ### FDM Pipeline
@@ -263,14 +269,14 @@ Save --> ReturnRes
 ```
 
 **Diagram sources**
-- [hsba_slicer.cppm:503-550](file://ModuleHsBaSlicer/hsba_slicer.cppm#L503-L550)
+- [hsba_slicer.cppm:543-590](file://ModuleHsBaSlicer/hsba_slicer.cppm#L543-L590)
 - [fdm_support.hpp:32-63](file://LibHsBaSlicer/Support/fdm_support.hpp#L32-L63)
 - [polygon_fill.hpp:32-49](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L32-L49)
 - [path_generator.hpp:45-46](file://LibHsBaSlicer/Path/path_generator.hpp#L45-L46)
 
 **Section sources**
-- [hsba_slicer.cppm:182-202](file://ModuleHsBaSlicer/hsba_slicer.cppm#L182-L202)
-- [hsba_slicer.cppm:420-550](file://ModuleHsBaSlicer/hsba_slicer.cppm#L420-L550)
+- [hsba_slicer.cppm:186-207](file://ModuleHsBaSlicer/hsba_slicer.cppm#L186-L207)
+- [hsba_slicer.cppm:460-590](file://ModuleHsBaSlicer/hsba_slicer.cppm#L460-L590)
 - [fdm_support.hpp:32-63](file://LibHsBaSlicer/Support/fdm_support.hpp#L32-L63)
 - [polygon_fill.hpp:32-49](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L32-L49)
 - [path_generator.hpp:45-46](file://LibHsBaSlicer/Path/path_generator.hpp#L45-L46)
@@ -306,13 +312,13 @@ Mod-->>App : "SlaResult { saved, total_layers }"
 ```
 
 **Diagram sources**
-- [hsba_slicer.cppm:592-655](file://ModuleHsBaSlicer/hsba_slicer.cppm#L592-L655)
+- [hsba_slicer.cppm:632-695](file://ModuleHsBaSlicer/hsba_slicer.cppm#L632-L695)
 - [sla_floor.hpp:132-178](file://LibHsBaSlicer/Floor/sla_floor.hpp#L132-L178)
 - [fdm_support.hpp:45-63](file://LibHsBaSlicer/Support/fdm_support.hpp#L45-L63)
 
 **Section sources**
-- [hsba_slicer.cppm:216-235](file://ModuleHsBaSlicer/hsba_slicer.cppm#L216-L235)
-- [hsba_slicer.cppm:556-655](file://ModuleHsBaSlicer/hsba_slicer.cppm#L556-L655)
+- [hsba_slicer.cppm:220-240](file://ModuleHsBaSlicer/hsba_slicer.cppm#L220-L240)
+- [hsba_slicer.cppm:596-695](file://ModuleHsBaSlicer/hsba_slicer.cppm#L596-L695)
 - [sla_floor.hpp:132-178](file://LibHsBaSlicer/Floor/sla_floor.hpp#L132-L178)
 
 ### SLS Pipeline
@@ -334,12 +340,12 @@ ExportLua --> End(["Return bool"])
 ```
 
 **Diagram sources**
-- [hsba_slicer.cppm:663-686](file://ModuleHsBaSlicer/hsba_slicer.cppm#L663-L686)
+- [hsba_slicer.cppm:703-726](file://ModuleHsBaSlicer/hsba_slicer.cppm#L703-L726)
 - [sls_export.hpp:45-47](file://LibHsBaSlicer/Path/sls_export.hpp#L45-L47)
 
 **Section sources**
-- [hsba_slicer.cppm:242-253](file://ModuleHsBaSlicer/hsba_slicer.cppm#L242-L253)
-- [hsba_slicer.cppm:661-686](file://ModuleHsBaSlicer/hsba_slicer.cppm#L661-L686)
+- [hsba_slicer.cppm:246-258](file://ModuleHsBaSlicer/hsba_slicer.cppm#L246-L258)
+- [hsba_slicer.cppm:701-726](file://ModuleHsBaSlicer/hsba_slicer.cppm#L701-L726)
 - [sls_export.hpp:45-47](file://LibHsBaSlicer/Path/sls_export.hpp#L45-L47)
 
 ### File Transfer Pipeline
@@ -371,13 +377,50 @@ Success --> |No| Error["Throw SlicerError"]
 ```
 
 **Diagram sources**
-- [hsba_slicer.cppm:692-725](file://ModuleHsBaSlicer/hsba_slicer.cppm#L692-L725)
+- [hsba_slicer.cppm:734-765](file://ModuleHsBaSlicer/hsba_slicer.cppm#L734-L765)
 - [file_transfer.hpp:45-56](file://LibHsBaSlicer/Transfer/file_transfer.hpp#L45-L56)
 
 **Section sources**
-- [hsba_slicer.cppm:268-283](file://ModuleHsBaSlicer/hsba_slicer.cppm#L268-L283)
-- [hsba_slicer.cppm:689-725](file://ModuleHsBaSlicer/hsba_slicer.cppm#L689-L725)
+- [hsba_slicer.cppm:272-288](file://ModuleHsBaSlicer/hsba_slicer.cppm#L272-L288)
+- [hsba_slicer.cppm:732-765](file://ModuleHsBaSlicer/hsba_slicer.cppm#L732-L765)
 - [file_transfer.hpp:19-56](file://LibHsBaSlicer/Transfer/file_transfer.hpp#L19-L56)
+
+### Custom Lua Pipeline
+Responsibilities:
+- **Fully Lua-driven workflow orchestration** where the entire process is controlled by Lua scripts.
+- Provides a complete Lua environment with all pipeline building blocks exposed through the global `HsBa` table.
+- Supports both synchronous and asynchronous execution with progress reporting.
+- Enables complex multi-stage workflows without recompiling C++ code.
+
+Key features:
+- **LuaPipelineContext**: Configuration structure for script execution including inline source, script file, entry function, and context variables.
+- **LuaPipelineOutput**: Result structure capturing success status, layer count, output path, and return values from Lua scripts.
+- **HsBa Table Operations**: Comprehensive Lua API exposing model management, slicing, support generation, filling, floor creation, path generation, and packaging operations.
+- **Progress Reporting**: Built-in progress callback system allowing Lua scripts to report execution status.
+- **Flexible Configuration**: Support for JSON configuration, model parameters, and output settings.
+
+```mermaid
+flowchart TD
+Start(["CustomLuaPipeline::run"]) --> CheckConfig{"Script or source set?"}
+CheckConfig --> |No| ThrowErr["Throw SlicerError"]
+CheckConfig --> |Yes| SetupEnv["SetupLuaPipelineEnvironment()"]
+SetupEnv --> CreateLua["Create Lua state with HsBa table"]
+CreateLua --> ExecuteScript["Execute Lua script"]
+ExecuteScript --> CallEntry["Call entry function (run_pipeline)"]
+CallEntry --> ProcessResults["Process Lua results"]
+ProcessResults --> BuildResult["Build CustomLuaResult"]
+BuildResult --> Return["Return result with layers, output, string"]
+```
+
+**Diagram sources**
+- [hsba_slicer.cppm:771-804](file://ModuleHsBaSlicer/hsba_slicer.cppm#L771-L804)
+- [lua_pipeline.cpp:728-855](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L728-L855)
+
+**Section sources**
+- [hsba_slicer.cppm:294-322](file://ModuleHsBaSlicer/hsba_slicer.cppm#L294-L322)
+- [hsba_slicer.cppm:771-804](file://ModuleHsBaSlicer/hsba_slicer.cppm#L771-L804)
+- [lua_pipeline.hpp:25-84](file://LibHsBaSlicer/Extends/lua_pipeline.hpp#L25-L84)
+- [lua_pipeline.cpp:728-855](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L728-L855)
 
 ### Event System
 Responsibilities:
@@ -415,11 +458,11 @@ EventSystem --> DatabaseEvents
 ```
 
 **Diagram sources**
-- [hsba_slicer.cppm:317-324](file://ModuleHsBaSlicer/hsba_slicer.cppm#L317-L324)
+- [hsba_slicer.cppm:356-363](file://ModuleHsBaSlicer/hsba_slicer.cppm#L356-L363)
 - [EventSourceFunction.hpp:14-26](file://LibHsBaSlicer/Extends/EventSourceFunction.hpp#L14-L26)
 
 **Section sources**
-- [hsba_slicer.cppm:317-324](file://ModuleHsBaSlicer/hsba_slicer.cppm#L317-L324)
+- [hsba_slicer.cppm:356-363](file://ModuleHsBaSlicer/hsba_slicer.cppm#L356-L363)
 - [EventSourceFunction.hpp:14-26](file://LibHsBaSlicer/Extends/EventSourceFunction.hpp#L14-L26)
 
 ### Lua Customization Functions
@@ -435,10 +478,8 @@ Usage:
 - **Performance Enhancement**: All functions are declared inline for optimal performance when called frequently.
 
 **Section sources**
-- [hsba_slicer.cppm:289-302](file://ModuleHsBaSlicer/hsba_slicer.cppm#L289-L302)
-- [hsba_slicer.cppm:308-316](file://ModuleHsBaSlicer/hsba_slicer.cppm#L308-L316)
-- [hsba_slicer.cppm:731-749](file://ModuleHsBaSlicer/hsba_slicer.cppm#L731-L749)
-- [hsba_slicer.cppm:755-771](file://ModuleHsBaSlicer/hsba_slicer.cppm#L755-L771)
+- [hsba_slicer.cppm:810-826](file://ModuleHsBaSlicer/hsba_slicer.cppm#L810-L826)
+- [hsba_slicer.cppm:328-354](file://ModuleHsBaSlicer/hsba_slicer.cppm#L328-L354)
 - [LuaAddFunction.hpp:19-24](file://LibHsBaSlicer/Extends/LuaAddFunction.hpp#L19-L24)
 
 ## Dependency Analysis
@@ -450,6 +491,7 @@ ModuleHsBaSlicer depends on:
 - Lua libraries for scripting integration.
 - **File transfer libraries for network operations**.
 - **Event system libraries for callback management**.
+- **Custom pipeline libraries for Lua-driven workflows**.
 
 Build-time considerations:
 - Single-file module avoids MSVC implicit-import issues.
@@ -467,20 +509,21 @@ Module --> Clipper["Clipper2"]
 Module --> Lua["Lua Libraries"]
 Module --> Network["Network Libraries"]
 Module --> Events["Event System"]
+Module --> CustomPipe["Custom Pipeline Engine"]
 ```
 
 **Diagram sources**
 - [CMakeLists.txt:12-29](file://ModuleHsBaSlicer/CMakeLists.txt#L12-L29)
 - [CMakeLists.txt:1-78](file://LibHsBaSlicer/CMakeLists.txt#L1-L78)
-- [hsba_slicer.cppm:38-59](file://ModuleHsBaSlicer/hsba_slicer.cppm#L38-L59)
+- [hsba_slicer.cppm:38-61](file://ModuleHsBaSlicer/hsba_slicer.cppm#L38-L61)
 
 **Section sources**
 - [CMakeLists.txt:1-46](file://ModuleHsBaSlicer/CMakeLists.txt#L1-L46)
 - [CMakeLists.txt:1-78](file://LibHsBaSlicer/CMakeLists.txt#L1-L78)
-- [hsba_slicer.cppm:38-59](file://ModuleHsBaSlicer/hsba_slicer.cppm#L38-L59)
+- [hsba_slicer.cppm:38-61](file://ModuleHsBaSlicer/hsba_slicer.cppm#L38-L61)
 
 ## Performance Considerations
-**Updated** Added comprehensive inline function optimization analysis and new file transfer performance optimizations
+**Updated** Added comprehensive inline function optimization analysis and new custom pipeline performance optimizations
 
 ### Inline Function Optimization Strategy
 The module implements strategic inline function declarations for 31 frequently-called methods across the core classes:
@@ -496,6 +539,7 @@ The module implements strategic inline function declarations for 31 frequently-c
 - **SlaPipeline**: `run()`, `generateFloor()`, `renderLayer()`, `savePackage()` - main workflow methods  
 - **SlsPipeline**: `run()` - primary export method
 - **FileTransferPipeline**: `run()` methods - file transfer operations optimized for performance
+- **CustomLuaPipeline**: `run()` - custom pipeline execution optimized for performance
 
 #### Event System Optimizations
 - **Event Registration**: `addEventCallback()`, `addZipperEventCallback()`, `addDBEventCallback()` - event setup operations
@@ -510,8 +554,9 @@ The module implements strategic inline function declarations for 31 frequently-c
 - **Reduced Function Call Overhead**: Inline functions eliminate call/return overhead for frequently-accessed methods
 - **Compiler Optimization Opportunities**: Inlined code enables better compiler optimizations like constant propagation and dead code elimination
 - **Memory Access Patterns**: Direct access to member variables through inline functions improves cache locality
-- **Critical Path Optimization**: Slicing operations, file transfer operations, and event registrations benefit significantly from inlining
+- **Critical Path Optimization**: Slicing operations, file transfer operations, event registrations, and custom pipeline executions benefit significantly from inlining
 - **Network Operation Optimization**: File transfer operations are optimized for high-throughput scenarios
+- **Lua Pipeline Optimization**: Custom pipeline execution is optimized for minimal overhead in script invocation
 
 ### Best Practices
 - Prefer using sliceD only when downstream algorithms require double precision; otherwise use slice to avoid conversion overhead.
@@ -521,6 +566,7 @@ The module implements strategic inline function declarations for 31 frequently-c
 - **Leverage inline optimizations**: The module's inline design means performance-critical paths are already optimized at compile-time.
 - **Optimize file transfer operations**: Configure appropriate pool sizes and batch file transfers for maximum throughput.
 - **Use event callbacks judiciously**: Register only necessary event handlers to minimize overhead.
+- **Optimize custom Lua pipelines**: Design efficient Lua scripts and minimize data transfer between C++ and Lua environments.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -536,6 +582,10 @@ Common issues and resolutions:
   - Verify host/port configuration and network connectivity.
   - Check file path validity and permissions.
   - Monitor progress callbacks for detailed error information.
+- **Custom Lua pipeline failures**:
+  - Ensure pipeline_lua_script or pipeline_lua_source is set before running CustomLuaPipeline.
+  - Verify that the Lua entry function exists and returns appropriate values.
+  - Check Lua script syntax and available functions in the HsBa table.
 - **Event callback issues**:
   - Ensure proper callback registration before operations begin.
   - Verify callback function signatures match expected types.
@@ -545,9 +595,12 @@ Common issues and resolutions:
 **Section sources**
 - [CMakeLists.txt:36-45](file://ModuleHsBaSlicer/CMakeLists.txt#L36-L45)
 - [module_anchor.cpp:1-13](file://ModuleHsBaSlicer/module_anchor.cpp#L1-L13)
-- [hsba_slicer.cppm:665-666](file://ModuleHsBaSlicer/hsba_slicer.cppm#L665-L666)
-- [hsba_slicer.cppm:366-378](file://ModuleHsBaSlicer/hsba_slicer.cppm#L366-L378)
-- [hsba_slicer.cppm:716-718](file://ModuleHsBaSlicer/hsba_slicer.cppm#L716-L718)
+- [hsba_slicer.cppm:705-706](file://ModuleHsBaSlicer/hsba_slicer.cppm#L705-L706)
+- [hsba_slicer.cppm:406-418](file://ModuleHsBaSlicer/hsba_slicer.cppm#L406-L418)
+- [hsba_slicer.cppm:756-758](file://ModuleHsBaSlicer/hsba_slicer.cppm#L756-L758)
+- [hsba_slicer.cppm:780-781](file://ModuleHsBaSlicer/hsba_slicer.cppm#L780-L781)
 
 ## Conclusion
-ModuleHsBaSlicer delivers a modern, exception-safe, and ergonomic C++20 API over LibHsBaSlicer with significant performance optimizations through strategic inline function declarations. By exporting classes like Model, FdmPipeline, SlaPipeline, SlsPipeline, and **FileTransferPipeline** with 31 frequently-called methods optimized as inline functions, it abstracts away low-level free functions while preserving flexibility through Lua customization and maximizing runtime performance. The module now includes comprehensive **event-driven programming capabilities** and **robust file transfer functionality**, making it suitable for complex multi-stage workflows requiring real-time monitoring and distributed operations. The single-file module design, careful CMake configuration, and inline optimization strategy ensure reliable consumption across platforms and toolchains while providing excellent performance characteristics for production workloads.
+ModuleHsBaSlicer delivers a modern, exception-safe, and ergonomic C++20 API over LibHsBaSlicer with significant performance optimizations through strategic inline function declarations. By exporting classes like Model, FdmPipeline, SlaPipeline, SlsPipeline, **FileTransferPipeline**, and **CustomLuaPipeline** with 31 frequently-called methods optimized as inline functions, it abstracts away low-level free functions while preserving flexibility through Lua customization and maximizing runtime performance. 
+
+The module now includes comprehensive **event-driven programming capabilities**, **robust file transfer functionality**, and **fully customizable Lua-driven workflows** that delegate entire processes to Lua scripts. The **CustomLuaPipeline** class represents a major enhancement, providing complete workflow orchestration through Lua while maintaining the performance benefits of inline optimizations. The single-file module design, careful CMake configuration, and inline optimization strategy ensure reliable consumption across platforms and toolchains while providing excellent performance characteristics for production workloads requiring complex, customizable slicing workflows.
