@@ -153,6 +153,37 @@ if(HSBA_RUN_TESTS_AFTER_BUILD)
   )
 endif()
 
+# graph_test
+add_executable(graph_test Graph/graph_test.cpp)
+
+# Boost.Graph 模板实例化超出 MSVC 65535 段限制
+if(MSVC)
+set_source_files_properties(Graph/graph_test.cpp PROPERTIES COMPILE_OPTIONS "/bigobj")
+endif()
+
+target_link_libraries(graph_test
+	HsBaSlicerBase
+    HsBaSlicerUtils
+	Boost::unit_test_framework
+)
+
+target_compile_definitions(graph_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME graph_test
+  COMMAND $<TARGET_FILE:graph_test>
+  )
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET graph_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R graph_test
+  )
+endif()
+
 #filename check and operator
 #test for filename check
 add_executable(filename_check_test
@@ -238,6 +269,38 @@ add_test(
   -t enum_simple_convert
   )
 
+# lua common types test
+add_executable(lua_common_types_test LuaCommonTypes/lua_common_types_test.cpp)
+
+target_link_libraries(lua_common_types_test
+	LibHsBaSlicer
+	HsBaSlicer2D
+	HsBaSlicerBase
+	HsBaSlicerUtils
+	Eigen3::Eigen
+	Boost::unit_test_framework
+	${LUA_LIBRARIES}
+)
+
+target_include_directories(lua_common_types_test PRIVATE ${LUA_INCLUDE_DIR})
+
+target_compile_definitions(lua_common_types_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME lua_common_types_test
+  COMMAND $<TARGET_FILE:lua_common_types_test>
+  )
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET lua_common_types_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R lua_common_types_test
+  )
+endif()
+
 set(ALL_TEST_TARGETS
   any_object_test
   anyvisit_test
@@ -257,7 +320,6 @@ set(ALL_TEST_TARGETS
   points_path_test
   layers_path_test
   images_path_test
-  cgal_model_test
   igl_model_test
   full_topo_model_test
   polygon_fill_test
@@ -266,10 +328,16 @@ set(ALL_TEST_TARGETS
   support_test
   model_loader_test
   openvdb_model_test
+  lua_common_types_test
 )
 
 if(TARGET HsBaSlicerCADModel)
   list(APPEND ALL_TEST_TARGETS occt_model_test)
+endif()
+
+# CGAL is a copyleft kernel, its test only builds when HSBA_COPL is enabled
+if(HSBA_COPL)
+  list(APPEND ALL_TEST_TARGETS cgal_model_test)
 endif()
 
 if(HSBA_RUN_TESTS_AFTER_BUILD)
@@ -597,26 +665,31 @@ if(TARGET HsBaSlicerCADModel)
 endif()
 endif()
 
+# CGAL is a copyleft kernel, cgal_model_test only builds when HSBA_COPL is enabled
+if(HSBA_COPL)
 add_executable(cgal_model_test Models/cgal_model_test.cpp)
+target_link_libraries(cgal_model_test PRIVATE Boost::unit_test_framework HsBaSlicerMesh Eigen3::Eigen)
+target_compile_definitions(cgal_model_test PRIVATE BOOST_TEST_DYN_LINK)
+target_compile_definitions(cgal_model_test PRIVATE $<$<CONFIG:Debug>:DISABLE_BOOLEAN_OPERATIONS_TESTS;DISABLE_ADVANCE_OPERATIONS_TESTS>)
+endif()
 add_executable(igl_model_test Models/igl_model_test.cpp)
 
-target_link_libraries(cgal_model_test PRIVATE Boost::unit_test_framework HsBaSlicerMesh Eigen3::Eigen)
 target_link_libraries(igl_model_test PRIVATE Boost::unit_test_framework HsBaSlicerMesh Eigen3::Eigen)
 
 # Always enable Boost test dynamic link
-target_compile_definitions(cgal_model_test PRIVATE BOOST_TEST_DYN_LINK)
 target_compile_definitions(igl_model_test PRIVATE BOOST_TEST_DYN_LINK)
 
 # In Debug configuration, disable boolean operation tests for CGAL and IGL
-target_compile_definitions(cgal_model_test PRIVATE $<$<CONFIG:Debug>:DISABLE_BOOLEAN_OPERATIONS_TESTS;DISABLE_ADVANCE_OPERATIONS_TESTS>)
 target_compile_definitions(igl_model_test PRIVATE $<$<CONFIG:Debug>:DISABLE_BOOLEAN_OPERATIONS_TESTS>)
 
 #target_compile_definitions(cgal_model_test PRIVATE $<$<CONFIG:Debug>:DISABLE_ADVANCE_OPERATIONS_TESTS>)
 
 enable_testing()
+if(HSBA_COPL)
 add_test(NAME cgal_model_test COMMAND $<TARGET_FILE:cgal_model_test>)
+endif()
 add_test(NAME igl_model_test COMMAND $<TARGET_FILE:igl_model_test>)
-if(HSBA_RUN_TESTS_AFTER_BUILD)
+if(HSBA_COPL AND HSBA_RUN_TESTS_AFTER_BUILD)
   add_custom_command(TARGET cgal_model_test POST_BUILD
     COMMAND ${CMAKE_CTEST_COMMAND} -V -R cgal_model_test
   )
@@ -661,6 +734,7 @@ add_executable(polygon_fill_test
 
 target_link_libraries(polygon_fill_test
     HsBaSlicer2D
+    LibHsBaSlicer
     Boost::unit_test_framework
 )
 

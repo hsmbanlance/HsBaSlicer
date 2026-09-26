@@ -31,8 +31,7 @@ target_link_libraries(HsBaSlicerFileOperator PUBLIC HsBaSlicerBase
 )
 
 if(HSBA_HSBA_USE_BIT7Z AND NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
-  find_package(unofficial-bit7z CONFIG REQUIRED)
-  target_link_libraries(HsBaSlicerFileOperator PUBLIC unofficial::bit7z::bit7z64)
+  target_link_libraries(HsBaSlicerFileOperator PUBLIC bit7z::bit7z  bit7z::bit7z64)
 endif()
 
 find_package(Lua REQUIRED)

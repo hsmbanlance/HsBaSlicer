@@ -7,6 +7,7 @@
     Support/fdm_support.hpp
     Fill/polygon_fill.hpp
     Path/path_generator.hpp
+    Path/path_optimizer.hpp
     Path/sls_export.hpp
     Floor/sla_floor.hpp
     Transfer/file_transfer.hpp
@@ -16,6 +17,7 @@
     Support/fdm_support.cpp
     Fill/polygon_fill.cpp
     Path/path_generator.cpp
+    Path/path_optimizer.cpp
     Path/sls_export.cpp
     Floor/sla_floor.cpp
     Transfer/file_transfer.cpp
@@ -23,6 +25,10 @@
     Extends/LuaAddFunction.cpp
     Extends/EventSourceFunction.hpp
     Extends/EventSourceFunction.cpp
+    Extends/LuaCommonTypes.hpp
+    Extends/LuaCommonTypes.cpp
+    Extends/lua_pipeline.hpp
+    Extends/lua_pipeline.cpp
     )
 else()
     add_library(LibHsBaSlicer SHARED 
@@ -33,6 +39,7 @@ else()
     Support/fdm_support.hpp
     Fill/polygon_fill.hpp
     Path/path_generator.hpp
+    Path/path_optimizer.hpp
     Path/sls_export.hpp
     Floor/sla_floor.hpp
     Transfer/file_transfer.hpp
@@ -42,6 +49,7 @@ else()
     Support/fdm_support.cpp
     Fill/polygon_fill.cpp
     Path/path_generator.cpp
+    Path/path_optimizer.cpp
     Path/sls_export.cpp
     Floor/sla_floor.cpp
     Transfer/file_transfer.cpp
@@ -49,6 +57,10 @@ else()
     Extends/LuaAddFunction.cpp
     Extends/EventSourceFunction.hpp
     Extends/EventSourceFunction.cpp
+    Extends/LuaCommonTypes.hpp
+    Extends/LuaCommonTypes.cpp
+    Extends/lua_pipeline.hpp
+    Extends/lua_pipeline.cpp
     )
     # Define the export macro for Windows
     target_compile_definitions(LibHsBaSlicer PRIVATE HSBA_SLICER_EXPORTS)
@@ -75,8 +87,8 @@ HsBaVersion
 HsBaSlicerFileOperator
 )
 
-# OCCT / CAD kernel is not available on Android, iOS, or game consoles
-if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
+# OCCT / CAD kernel is a copyleft kernel, not available without HSBA_COPL or on Android, iOS, or game consoles
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE AND HSBA_COPL)
     target_link_libraries(LibHsBaSlicer PRIVATE HsBaSlicerCADModel)
 endif()
 

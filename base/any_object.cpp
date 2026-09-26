@@ -83,6 +83,17 @@ AnyObject AnyObject::Invoke(std::string_view method_name, std::span<AnyObject> a
 {
     if (!type_info)
         throw RuntimeError("Invoke on empty AnyObject");
+#ifdef HSBA_ANY_OBJECT_ENABLE_MOCK
+    // Mockit-like hook: when mocking is enabled and a stub matches, serve the
+    // call from the registry instead of dispatching to the real method.
+    {
+        AnyObject mocked;
+        if (Mock::MockRegistry::instance().try_invoke(type_info, method_name, data, args, mocked))
+        {
+            return mocked;
+        }
+    }
+#endif
     auto it = type_info->methods.find(method_name);
     if (it == type_info->methods.end())
     {

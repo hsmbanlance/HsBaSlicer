@@ -148,6 +148,42 @@ else()
   message(STATUS "Building for unknown platform: ${CMAKE_SYSTEM_NAME}")
 endif()
 
+# Copyleft kernels (CGAL, OpenCascade) are only installed by the vcpkg "copyleft"
+# manifest feature. HSBA_COPL is tri-state:
+#   AUTO - detect: VCPKG_MANIFEST_FEATURES env -> VCPKG_MANIFEST_NO_DEFAULT_FEATURES env
+#          -> probe whether CGAL/OpenCascade are installed (vcpkg manifest install
+#          happens during toolchain load, so packages are already in place here;
+#          note default-features are NOT listed in VCPKG_MANIFEST_FEATURES)
+#   ON/OFF - force explicitly
+set(HSBA_COPL "AUTO" CACHE STRING "Link copyleft kernels (CGAL, OpenCascade); switches project license to GPL-3.0-or-later (AUTO/ON/OFF)")
+set_property(CACHE HSBA_COPL PROPERTY STRINGS AUTO ON OFF)
+
+if(HSBA_COPL STREQUAL "AUTO")
+  if(DEFINED ENV{VCPKG_MANIFEST_FEATURES} AND "$ENV{VCPKG_MANIFEST_FEATURES}" MATCHES "copyleft")
+    set(_HSBA_COPL_DETECTED ON)
+  elseif(DEFINED ENV{VCPKG_MANIFEST_NO_DEFAULT_FEATURES} AND NOT "$ENV{VCPKG_MANIFEST_NO_DEFAULT_FEATURES}" MATCHES "^(0|OFF|FALSE|N)$")
+    # Default features (incl. copyleft) explicitly disabled
+    set(_HSBA_COPL_DETECTED OFF)
+  else()
+    # Probe for installed copyleft kernels (vcpkg manifest default-features or system install)
+    find_package(CGAL CONFIG QUIET)
+    find_package(OpenCASCADE CONFIG QUIET)
+    if(CGAL_FOUND OR OpenCASCADE_FOUND)
+      set(_HSBA_COPL_DETECTED ON)
+    else()
+      set(_HSBA_COPL_DETECTED OFF)
+    endif()
+  endif()
+  set(HSBA_COPL ${_HSBA_COPL_DETECTED})
+endif()
+
+if(HSBA_COPL)
+  message(STATUS "Copyleft kernels enabled (CGAL, OpenCascade); project license will be GPL-3.0-or-later")
+  add_compile_definitions(HSBA_COPL)
+else()
+  message(STATUS "Copyleft kernels disabled; project license will be MIT")
+endif()
+
 find_package(PkgConfig REQUIRED)
 
 #Tripartite library needed
@@ -197,7 +233,7 @@ endif()
 
 if(HSBA_HSBA_USE_BIT7Z)
 	add_compile_definitions(HSBA_USE_BIT7Z)
-	find_package(unofficial-bit7z CONFIG REQUIRED)
+	find_package(bit7z CONFIG REQUIRED)
 endif()
 
 option(HSBA_ENABLE_THREAD_POOL_COROUTINE "Enable coroutine support in thread pool" ON)
@@ -228,7 +264,7 @@ endif()
 
 #Mesh_kernel
 find_package(libigl CONFIG REQUIRED)
-if(NOT IOS AND NOT HSBA_GAME_CONSOLE)
+if(NOT IOS AND NOT HSBA_GAME_CONSOLE AND HSBA_COPL)
   find_package(CGAL CONFIG REQUIRED)
   add_compile_definitions(USE_CGAL)
   message("Use CGAL and igl enable boolean operations or other features.")
@@ -242,8 +278,9 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   message("Boolean operations may be slow and cause high memory usage in Debug mode.")
 endif()
 
-# Model object pool size: 10 when CGAL is available, 1 otherwise
-if(NOT IOS AND NOT HSBA_GAME_CONSOLE)
+# Model object pool size: 10 when copyleft kernels (CGAL/OCCT) are available so
+# boolean operations can hold multiple models, 1 otherwise
+if(NOT IOS AND NOT HSBA_GAME_CONSOLE AND HSBA_COPL)
   add_compile_definitions(HSBA_MODEL_POOL_SIZE=10)
 else()
   add_compile_definitions(HSBA_MODEL_POOL_SIZE=1)
@@ -251,9 +288,10 @@ endif()
 
 #CAD_kernel
 #OpenCascade
+#copyleft kernel, only linked when HSBA_COPL is enabled
 #disable if andoird and IOS
 #Todo: disable if not support OpenCascade, or use other CAD kernel
-if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE AND HSBA_COPL)
   find_package(OpenCASCADE CONFIG REQUIRED)
   message("Use occt as cad kernel.")
   add_compile_definitions(USE_OCCT)
@@ -322,7 +360,7 @@ if(DEFINED VCPKG_TARGET_TRIPLET)
 	message("Set BUILD_SHARED_LIBS to ON for dynamic.")
   elseif(VCPKG_TARGET_TRIPLET MATCHES "linux" OR VCPKG_TARGET_TRIPLET MATCHES "android" OR VCPKG_TARGET_TRIPLET MATCHES "static")
 	set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build using shared libraries" FORCE)
-	message("Set BUILD_SHARED_LIBS to OFF for Linux or Android static.")
+	message("Set BUILD_SHARED_LIBS to OFF for Linux or Android or MacOS static.")
 #other use static
   else()
 	set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build using shared libraries" FORCE)
@@ -330,6 +368,23 @@ if(DEFINED VCPKG_TARGET_TRIPLET)
   endif()
 else()
   message("VCPKG_TARGET_TRIPLET is not defined.")
+endif()
+
+#test
+# Declared before the subdirectory section on purpose: HsBaSlicerBase gates the
+# AnyObject mockit-like stubbing facility on HSBA_SLICER_USE_TESTS (see
+# base/CMakeLists.txt), so the option must already exist when "base" is added.
+option(HSBA_SLICER_USE_TESTS "use tests" ON)
+if(ANDROID OR IOS OR HSBA_GAME_CONSOLE)
+  set(HSBA_SLICER_USE_TESTS OFF CACHE BOOL "use tests" FORCE)
+  message(STATUS "Tests disabled on Android, iOS, or game consoles due to output limitations.")
+endif()
+if(NOT DEFINED HSBA_SLICER_RUN_TESTS_AFTER_BUILD)
+  set(HSBA_SLICER_RUN_TESTS_AFTER_BUILD ON CACHE BOOL "Run tests after build" ON)
+endif()
+if(CMAKE_CROSSCOMPILING)
+  set(HSBA_SLICER_RUN_TESTS_AFTER_BUILD OFF CACHE BOOL "Run tests after build" FORCE)
+  message(STATUS "Cross-compiling: test executables will be built but not executed.")
 endif()
 
 # subdirectory。
@@ -347,7 +402,7 @@ add_subdirectory("2D")
 add_subdirectory("paths")
 add_subdirectory("fileoperator")
 add_subdirectory("meshmodel")
-if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
+if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE AND HSBA_COPL)
   add_subdirectory("cadmodel")
 endif()
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
@@ -371,6 +426,7 @@ if(HSBA_SLICER_BUILD_SAMPLES)
   add_subdirectory("samples/FDM")
   add_subdirectory("samples/SLA")
   add_subdirectory("samples/SLS")
+  add_subdirectory("samples/Custom")
   add_subdirectory("samples/LibHsBaSlicer")
 endif()
 
@@ -393,7 +449,10 @@ set(_HSBA_INSTALL_TARGETS
     HsBaPipelineTypes
 )
 if(NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)
-  list(APPEND _HSBA_INSTALL_TARGETS HsBaSlicerCADModel HsBaSlicerPointCloud)
+  list(APPEND _HSBA_INSTALL_TARGETS HsBaSlicerPointCloud)
+  if(HSBA_COPL)
+    list(APPEND _HSBA_INSTALL_TARGETS HsBaSlicerCADModel)
+  endif()
 endif()
 
 # LibHsBaSlicer
@@ -429,6 +488,7 @@ install(FILES
     DllHsBaSlicer/fdm_pipeline.h
     DllHsBaSlicer/sla_pipeline.h
     DllHsBaSlicer/sls_pipeline.h
+    DllHsBaSlicer/custom_pipeline.h
     DllHsBaSlicer/pipeline_convert.h
     DllHsBaSlicer/initialize.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer
@@ -471,6 +531,7 @@ install(FILES
     LibHsBaSlicer/Path/path_generator.hpp
     LibHsBaSlicer/Path/sls_export.hpp
     LibHsBaSlicer/Floor/sla_floor.hpp
+    LibHsBaSlicer/Extends/lua_pipeline.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/LibHsBaSlicer
 )
 
@@ -569,20 +630,8 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HsBaSlicer
 )
 
-#test
-option(HSBA_SLICER_USE_TESTS "use tests" ON)
-if(ANDROID OR IOS OR HSBA_GAME_CONSOLE)
-  set(HSBA_SLICER_USE_TESTS OFF CACHE BOOL "use tests" FORCE)
-  message(STATUS "Tests disabled on Android, iOS, or game consoles due to output limitations.")
-endif()
-if(NOT DEFINED HSBA_SLICER_RUN_TESTS_AFTER_BUILD)
-  set(HSBA_SLICER_RUN_TESTS_AFTER_BUILD ON CACHE BOOL "Run tests after build" ON)
-endif()
-if(CMAKE_CROSSCOMPILING)
-  set(HSBA_SLICER_RUN_TESTS_AFTER_BUILD OFF CACHE BOOL "Run tests after build" FORCE)
-  message(STATUS "Cross-compiling: test executables will be built but not executed.")
-endif()
-
+#test (the HSBA_SLICER_USE_TESTS / HSBA_SLICER_RUN_TESTS_AFTER_BUILD options are
+# declared above the subdirectory section, see the note there)
 if(HSBA_SLICER_USE_TESTS)
 	add_subdirectory("tests")
 endif()

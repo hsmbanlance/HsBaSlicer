@@ -8,7 +8,7 @@ LibHsBaSlicer 是 HsBaSlicer 的核心 C++ 库，提供完整的切片流水线�
 - [Slice（网格切片）](./mesh_slice.md) - Z 轴平面切片，生成层轮廓
 - [Support（支撑生成）](./fdm_support.md) - FDM/SLA/Lua 支撑截面生成
 - [Fill（多边形填充）](./polygon_fill.md) - 多种模式的多边形填充
-- [Path（路径生成）](./path_generator.md) - 从层数据生成 G-code 路径
+- [Path（路径生成）](./path_generator.md) - 从层数据生成 G-code 路径，与路径输出前置区域路径优化
 - **Floor（SLA 地板/渲染/打包）** - SLA 底座生成、层图渲染与 zip 打包导出
 - **Path/SLS 导出** - SLS Lua 脚本驱动导出（无标准格式）
 - **Transfer（文件传输）** - 远程执行器文件传输（连接池化 TCP 传输）
@@ -22,7 +22,7 @@ LibHsBaSlicer
 ├── Slice/         指定高度的网格切片
 ├── Support/       FDM/SLA/Lua 支撑生成
 ├── Fill/          多边形填充模式
-├── Path/          G-code 路径生成 + SLS Lua 导出
+├── Path/          G-code 路径生成 + 区域路径优化 + SLS Lua 导出
 ├── Floor/         SLA 地板/筏生成、层图渲染、zip 打包
 ├── Transfer/      远程文件传输（连接池化）
 └── Extends/       外部 Lua 函数注册 + C++ 事件源（Zipper/DB）
@@ -38,6 +38,7 @@ LibHsBaSlicer
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
 #include "LibHsBaSlicer/Fill/polygon_fill.hpp"
 #include "LibHsBaSlicer/Path/path_generator.hpp"
+#include "LibHsBaSlicer/Path/path_optimizer.hpp"        // 路径输出前置优化
 #include "LibHsBaSlicer/Path/sls_export.hpp"            // SLS Lua 导出
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"            // SLA 地板/渲染/打包
 #include "LibHsBaSlicer/Transfer/file_transfer.hpp"     // 文件传输
@@ -193,6 +194,85 @@ pkg.layer_z_heights = z_heights;  // 各层 Z 高度
 SaveSlsPackageLua(pkg, "output/result.zip", "scripts/export_sls.lua", "export_sls");
 ```
 
+## 路径优化（路径输出前置）
+
+通过 `Path/path_optimizer.hpp` 提供路径输出前置优化：把独立的多边形区域作为图顶点（AreaGraph），
+求解使空走代价最小的区域访问顺序，减少输出路径中的空走距离。按执行时机分两种模式（同一优化器内不可混用）：
+
+| 模式 | 执行时机 | 区域输入 | 门禁（候选出入门点） | 输出 |
+| --- | --- | --- | --- | --- |
+| 多边形模式 | 填充前 | 多边形本身（轮廓） | 全部多边形顶点 | 优化顺序的多边形集合（供后续填充） |
+| 填充结果模式 | 填充后 | 填充路径（支持多点折线） | 每条折线的首/尾端点 | 完整填充路径 |
+
+### C++ 接口
+
+```cpp
+#include "LibHsBaSlicer/Path/path_optimizer.hpp"
+using namespace HsBa::Slicer;
+
+// 多边形模式（填充前执行）：输出优化顺序的多边形，供后续填充使用
+RegionPathOptimizer opt;
+opt.addPolygonRegion(1, region1_polys);
+opt.addPolygonRegion(2, region2_polys);
+opt.optimizeOrder();                       // 区域数 >= 3 用遗传 TSP 求解
+PolygonsD ordered_polys = opt.buildPolygons();
+// 区域内多边形次序贪心编排，每个多边形仅旋转起点至入门禁顶点，不改变环绕方向
+
+// 填充结果模式（填充后执行）：输入支持多点折线，输出完整填充路径
+RegionPathOptimizer opt2;
+opt2.addRegion(1, region1_paths);
+opt2.addRegion(2, region2_paths);
+opt2.addRoute(1, 2, 42.0);                 // 可选：手动覆盖区域间空走代价（对称）
+opt2.optimizeOrder();
+PolygonsD full_paths = opt2.buildPaths();  // 区域内路径方向/次序贪心编排，减少跳变
+```
+
+### Lua 脚本嵌入方案（唯一交付入口）
+
+脚本环境内注册全局表 `PathOptimize`：
+
+| Lua 接口 | 说明 |
+| --- | --- |
+| `PathOptimize.new()` | 创建优化器对象（`addPolygons`/`addRegion`/`addRoute`/`optimizeOrder`/`buildPolygons`/`buildPaths`） |
+| `PathOptimize.optimizePolygons(regions)` | 多边形模式一键优化，返回优化顺序的多边形表 |
+| `PathOptimize.optimizeRegions(regions)` | 填充结果模式一键优化，返回完整填充路径表（支持多点折线） |
+
+其中 `regions` = 区域数组，每个区域 = 折线/多边形数组，每条折线/多边形 = `{x=.., y=..}` 点数组。
+
+脚本契约：函数接收 `regions`，返回同格式的优化结果表；脚本内还可使用多边形操作与填充函数。
+示例脚本见 `tests/PolygonFill/optimize_paths.lua`：
+
+```lua
+-- 填充结果模式：输出完整填充路径（支持多点折线）
+function optimize_paths(regions)
+    return PathOptimize.optimizeRegions(regions)
+end
+
+-- 多边形模式（填充前执行）：输出优化顺序的多边形集合，供后续填充使用
+function optimize_polygons(regions)
+    return PathOptimize.optimizePolygons(regions)
+end
+```
+
+C++ 嵌入入口（脚本文件 / 内联字符串两个版本）：
+
+| 函数 | 说明 |
+| --- | --- |
+| `LuaOptimizeRegionPolygons()` / `LuaOptimizeRegionPolygonsString()` | 多边形模式（默认函数名 `optimize_polygons`） |
+| `LuaOptimizeRegionPaths()` / `LuaOptimizeRegionPathsString()` | 填充结果模式（默认函数名 `optimize_paths`） |
+
+```cpp
+// 脚本环境中已注册多边形操作、填充与 PathOptimize 函数；可经 lua_reg 追加自定义注册
+PolygonsD optimized = LuaOptimizeRegionPaths(regions, "scripts/optimize_paths.lua");
+```
+
+### 流程接入
+
+按分层契约，`RegisterLuaPathOptimizeFunctions` 已接入 **Fill（填充）阶段**：`LuaCustomFillByFile()`
+的 Lua 环境在外部 2D 函数池之外自动注册 `PathOptimize`，填充脚本可直接在路径输出前优化区域顺序。
+Slice/Support/SLS Output/SLA Output 阶段不涉及路径空走语义，不接入。
+
+
 ## 版本信息
 
 ```cpp
@@ -208,7 +288,7 @@ std::string xml = GetVersionXml();    // XML 格式版本信息
 1. **预处理**：通过 `LoadModel()` 加载模型，施加变换，可选执行布尔运算/抽壳
 2. **切片**：在每个层高位置通过 `Slice()` 生成层轮廓
 3. **支撑**：通过 `GenerateAllFdmSupport()` / `GenerateAllSlaSupport()` 生成支撑结构
-4. **填充**：通过 `FillPolygon()` 或 `FillWithBorder()` 填充层多边形
+4. **填充**：通过 `FillPolygon()` 或 `FillWithBorder()` 填充层多边形；可在填充前（多边形模式）或填充后（填充结果模式）通过 `RegionPathOptimizer` / Lua 脚本优化区域路径顺序
 5. **路径**：通过 `GenerateGCodePathV2()` 生成支持多固件格式的 G-code 路径
 6. **SLA 导出**：通过 `GenerateFloorRaft()` + `RenderPolygonsToImage()` + `SaveSlaPackage()` 完成 SLA 输出
 7. **SLS 导出**：通过 `SaveSlsPackageLua()` 由 Lua 脚本决定输出格式

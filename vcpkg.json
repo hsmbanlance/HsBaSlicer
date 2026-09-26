@@ -39,10 +39,7 @@
     "boost-units",
     "boost-uuid",
     "boost-pfr",
-    {
-      "name": "cgal",
-      "platform": "windows | linux | osx | android"
-    },
+    "boost-graph",
     "clipper2",
     "libjpeg-turbo",
     "libpng",
@@ -53,21 +50,10 @@
     "eigen3",
     {
       "name": "libigl",
-      "features": [
-        "cgal"
-      ],
-      "platform": "windows | linux | osx | android"
-    },
-    {
-      "name": "libigl",
       "platform": "!windows & !linux & !osx & !android"
     },
     "freetype",
     "miniz",
-    {
-      "name": "opencascade",
-      "platform": "windows | linux | osx "
-    },
     {
       "name": "openvdb",
       "platform": "windows | linux | osx"
@@ -103,7 +89,24 @@
   "features": {
     "copyleft": {
       "description": "Build with copyleft kernels (CGAL GPL-3.0-or-later, OpenCascade LGPL-2.1-only). Enabling this feature switches the project license from MIT to GPL-3.0-or-later.",
-      "license": "GPL-3.0-or-later"
+      "license": "GPL-3.0-or-later",
+      "dependencies": [
+        {
+          "name": "cgal",
+          "platform": "windows | linux | osx | android"
+        },
+        {
+          "name": "libigl",
+          "features": [
+            "cgal"
+          ],
+          "platform": "windows | linux | osx | android"
+        },
+        {
+          "name": "opencascade",
+          "platform": "windows | linux | osx "
+        }
+      ]
     }
   }
 }

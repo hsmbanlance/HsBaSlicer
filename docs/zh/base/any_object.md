@@ -12,6 +12,7 @@ AnyObject 组件提供了运行时类型反射和动态调用的功能，允许�
 - 类型安全的任意类型存储
 - 支持移动和拷贝语义
 - 支持非成员函数注册
+- Mockit 风格的测试 Mock 支持（仅在检测到常用测试宏时启用，可运行时手动开关）
 
 ## 使用方法
 
@@ -526,6 +527,176 @@ int main()
     return 0;
 }
 ```
+
+### 8. Mock 支持（测试专用）
+
+`AnyObject::Invoke` 内置了 Mockit 风格的方法打桩能力，便于在单元测试中隔离被测代码与其依赖。为了避免污染生产构建，所有 Mock 相关代码由 `HSBA_ANY_OBJECT_ENABLE_MOCK` 宏整体门控。
+
+**启用条件（满足任一即可）**：
+
+- 显式定义 `HSBA_ANY_OBJECT_ENABLE_MOCK=1`
+- 当前编译单元中出现下列任一常用测试框架宏：
+  - Boost.Test：`BOOST_TEST_MODULE`、`BOOST_TEST_INCLUDED`、`BOOST_TEST_DYN_LINK`、`BOOST_TEST_ALTERNATIVE_INIT_API`
+  - GoogleTest：`GTEST_INCLUDE_GTEST_GTEST_H_`、`GTEST_API_`、`GTEST_HAS_MOCK`
+  - Catch2：`CATCH_VERSION_MAJOR`、`CATCH_CONFIG_MAIN`、`CATCH_CONFIG_RUNNER`
+  - doctest：`DOCTEST_LIBRARY_INCLUDED`、`DOCTEST_CONFIG_IMPLEMENT`、`DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN`
+- 项目层：当 `HSBA_SLICER_USE_TESTS=ON` 时，CMake 会为 `HsBaSlicerBase` 追加 `PUBLIC HSBA_ANY_OBJECT_ENABLE_MOCK=1`，链接它的测试目标无需重复设置。
+
+**运行时开关**：即便编译进来，Mock 默认关闭，`AnyObject::Invoke` 走真实方法路径，无任何行为变化。可通过下列 API 手动开启或关闭：
+
+| API | 说明 |
+| --- | --- |
+| `Mock::EnableMock()` / `MockRegistry::instance().enable()` | 手动开启 Mock |
+| `Mock::DisableMock()` / `MockRegistry::instance().disable()` | 手动关闭 Mock（保留已注册的桩） |
+| `Mock::SetMockEnabled(bool)` | 显式设置开关 |
+| `Mock::IsMockEnabled()` | 查询当前状态 |
+| `Mock::ClearMocks()` / `MockRegistry::clear()` | 清空所有桩与调用记录 |
+| `Mock::MockRegistry::ScopedEnable` | RAII：作用域内开启，退出时恢复先前状态 |
+| `Mock::MockRegistry::ScopedStubs` | RAII：进入时清空并开启，退出时清空并恢复；用于测试用例之间的隔离 |
+
+**打桩 API**：桩以 `(TypeInfo*, method_name)` 为键。
+
+- `stub<T>(method_name, fn)`：安装自定义桩函数，签名 `AnyObject(void* self, std::span<AnyObject> args)`
+- `stub_return<T>(method_name, value)`：安装固定返回值桩
+- `stub_throw<T>(method_name, eptr)`：安装总是重抛 `std::exception_ptr` 的桩
+- `stub_throw<T, E, Args...>(method_name, args...)`：安装每次构造 `E(args...)` 并抛出的桩
+- `add_rule<T>(method_name, predicate, action)`：新增一条**依赖实参**的规则（谓词匹配时才生效）
+- `when_called<T>(method_name, action)`：等价于 `add_rule<T>(name, AnyArgs(), action)`
+- `unstub<T>(method_name)` / `clear<T>()`：移除单个桩或某个类型下的全部桩与规则
+- `clear_rules<T>(method_name)`：仅清除规则，保留普通桩
+- `rule_count<T>(method_name)`：查询当前规则数量
+- `call_count<T>(method_name)`：查询已记录的调用次数
+- `calls<T>(method_name)`：获取调用记录（含 `method_name` 与参数快照）
+- `reset_calls()`：清空调用记录但保留桩与规则
+
+**优先级**：`AnyObject::Invoke` 首先按插入顺序依次评估当前 (类型, 方法) 下的所有规则，**首个谓词命中的规则**接管调用；若无规则命中，则回退到普通桩（`stub*` 系列）；仍无匹配时执行真实方法。只有**实际被 Mock 接管**的调用才会被记录到 `calls<T>()`。
+
+所有桩与调用记录均由内部 `std::mutex` 保护，可在并行测试中安全使用。为避免与用户回调相互锁定，谓词与动作均在锁外执行。
+
+**动作工厂 (`Mock::`)**：
+
+| 工厂 | 作用 |
+| --- | --- |
+| `Return(value)` | 返回一个包装为 `AnyObject` 的固定值 |
+| `Throw(std::exception_ptr)` | 重抛给定的异常指针 |
+| `ThrowOf<E, Args...>(args...)` | 每次构造 `E(args...)` 并抛出 |
+| `Do(callable)` | 包装任意 `AnyObject(void*, std::span<AnyObject>)` 可调用对象（可自由读参、访问 `self`、抛异常） |
+
+**谓词工厂 (`Mock::`)**：
+
+| 工厂 | 作用 |
+| --- | --- |
+| `AnyArgs()` | 总是匹配 |
+| `ArgCountIs(n)` | 实参个数等于 `n` |
+| `ArgAtIs<V>(i, expected)` | `args[i]` 能 `cast<V>()` 且与 `expected` 相等；类型不匹配时返回 false而非抛异常 |
+| `ArgAtMatches<V>(i, unary_pred)` | `args[i].cast<V>()` 满足 `unary_pred` |
+| `AllOf(ps...)` / `AnyOf(ps...)` / `Not(p)` | 谓词的与/或/非组合 |
+
+**示例**：
+
+```cpp
+#include "base/any_object.hpp"
+
+using namespace HsBa::Slicer::Utils;
+
+BOOST_AUTO_TEST_CASE(player_add_health_mocked)
+{
+    Player p{100, 1.0f};
+    AnyObject obj(p);
+    AnyObject args[] = {AnyObject(50)};
+
+    // 默认关闭：真实方法生效
+    BOOST_CHECK_EQUAL(obj.Invoke("AddHealth", args).cast<int>(), 150);
+
+    {
+        // 进入作用域：清空 + 开启 Mock，并注册固定返回值桩
+        Mock::MockRegistry::ScopedStubs scope;
+        scope.registry().stub_return<Player>("AddHealth", 999);
+
+        BOOST_CHECK_EQUAL(obj.Invoke("AddHealth", args).cast<int>(), 999);
+        BOOST_CHECK_EQUAL(scope.registry().call_count<Player>("AddHealth"), 1u);
+
+        auto records = scope.registry().calls<Player>("AddHealth");
+        BOOST_REQUIRE_EQUAL(records.size(), 1u);
+        BOOST_CHECK_EQUAL(records[0].args[0].cast<int>(), 50);
+    }
+    // 离开作用域：桩已清理、Mock 已关闭，行为恢复真实方法
+    BOOST_CHECK(!Mock::IsMockEnabled());
+    BOOST_CHECK_EQUAL(obj.Invoke("AddHealth", args).cast<int>(), 200);
+}
+```
+
+**抛异常桩**：
+
+```cpp
+using namespace HsBa::Slicer::Utils;
+Mock::MockRegistry::ScopedStubs scope;
+
+// 方式 A：直接传入 std::exception_ptr
+scope.registry().stub_throw<Player>("AddHealth",
+    std::make_exception_ptr(std::runtime_error("db down")));
+
+// 方式 B：每次构造并抛出指定异常类型
+scope.registry().stub_throw<Player, std::logic_error>("AddHealth", "invalid state");
+
+// 方式 C：自由函数快捷
+Mock::StubThrow<Player, std::out_of_range>("AddHealth", "oor");
+
+BOOST_CHECK_THROW(obj.Invoke("AddHealth", args), std::out_of_range);
+// 抛出的调用仍会记录到 calls<Player>("AddHealth")
+```
+
+**依赖实参的规则桩**：
+
+```cpp
+using namespace HsBa::Slicer::Utils;
+Mock::MockRegistry::ScopedStubs scope;
+auto& reg = scope.registry();
+
+// 规则 1：实参为 0 时抛异常
+reg.add_rule<Player>("AddHealth",
+    Mock::ArgAtIs<int>(0, 0),
+    Mock::ThrowOf<std::runtime_error>("zero not allowed"));
+
+// 规则 2：实参 > 100 时返回固定值
+reg.add_rule<Player>("AddHealth",
+    Mock::ArgAtMatches<int>(0, [](const int& v) { return v > 100; }),
+    Mock::Return<int>(-1));
+
+// 普通桩作为兑底：自定义依赖 self 与实参的行为
+reg.stub<Player>("AddHealth", [](void* self, std::span<AnyObject> a) -> AnyObject {
+    auto* p = static_cast<Player*>(self);
+    p->health += a[0].cast<int>();
+    return AnyObject{p->health};
+});
+
+AnyObject zero[] = {AnyObject(0)};
+AnyObject big[]  = {AnyObject(500)};
+AnyObject mid[]  = {AnyObject(20)};
+
+BOOST_CHECK_THROW(obj.Invoke("AddHealth", zero), std::runtime_error); // 命中规则 1
+BOOST_CHECK_EQUAL(obj.Invoke("AddHealth", big).cast<int>(), -1);       // 命中规则 2
+BOOST_CHECK_EQUAL(obj.Invoke("AddHealth", mid).cast<int>(), 120);      // 回退到普通桩
+```
+
+**组合谓词**：`AllOf` / `AnyOf` / `Not` 可以拼接出任意复杂的实参匹配条件：
+
+```cpp
+reg.add_rule<Player>("AddHealth",
+    Mock::AllOf(Mock::ArgCountIs(1u),
+                Mock::Not(Mock::ArgAtIs<int>(0, 0))),
+    Mock::Return<int>(42));
+```
+
+**注意事项**：
+
+- `MockRegistry` 是全局单例，务必使用 `ScopedStubs`，或在测试夹具的 `setup/teardown` 中显式调用 `ClearMocks()`，避免用例之间串扰。
+- 桩函数的第一个参数是原对象的 `void* self`，可安全地 `static_cast` 回原类型以读写其状态。
+- `calls<T>(name)` 返回的 `CallRecord::args` 通过 `AnyObject` 的拷贝构造保存参数快照，参数类型必须支持拷贝。
+- **抛异常仍会记录调用**：即使动作抛出，`CallRecord` 已在派发前写入，因此可以在断言异常后继续校验调用次数。
+- **规则优先于普通桩**：同一 (类型, 方法) 下同时存在规则和 `stub*` 时，先按插入顺序逐条评估规则，均不命中时才回退到普通桩。
+- `ArgAtIs` / `ArgAtMatches` 在实参个数不足或类型不匹配时**返回 false而不抛异常**，便于安全地写宽松谓词。
+- 未启用 `HSBA_ANY_OBJECT_ENABLE_MOCK` 时，`Mock` 命名空间不存在，`Invoke` 也没有任何额外开销。
 
 ## 注意事项
 

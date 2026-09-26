@@ -193,4 +193,37 @@ void FileTransferResultToMsg(const HsBaFileTransferPipelineResult_t& result, Hsb
     msg->set_file_transfer_result_elapsed_seconds(result.elapsed_seconds);
 }
 
+void CustomConfigToMsg(const HsBaCustomPipelineConfig_t& config, HsbaProto::custom_pipe_config* msg)
+{
+    if (config.pipeline_lua_script)
+        msg->set_custom_pipe_config_pipeline_lua_script(config.pipeline_lua_script);
+    if (config.pipeline_lua_source)
+        msg->set_custom_pipe_config_pipeline_lua_source(config.pipeline_lua_source);
+    if (config.entry_func)
+        msg->set_custom_pipe_config_entry_func(config.entry_func);
+    if (config.config_json)
+        msg->set_custom_pipe_config_config_json(config.config_json);
+
+    if (config.model_name)
+        msg->set_custom_pipe_config_model_name(config.model_name);
+    if (config.model_path)
+        msg->set_custom_pipe_config_model_path(config.model_path);
+
+    if (config.output_path)
+        msg->set_custom_pipe_config_output_path(config.output_path);
+}
+
+void CustomResultToMsg(const HsBaCustomPipelineResult_t& result, HsbaProto::custom_pipe_result* msg)
+{
+    msg->set_custom_pipe_result_success(result.success != 0);
+    msg->set_custom_pipe_result_total_layers(result.total_layers);
+    if (result.output_path)
+        msg->set_custom_pipe_result_output_path(result.output_path);
+    if (result.result_string)
+        msg->set_custom_pipe_result_result_string(result.result_string);
+    if (result.error_message)
+        msg->set_custom_pipe_result_error_message(result.error_message);
+    msg->set_custom_pipe_result_elapsed_seconds(result.elapsed_seconds);
+}
+
 }  // namespace HsBa::Slicer

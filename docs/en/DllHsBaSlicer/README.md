@@ -41,6 +41,7 @@ All public headers are exported to `include/HsBaSlicer/` in the install tree.
 | `sla_pipeline.h` | SLA full-pipeline interface |
 | `sls_pipeline.h` | SLS full-pipeline interface |
 | `file_transfer_pipeline.h` | File transfer pipeline interface (sync/async) |
+| `custom_pipeline.h` | Custom Lua pipeline interface (sync/async) |
 | `pipeline_convert.h` | Proto serialized bytes ↔ C struct conversion |
 | `lua_register.h` | Lua extension function registration (2D/3D/File/Event callbacks) |
 | `event_source_register.h` | C++ event source registration (Zipper progress / DB events) |
@@ -243,6 +244,77 @@ void HsBaFreeFileTransferPipelineResult(HsBaFileTransferPipelineResult_t* result
 | `file_paths` | NULL | Array of file paths to transfer |
 | `file_count` | 0 | Number of files |
 
+### Custom Lua Pipeline
+
+Unlike FDM/SLA/SLS (whose stage order is fixed in C++ with optional per-stage Lua customization), the Custom pipeline delegates the **entire workflow to a Lua script**: the C++ side only builds the Lua environment, exposes every pipeline building block through the global `HsBa` table and calls the script's entry function. New processes can be added by editing a script, without rebuilding the library.
+
+```c
+HsBaCustomPipelineConfig_t HsBaCreateDefaultCustomConfig(void);
+
+HsBaCustomPipelineResult_t HsBaRunCustomPipeline(const HsBaCustomPipelineConfig_t* config,
+                                                 HsBaCustomProgressCallback callback, void* user_data);
+
+void HsBaRunCustomPipelineAsync(const HsBaCustomPipelineConfig_t* config,
+                                HsBaCustomProgressCallback callback, void* user_data,
+                                HsBaCustomResultCallback result_callback, void* result_user_data);
+
+void HsBaFreeCustomPipelineResult(HsBaCustomPipelineResult_t* result);
+```
+
+#### Configuration Fields
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `pipeline_lua_script` | NULL | Path to the pipeline Lua script |
+| `pipeline_lua_source` | NULL | Inline Lua source, executed **before** the script file (parameter prelude) |
+| `entry_func` | NULL | Entry function name, `run_pipeline` when NULL |
+| `config_json` | NULL | Free-form JSON string, readable in Lua as `pipeline_config` |
+| `model_name` / `model_path` | NULL | Model name / file path, readable as `model_name` / `model_path` |
+| `output_path` | NULL | Default output path, readable as `output_path` |
+
+> At least one of `pipeline_lua_script` / `pipeline_lua_source` must be set. All fields above can also be delivered as Proto bytes, see [Proto Serialization Conversion](#proto-serialization-conversion).
+
+#### Script Environment
+
+Injected globals: `HsBa` (operations table), `model_name`, `model_path`, `output_path`, `pipeline_config`, `pipeline_entry`. The pooled libraries (`PolygonOperations`, `Support`, `PolygonFill`, `PathOptimize`, `Zipper`, `Cipher`, `SQLiteAdapter`, ...) are available as well.
+
+`HsBa` operations (coordinates in mm):
+
+| Group | Operations |
+| --- | --- |
+| Reporting | `progress(pct[, stage])`, `setLayers(n)`, `setOutputPath(path)` |
+| Files | `readFile(path)`, `writeFile(path, content)` |
+| Model | `loadModel(n, path)`, `modelInfo(n)`, `translateModel`, `rotateModel`, `scaleModel`, `removeModel`, `modelNames` |
+| Slicing | `layerCount(n, lh, flh)`, `layerZ(i, lh, flh)`, `slice(n, z)`, `sliceUnsafe(n, z)`, `toInt`, `toDouble` |
+| Process | `fill(polys[, cfg])`, `fdmSupport(layers, cfg)`, `slaSupport(layers, cfg)`, `floor(bottom, cfg)` |
+| Output | `toGcode(layers, cfg)`, `saveSlaPackage(tbl)`, `saveSlsPackage(tbl)`, `renderImage(polys, w, h, path)` |
+
+Any truthy return value of the entry function means success (a string return is reported through `result_string`); returning `false`/`nil` or raising a Lua error means failure. `total_layers` and `output_path` are reported by the script via `HsBa.setLayers()` / `HsBa.setOutputPath()`.
+
+#### Calling Via Protobuf
+
+For cross-process / cross-language use there is no need to marshal every string field at the boundary: serialize the request as `custom_pipe_config` wire bytes, rebuild the C config struct on the receiving side with the C interface, run it as usual, and return the result as `custom_pipe_result` bytes.
+
+```c
+#include "pipeline_convert.h"
+
+// 1. Receive custom_pipe_config bytes from the peer
+HsBaCustomPipelineConfig_t cfg = HsBaCustomConfigDefault();
+if (!HsBaCustomConfigFromProtoBytes(buf, size, &cfg)) { /* parse failure */ }
+
+// 2. Identical to the plain call with directly assigned fields
+HsBaCustomPipelineResult_t r = HsBaRunCustomPipeline(&cfg, OnProgress, NULL);
+
+// 3. Release the deserialized strings and send the result back
+HsBaFreeCustomConfigStrings(&cfg);
+void* out_buf = NULL; int out_size = 0;
+HsBaCustomResultToProtoBytes(&r, &out_buf, &out_size);  /* send out_buf[0, out_size) */
+free(out_buf);
+HsBaFreeCustomPipelineResult(&r);
+```
+
+The pipeline definition itself (stage order, operation combination) stays inside the Lua script — Proto only carries the script path / inline source plus the model and output inputs, which is why `custom_pipe_config` has far fewer fields than the FDM/SLA/SLS messages. The `pipeline_lua_source` field can ship a whole workflow, enabling file-free deployments.
+
 ### Proto Serialization Conversion
 
 Bidirectional conversion between C structs and Protobuf serialized bytes, suitable for cross-process / cross-language communication. All output buffers are allocated with `malloc`; the caller is responsible for `free`.
@@ -272,14 +344,25 @@ int HsBaFileTransferConfigToProtoBytes(const HsBaFileTransferPipelineConfig_t* c
 int HsBaFileTransferResultFromProtoBytes(const void* proto_data, int proto_size, HsBaFileTransferPipelineResult_t* result);
 int HsBaFileTransferResultToProtoBytes(const HsBaFileTransferPipelineResult_t* result, void** out_data, int* out_size);
 
+// Custom Lua pipeline
+int HsBaCustomConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaCustomPipelineConfig_t* config);
+int HsBaCustomConfigToProtoBytes(const HsBaCustomPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaCustomResultFromProtoBytes(const void* proto_data, int proto_size, HsBaCustomPipelineResult_t* result);
+int HsBaCustomResultToProtoBytes(const HsBaCustomPipelineResult_t* result, void** out_data, int* out_size);
+
 // Memory cleanup
 void HsBaFreeFdmConfigStrings(HsBaFdmPipelineConfig_t* config);
 void HsBaFreeSlaConfigStrings(HsBaSlaPipelineConfig_t* config);
 void HsBaFreeSlsConfigStrings(HsBaSlsPipelineConfig_t* config);
 void HsBaFreeFileTransferConfigStrings(HsBaFileTransferPipelineConfig_t* config);
+void HsBaFreeCustomConfigStrings(HsBaCustomPipelineConfig_t* config);
 ```
 
-> Proto message definitions are in the `proto/` directory (`fdm_pipeline.proto`, `sla_pipeline.proto`, `sls_pipeline.proto`, `file_transfer_pipeline.proto`), with multi-language output support for C++/C#/Java/Python/PHP.
+> Proto message definitions are in the `proto/` directory (`fdm_pipeline.proto`, `sla_pipeline.proto`, `sls_pipeline.proto`, `file_transfer_pipeline.proto`, `custom_pipeline.proto`), with multi-language output support for C++/C#/Java/Python/PHP.
+>
+> The strings produced by `HsBaCustomResultFromProtoBytes` are `malloc`'d as well; release them with `HsBaFreeCustomPipelineResult()` (Custom has no separate ResultStrings helper).
+>
+> **Note for C++ callers**: `DllHsBaSlicer` already links a copy of `HsBaSlicerProto`. Do not link the generated `.pb.cc` into the same process as well, otherwise protobuf aborts at startup with a duplicate descriptor registration (`File already exists in database`). Pure C++ integrations should use the C structs directly, or go through the `LibHsBaSlicer` / `ModuleHsBaSlicer` layers; cross-language callers (C# / Python / Java, each with its own protobuf runtime) are unaffected, and example 4 of `samples/Custom/` shows the bytes-only approach by hand-encoding the wire format.
 
 ### Version Information
 
@@ -380,7 +463,7 @@ typedef void (*HsBaResultCallback)(HsBaFdmPipelineResult_t result, void* user_da
 3. Version strings must be freed with `HsBaFreeVersionString()`;
 4. Model handles (`void*` returned by `HsBaLoadModel` / `HsBaGetModel` / `HsBaBoolean*` / `HsBaThickSolidModel`) must be released with `HsBaReleaseModelHandle()`;
 5. `pipeline_types.h` also provides DLL-independent inline initializers `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()` / `HsBaFileTransferConfigDefault()`, handy for header-only scenarios (e.g. mirroring structs for P/Invoke);
-6. Proto deserialization (`*FromProtoBytes`) allocates string fields with `malloc`—release them with the matching `HsBaFree*ConfigStrings()`; `*ToProtoBytes` output buffers (`out_data`) must be `free`'d by the caller.
+6. Proto deserialization (`*FromProtoBytes`) allocates string fields with `malloc`—release them with the matching `HsBaFree*ConfigStrings()` (for Custom results use `HsBaFreeCustomPipelineResult()`); `*ToProtoBytes` output buffers (`out_data`) must be `free`'d by the caller.
 
 ## Minimal Example (C/C++)
 
@@ -419,5 +502,6 @@ int main(void)
 - `samples/FDM/` — FDM sync/async, Lua custom support & infill full examples
 - `samples/SLA/` — SLA pipeline with Lua custom floor/support/export examples
 - `samples/SLS/` — SLS pipeline with Lua export example
+- `samples/Custom/` — Fully Lua-script-defined pipeline example (FDM / SLA / inline script / async / Protobuf bytes)
 - `android/` — Android JNI sample project
 - `ios/HsBaSlicerExample/` — iOS Swift bridging sample

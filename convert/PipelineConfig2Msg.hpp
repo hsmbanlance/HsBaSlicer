@@ -4,6 +4,7 @@
 
 #include "pipelinetypes/pipeline_types.h"
 
+#include "custom_pipeline.pb.h"
 #include "fdm_pipeline.pb.h"
 #include "file_transfer_pipeline.pb.h"
 #include "sla_pipeline.pb.h"
@@ -35,6 +36,12 @@ void FileTransferConfigToMsg(const HsBaFileTransferPipelineConfig_t& config, Hsb
 
 /// @brief Convert file transfer pipeline C result to proto message.
 void FileTransferResultToMsg(const HsBaFileTransferPipelineResult_t& result, HsbaProto::file_transfer_pipe_result* msg);
+
+/// @brief Convert custom Lua pipeline C config to proto message.
+void CustomConfigToMsg(const HsBaCustomPipelineConfig_t& config, HsbaProto::custom_pipe_config* msg);
+
+/// @brief Convert custom Lua pipeline C result to proto message.
+void CustomResultToMsg(const HsBaCustomPipelineResult_t& result, HsbaProto::custom_pipe_result* msg);
 
 }  // namespace HsBa::Slicer
 

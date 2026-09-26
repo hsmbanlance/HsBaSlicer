@@ -197,4 +197,30 @@ void MsgToFileTransferResult(const HsbaProto::file_transfer_pipe_result& msg, Hs
     result->elapsed_seconds = msg.file_transfer_result_elapsed_seconds();
 }
 
+void MsgToCustomConfig(const HsbaProto::custom_pipe_config& msg, HsBaCustomPipelineConfig_t* config)
+{
+    *config = HsBaCustomConfigDefault();
+
+    config->pipeline_lua_script = DupString(msg.custom_pipe_config_pipeline_lua_script());
+    config->pipeline_lua_source = DupString(msg.custom_pipe_config_pipeline_lua_source());
+    // Empty entry_func stays NULL: the Lib layer then falls back to "run_pipeline".
+    config->entry_func = DupString(msg.custom_pipe_config_entry_func());
+    config->config_json = DupString(msg.custom_pipe_config_config_json());
+
+    config->model_name = DupString(msg.custom_pipe_config_model_name());
+    config->model_path = DupString(msg.custom_pipe_config_model_path());
+
+    config->output_path = DupString(msg.custom_pipe_config_output_path());
+}
+
+void MsgToCustomResult(const HsbaProto::custom_pipe_result& msg, HsBaCustomPipelineResult_t* result)
+{
+    result->success = msg.custom_pipe_result_success() ? 1 : 0;
+    result->total_layers = msg.custom_pipe_result_total_layers();
+    result->output_path = DupString(msg.custom_pipe_result_output_path());
+    result->result_string = DupString(msg.custom_pipe_result_result_string());
+    result->error_message = DupString(msg.custom_pipe_result_error_message());
+    result->elapsed_seconds = msg.custom_pipe_result_elapsed_seconds();
+}
+
 }  // namespace HsBa::Slicer

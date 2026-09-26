@@ -10,6 +10,8 @@ The Utils module provides multiple utility C++ tools and functions, including ap
 - [LuaAnyObject](./luaanyobject.md) - Provides functionality for registering and using AnyObject types in Lua
 - [PCH Headers](./pch_headers.md) - Precompiled header file containing common library headers
 - [LogCfg](./logcfg.md) - INI format log system configuration file
+- [Graph](./graph.md) - Generic graph structure and algorithm collection keyed by business IDs, built on Boost.Graph
+- [AreaGraph](./areagraph.md) - Two-level area/gate graph model with gate-level shortest path and area tour (TSP) solving
 
 ## Usage
 

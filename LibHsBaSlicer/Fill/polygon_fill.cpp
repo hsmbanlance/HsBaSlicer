@@ -2,6 +2,7 @@
 
 #include "2D/PolygonFill.hpp"
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
+#include "LibHsBaSlicer/Path/path_optimizer.hpp"
 
 namespace HsBa::Slicer
 {
@@ -31,11 +32,13 @@ HSBA_SLICER_LIB_API Polygons FillWithBorder(const Polygons& poly, double spacing
 HSBA_SLICER_LIB_API Polygons LuaCustomFillByFile(const Polygons& poly, const std::string& scriptPath,
                                                  const std::string& functionName, double lineThickness)
 {
-    // Compose external 2D functions into lua_reg callback
+    // Compose external 2D functions and the path optimize functions (PathOptimize)
+    // into lua_reg callback, so fill scripts can optimize regions before path output
     std::function<void(lua_State*)> reg = [](lua_State* L)
     {
         for (auto& f : Get2DFunctions())
             f(L);
+        RegisterLuaPathOptimizeFunctions(L);
     };
     return LuaCustomFill(poly, scriptPath, functionName, lineThickness, reg);
 }

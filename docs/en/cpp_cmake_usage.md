@@ -476,6 +476,7 @@ target_link_libraries(my_app PRIVATE HsBaSlicer::LibHsBaSlicer)
 - `samples/FDM/` — DllHsBaSlicer C ABI sync/async, Lua custom examples
 - `samples/SLA/` — SLA pipeline example
 - `samples/SLS/` — SLS pipeline example
+- `samples/Custom/` — Pipeline fully defined by a custom Lua script example
 
 ## Related Documentation
 

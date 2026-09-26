@@ -476,6 +476,7 @@ target_link_libraries(my_app PRIVATE HsBaSlicer::LibHsBaSlicer)
 - `samples/FDM/` — DllHsBaSlicer C ABI 同步/异步、Lua 自定义示例
 - `samples/SLA/` — SLA 流水线示例
 - `samples/SLS/` — SLS 流水线示例
+- `samples/Custom/` — 整条流水线由 Lua 脚本定义的示例
 
 ## 相关文档
 

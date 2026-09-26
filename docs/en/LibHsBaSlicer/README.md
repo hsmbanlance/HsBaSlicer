@@ -8,7 +8,7 @@ LibHsBaSlicer is the core C++ library of HsBaSlicer, providing the full slicing 
 - [Slice (Mesh Slicing)](./mesh_slice.md) - Z-axis plane slicing for generating layer contours
 - [Support (Support Generation)](./fdm_support.md) - FDM/SLA/Lua support cross-section generation
 - [Fill (Polygon Fill)](./polygon_fill.md) - Polygon infill with various patterns
-- [Path (Path Generation)](./path_generator.md) - G-code path generation from layer data
+- [Path (Path Generation)](./path_generator.md) - G-code path generation from layer data, with pre-output region path optimization
 - **Floor (SLA Floor/Render/Package)** - SLA raft generation, layer image rendering and zip packaging
 - **Path/SLS Export** - SLS Lua-script-driven export (no standard format)
 - **Transfer (File Transfer)** - Remote executor file transfer (pooled TCP connections)
@@ -22,7 +22,7 @@ LibHsBaSlicer
 ├── Slice/         Mesh slicing at specified heights
 ├── Support/       FDM/SLA/Lua support generation
 ├── Fill/          Polygon infill patterns
-├── Path/          G-code path generation + SLS Lua export
+├── Path/          G-code path generation + region path optimization + SLS Lua export
 ├── Floor/         SLA floor/raft generation, layer rendering, zip packaging
 ├── Transfer/      Remote file transfer (pooled connections)
 └── Extends/       External Lua function registration + C++ event sources (Zipper/DB)
@@ -38,6 +38,7 @@ To use LibHsBaSlicer, include the corresponding header files:
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
 #include "LibHsBaSlicer/Fill/polygon_fill.hpp"
 #include "LibHsBaSlicer/Path/path_generator.hpp"
+#include "LibHsBaSlicer/Path/path_optimizer.hpp"        // Pre-output path optimization
 #include "LibHsBaSlicer/Path/sls_export.hpp"            // SLS Lua export
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"            // SLA floor/render/package
 #include "LibHsBaSlicer/Transfer/file_transfer.hpp"     // File transfer
@@ -193,6 +194,88 @@ pkg.layer_z_heights = z_heights;  // Per-layer Z heights
 SaveSlsPackageLua(pkg, "output/result.zip", "scripts/export_sls.lua", "export_sls");
 ```
 
+## Path Optimization (Pre-Path-Output)
+
+Use `Path/path_optimizer.hpp` for pre-path-output optimization: independent polygon regions are modeled as
+graph vertices (AreaGraph) and the region visiting order minimizing travel cost is solved, reducing travel
+moves in the final output. Two modes by execution timing (cannot be mixed within one optimizer):
+
+| Mode | Execution Timing | Region Input | Gates (candidate entry/exit points) | Output |
+| --- | --- | --- | --- | --- |
+| Polygon mode | Before fill | Polygons themselves (contours) | All polygon vertices | Polygons in optimized order (for subsequent fill) |
+| Fill-result mode | After fill | Fill paths (multi-point polylines supported) | First/last endpoint of each polyline | Complete fill paths |
+
+### C++ API
+
+```cpp
+#include "LibHsBaSlicer/Path/path_optimizer.hpp"
+using namespace HsBa::Slicer;
+
+// Polygon mode (before fill): outputs polygons in optimized order for subsequent filling
+RegionPathOptimizer opt;
+opt.addPolygonRegion(1, region1_polys);
+opt.addPolygonRegion(2, region2_polys);
+opt.optimizeOrder();                       // Genetic TSP for >= 3 regions
+PolygonsD ordered_polys = opt.buildPolygons();
+// Region-internal order arranged greedily; each polygon only rotates its start vertex to the entry gate, winding direction preserved
+
+// Fill-result mode (after fill): supports multi-point polylines, outputs complete fill paths
+RegionPathOptimizer opt2;
+opt2.addRegion(1, region1_paths);
+opt2.addRegion(2, region2_paths);
+opt2.addRoute(1, 2, 42.0);                 // Optional: manual override of inter-region travel cost (symmetric)
+opt2.optimizeOrder();
+PolygonsD full_paths = opt2.buildPaths();  // Region-internal path direction/order arranged greedily to reduce jumps
+```
+
+### Lua Script Embedding (the only delivery entry)
+
+The script environment registers the global table `PathOptimize`:
+
+| Lua Interface | Description |
+| --- | --- |
+| `PathOptimize.new()` | Create optimizer object (`addPolygons`/`addRegion`/`addRoute`/`optimizeOrder`/`buildPolygons`/`buildPaths`) |
+| `PathOptimize.optimizePolygons(regions)` | One-shot polygon-mode optimization, returns polygons in optimized order |
+| `PathOptimize.optimizeRegions(regions)` | One-shot fill-result-mode optimization, returns complete fill paths (multi-point polylines supported) |
+
+where `regions` = array of regions, each region = array of polylines/polygons, each polyline/polygon = array of `{x=.., y=..}` points.
+
+Script contract: the function receives `regions` and returns the optimized result table in the same format;
+polygon operations and fill functions are also available inside the script.
+See `tests/PolygonFill/optimize_paths.lua` for an example script:
+
+```lua
+-- Fill-result mode: outputs complete fill paths (multi-point polylines supported)
+function optimize_paths(regions)
+    return PathOptimize.optimizeRegions(regions)
+end
+
+-- Polygon mode (before fill): outputs polygons in optimized order for subsequent filling
+function optimize_polygons(regions)
+    return PathOptimize.optimizePolygons(regions)
+end
+```
+
+C++ embedding entries (script file / inline string variants):
+
+| Function | Description |
+| --- | --- |
+| `LuaOptimizeRegionPolygons()` / `LuaOptimizeRegionPolygonsString()` | Polygon mode (default function name `optimize_polygons`) |
+| `LuaOptimizeRegionPaths()` / `LuaOptimizeRegionPathsString()` | Fill-result mode (default function name `optimize_paths`) |
+
+```cpp
+// The script environment registers polygon operations, fill and PathOptimize functions; extra registrations can be appended via lua_reg
+PolygonsD optimized = LuaOptimizeRegionPaths(regions, "scripts/optimize_paths.lua");
+```
+
+### Pipeline Integration
+
+Per the layered contract, `RegisterLuaPathOptimizeFunctions` is integrated into the **Fill stage**: the Lua
+environment of `LuaCustomFillByFile()` automatically registers `PathOptimize` in addition to the external 2D
+function pool, so fill scripts can optimize region order directly before path output.
+The Slice/Support/SLS Output/SLA Output stages have no travel-move semantics and are not integrated.
+
+
 ## Version Information
 
 ```cpp
@@ -208,7 +291,7 @@ std::string xml = GetVersionXml();    // XML format version info
 1. **Preprocess**: Load model via `LoadModel()`, apply transforms, optionally perform boolean operations/shelling
 2. **Slice**: Generate layer contours via `Slice()` at each layer height
 3. **Support**: Generate support structures via `GenerateAllFdmSupport()` / `GenerateAllSlaSupport()`
-4. **Fill**: Fill layer polygons via `FillPolygon()` or `FillWithBorder()`
+4. **Fill**: Fill layer polygons via `FillPolygon()` or `FillWithBorder()`; optionally optimize region path order via `RegionPathOptimizer` / Lua scripts before fill (polygon mode) or after fill (fill-result mode)
 5. **Path**: Generate G-code paths via `GenerateGCodePathV2()` with multi-firmware output
 6. **SLA Export**: Use `GenerateFloorRaft()` + `RenderPolygonsToImage()` + `SaveSlaPackage()` for SLA output
 7. **SLS Export**: Use `SaveSlsPackageLua()` for Lua-script-determined output format

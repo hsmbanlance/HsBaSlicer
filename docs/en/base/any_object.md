@@ -12,6 +12,7 @@ The AnyObject component provides runtime type reflection and dynamic invocation 
 - Type-safe arbitrary type storage
 - Support for move and copy semantics
 - Support for non-member function registration
+- Mockit-style test mocking support (enabled only when common test macros are detected; runtime toggle available)
 
 ## Usage
 
@@ -526,6 +527,176 @@ int main()
     return 0;
 }
 ```
+
+### 8. Mock Support (Tests Only)
+
+`AnyObject::Invoke` has built-in Mockit-style method stubbing so unit tests can isolate the code under test from its dependencies. To keep production builds clean, all Mock code is gated by the `HSBA_ANY_OBJECT_ENABLE_MOCK` macro.
+
+**Activation conditions (any one is enough):**
+
+- Define `HSBA_ANY_OBJECT_ENABLE_MOCK=1` explicitly.
+- Any of the following common test-framework macros is visible in the current translation unit:
+  - Boost.Test: `BOOST_TEST_MODULE`, `BOOST_TEST_INCLUDED`, `BOOST_TEST_DYN_LINK`, `BOOST_TEST_ALTERNATIVE_INIT_API`
+  - GoogleTest: `GTEST_INCLUDE_GTEST_GTEST_H_`, `GTEST_API_`, `GTEST_HAS_MOCK`
+  - Catch2: `CATCH_VERSION_MAJOR`, `CATCH_CONFIG_MAIN`, `CATCH_CONFIG_RUNNER`
+  - doctest: `DOCTEST_LIBRARY_INCLUDED`, `DOCTEST_CONFIG_IMPLEMENT`, `DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN`
+- Project level: when `HSBA_SLICER_USE_TESTS=ON`, CMake adds `PUBLIC HSBA_ANY_OBJECT_ENABLE_MOCK=1` to `HsBaSlicerBase`, so any test target that links it inherits the macro automatically.
+
+**Runtime toggle:** even when compiled in, mocking is off by default and `AnyObject::Invoke` runs the real method with zero behavioural change. Use the APIs below to turn it on/off manually:
+
+| API | Description |
+| --- | --- |
+| `Mock::EnableMock()` / `MockRegistry::instance().enable()` | Turn mocking on. |
+| `Mock::DisableMock()` / `MockRegistry::instance().disable()` | Turn mocking off (registered stubs are preserved). |
+| `Mock::SetMockEnabled(bool)` | Set the toggle explicitly. |
+| `Mock::IsMockEnabled()` | Query the current state. |
+| `Mock::ClearMocks()` / `MockRegistry::clear()` | Drop every stub and recorded call. |
+| `Mock::MockRegistry::ScopedEnable` | RAII: enable on construction, restore the previous state on destruction. |
+| `Mock::MockRegistry::ScopedStubs` | RAII: clear + enable on construction, clear + restore on destruction; ideal for per-case isolation. |
+
+**Stubbing API:** stubs are keyed by `(TypeInfo*, method_name)`.
+
+- `stub<T>(method_name, fn)`: install a custom stub with signature `AnyObject(void* self, std::span<AnyObject> args)`.
+- `stub_return<T>(method_name, value)`: install a stub that always returns a fixed value.
+- `stub_throw<T>(method_name, eptr)`: install a stub that always rethrows a `std::exception_ptr`.
+- `stub_throw<T, E, Args...>(method_name, args...)`: install a stub that constructs `E(args...)` and throws it every call.
+- `add_rule<T>(method_name, predicate, action)`: register an **argument-dependent** rule (fires only when the predicate matches).
+- `when_called<T>(method_name, action)`: shorthand for `add_rule<T>(name, AnyArgs(), action)`.
+- `unstub<T>(method_name)` / `clear<T>()`: remove a single stub, or every stub and rule of a type.
+- `clear_rules<T>(method_name)`: drop rules only, keep the plain stub.
+- `rule_count<T>(method_name)`: number of currently registered rules.
+- `call_count<T>(method_name)`: number of recorded calls.
+- `calls<T>(method_name)`: recorded calls, each carrying `method_name` and an argument snapshot.
+- `reset_calls()`: drop recorded calls while keeping stubs and rules.
+
+**Precedence:** `AnyObject::Invoke` first evaluates every rule registered for the current (type, method) pair in insertion order; the **first rule whose predicate matches** handles the call. If no rule matches, it falls back to the plain stub (the `stub*` family); if there is no stub either, the real method runs. Only calls **actually served by the mock** are recorded in `calls<T>()`.
+
+All stubs, rules and recorded calls are guarded by an internal `std::mutex`, so parallel tests can install and inspect them safely. Predicates and actions are invoked **outside** the lock so user callbacks may re-enter the registry without deadlocking.
+
+**Action factories (`Mock::`):**
+
+| Factory | Purpose |
+| --- | --- |
+| `Return(value)` | Return a fixed value wrapped into an `AnyObject`. |
+| `Throw(std::exception_ptr)` | Rethrow the given exception pointer. |
+| `ThrowOf<E, Args...>(args...)` | Construct `E(args...)` and throw it on every call. |
+| `Do(callable)` | Wrap any `AnyObject(void*, std::span<AnyObject>)` callable (free to read args, touch `self`, throw). |
+
+**Predicate factories (`Mock::`):**
+
+| Factory | Purpose |
+| --- | --- |
+| `AnyArgs()` | Always matches. |
+| `ArgCountIs(n)` | Matches when the argument count equals `n`. |
+| `ArgAtIs<V>(i, expected)` | `args[i]` can be `cast<V>()` and compares equal to `expected`. Returns false instead of throwing on type mismatch. |
+| `ArgAtMatches<V>(i, unary_pred)` | `args[i].cast<V>()` satisfies `unary_pred`. |
+| `AllOf(ps...)` / `AnyOf(ps...)` / `Not(p)` | Boolean combinations of predicates. |
+
+**Example:**
+
+```cpp
+#include "base/any_object.hpp"
+
+using namespace HsBa::Slicer::Utils;
+
+BOOST_AUTO_TEST_CASE(player_add_health_mocked)
+{
+    Player p{100, 1.0f};
+    AnyObject obj(p);
+    AnyObject args[] = {AnyObject(50)};
+
+    // Mocking is off by default: the real method runs.
+    BOOST_CHECK_EQUAL(obj.Invoke("AddHealth", args).cast<int>(), 150);
+
+    {
+        // Enter the scope: clear + enable mocking and register a fixed-return stub.
+        Mock::MockRegistry::ScopedStubs scope;
+        scope.registry().stub_return<Player>("AddHealth", 999);
+
+        BOOST_CHECK_EQUAL(obj.Invoke("AddHealth", args).cast<int>(), 999);
+        BOOST_CHECK_EQUAL(scope.registry().call_count<Player>("AddHealth"), 1u);
+
+        auto records = scope.registry().calls<Player>("AddHealth");
+        BOOST_REQUIRE_EQUAL(records.size(), 1u);
+        BOOST_CHECK_EQUAL(records[0].args[0].cast<int>(), 50);
+    }
+    // On scope exit: stubs cleared, mocking disabled, real behaviour restored.
+    BOOST_CHECK(!Mock::IsMockEnabled());
+    BOOST_CHECK_EQUAL(obj.Invoke("AddHealth", args).cast<int>(), 200);
+}
+```
+
+**Throwing stubs:**
+
+```cpp
+using namespace HsBa::Slicer::Utils;
+Mock::MockRegistry::ScopedStubs scope;
+
+// Option A: pass a std::exception_ptr directly.
+scope.registry().stub_throw<Player>("AddHealth",
+    std::make_exception_ptr(std::runtime_error("db down")));
+
+// Option B: construct and throw a specific exception type on every call.
+scope.registry().stub_throw<Player, std::logic_error>("AddHealth", "invalid state");
+
+// Option C: free-function shortcut.
+Mock::StubThrow<Player, std::out_of_range>("AddHealth", "oor");
+
+BOOST_CHECK_THROW(obj.Invoke("AddHealth", args), std::out_of_range);
+// Throwing calls are still recorded in calls<Player>("AddHealth").
+```
+
+**Argument-dependent rules:**
+
+```cpp
+using namespace HsBa::Slicer::Utils;
+Mock::MockRegistry::ScopedStubs scope;
+auto& reg = scope.registry();
+
+// Rule 1: throw when the argument is 0.
+reg.add_rule<Player>("AddHealth",
+    Mock::ArgAtIs<int>(0, 0),
+    Mock::ThrowOf<std::runtime_error>("zero not allowed"));
+
+// Rule 2: return a fixed value when the argument is > 100.
+reg.add_rule<Player>("AddHealth",
+    Mock::ArgAtMatches<int>(0, [](const int& v) { return v > 100; }),
+    Mock::Return<int>(-1));
+
+// Plain stub as fallback: custom behaviour driven by self and args.
+reg.stub<Player>("AddHealth", [](void* self, std::span<AnyObject> a) -> AnyObject {
+    auto* p = static_cast<Player*>(self);
+    p->health += a[0].cast<int>();
+    return AnyObject{p->health};
+});
+
+AnyObject zero[] = {AnyObject(0)};
+AnyObject big[]  = {AnyObject(500)};
+AnyObject mid[]  = {AnyObject(20)};
+
+BOOST_CHECK_THROW(obj.Invoke("AddHealth", zero), std::runtime_error); // rule 1 fires
+BOOST_CHECK_EQUAL(obj.Invoke("AddHealth", big).cast<int>(), -1);      // rule 2 fires
+BOOST_CHECK_EQUAL(obj.Invoke("AddHealth", mid).cast<int>(), 120);     // falls back to the plain stub
+```
+
+**Combining predicates:** `AllOf` / `AnyOf` / `Not` compose arbitrarily complex argument conditions:
+
+```cpp
+reg.add_rule<Player>("AddHealth",
+    Mock::AllOf(Mock::ArgCountIs(1u),
+                Mock::Not(Mock::ArgAtIs<int>(0, 0))),
+    Mock::Return<int>(42));
+```
+
+**Notes:**
+
+- `MockRegistry` is a global singleton. Always use `ScopedStubs`, or call `ClearMocks()` explicitly in your fixture's `setup/teardown`, to avoid leaking state between test cases.
+- The first parameter of a stub function is the original object's `void* self`; `static_cast` it back to the concrete type when you need to read or mutate its state.
+- `CallRecord::args` returned by `calls<T>(name)` is captured via `AnyObject`'s copy constructor, so argument types must be copyable.
+- **Throwing actions still record the call**: the `CallRecord` is written before dispatch, so you can assert on the exception and then verify `call_count` / `calls`.
+- **Rules take precedence over the plain stub**: when both exist for the same (type, method), rules are evaluated in insertion order first; the plain stub is used only when no rule matches.
+- `ArgAtIs` / `ArgAtMatches` **return false instead of throwing** when the argument count is too small or the stored type does not match, so loose predicates stay safe.
+- When `HSBA_ANY_OBJECT_ENABLE_MOCK` is not defined, the `Mock` namespace does not exist and `Invoke` has no additional overhead.
 
 ## Notes
 

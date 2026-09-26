@@ -41,6 +41,7 @@ LibHsBaSlicer  ← C++ 静态库：预处理 / 切片 / 支撑 / 填充 / 路径
 | `sla_pipeline.h` | SLA 全流程接口 |
 | `sls_pipeline.h` | SLS 全流程接口 |
 | `file_transfer_pipeline.h` | 文件传输流水线接口（同步/异步） |
+| `custom_pipeline.h` | 自定义 Lua 流水线接口（同步/异步） |
 | `pipeline_convert.h` | Proto 序列化字节 ↔ C 结构体转换 |
 | `lua_register.h` | Lua 扩展函数注册接口（2D/3D/File/事件回调） |
 | `event_source_register.h` | C++ 事件源注册接口（Zipper 进度 / DB 事件） |
@@ -243,6 +244,77 @@ void HsBaFreeFileTransferPipelineResult(HsBaFileTransferPipelineResult_t* result
 | `file_paths` | NULL | 待传输文件路径数组 |
 | `file_count` | 0 | 文件数量 |
 
+### 自定义 Lua 流水线
+
+与 FDM/SLA/SLS（阶段顺序在 C++ 中固定，Lua 只能替换个别阶段）不同，Custom 流水线的**整条工作流由 Lua 脚本决定**：C++ 侧只负责构造 Lua 环境、把全部流水线算子挂在全局表 `HsBa` 上，然后调用脚本里的入口函数。需要新增工艺时只改脚本，不必重新编译库。
+
+```c
+HsBaCustomPipelineConfig_t HsBaCreateDefaultCustomConfig(void);
+
+HsBaCustomPipelineResult_t HsBaRunCustomPipeline(const HsBaCustomPipelineConfig_t* config,
+                                                 HsBaCustomProgressCallback callback, void* user_data);
+
+void HsBaRunCustomPipelineAsync(const HsBaCustomPipelineConfig_t* config,
+                                HsBaCustomProgressCallback callback, void* user_data,
+                                HsBaCustomResultCallback result_callback, void* result_user_data);
+
+void HsBaFreeCustomPipelineResult(HsBaCustomPipelineResult_t* result);
+```
+
+#### 配置字段
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `pipeline_lua_script` | NULL | 流水线 Lua 脚本路径 |
+| `pipeline_lua_source` | NULL | 内联 Lua 源码，**先于**脚本文件执行（可作为参数预置） |
+| `entry_func` | NULL | 入口函数名，NULL 时为 `run_pipeline` |
+| `config_json` | NULL | 任意 JSON 字符串，脚本中以 `pipeline_config` 读取 |
+| `model_name` / `model_path` | NULL | 模型名与路径，脚本中以 `model_name` / `model_path` 读取 |
+| `output_path` | NULL | 默认输出路径，脚本中以 `output_path` 读取 |
+
+> `pipeline_lua_script` 与 `pipeline_lua_source` 至少提供一个。上述字段都可以通过 Proto 字节流下发，见下方 [Proto 序列化转换](#proto-序列化转换)。
+
+#### 脚本环境
+
+注入的全局变量：`HsBa`（算子表）、`model_name`、`model_path`、`output_path`、`pipeline_config`、`pipeline_entry`；同时可用项目注册池中的 `PolygonOperations`、`Support`、`PolygonFill`、`PathOptimize`、`Zipper`、`Cipher`、`SQLiteAdapter` 等库。
+
+`HsBa` 算子（坐标单位为 mm）：
+
+| 分组 | 算子 |
+| --- | --- |
+| 回报 | `progress(pct[, stage])`、`setLayers(n)`、`setOutputPath(path)` |
+| 文件 | `readFile(path)`、`writeFile(path, content)` |
+| 模型 | `loadModel(n, path)`、`modelInfo(n)`、`translateModel`、`rotateModel`、`scaleModel`、`removeModel`、`modelNames` |
+| 切片 | `layerCount(n, lh, flh)`、`layerZ(i, lh, flh)`、`slice(n, z)`、`sliceUnsafe(n, z)`、`toInt`、`toDouble` |
+| 工艺 | `fill(polys[, cfg])`、`fdmSupport(layers, cfg)`、`slaSupport(layers, cfg)`、`floor(bottom, cfg)` |
+| 输出 | `toGcode(layers, cfg)`、`saveSlaPackage(tbl)`、`saveSlsPackage(tbl)`、`renderImage(polys, w, h, path)` |
+
+入口函数返回任意真值表示成功（字符串会经 `result_string` 回传），返回 `false`/`nil` 或抛出 Lua 错误表示失败；`total_layers`、`output_path` 由脚本通过 `HsBa.setLayers()` / `HsBa.setOutputPath()` 回报。
+
+#### Proto 方式调用
+
+跨进程 / 跨语言场景下，不必在边界上逐个传递字符串字段：把请求序列化成 `custom_pipe_config` 的 wire 字节，接收端用 C 接口还原成配置结构后照常执行，再把结果转成 `custom_pipe_result` 字节回传。
+
+```c
+#include "pipeline_convert.h"
+
+// 1. 收到对端发来的 custom_pipe_config 字节
+HsBaCustomPipelineConfig_t cfg = HsBaCustomConfigDefault();
+if (!HsBaCustomConfigFromProtoBytes(buf, size, &cfg)) { /* 解析失败 */ }
+
+// 2. 与直接赋值字段的调用方式完全一致
+HsBaCustomPipelineResult_t r = HsBaRunCustomPipeline(&cfg, OnProgress, NULL);
+
+// 3. 释放反序列化出的字符串，并把结果回传
+HsBaFreeCustomConfigStrings(&cfg);
+void* out_buf = NULL; int out_size = 0;
+HsBaCustomResultToProtoBytes(&r, &out_buf, &out_size);  /* 发送 out_buf[0, out_size) */
+free(out_buf);
+HsBaFreeCustomPipelineResult(&r);
+```
+
+流水线定义本身（阶段顺序、算子组合）仍留在 Lua 脚本里，Proto 只负责运送脚本路径 / 内联源码与模型、输出等入参；因此 `custom_pipe_config` 字段比 FDM/SLA/SLS 少得多。内联源码字段 `pipeline_lua_source` 可以携带整条流水线，实现“无文件部署”。
+
 ### Proto 序列化转换
 
 提供 C 结构体与 Protobuf 序列化字节之间的双向转换，适用于跨进程 / 跨语言通信场景。所有输出缓冲区由 `malloc` 分配，调用方负责 `free`。
@@ -272,14 +344,25 @@ int HsBaFileTransferConfigToProtoBytes(const HsBaFileTransferPipelineConfig_t* c
 int HsBaFileTransferResultFromProtoBytes(const void* proto_data, int proto_size, HsBaFileTransferPipelineResult_t* result);
 int HsBaFileTransferResultToProtoBytes(const HsBaFileTransferPipelineResult_t* result, void** out_data, int* out_size);
 
+// Custom Lua 流水线
+int HsBaCustomConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaCustomPipelineConfig_t* config);
+int HsBaCustomConfigToProtoBytes(const HsBaCustomPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaCustomResultFromProtoBytes(const void* proto_data, int proto_size, HsBaCustomPipelineResult_t* result);
+int HsBaCustomResultToProtoBytes(const HsBaCustomPipelineResult_t* result, void** out_data, int* out_size);
+
 // 内存释放
 void HsBaFreeFdmConfigStrings(HsBaFdmPipelineConfig_t* config);
 void HsBaFreeSlaConfigStrings(HsBaSlaPipelineConfig_t* config);
 void HsBaFreeSlsConfigStrings(HsBaSlsPipelineConfig_t* config);
 void HsBaFreeFileTransferConfigStrings(HsBaFileTransferPipelineConfig_t* config);
+void HsBaFreeCustomConfigStrings(HsBaCustomPipelineConfig_t* config);
 ```
 
-> Proto 消息定义位于 `proto/` 目录（`fdm_pipeline.proto`、`sla_pipeline.proto`、`sls_pipeline.proto`、`file_transfer_pipeline.proto`），支持 C++/C#/Java/Python/PHP 多语言输出。
+> Proto 消息定义位于 `proto/` 目录（`fdm_pipeline.proto`、`sla_pipeline.proto`、`sls_pipeline.proto`、`file_transfer_pipeline.proto`、`custom_pipeline.proto`），支持 C++/C#/Java/Python/PHP 多语言输出。
+>
+> `HsBaCustomResultFromProtoBytes` 得到的结果字符串同样由 `malloc` 分配，请使用 `HsBaFreeCustomPipelineResult()` 释放（Custom 没有单独的 ResultStrings 释放函数）。
+>
+> **C++ 调用方注意**：`DllHsBaSlicer` 内部已经链了一份 `HsBaSlicerProto`，不要把生成的 `.pb.cc` 再链进同一个进程，否则 protobuf 会因同名 proto 文件重复注册（`File already exists in database`）在启动时终止进程。纯 C++ 集成请直接使用 C 结构体，或改走 `LibHsBaSlicer` / `ModuleHsBaSlicer` 层；跨语言调用方（C# / Python / Java 用自己的 protobuf 运行库）不受影响，`samples/Custom/` 的示例 4 就是按这种方式只手拼 wire 字节。
 
 ### 版本信息
 
@@ -380,7 +463,7 @@ typedef void (*HsBaResultCallback)(HsBaFdmPipelineResult_t result, void* user_da
 3. 版本字符串必须用 `HsBaFreeVersionString()` 释放；
 4. 模型句柄（`HsBaLoadModel` / `HsBaGetModel` / `HsBaBoolean*` / `HsBaThickSolidModel` 返回的 `void*`）必须用 `HsBaReleaseModelHandle()` 释放引用；
 5. `pipeline_types.h` 还提供无 DLL 依赖的内联初始化器 `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()` / `HsBaFileTransferConfigDefault()`，便于纯头文件场景（如 P/Invoke 结构体对照）使用；
-6. Proto 反序列化（`*FromProtoBytes`）产生的字符串字段由 `malloc` 分配，必须调用对应的 `HsBaFree*ConfigStrings()` 释放；`*ToProtoBytes` 产生的 `out_data` 缓冲区由调用方 `free`。
+6. Proto 反序列化（`*FromProtoBytes`）产生的字符串字段由 `malloc` 分配，必须调用对应的 `HsBaFree*ConfigStrings()` 释放（Custom 结果例外，用 `HsBaFreeCustomPipelineResult()`）；`*ToProtoBytes` 产生的 `out_data` 缓冲区由调用方 `free`。
 
 ## 最小示例（C/C++）
 
@@ -419,5 +502,6 @@ int main(void)
 - `samples/FDM/` —— FDM 同步/异步、Lua 自定义支撑与填充完整示例
 - `samples/SLA/` —— SLA 流水线与 Lua 自定义地板/支撑/导出示例
 - `samples/SLS/` —— SLS 流水线与 Lua 导出示例
+- `samples/Custom/` —— 整条流水线完全由 Lua 脚本定义的示例（FDM/SLA/内联脚本/异步/Protobuf 字节流）
 - `android/` —— Android JNI 调用示例工程
 - `ios/HsBaSlicerExample/` —— iOS Swift 桥接调用示例

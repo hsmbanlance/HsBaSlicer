@@ -10,6 +10,8 @@
 	LuaAnyObject.cpp
 	LuaDllLoader.hpp
 	LuaDllLoader.cpp
+	Graph.hpp
+	AreaGraph.hpp
 )
 
 find_package(boost_date_time CONFIG REQUIRED)

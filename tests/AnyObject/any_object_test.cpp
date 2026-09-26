@@ -185,6 +185,192 @@ BOOST_AUTO_TEST_CASE(compiler_specific_vtable_bitfield)
 }
 #endif
 
+#ifdef HSBA_ANY_OBJECT_ENABLE_MOCK
+BOOST_AUTO_TEST_CASE(any_object_mock_manual_toggle)
+{
+    using namespace HsBa::Slicer::Utils;
+
+    Standard src{7};
+    AnyObject obj(src);
+    AnyObject args[] = {AnyObject(3)};
+
+    auto& reg = Mock::MockRegistry::instance();
+    // Baseline: mocking is off by default, real method runs.
+    reg.disable();
+    reg.clear();
+    BOOST_CHECK_EQUAL(obj.Invoke("Add", args).cast<int>(), 10);
+    BOOST_CHECK_EQUAL(reg.call_count<Standard>("Add"), 0u);
+
+    // Install a stub, but keep mocking disabled -> still real method.
+    reg.stub<Standard>("Add", [](void*, std::span<AnyObject>) -> AnyObject { return AnyObject{999}; });
+    BOOST_CHECK_EQUAL(obj.Invoke("Add", args).cast<int>(), 10);
+
+    // Manually enable mocking -> stub takes over.
+    reg.enable();
+    BOOST_CHECK(reg.is_enabled());
+    BOOST_CHECK_EQUAL(obj.Invoke("Add", args).cast<int>(), 999);
+    BOOST_CHECK_EQUAL(reg.call_count<Standard>("Add"), 1u);
+
+    // Manually disable again -> back to real method, stub is preserved.
+    reg.disable();
+    BOOST_CHECK_EQUAL(obj.Invoke("Add", args).cast<int>(), 10);
+
+    // Re-enable via RAII scope; scope exit restores previous state.
+    {
+        Mock::MockRegistry::ScopedEnable guard(reg);
+        BOOST_CHECK(reg.is_enabled());
+        BOOST_CHECK_EQUAL(obj.Invoke("Add", args).cast<int>(), 999);
+    }
+    BOOST_CHECK(!reg.is_enabled());
+
+    reg.clear();
+}
+
+BOOST_AUTO_TEST_CASE(any_object_mock_scoped_stubs_isolation)
+{
+    using namespace HsBa::Slicer::Utils;
+    Standard src{5};
+    AnyObject obj(src);
+    AnyObject args[] = {AnyObject(2)};
+
+    {
+        Mock::MockRegistry::ScopedStubs scope;
+        scope.registry().stub_return<Standard>("Add", 42);
+        BOOST_CHECK_EQUAL(obj.Invoke("Add", args).cast<int>(), 42);
+        BOOST_CHECK_EQUAL(scope.registry().call_count<Standard>("Add"), 1u);
+        auto records = scope.registry().calls<Standard>("Add");
+        BOOST_REQUIRE_EQUAL(records.size(), 1u);
+        BOOST_CHECK_EQUAL(records[0].method_name, "Add");
+        BOOST_REQUIRE_EQUAL(records[0].args.size(), 1u);
+        BOOST_CHECK_EQUAL(records[0].args[0].cast<int>(), 2);
+    }
+    // After scope: mocking restored to disabled and every stub cleared.
+    BOOST_CHECK(!Mock::IsMockEnabled());
+    BOOST_CHECK_EQUAL(obj.Invoke("Add", args).cast<int>(), 7);
+}
+
+BOOST_AUTO_TEST_CASE(any_object_mock_stub_throw)
+{
+    using namespace HsBa::Slicer::Utils;
+    Standard src{1};
+    AnyObject obj(src);
+    AnyObject args[] = {AnyObject(1)};
+
+    Mock::MockRegistry::ScopedStubs scope;
+
+    // 1) stub_throw with an exception_ptr -> Invoke rethrows the same exception.
+    scope.registry().stub_throw<Standard>("Add", std::make_exception_ptr(std::runtime_error("boom")));
+    BOOST_CHECK_THROW(obj.Invoke("Add", args), std::runtime_error);
+    try
+    {
+        obj.Invoke("Add", args);
+    }
+    catch (const std::runtime_error& e)
+    {
+        BOOST_CHECK_EQUAL(std::string(e.what()), "boom");
+    }
+    // Even though the action threw, the calls are still recorded.
+    BOOST_CHECK_EQUAL(scope.registry().call_count<Standard>("Add"), 2u);
+
+    // 2) stub_throw<T, E, Args...> constructs E(args...) on every call.
+    scope.registry().stub_throw<Standard, std::logic_error>("Add", "invalid arg");
+    BOOST_CHECK_THROW(obj.Invoke("Add", args), std::logic_error);
+
+    // 3) Free-function shortcut works the same way.
+    scope.registry().unstub<Standard>("Add");
+    Mock::StubThrow<Standard, std::out_of_range>("Add", "oor");
+    BOOST_CHECK_THROW(obj.Invoke("Add", args), std::out_of_range);
+}
+
+BOOST_AUTO_TEST_CASE(any_object_mock_argument_dependent_rules)
+{
+    using namespace HsBa::Slicer::Utils;
+    Standard src{10};
+    AnyObject obj(src);
+
+    Mock::MockRegistry::ScopedStubs scope;
+    auto& reg = scope.registry();
+
+    // Rule 1: arg == 0 -> throw runtime_error.
+    reg.add_rule<Standard>("Add", Mock::ArgAtIs<int>(0, 0), Mock::ThrowOf<std::runtime_error>("zero not allowed"));
+    // Rule 2: arg > 100 -> return -1.
+    reg.add_rule<Standard>("Add",
+                           Mock::ArgAtMatches<int>(0, [](const int& v) { return v > 100; }), Mock::Return<int>(-1));
+    // Fallback stub for any other value: return real self->value + arg (mirrors the real method).
+    reg.stub<Standard>("Add",
+                       [](void* self, std::span<AnyObject> a) -> AnyObject
+                       {
+                           auto* s = static_cast<Standard*>(self);
+                           return AnyObject{s->value + a[0].cast<int>()};
+                       });
+    BOOST_CHECK_EQUAL(reg.rule_count<Standard>("Add"), 2u);
+
+    // Rule 1 matches: throws.
+    AnyObject zero[] = {AnyObject(0)};
+    BOOST_CHECK_THROW(obj.Invoke("Add", zero), std::runtime_error);
+
+    // Rule 2 matches: returns -1.
+    AnyObject big[] = {AnyObject(1000)};
+    BOOST_CHECK_EQUAL(obj.Invoke("Add", big).cast<int>(), -1);
+
+    // Neither rule matches: fallback stub runs -> 10 + 5 = 15.
+    AnyObject mid[] = {AnyObject(5)};
+    BOOST_CHECK_EQUAL(obj.Invoke("Add", mid).cast<int>(), 15);
+
+    // Rules take precedence over the fallback even when registered later.
+    reg.add_rule<Standard>("Add", Mock::ArgAtIs<int>(0, 5), Mock::Return<int>(555));
+    // Rule ordering: first match wins, so the earlier rules still fire for 5? No rule matches 5 earlier,
+    // so the newly added rule handles it.
+    BOOST_CHECK_EQUAL(obj.Invoke("Add", mid).cast<int>(), 555);
+
+    // clear_rules leaves the fallback stub intact.
+    reg.clear_rules<Standard>("Add");
+    BOOST_CHECK_EQUAL(reg.rule_count<Standard>("Add"), 0u);
+    BOOST_CHECK_EQUAL(obj.Invoke("Add", zero).cast<int>(), 10);  // 10 + 0 via fallback
+}
+
+BOOST_AUTO_TEST_CASE(any_object_mock_rule_precedence_and_helpers)
+{
+    using namespace HsBa::Slicer::Utils;
+    Standard src{0};
+    AnyObject obj(src);
+    AnyObject args[] = {AnyObject(7)};
+
+    Mock::MockRegistry::ScopedStubs scope;
+    auto& reg = scope.registry();
+
+    // Fallback would return 111, but the rule below matches and returns 222.
+    reg.stub_return<Standard>("Add", 111);
+    reg.add_rule<Standard>("Add", Mock::AllOf(Mock::ArgCountIs(1u), Mock::ArgAtIs<int>(0, 7)),
+                           Mock::Return<int>(222));
+    BOOST_CHECK_EQUAL(obj.Invoke("Add", args).cast<int>(), 222);
+
+    // Not(...) inverts a predicate -> no match, fallback stub fires.
+    reg.clear_rules<Standard>("Add");
+    reg.add_rule<Standard>("Add", Mock::Not(Mock::ArgAtIs<int>(0, 7)), Mock::Return<int>(333));
+    BOOST_CHECK_EQUAL(obj.Invoke("Add", args).cast<int>(), 111);
+
+    // AnyOf(...) matches when any sub-predicate matches.
+    reg.clear_rules<Standard>("Add");
+    reg.add_rule<Standard>("Add", Mock::AnyOf(Mock::ArgAtIs<int>(0, 1), Mock::ArgAtIs<int>(0, 7)),
+                           Mock::Return<int>(444));
+    BOOST_CHECK_EQUAL(obj.Invoke("Add", args).cast<int>(), 444);
+
+    // Mock::Do wraps a user lambda that both reads args and self.
+    reg.clear_rules<Standard>("Add");
+    reg.when_called<Standard>("Add",
+                              Mock::Do(
+                                  [](void* self, std::span<AnyObject> a) -> AnyObject
+                                  {
+                                      auto* s = static_cast<Standard*>(self);
+                                      s->value += a[0].cast<int>();
+                                      return AnyObject{s->value};
+                                  }));
+    BOOST_CHECK_EQUAL(obj.Invoke("Add", args).cast<int>(), 7);
+    BOOST_CHECK_EQUAL(obj.Invoke("Add", args).cast<int>(), 14);
+}
+#endif  // HSBA_ANY_OBJECT_ENABLE_MOCK
+
 namespace
 {
 int lua_standard_new(lua_State* L)

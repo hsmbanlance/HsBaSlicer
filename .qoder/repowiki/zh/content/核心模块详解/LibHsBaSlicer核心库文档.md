@@ -13,11 +13,14 @@
 - [polygon_fill.hpp](file://LibHsBaSlicer/Fill/polygon_fill.hpp)
 - [polygon_fill.cpp](file://LibHsBaSlicer/Fill/polygon_fill.cpp)
 - [path_generator.hpp](file://LibHsBaSlicer/Path/path_generator.hpp)
+- [path_optimizer.hpp](file://LibHsBaSlicer/Path/path_optimizer.hpp)
+- [path_optimizer.cpp](file://LibHsBaSlicer/Path/path_optimizer.cpp)
 - [sls_export.hpp](file://LibHsBaSlicer/Path/sls_export.hpp)
 - [sls_export.cpp](file://LibHsBaSlicer/Path/sls_export.cpp)
 - [sla_floor.hpp](file://LibHsBaSlicer/Floor/sla_floor.hpp)
 - [LuaAdapter.hpp](file://fileoperator/LuaAdapter.hpp)
 - [IModel.hpp](file://base/IModel.hpp)
+- [AreaGraph.hpp](file://utils/AreaGraph.hpp)
 - [README.md](file://docs/zh/LibHsBaSlicer/README.md)
 - [main.cpp](file://samples/FDM/main.cpp)
 - [version_info.hpp](file://LibHsBaSlicer/version_info.hpp)
@@ -27,36 +30,38 @@
 - [CMakeLists.txt](file://version/CMakeLists.txt)
 - [sls_pipeline.h](file://DllHsBaSlicer/sls_pipeline.h)
 - [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
+- [optimize_paths.lua](file://tests/PolygonFill/optimize_paths.lua)
 </cite>
 
 ## 更新摘要
 **所做更改**   
-- 新增SLS导出功能支持章节，详细说明选择性激光烧结工艺的实现
-- 增强路径输出模块以支持SLS格式，新增SlsPackage数据结构
-- 改进Lua脚本扩展能力，提供完整的数据库集成支持
-- 更新API参考文档，包含SLS相关的新接口和配置选项
-- 添加SLS流水线示例和最佳实践指南
+- 新增路径优化功能完整说明章节，包括RegionPathOptimizer类和AreaGraph算法实现
+- 增强Fill阶段集成细节，展示路径优化如何与填充脚本无缝集成
+- 添加Lua脚本接口详细说明，包括PathOptimize全局表和两种优化模式
+- 更新API参考文档，包含路径优化的C++和Lua接口
+- 新增路径优化使用示例和最佳实践指南
 
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
-4. [SLS导出功能](#sls导出功能)
-5. [版本信息管理](#版本信息管理)
-6. [架构总览](#架构总览)
-7. [详细组件分析](#详细组件分析)
-8. [依赖关系分析](#依赖关系分析)
-9. [性能与并发特性](#性能与并发特性)
-10. [故障排查指南](#故障排查指南)
-11. [结论](#结论)
-12. [附录：API参考](#附录api参考)
+4. [路径优化功能](#路径优化功能)
+5. [SLS导出功能](#sls导出功能)
+6. [版本信息管理](#版本信息管理)
+7. [架构总览](#架构总览)
+8. [详细组件分析](#详细组件分析)
+9. [依赖关系分析](#依赖关系分析)
+10. [性能与并发特性](#性能与并发特性)
+11. [故障排查指南](#故障排查指南)
+12. [结论](#结论)
+13. [附录：API参考](#附录api参考)
 
 ## 简介
 LibHsBaSlicer 是 HsBaSlicer 的核心 C++ 静态/共享库，提供五大切片能力：模型预处理、网格切片、FDM支撑生成、多边形填充与路径生成。所有对外 API 位于命名空间 HsBa::Slicer，并通过统一的导出宏在 Windows 平台进行 DLL 导出控制。该库面向 FDM/SLA/SLS 等增材制造流程，支持 STL/OBJ/STEP/IGES 等常见格式输入，输出层轮廓、支撑截面、填充线与 G-code 路径序列。
 
-典型工作流为：加载并变换模型 → 按层高切片 → 生成支撑 → 填充内腔 → 生成打印路径。
+典型工作流为：加载并变换模型 → 按层高切片 → 生成支撑 → 填充内腔 → **路径优化** → 生成打印路径。
 
-**更新** 新增了SLS（选择性激光烧结）导出功能支持，通过Lua脚本驱动实现灵活的自定义输出格式，同时增强了路径输出模块以支持SLS格式的数据包封装。
+**更新** 新增了完整的路径优化功能，通过RegionPathOptimizer类实现独立多边形区域的访问顺序优化，支持填充前和填充后两种优化模式，大幅减少空走距离并提升打印效率。同时增强了Fill阶段集成，使路径优化能够无缝嵌入自定义填充脚本中。
 
 章节来源
 - [README.md:1-49](file://docs/zh/LibHsBaSlicer/README.md#L1-L49)
@@ -71,7 +76,7 @@ A["Preprocess<br/>模型预处理"]
 B["Slice<br/>网格切片"]
 C["Support<br/>FDM支撑"]
 D["Fill<br/>多边形填充"]
-E["Path<br/>路径生成"]
+E["Path<br/>路径生成与优化"]
 F["Floor<br/>SLA底板"]
 G["Version<br/>版本管理"]
 end
@@ -93,6 +98,7 @@ B --> L4
 C --> L6
 D --> L4
 E --> L7
+E --> L2
 F --> L4
 G --> L9
 A -.-> L8
@@ -110,20 +116,168 @@ B -.-> L8
 - 切片（Slice）：Z 向平面切片，返回安全/不安全轮廓集合，支持 Lua 脚本扩展。
 - 支撑（Support）：基于悬垂检测与配置参数生成单层/全层支撑截面。
 - 填充（Fill）：线型/之字形/简单之字形等多种填充模式，支持带边框的复合偏移填充。
-- 路径（Path）：将层数据转换为 G-code 点序列，封装挤出/移动段与速度、线宽等工艺参数。
-- **SLS导出（SLS Export）**：为选择性激光烧结工艺提供专用的数据包封装和Lua脚本导出功能。
+- **路径优化（Path Optimizer）**：独立多边形区域访问顺序优化，减少空走距离，支持填充前和填充后两种模式。
+- 路径生成（Path）：将层数据转换为 G-code 点序列，封装挤出/移动段与速度、线宽等工艺参数。
+- SLS导出（SLS Export）：为选择性激光烧结工艺提供专用的数据包封装和Lua脚本导出功能。
 - 底板（Floor）：为SLA工艺生成接触底板和支撑结构。
 - 版本管理（Version）：提供统一的版本信息查询接口，支持JSON和XML格式输出。
 
 章节来源
 - [model_preprocess.hpp:15-85](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L15-L85)
-- [mesh_slice.hpp:13-25](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L13-L25)
+- [mesh_slice.hpp:13-25](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L13-25)
 - [fdm_support.hpp:11-33](file://LibHsBaSlicer/Support/fdm_support.hpp#L11-L33)
 - [polygon_fill.hpp:9-33](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L9-33)
+- [path_optimizer.hpp:18-84](file://LibHsBaSlicer/Path/path_optimizer.hpp#L18-84)
 - [path_generator.hpp:13-59](file://LibHsBaSlicer/Path/path_generator.hpp#L13-59)
 - [sls_export.hpp:20-47](file://LibHsBaSlicer/Path/sls_export.hpp#L20-47)
 - [sla_floor.hpp:20-74](file://LibHsBaSlicer/Floor/sla_floor.hpp#L20-74)
 - [version_info.hpp:11-21](file://LibHsBaSlicer/version_info.hpp#L11-21)
+
+## 路径优化功能
+
+### 架构设计
+路径优化功能通过RegionPathOptimizer类实现独立多边形区域的访问顺序优化，利用AreaGraph算法求解最短路径问题。该功能支持两种优化模式：
+
+```mermaid
+classDiagram
+class RegionPathOptimizer {
++addRegion(regionId, paths) void
++addPolygonRegion(regionId, polygons) void
++addRoute(fromId, toId, cost) void
++optimizeOrder() vector~int~
++buildPaths() PolygonsD
++buildPolygons() PolygonsD
+}
+class AreaGraph {
++addArea(id, config) void
++addRoute(from, to, gateWeights) void
++shortestPath(from, to) PathResult
++solveTSP(mustVisit) TSPResult
+}
+class PathOptimize {
++new() RegionPathOptimizer
++optimizeRegions(regions) PolygonsD
++optimizePolygons(regions) PolygonsD
+}
+RegionPathOptimizer --> AreaGraph : "使用"
+PathOptimize --> RegionPathOptimizer : "封装"
+```
+
+图表来源
+- [path_optimizer.hpp:33-84](file://LibHsBaSlicer/Path/path_optimizer.hpp#L33-84)
+- [AreaGraph.hpp:87-308](file://utils/AreaGraph.hpp#L87-308)
+
+### 核心API接口
+路径优化功能提供以下主要接口：
+
+#### C++ API
+- `RegionPathOptimizer`：核心优化器类，支持两种区域类型
+- `addRegion()`：添加基于填充结果的区域（填充后优化）
+- `addPolygonRegion()`：添加基于多边形本身的区域（填充前优化）
+- `addRoute()`：手动指定区域间空走代价
+- `optimizeOrder()`：求解区域访问顺序
+- `buildPaths()`：输出优化后的完整填充路径
+- `buildPolygons()`：输出优化顺序的多边形集合
+
+#### Lua API
+- `PathOptimize.new()`：创建优化器对象
+- `PathOptimize.optimizeRegions()`：一键优化填充结果
+- `PathOptimize.optimizePolygons()`：一键优化多边形集合
+
+### 优化模式详解
+
+#### 填充结果模式（填充后优化）
+适用于已生成的填充路径，支持多点折线数据结构：
+- 每条路径的首尾端点作为门禁点
+- 通过TSP算法求解最优访问顺序
+- 区域内路径方向自动调整以减少跳变
+
+#### 多边形模式（填充前优化）
+适用于原始多边形轮廓，在填充执行前优化：
+- 多边形全部顶点作为候选门禁点
+- 输出优化顺序的多边形集合供后续填充使用
+- 保持多边形环绕方向不变
+
+### AreaGraph算法实现
+AreaGraph提供了核心的图论算法支持：
+
+```mermaid
+flowchart TD
+A["输入区域集合"] --> B["构建AreaGraph"]
+B --> C["计算区域内部门禁代价"]
+C --> D["计算区域间路由代价"]
+D --> E{"区域数量"}
+E --> |=1| F["直接返回添加顺序"]
+E --> |=2| G["比较两个方向距离"]
+E --> |>2| H["遗传算法求解TSP"]
+H --> I["输出最优访问顺序"]
+G --> I
+F --> I
+```
+
+图表来源
+- [AreaGraph.hpp:231-308](file://utils/AreaGraph.hpp#L231-308)
+- [path_optimizer.cpp:113-161](file://LibHsBaSlicer/Path/path_optimizer.cpp#L113-161)
+
+### Fill阶段集成
+路径优化功能已深度集成到Fill阶段，通过Lua脚本扩展机制实现无缝调用：
+
+```mermaid
+sequenceDiagram
+participant App as "应用"
+participant Fill as "填充模块"
+participant Lua as "Lua环境"
+participant Opt as "路径优化器"
+App->>Fill : LuaCustomFillByFile(poly, script)
+Fill->>Lua : 创建Lua状态
+Fill->>Lua : 注册PathOptimize函数
+Fill->>Lua : 执行填充脚本
+Lua->>Opt : optimizeRegions()/optimizePolygons()
+Opt-->>Lua : 返回优化结果
+Lua-->>Fill : 返回填充路径
+Fill-->>App : 返回最终结果
+```
+
+图表来源
+- [polygon_fill.cpp:32-44](file://LibHsBaSlicer/Fill/polygon_fill.cpp#L32-44)
+- [path_optimizer.cpp:569-582](file://LibHsBaSlicer/Path/path_optimizer.cpp#L569-582)
+
+### 使用示例
+路径优化功能提供了丰富的使用示例：
+
+#### 基础用法
+```lua
+-- 填充结果模式一键优化
+function optimize_paths(regions)
+    return PathOptimize.optimizeRegions(regions)
+end
+
+-- 多边形模式一键优化  
+function optimize_polygons(regions)
+    return PathOptimize.optimizePolygons(regions)
+end
+```
+
+#### 高级定制
+```lua
+-- 手动构建优化器，自定义区域间代价
+function optimize_paths_manual(regions)
+    local opt = PathOptimize.new()
+    for i, paths in ipairs(regions) do
+        opt:addRegion(i, paths)
+    end
+    -- 手动指定区域间的空走代价
+    opt:addRoute(1, 2, 15.0)
+    local order = opt:optimizeOrder()
+    return opt:buildPaths()
+end
+```
+
+**章节来源**
+- [path_optimizer.hpp:18-161](file://LibHsBaSlicer/Path/path_optimizer.hpp#L18-161)
+- [path_optimizer.cpp:38-662](file://LibHsBaSlicer/Path/path_optimizer.cpp#L38-662)
+- [polygon_fill.cpp:32-44](file://LibHsBaSlicer/Fill/polygon_fill.cpp#L32-44)
+- [optimize_paths.lua:1-34](file://tests/PolygonFill/optimize_paths.lua#L1-L34)
 
 ## SLS导出功能
 
@@ -292,6 +446,15 @@ class Support {
 class Fill {
 +FillPolygon(poly,spacing,mode,angle) Polygons
 +FillWithBorder(poly,spacing,border_count,mode,angle) Polygons
++LuaCustomFillByFile(poly,script,functionName,lineThickness) Polygons
+}
+class PathOptimizer {
++addRegion(regionId,paths) void
++addPolygonRegion(regionId,polygons) void
++addRoute(fromId,toId,cost) void
++optimizeOrder() vector~int~
++buildPaths() PolygonsD
++buildPolygons() PolygonsD
 }
 class Path {
 +GenerateGCodePath(layer_data,config) unique_ptr~PointsPath~
@@ -313,7 +476,8 @@ class VersionInfo {
 Preprocess --> IModel : "管理生命周期"
 Slice --> IModel : "读取几何"
 Support --> Fill : "使用填充结果"
-Path --> Fill : "消费填充轮廓"
+Fill --> PathOptimizer : "集成优化"
+PathOptimizer --> Path : "消费优化结果"
 SLSExport --> Fill : "处理层数据"
 Floor --> Fill : "生成底板"
 VersionInfo --> IModel : "独立模块"
@@ -322,9 +486,10 @@ VersionInfo --> IModel : "独立模块"
 图表来源
 - [IModel.hpp:107-136](file://base/IModel.hpp#L107-L136)
 - [model_preprocess.hpp:15-85](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L15-L85)
-- [mesh_slice.hpp:13-25](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L13-L25)
+- [mesh_slice.hpp:13-25](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L13-25)
 - [fdm_support.hpp:11-33](file://LibHsBaSlicer/Support/fdm_support.hpp#L11-L33)
 - [polygon_fill.hpp:9-33](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L9-33)
+- [path_optimizer.hpp:18-84](file://LibHsBaSlicer/Path/path_optimizer.hpp#L18-84)
 - [path_generator.hpp:13-59](file://LibHsBaSlicer/Path/path_generator.hpp#L13-59)
 - [sls_export.hpp:20-47](file://LibHsBaSlicer/Path/sls_export.hpp#L20-47)
 - [sla_floor.hpp:20-74](file://LibHsBaSlicer/Floor/sla_floor.hpp#L20-74)
@@ -389,7 +554,7 @@ CallUnsafe --> Return
 - [mesh_slice.hpp:15-21](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L15-L21)
 
 章节来源
-- [mesh_slice.hpp:13-25](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L13-L25)
+- [mesh_slice.hpp:13-25](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L13-25)
 - [mesh_slice.cpp:1-28](file://LibHsBaSlicer/Slice/mesh_slice.cpp#L1-L28)
 
 ### 支撑（Support）
@@ -415,13 +580,14 @@ Sup-->>App : vector<PolygonsD>
 - [fdm_support.hpp:20-31](file://LibHsBaSlicer/Support/fdm_support.hpp#L20-31)
 
 章节来源
-- [fdm_support.hpp:11-33](file://LibHsBaSlicer/Support/fdm_support.hpp#L11-33)
+- [fdm_support.hpp:11-33](file://LibHsBaSlicer/Support/fdm_support.hpp#L11-L33)
 
 ### 填充（Fill）
 - 职责：对二维多边形执行不同模式的填充，并提供带边框的复合偏移填充。
 - 关键设计：
   - FillPolygon 根据模式分派至 Line/SimpleZigzag/Zigzag 算法。
   - FillWithBorder 使用 CompositeOffsetFill 实现向内偏移生成边框后再填充。
+  - **新增**：LuaCustomFillByFile 集成了路径优化功能，支持在填充脚本中使用PathOptimize。
 - 复杂度与性能：
   - 填充算法通常为 O(n·k)，n 为边界点数，k 为填充线数；角度与间距影响 k。
 
@@ -431,20 +597,60 @@ In(["输入: poly, spacing, mode, angle"]) --> Switch{"模式选择"}
 Switch --> |Line| L["LineFill(...)"]
 Switch --> |SimpleZigzag| SZ["SimpleZigzagFill(...)"]
 Switch --> |Zigzag| Z["ZigzagFill(...)"]
-L --> Out["返回 Polygons"]
+Switch --> |Lua| LU["LuaCustomFillByFile(...)"]
+LU --> PO["PathOptimize集成"]
+PO --> Out["返回 Polygons"]
+L --> Out
 SZ --> Out
 Z --> Out
 ```
 
 图表来源
-- [polygon_fill.cpp:5-18](file://LibHsBaSlicer/Fill/polygon_fill.cpp#L5-18)
-- [polygon_fill.hpp:11-31](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L11-31)
+- [polygon_fill.cpp:9-44](file://LibHsBaSlicer/Fill/polygon_fill.cpp#L9-44)
+- [polygon_fill.hpp:21-49](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L21-49)
 
 章节来源
 - [polygon_fill.hpp:9-33](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L9-33)
-- [polygon_fill.cpp:1-29](file://LibHsBaSlicer/Fill/polygon_fill.cpp#L1-L29)
+- [polygon_fill.cpp:1-47](file://LibHsBaSlicer/Fill/polygon_fill.cpp#L1-L47)
 
-### 路径（Path）
+### 路径优化（Path Optimizer）
+- 职责：独立多边形区域访问顺序优化，减少空走距离，提升打印效率。
+- 关键设计：
+  - RegionPathOptimizer 支持两种优化模式：填充结果模式和多边形模式。
+  - AreaGraph 提供核心图论算法，包括最短路径和TSP求解。
+  - Lua绑定提供完整的脚本扩展能力。
+- 复杂度与性能：
+  - TSP求解使用遗传算法，时间复杂度O(n²·G)，G为迭代次数。
+  - 区域内贪心编排为O(n²)，整体性能适合中等规模区域集合。
+- 错误处理：
+  - 模式混用检查，区域ID重复检查，TSP求解失败回退。
+
+```mermaid
+sequenceDiagram
+participant App as "调用方"
+participant Opt as "RegionPathOptimizer"
+participant AG as "AreaGraph"
+participant GA as "遗传算法"
+App->>Opt : addRegion()/addPolygonRegion()
+Opt->>AG : buildAreaGraph()
+App->>Opt : optimizeOrder()
+Opt->>AG : solveTSP(mustVisit)
+AG->>GA : GeneticTSP.solve()
+GA-->>AG : 最优路径
+AG-->>Opt : tour + entryGates
+Opt-->>App : 优化顺序
+```
+
+图表来源
+- [path_optimizer.cpp:113-161](file://LibHsBaSlicer/Path/path_optimizer.cpp#L113-161)
+- [AreaGraph.hpp:231-308](file://utils/AreaGraph.hpp#L231-308)
+
+章节来源
+- [path_optimizer.hpp:18-161](file://LibHsBaSlicer/Path/path_optimizer.hpp#L18-161)
+- [path_optimizer.cpp:1-662](file://LibHsBaSlicer/Path/path_optimizer.cpp#L1-662)
+- [AreaGraph.hpp:1-558](file://utils/AreaGraph.hpp#L1-558)
+
+### 路径生成（Path）
 - 职责：将层数据（轮廓、填充、支撑）转换为 G-code 点序列，封装挤出/移动段与速度、线宽、单位等工艺参数。
 - 关键设计：
   - LayerPathData 聚合一层所需的路径元素与 Z 高度。
@@ -540,17 +746,20 @@ Lib -.可选.-> CAD["HsBaSlicerCADModel"]
 - 预编译头：通过 pch_headers.hpp 集中引入常用标准库与第三方头，减少重复编译开销。
 - 版本信息缓存：版本信息在构建时生成，运行时直接访问，无额外性能开销。
 - SLS导出优化：JSON序列化采用流式处理，避免大对象内存分配；Lua脚本执行支持异步回调。
+- **路径优化优化**：AreaGraph使用懒加载机制，仅在需要时构建扩展图；TSP求解支持参数调优平衡精度与速度。
 - 建议：
   - 大批量模型处理时复用模型对象，避免频繁加载/释放。
   - 合理设置填充间距与壁厚，平衡质量与时间。
   - 对超大模型优先使用不安全切片获取完整拓扑，再进行后处理筛选。
   - SLS导出时使用合适的压缩级别，平衡文件大小和处理时间。
+  - 路径优化时根据区域数量选择合适的TSP参数，小区域集可使用默认参数，大规模区域集建议增加populationSize。
 
 章节来源
 - [model_preprocess.cpp:9-14](file://LibHsBaSlicer/Preprocess/model_preprocess.cpp#L9-L14)
 - [mesh_slice.hpp:15-16](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L15-L16)
 - [pch_headers.hpp:1-40](file://LibHsBaSlicer/pch_headers.hpp#L1-L40)
 - [sls_export.cpp:50-94](file://LibHsBaSlicer/Path/sls_export.cpp#L50-94)
+- [AreaGraph.hpp:231-308](file://utils/AreaGraph.hpp#L231-308)
 
 ## 故障排查指南
 - 模型加载失败
@@ -562,6 +771,13 @@ Lib -.可选.-> CAD["HsBaSlicerCADModel"]
   - 调整悬垂角度、填充间距与壁厚；检查输入轮廓是否为有效闭合多边形。
 - 路径生成问题
   - 核对 FdmPathConfig 的单位、线宽与速度设置；确保层数据中 z_height 正确递增。
+- **路径优化失败**
+  - 检查区域ID是否重复；确认同一优化器内未混用两种模式。
+  - 验证AreaGraph构建是否成功；检查区域间是否存在可达路径。
+  - 对于大规模区域集，适当调整TSP参数（populationSize、maxGenerations）。
+- **Lua脚本错误**
+  - 确认PathOptimize函数是否正确注册；检查脚本语法和函数签名。
+  - 验证regions数据结构是否符合要求；检查点坐标格式是否正确。
 - **SLS导出失败**
   - 检查Lua脚本语法和路径是否正确；确认输出目录具有写入权限。
   - 验证Lua环境中必要的库（Zipper、数据库适配器）是否正确注册。
@@ -575,13 +791,14 @@ Lib -.可选.-> CAD["HsBaSlicerCADModel"]
 - [mesh_slice.hpp:17-21](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L17-21)
 - [fdm_support.hpp:13-22](file://LibHsBaSlicer/Support/fdm_support.hpp#L13-22)
 - [polygon_fill.hpp:11-31](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L11-31)
+- [path_optimizer.hpp:41-79](file://LibHsBaSlicer/Path/path_optimizer.hpp#L41-79)
 - [path_generator.hpp:18-57](file://LibHsBaSlicer/Path/path_generator.hpp#L18-57)
 - [sls_export.cpp:50-94](file://LibHsBaSlicer/Path/sls_export.cpp#L50-94)
 
 ## 结论
 LibHsBaSlicer 提供了从模型预处理到 G-code 路径生成的完整切片链路，具备清晰的模块化设计与良好的可扩展性（Lua 脚本、多后端模型）。通过合理的参数配置与并发策略，可在多平台上稳定高效地服务 FDM/SLA/SLS 等工艺需求。
 
-**更新** 新增的SLS导出功能进一步增强了库的工艺覆盖范围，通过Lua脚本驱动的灵活输出机制，为用户提供了高度定制化的数据处理能力。版本管理功能的架构重构也进一步提升了库的完整性，提供了统一的版本信息查询接口，便于调试、日志记录和兼容性检查。
+**更新** 新增的完整路径优化功能进一步增强了库的工艺覆盖范围，通过RegionPathOptimizer类和AreaGraph算法实现了高效的独立区域访问顺序优化。该功能支持填充前和填充后两种模式，能够显著减少打印过程中的空走距离，提升打印效率。同时，路径优化功能与Fill阶段的深度集成使得用户可以在自定义填充脚本中直接使用PathOptimize，提供了极大的灵活性。SLS导出功能的完善和版本管理架构的重构也进一步提升了库的完整性，为用户提供了更加专业和可靠的增材制造解决方案。
 
 ## 附录：API参考
 - 预处理
@@ -591,10 +808,14 @@ LibHsBaSlicer 提供了从模型预处理到 G-code 路径生成的完整切片�
 - 支撑
   - GenerateFdmSupport / GenerateAllFdmSupport
 - 填充
-  - FillPolygon / FillWithBorder
-- 路径
+  - FillPolygon / FillWithBorder / LuaCustomFillByFile
+- **路径优化**
+  - RegionPathOptimizer / addRegion / addPolygonRegion / addRoute / optimizeOrder / buildPaths / buildPolygons
+  - PathOptimize / new / optimizeRegions / optimizePolygons
+  - LuaOptimizeRegionPaths / LuaOptimizeRegionPathsString / LuaOptimizeRegionPolygons / LuaOptimizeRegionPolygonsString
+- 路径生成
   - GenerateGCodePath / PolygonsToGPoints
-- **SLS导出**
+- SLS导出
   - SlsPackage / SaveSlsPackageLua
 - 底板
   - GenerateFloorContact / GenerateFloorRaft / GenerateFloorBorder / GenerateFloorFill
@@ -607,9 +828,10 @@ LibHsBaSlicer 提供了从模型预处理到 G-code 路径生成的完整切片�
 
 章节来源
 - [model_preprocess.hpp:15-85](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L15-L85)
-- [mesh_slice.hpp:13-25](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L13-L25)
+- [mesh_slice.hpp:13-25](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L13-25)
 - [fdm_support.hpp:11-33](file://LibHsBaSlicer/Support/fdm_support.hpp#L11-L33)
 - [polygon_fill.hpp:9-33](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L9-33)
+- [path_optimizer.hpp:18-161](file://LibHsBaSlicer/Path/path_optimizer.hpp#L18-161)
 - [path_generator.hpp:13-59](file://LibHsBaSlicer/Path/path_generator.hpp#L13-59)
 - [sls_export.hpp:20-47](file://LibHsBaSlicer/Path/sls_export.hpp#L20-47)
 - [sla_floor.hpp:20-178](file://LibHsBaSlicer/Floor/sla_floor.hpp#L20-178)

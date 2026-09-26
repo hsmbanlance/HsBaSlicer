@@ -41,8 +41,9 @@ BOOST_AUTO_TEST_CASE(volume_and_transform)
     BOOST_CHECK_CLOSE(mx.z(), 0.5f, 1e-3);
 }
 
-// Boolean operations for IGL guarded by compile-time macro to allow skipping in Debug.
-#ifndef DISABLE_BOOLEAN_OPERATIONS_TESTS
+// Boolean operations for IGL require CGAL; guarded by compile-time macros so the
+// test is skipped in Debug and in builds without the copyleft kernel (USE_CGAL).
+#if defined(USE_CGAL) && !defined(DISABLE_BOOLEAN_OPERATIONS_TESTS)
 BOOST_AUTO_TEST_CASE(boolean_operations)
 {
     auto a = IglModel::CreateBox(Eigen::Vector3f{1.0f, 1.0f, 1.0f});

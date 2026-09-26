@@ -47,3 +47,11 @@ else()
 endif()
 
 target_link_libraries(HsBaSlicerBase PUBLIC magic_enum::magic_enum)
+
+# Enable the Mockit-like stubbing facility in AnyObject when tests are part of
+# the build. This is PUBLIC so any test target that links HsBaSlicerBase sees
+# the same layout of MockRegistry / ScopedEnable that the library was built
+# with. Production builds without HSBA_SLICER_USE_TESTS pay no overhead.
+if(HSBA_SLICER_USE_TESTS)
+    target_compile_definitions(HsBaSlicerBase PUBLIC HSBA_ANY_OBJECT_ENABLE_MOCK=1)
+endif()

@@ -19,7 +19,10 @@ param(
     [string]$ConfigureTime = (Get-Date -Format "yyyy-MM-dd HH:mm:ss"),
     
     [Parameter(Mandatory=$false)]
-    [string]$VcpkgJsonPath
+    [string]$VcpkgJsonPath,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$Copyleft = "OFF"
 )
 
 # 获取当前时间戳
@@ -87,6 +90,8 @@ $targetPlatform = Get-PlatformFromTriplet $VcpkgTriplet
 # 解析 vcpkg.json 文件
 $vcpkgJsonPath = if ($VcpkgJsonPath) { $VcpkgJsonPath } else { Join-Path $PSScriptRoot "..\vcpkg.json" }
 $thirdLibsCode = ""
+# 是否启用 vcpkg.json 的 copyleft feature（CGAL/OpenCascade 等 Copyleft 内核仅在该 feature 下安装）
+$copyleftEnabled = $Copyleft -in @("ON", "1", "True", "TRUE", "true")
 # 是否包含 GPL/LGPL 等 Copyleft 依赖，用于决定项目许可证（GPL 或 MIT）
 $hasCopyleft = $false
 
@@ -142,9 +147,15 @@ if (Test-Path $vcpkgJsonPath) {
             "openvdb" = @{ license = "Apache-2.0"; homepage = "https://www.openvdb.org/" }
         }
         
+        # 顶层依赖 + 启用 copyleft feature 时追加其 feature 依赖（CGAL、libigl[cgal]、OpenCascade）
+        $allDeps = @($vcpkgContent.dependencies)
+        if ($copyleftEnabled -and $vcpkgContent.features.copyleft.dependencies) {
+            $allDeps += @($vcpkgContent.features.copyleft.dependencies)
+        }
+        
         # 遍历依赖并生成代码
         $addedLibs = @{}
-        foreach ($dep in $vcpkgContent.dependencies) {
+        foreach ($dep in $allDeps) {
             # 处理字符串或对象类型的依赖
             $depName = if ($dep -is [string]) { $dep } else { $dep.name }
             $depPlatform = if ($dep -is [object] -and $dep.platform) { $dep.platform } else { $null }
@@ -233,5 +244,6 @@ Write-Host "Generated version.cpp at: $OutputPath"
 Write-Host "Build Type: $BuildType"
 Write-Host "Platform: $Platform"
 Write-Host "Vcpkg Triplet: $VcpkgTriplet"
+Write-Host "Copyleft Feature: $(if ($copyleftEnabled) { 'enabled' } else { 'disabled' })"
 Write-Host "Project License: $projectLicense"
 Write-Host "Configure Time: $timestamp"
