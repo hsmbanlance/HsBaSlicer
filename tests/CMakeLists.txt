@@ -269,6 +269,38 @@ add_test(
   -t enum_simple_convert
   )
 
+# lua common types test
+add_executable(lua_common_types_test LuaCommonTypes/lua_common_types_test.cpp)
+
+target_link_libraries(lua_common_types_test
+	LibHsBaSlicer
+	HsBaSlicer2D
+	HsBaSlicerBase
+	HsBaSlicerUtils
+	Eigen3::Eigen
+	Boost::unit_test_framework
+	${LUA_LIBRARIES}
+)
+
+target_include_directories(lua_common_types_test PRIVATE ${LUA_INCLUDE_DIR})
+
+target_compile_definitions(lua_common_types_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME lua_common_types_test
+  COMMAND $<TARGET_FILE:lua_common_types_test>
+  )
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET lua_common_types_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R lua_common_types_test
+  )
+endif()
+
 set(ALL_TEST_TARGETS
   any_object_test
   anyvisit_test
@@ -296,6 +328,7 @@ set(ALL_TEST_TARGETS
   support_test
   model_loader_test
   openvdb_model_test
+  lua_common_types_test
 )
 
 if(TARGET HsBaSlicerCADModel)

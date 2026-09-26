@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "LibHsBaSlicer/Extends/LuaCommonTypes.hpp"
 #include "LibHsBaSlicer/Path/sls_export.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
@@ -168,6 +169,9 @@ HsBaSlsPipelineResult_t ToCResult(const InternalSlsResult& ir)
 
 Utils::Task<InternalSlsResult> RunSlsPipelineAsync(const InternalSlsConfig& cfg)
 {
+    // 把常用自定义类型的 AnyObject/Lua 注册函数装入通用注册池，供各阶段 Lua 环境使用
+    HsBa::Slicer::InstallCommonAnyObjectTypes();
+
     InternalSlsResult result;
     auto start_time = std::chrono::steady_clock::now();
 
