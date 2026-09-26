@@ -182,6 +182,54 @@ extern "C"
                                                            void** out_data, int* out_size);
 
     /* ========================================================================
+     *  Custom Lua Pipeline Proto conversion
+     *
+     *  The custom pipeline keeps its whole workflow inside the Lua script, so
+     *  the proto messages only carry the script reference and the few values
+     *  published into the Lua environment.
+     * ====================================================================== */
+
+    /**
+     * @brief Deserialize custom Lua pipeline config from proto bytes.
+     * @param proto_data Serialized proto bytes (custom_pipe_config).
+     * @param proto_size Size of proto_data in bytes.
+     * @param config Output C config struct.
+     * @return 1 on success, 0 on parse failure.
+     */
+    HSBA_SLICER_API int HsBaCustomConfigFromProtoBytes(const void* proto_data, int proto_size,
+                                                       HsBaCustomPipelineConfig_t* config);
+
+    /**
+     * @brief Serialize custom Lua pipeline config to proto bytes.
+     * @param config Input C config struct.
+     * @param out_data Output buffer (malloc-allocated, caller must free).
+     * @param out_size Output buffer size in bytes.
+     * @return 1 on success, 0 on serialization failure.
+     */
+    HSBA_SLICER_API int HsBaCustomConfigToProtoBytes(const HsBaCustomPipelineConfig_t* config, void** out_data,
+                                                     int* out_size);
+
+    /**
+     * @brief Deserialize custom Lua pipeline result from proto bytes.
+     * @param proto_data Serialized proto bytes (custom_pipe_result).
+     * @param proto_size Size of proto_data in bytes.
+     * @param result Output C result struct, free it with HsBaFreeCustomPipelineResult.
+     * @return 1 on success, 0 on parse failure.
+     */
+    HSBA_SLICER_API int HsBaCustomResultFromProtoBytes(const void* proto_data, int proto_size,
+                                                       HsBaCustomPipelineResult_t* result);
+
+    /**
+     * @brief Serialize custom Lua pipeline result to proto bytes.
+     * @param result Input C result struct.
+     * @param out_data Output buffer (malloc-allocated, caller must free).
+     * @param out_size Output buffer size in bytes.
+     * @return 1 on success, 0 on serialization failure.
+     */
+    HSBA_SLICER_API int HsBaCustomResultToProtoBytes(const HsBaCustomPipelineResult_t* result, void** out_data,
+                                                     int* out_size);
+
+    /* ========================================================================
      *  C struct memory cleanup helpers
      *
      *  Free malloc'd string fields in converted C structs.
@@ -210,6 +258,12 @@ extern "C"
      * @param config Config struct whose string fields and array should be freed.
      */
     HSBA_SLICER_API void HsBaFreeFileTransferConfigStrings(HsBaFileTransferPipelineConfig_t* config);
+
+    /**
+     * @brief Free malloc'd string fields in custom Lua pipeline config struct.
+     * @param config Config struct whose string fields should be freed.
+     */
+    HSBA_SLICER_API void HsBaFreeCustomConfigStrings(HsBaCustomPipelineConfig_t* config);
 
 #ifdef __cplusplus
 }  // extern "C"

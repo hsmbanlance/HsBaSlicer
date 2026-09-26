@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package HsbaProto;
+
+// Configuration of the fully Lua-driven custom pipeline.
+// The whole workflow (stage order and content) lives inside the Lua entry
+// function of pipeline_lua_script / pipeline_lua_source, so this message is
+// intentionally small: everything else is decided by the script.
+message custom_pipe_config
+{
+    string custom_pipe_config_pipeline_lua_script = 1; // path to the pipeline Lua script file
+    string custom_pipe_config_pipeline_lua_source = 2; // inline Lua source, executed before the script file
+    string custom_pipe_config_entry_func = 3; // Lua entry function name (empty = "run_pipeline")
+    string custom_pipe_config_config_json = 4; // free-form JSON exposed to Lua as `pipeline_config`
+    string custom_pipe_config_model_name = 5; // model name exposed to Lua as `model_name`
+    string custom_pipe_config_model_path = 6; // model file path exposed to Lua as `model_path`
+    string custom_pipe_config_output_path = 7; // default output path exposed to Lua as `output_path`
+}
+
+// Result of the custom Lua pipeline. total_layers / output_path are reported
+// by the script through HsBa.setLayers() / HsBa.setOutputPath().
+message custom_pipe_result
+{
+    bool custom_pipe_result_success = 1; // success flag
+    int32 custom_pipe_result_total_layers = 2; // layer count reported by the script
+    string custom_pipe_result_output_path = 3; // output path reported by the script
+    string custom_pipe_result_result_string = 4; // string returned by the Lua entry function
+    string custom_pipe_result_error_message = 5; // error message
+    double custom_pipe_result_elapsed_seconds = 6; // elapsed seconds
+}

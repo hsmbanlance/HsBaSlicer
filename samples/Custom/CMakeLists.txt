@@ -12,6 +12,12 @@ endif()
 
 target_link_libraries(custom_sample PRIVATE DllHsBaSlicer)
 
+# 示例 4 只用 DllHsBaSlicer 的 From/ToProtoBytes C 接口，自己手拼 wire 字节：
+# 这里故意不链接 HsBaSlicerProto —— 把生成的 .pb.cc 与已经包含同一份 protobuf
+# 描述符的 DllHsBaSlicer 链进同一个进程，会在启动时报
+# "File already exists in database" 并终止进程（跨语言调用方用自己的 protobuf
+# 运行库，不存在这个问题）
+
 # 示例需要访问公开头文件
 target_include_directories(custom_sample PRIVATE
     ${CMAKE_SOURCE_DIR}/DllHsBaSlicer

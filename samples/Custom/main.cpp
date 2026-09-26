@@ -23,17 +23,27 @@
  * 同时脚本还能使用项目注册池中的 PolygonOperations / Support / PolygonFill /
  * PathOptimize / Zipper / Cipher / SQLiteAdapter 等库。
  *
+ * 调用方式共四种：脚本文件、内联源码、异步执行，以及示例 4 演示的 Protobuf
+ * 字节流（跨进程 / 跨语言：请求与结果都以 `proto/custom_pipeline.proto` 定义
+ * 的 wire 格式传递，C++ / C# / Java / Python 只要能序列化该 schema 即可调用）。
+ *
  * 支持平台: Windows / Linux / macOS / Android / iOS
  */
 
+#include <bit>
 #include <chrono>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <format>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
 
 #include "custom_pipeline.h"
+#include "pipeline_convert.h"
 
 #ifndef HSBA_GAME_CONSOLE
 #include "logger/logger.hpp"
@@ -209,6 +219,241 @@ static int RunAsyncLuaPipeline()
 }
 
 // ---------------------------------------------------------------------------
+// 极简 Protobuf wire 编解码
+//
+// 只覆盖示例 4 用到的 varint / length-delimited / fixed64 三种类型，字段编号与
+// proto/custom_pipeline.proto 一致。示例因此不必链接 protobuf 运行库 —— 这也正是
+// C# / Python / Java 调用方的处境：它们用自己的运行库产生字节。注意：C++ 调用方
+// 不要把 HsBaSlicerProto 里的 .pb.cc 与 DllHsBaSlicer 链进同一个进程，protobuf
+// 会因同名 proto 文件重复注册（"File already exists in database"）直接终止进程。
+// ---------------------------------------------------------------------------
+namespace
+{
+constexpr int kWireVarint = 0;
+constexpr int kWireFixed64 = 1;
+constexpr int kWireDelimited = 2;
+constexpr int kWireFixed32 = 5;
+
+void AppendVarint(std::string& out, uint64_t value)
+{
+    do
+    {
+        uint8_t byte = static_cast<uint8_t>(value & 0x7F);
+        value >>= 7;
+        if (value)
+            byte |= 0x80;
+        out.push_back(static_cast<char>(byte));
+    } while (value);
+}
+
+/// @brief 追加一个 string 字段（proto3 语义：空串属于默认值，不写入字节流）
+void AppendStringField(std::string& out, int field_number, std::string_view value)
+{
+    if (value.empty())
+        return;
+    AppendVarint(out, (static_cast<uint64_t>(field_number) << 3) | kWireDelimited);
+    AppendVarint(out, value.size());
+    out.append(value);
+}
+
+struct ProtoField
+{
+    int field_number = 0;
+    int wire_type = 0;
+    std::string_view text;  ///< wire_type 2
+    uint64_t varint = 0;    ///< wire_type 0
+    uint64_t fixed64 = 0;   ///< wire_type 1
+};
+
+bool ReadVarint(std::string_view& buf, uint64_t& value)
+{
+    value = 0;
+    for (int shift = 0; shift < 64; shift += 7)
+    {
+        if (buf.empty())
+            return false;
+        const uint8_t byte = static_cast<uint8_t>(buf.front());
+        buf.remove_prefix(1);
+        value |= static_cast<uint64_t>(byte & 0x7F) << shift;
+        if ((byte & 0x80) == 0)
+            return true;
+    }
+    return false;
+}
+
+/// @brief 从字节流头部读一个字段，buf 同步前移；buf 耗尽时返回 false
+bool ReadField(std::string_view& buf, ProtoField& field)
+{
+    field = {};
+    if (buf.empty())
+        return false;
+    uint64_t tag = 0;
+    if (!ReadVarint(buf, tag))
+        return false;
+    field.field_number = static_cast<int>(tag >> 3);
+    field.wire_type = static_cast<int>(tag & 0x7);
+    switch (field.wire_type)
+    {
+    case kWireVarint:
+        return ReadVarint(buf, field.varint);
+    case kWireFixed64:
+        if (buf.size() < 8)
+            return false;
+        std::memcpy(&field.fixed64, buf.data(), 8);
+        buf.remove_prefix(8);
+        return true;
+    case kWireDelimited:
+    {
+        uint64_t len = 0;
+        if (!ReadVarint(buf, len) || len > buf.size())
+            return false;
+        field.text = buf.substr(0, static_cast<size_t>(len));
+        buf.remove_prefix(static_cast<size_t>(len));
+        return true;
+    }
+    case kWireFixed32:
+        if (buf.size() < 4)
+            return false;
+        buf.remove_prefix(4);
+        return true;
+    default:
+        return false;  // group 等不在示例范围内
+    }
+}
+
+/// @brief 解析整个消息的字段列表（未设置的字段不会出现）
+std::vector<ProtoField> ParseProtoFields(std::string_view buf)
+{
+    std::vector<ProtoField> fields;
+    ProtoField field;
+    while (ReadField(buf, field))
+        fields.push_back(field);
+    return fields;
+}
+
+std::string_view TextField(const std::vector<ProtoField>& fields, int number)
+{
+    for (const auto& f : fields)
+        if (f.field_number == number && f.wire_type == kWireDelimited)
+            return f.text;
+    return {};
+}
+
+uint64_t NumberField(const std::vector<ProtoField>& fields, int number)
+{
+    for (const auto& f : fields)
+        if (f.field_number == number && f.wire_type == kWireVarint)
+            return f.varint;
+    return 0;
+}
+
+// custom_pipe_config 的字段编号（与 .proto 一致）
+enum CustomConfigField : int
+{
+    kCfgScript = 1,
+    kCfgSource = 2,
+    kCfgEntryFunc = 3,
+    kCfgConfigJson = 4,
+    kCfgModelName = 5,
+    kCfgModelPath = 6,
+    kCfgOutputPath = 7,
+};
+
+// custom_pipe_result 的字段编号
+enum CustomResultField : int
+{
+    kResSuccess = 1,
+    kResTotalLayers = 2,
+    kResOutputPath = 3,
+    kResResultString = 4,
+    kResErrorMessage = 5,
+    kResElapsedSeconds = 6,
+};
+}  // namespace
+
+// ---------------------------------------------------------------------------
+// 示例 4: 以 Protobuf 字节流的方式调用 Custom 流水线
+//
+// 真实部署中，下面的请求字节通常由其它语言（C# / Python / Java）按
+// proto/custom_pipeline.proto 序列化后经 socket / 消息队列送来，接收端只需要
+// 这对 From/ToProtoBytes 的 C 接口就能把 wire 数据变成 C 配置结构。
+// ---------------------------------------------------------------------------
+static int RunPipelineFromProtoBytes()
+{
+    LogMsg("=== 示例 4: Protobuf 字节流驱动的 Custom 流水线 ===");
+
+    // 1. 发送端：按 wire 格式组装 custom_pipe_config 请求
+    std::string payload;
+    AppendStringField(payload, CustomConfigField::kCfgScript, "scripts/my_fdm_pipeline.lua");
+    AppendStringField(payload, CustomConfigField::kCfgSource,
+                      "machine = { layer_height = 0.25, first_layer_height = 0.3, fill_spacing = 0.5, "
+                      "wall_count = 2, enable_support = false, print_speed = 70, firmware = 'marlin' }");
+    AppendStringField(payload, CustomConfigField::kCfgEntryFunc, "run_pipeline");
+    AppendStringField(payload, CustomConfigField::kCfgConfigJson,
+                      "{ \"machine\": \"HsBa-X1\", \"material\": \"PETG\" }");
+    AppendStringField(payload, CustomConfigField::kCfgModelName, "stanford_bunny");
+    AppendStringField(payload, CustomConfigField::kCfgModelPath, "models/stanford_bunny.stl");
+    AppendStringField(payload, CustomConfigField::kCfgOutputPath, "output/custom_proto_pipeline.gcode");
+    LogMsg(std::format("请求序列化完成: {} 字节 wire 数据", payload.size()));
+
+    // 2. 接收端：proto 字节 -> C 配置结构（字符串字段由 malloc 分配）
+    HsBaCustomPipelineConfig_t cfg = HsBaCustomConfigDefault();
+    if (!HsBaCustomConfigFromProtoBytes(payload.data(), static_cast<int>(payload.size()), &cfg))
+    {
+        LogMsg("Proto 请求解析失败");
+        return 0;
+    }
+
+    // 3. 配置回转：C 结构 -> proto 字节，再解一次关键字段，验证双向映射一致
+    void* roundtrip_data = nullptr;
+    int roundtrip_size = 0;
+    if (HsBaCustomConfigToProtoBytes(&cfg, &roundtrip_data, &roundtrip_size))
+    {
+        const auto fields = ParseProtoFields(
+            std::string_view(static_cast<const char*>(roundtrip_data), static_cast<size_t>(roundtrip_size)));
+        LogMsg(std::format("配置回转 {} 字节, 脚本字段解回: {}", roundtrip_size,
+                           TextField(fields, CustomConfigField::kCfgScript)));
+        std::free(roundtrip_data);
+    }
+
+    // 4. 执行流水线（与示例 1 完全相同的入口，只是配置来源换成了 proto）
+    HsBaCustomPipelineResult_t result = HsBaRunCustomPipeline(&cfg, OnProgress, nullptr);
+    LogResult(result);
+
+    HsBaFreeCustomConfigStrings(&cfg);  // 释放 FromProtoBytes 分配的字符串字段
+
+    // 5. 回传结果：C 结果结构 -> proto 字节 -> 对端（这里自己解一次）反序列化
+    void* response_data = nullptr;
+    int response_size = 0;
+    if (HsBaCustomResultToProtoBytes(&result, &response_data, &response_size))
+    {
+        const auto fields = ParseProtoFields(
+            std::string_view(static_cast<const char*>(response_data), static_cast<size_t>(response_size)));
+        const double elapsed = std::bit_cast<double>(
+            [&]
+            {
+                for (const auto& f : fields)
+                    if (f.field_number == CustomResultField::kResElapsedSeconds)
+                        return f.fixed64;
+                return uint64_t{0};
+            }());
+        LogMsg(std::format("结果回传包 {} 字节: success={}, layers={}, output={}, elapsed={:.2f}", response_size,
+                           NumberField(fields, CustomResultField::kResSuccess) != 0,
+                           NumberField(fields, CustomResultField::kResTotalLayers),
+                           TextField(fields, CustomResultField::kResOutputPath), elapsed));
+        std::free(response_data);
+    }
+    else
+    {
+        LogMsg("结果序列化失败");
+    }
+
+    const int success = result.success;
+    HsBaFreeCustomPipelineResult(&result);
+    return success;
+}
+
+// ---------------------------------------------------------------------------
 // 入口
 // ---------------------------------------------------------------------------
 int main()
@@ -223,6 +468,7 @@ int main()
     RunLuaDefinedFdmPipeline();
     RunInlineLuaPipeline();
     RunAsyncLuaPipeline();
+    RunPipelineFromProtoBytes();
 
     LogMsg("全部示例执行完毕。");
     return 0;

@@ -4,6 +4,7 @@
 
 #include "pipelinetypes/pipeline_types.h"
 
+#include "custom_pipeline.pb.h"
 #include "fdm_pipeline.pb.h"
 #include "file_transfer_pipeline.pb.h"
 #include "sla_pipeline.pb.h"
@@ -51,6 +52,17 @@ void MsgToFileTransferConfig(const HsbaProto::file_transfer_pipe_config& msg, Hs
 /// @note String fields (error_message) are allocated with malloc;
 ///       caller must call HsBaFreeFileTransferPipelineResult to release.
 void MsgToFileTransferResult(const HsbaProto::file_transfer_pipe_result& msg, HsBaFileTransferPipelineResult_t* result);
+
+/// @brief Convert proto message to custom Lua pipeline C config.
+/// @note String fields are allocated with malloc; caller must free the struct
+///       or pass it through HsBaRunCustomPipeline which copies internally.
+///       Empty entry_func stays NULL so the "run_pipeline" default applies.
+void MsgToCustomConfig(const HsbaProto::custom_pipe_config& msg, HsBaCustomPipelineConfig_t* config);
+
+/// @brief Convert proto message to custom Lua pipeline C result.
+/// @note String fields (output_path, result_string, error_message) are allocated
+///       with malloc; caller must call HsBaFreeCustomPipelineResult to release.
+void MsgToCustomResult(const HsbaProto::custom_pipe_result& msg, HsBaCustomPipelineResult_t* result);
 
 }  // namespace HsBa::Slicer
 
