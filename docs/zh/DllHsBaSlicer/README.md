@@ -243,6 +243,53 @@ void HsBaFreeFileTransferPipelineResult(HsBaFileTransferPipelineResult_t* result
 | `file_paths` | NULL | 待传输文件路径数组 |
 | `file_count` | 0 | 文件数量 |
 
+### 自定义 Lua 流水线
+
+与 FDM/SLA/SLS（阶段顺序在 C++ 中固定，Lua 只能替换个别阶段）不同，Custom 流水线的**整条工作流由 Lua 脚本决定**：C++ 侧只负责构造 Lua 环境、把全部流水线算子挂在全局表 `HsBa` 上，然后调用脚本里的入口函数。需要新增工艺时只改脚本，不必重新编译库。
+
+```c
+HsBaCustomPipelineConfig_t HsBaCreateDefaultCustomConfig(void);
+
+HsBaCustomPipelineResult_t HsBaRunCustomPipeline(const HsBaCustomPipelineConfig_t* config,
+                                                 HsBaCustomProgressCallback callback, void* user_data);
+
+void HsBaRunCustomPipelineAsync(const HsBaCustomPipelineConfig_t* config,
+                                HsBaCustomProgressCallback callback, void* user_data,
+                                HsBaCustomResultCallback result_callback, void* result_user_data);
+
+void HsBaFreeCustomPipelineResult(HsBaCustomPipelineResult_t* result);
+```
+
+#### 配置字段
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `pipeline_lua_script` | NULL | 流水线 Lua 脚本路径 |
+| `pipeline_lua_source` | NULL | 内联 Lua 源码，**先于**脚本文件执行（可作为参数预置） |
+| `entry_func` | NULL | 入口函数名，NULL 时为 `run_pipeline` |
+| `config_json` | NULL | 任意 JSON 字符串，脚本中以 `pipeline_config` 读取 |
+| `model_name` / `model_path` | NULL | 模型名与路径，脚本中以 `model_name` / `model_path` 读取 |
+| `output_path` | NULL | 默认输出路径，脚本中以 `output_path` 读取 |
+
+> `pipeline_lua_script` 与 `pipeline_lua_source` 至少提供一个。Custom 流水线不参与 Proto 序列化转换。
+
+#### 脚本环境
+
+注入的全局变量：`HsBa`（算子表）、`model_name`、`model_path`、`output_path`、`pipeline_config`、`pipeline_entry`；同时可用项目注册池中的 `PolygonOperations`、`Support`、`PolygonFill`、`PathOptimize`、`Zipper`、`Cipher`、`SQLiteAdapter` 等库。
+
+`HsBa` 算子（坐标单位为 mm）：
+
+| 分组 | 算子 |
+| --- | --- |
+| 回报 | `progress(pct[, stage])`、`setLayers(n)`、`setOutputPath(path)` |
+| 文件 | `readFile(path)`、`writeFile(path, content)` |
+| 模型 | `loadModel(n, path)`、`modelInfo(n)`、`translateModel`、`rotateModel`、`scaleModel`、`removeModel`、`modelNames` |
+| 切片 | `layerCount(n, lh, flh)`、`layerZ(i, lh, flh)`、`slice(n, z)`、`sliceUnsafe(n, z)`、`toInt`、`toDouble` |
+| 工艺 | `fill(polys[, cfg])`、`fdmSupport(layers, cfg)`、`slaSupport(layers, cfg)`、`floor(bottom, cfg)` |
+| 输出 | `toGcode(layers, cfg)`、`saveSlaPackage(tbl)`、`saveSlsPackage(tbl)`、`renderImage(polys, w, h, path)` |
+
+入口函数返回任意真值表示成功（字符串会经 `result_string` 回传），返回 `false`/`nil` 或抛出 Lua 错误表示失败；`total_layers`、`output_path` 由脚本通过 `HsBa.setLayers()` / `HsBa.setOutputPath()` 回报。
+
 ### Proto 序列化转换
 
 提供 C 结构体与 Protobuf 序列化字节之间的双向转换，适用于跨进程 / 跨语言通信场景。所有输出缓冲区由 `malloc` 分配，调用方负责 `free`。
@@ -419,5 +466,6 @@ int main(void)
 - `samples/FDM/` —— FDM 同步/异步、Lua 自定义支撑与填充完整示例
 - `samples/SLA/` —— SLA 流水线与 Lua 自定义地板/支撑/导出示例
 - `samples/SLS/` —— SLS 流水线与 Lua 导出示例
+- `samples/Custom/` —— 整条流水线完全由 Lua 脚本定义的示例（FDM/SLA/内联脚本/异步）
 - `android/` —— Android JNI 调用示例工程
 - `ios/HsBaSlicerExample/` —— iOS Swift 桥接调用示例

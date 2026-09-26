@@ -57,6 +57,7 @@ module;
 #include "LibHsBaSlicer/Transfer/file_transfer.hpp"
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
 #include "LibHsBaSlicer/Extends/EventSourceFunction.hpp"
+#include "LibHsBaSlicer/Extends/lua_pipeline.hpp"
 
 // ---- Module interface ----
 export module hsba.slicer;
@@ -100,6 +101,8 @@ using ::HsBaSlsPipelineConfig_t;
 using ::HsBaSlsPipelineResult_t;
 using ::HsBaFileTransferPipelineConfig_t;
 using ::HsBaFileTransferPipelineResult_t;
+using ::HsBaCustomPipelineConfig_t;
+using ::HsBaCustomPipelineResult_t;
 
 // Re-export support config types into HsBa::Slicer namespace
 using Support::SupportConfig;
@@ -121,6 +124,8 @@ HsBaSlaPipelineConfig_t defaultSlaConfig();
 HsBaSlsPipelineConfig_t defaultSlsConfig();
 /// @brief Create default file transfer pipeline config.
 HsBaFileTransferPipelineConfig_t defaultFileTransferConfig();
+/// @brief Create default custom Lua pipeline config.
+HsBaCustomPipelineConfig_t defaultCustomConfig();
 
 // ===========================================================================
 // Model (RAII wrapper)
@@ -283,6 +288,40 @@ private:
 };
 
 // ===========================================================================
+// Custom Lua Pipeline (fully Lua-driven workflow)
+// ===========================================================================
+
+/// @brief Custom Lua pipeline result (C++ style).
+struct CustomLuaResult
+{
+    bool success = false;
+    int total_layers = 0;
+    std::string output_path;   ///< Output path reported by the Lua script
+    std::string result_string; ///< String returned by the Lua entry function
+};
+
+/// @brief Fully Lua-driven pipeline: the Lua entry function orchestrates all
+///        stages through the global `HsBa` table (loadModel/slice/fill/
+///        fdmSupport/toGcode/saveSlsPackage/...). The stage order is defined
+///        entirely by the script.
+class CustomLuaPipeline
+{
+public:
+    explicit CustomLuaPipeline(HsBaCustomPipelineConfig_t cfg = HsBaCustomConfigDefault());
+
+    /// @brief Set the progress callback driven by `HsBa.progress()` in Lua.
+    void setProgressFunc(std::function<void(int, std::string_view)> func);
+
+    /// @brief Run the custom pipeline.
+    /// @throws SlicerError on failure.
+    CustomLuaResult run() const;
+
+private:
+    HsBaCustomPipelineConfig_t cfg_;
+    std::function<void(int, std::string_view)> progress_;
+};
+
+// ===========================================================================
 // Lua custom functions
 // ===========================================================================
 
@@ -358,6 +397,7 @@ HsBaFdmPipelineConfig_t defaultFdmConfig() { return HsBaFdmConfigDefault(); }
 HsBaSlaPipelineConfig_t defaultSlaConfig() { return HsBaSlaConfigDefault(); }
 HsBaSlsPipelineConfig_t defaultSlsConfig() { return HsBaSlsConfigDefault(); }
 HsBaFileTransferPipelineConfig_t defaultFileTransferConfig() { return HsBaFileTransferConfigDefault(); }
+HsBaCustomPipelineConfig_t defaultCustomConfig() { return HsBaCustomConfigDefault(); }
 
 // ===========================================================================
 // Model
@@ -722,6 +762,45 @@ FileTransferOutcome FileTransferPipeline::run(FileTransferProgressFunc progress)
     outcome.files_transferred = result.files_transferred;
     outcome.total_files = result.total_files;
     return outcome;
+}
+
+// ===========================================================================
+// CustomLuaPipeline
+// ===========================================================================
+
+CustomLuaPipeline::CustomLuaPipeline(HsBaCustomPipelineConfig_t cfg) : cfg_(cfg) {}
+
+void CustomLuaPipeline::setProgressFunc(std::function<void(int, std::string_view)> func)
+{
+    progress_ = std::move(func);
+}
+
+CustomLuaResult CustomLuaPipeline::run() const
+{
+    if (!cfg_.pipeline_lua_script && !cfg_.pipeline_lua_source)
+        throw SlicerError("Custom Lua pipeline requires pipeline_lua_script or pipeline_lua_source");
+
+    LuaPipelineContext ctx;
+    ctx.script = cfg_.pipeline_lua_source ? cfg_.pipeline_lua_source : "";
+    ctx.script_file = cfg_.pipeline_lua_script ? cfg_.pipeline_lua_script : "";
+    ctx.entry_func = (cfg_.entry_func && *cfg_.entry_func) ? cfg_.entry_func : "run_pipeline";
+    ctx.config_json = cfg_.config_json ? cfg_.config_json : "";
+    ctx.output_path = cfg_.output_path ? cfg_.output_path : "";
+    ctx.model_name = cfg_.model_name ? cfg_.model_name : "";
+    ctx.model_path = cfg_.model_path ? cfg_.model_path : "";
+    if (progress_)
+        ctx.progress_cb = [p = progress_](int percent, std::string_view stage) { p(percent, stage); };
+
+    const LuaPipelineOutput out = RunLuaPipeline(ctx);
+    if (!out.success)
+        throw SlicerError(out.error_message.empty() ? "Custom Lua pipeline failed" : out.error_message);
+
+    CustomLuaResult result;
+    result.success = out.success;
+    result.total_layers = out.total_layers;
+    result.output_path = out.output_path;
+    result.result_string = out.result_string;
+    return result;
 }
 
 // ===========================================================================

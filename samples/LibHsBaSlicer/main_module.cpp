@@ -4,7 +4,8 @@
  *
  * Demonstrates how to use the ModuleHsBaSlicer C++20 module wrapper,
  * performing a complete FDM slicing workflow with class-based API:
- * Model -> FdmPipeline -> FdmResult.
+ * Model -> FdmPipeline -> FdmResult, plus an optional fully Lua-script
+ * defined workflow via CustomLuaPipeline.
  *
  * Compiler: C++20 module-capable compiler (MSVC 19.34+, GCC 14+, Clang 16+)
  * Requires: HSBA_SLICER_MODULE=ON (default)
@@ -16,6 +17,7 @@
 #include <format>
 #include <iostream>
 #include <string>
+#include <string_view>
 
 // Project headers: GMF-defined types (ModelInfo, etc.) are not exported by
 // C++20 modules (standard limitation). Consumers must include them directly.
@@ -45,7 +47,7 @@ int main()
         // =================================================================
         // Step 1: Load model (RAII - auto cleanup on scope exit)
         // =================================================================
-        std::cout << "[1/3] Loading model..." << std::endl;
+        std::cout << "[1/4] Loading model..." << std::endl;
         Model model("stanford_bunny", model_path);
 
         // Query model info
@@ -63,7 +65,7 @@ int main()
         // =================================================================
         // Step 2: Configure FDM pipeline (using pipeline_types.h config)
         // =================================================================
-        std::cout << "[2/3] Configuring FDM pipeline..." << std::endl;
+        std::cout << "[2/4] Configuring FDM pipeline..." << std::endl;
 
         HsBaFdmPipelineConfig_t cfg = defaultFdmConfig();
         cfg.layer_height = 0.2f;
@@ -87,7 +89,7 @@ int main()
         // =================================================================
         // Step 3: Run full pipeline
         // =================================================================
-        std::cout << "[3/3] Running FDM pipeline..." << std::endl;
+        std::cout << "[3/4] Running FDM pipeline..." << std::endl;
         FdmResult result = pipeline.run(model);
 
         std::cout << std::format("  Total layers: {}", result.total_layers) << std::endl;
@@ -95,6 +97,34 @@ int main()
         std::cout << "Slicing complete! G-code saved to: output/lib_module_sample.gcode" << std::endl;
 
         // Model destructor automatically calls RemoveModel()
+
+        // =================================================================
+        // Step 4 (optional): Custom Lua pipeline - the whole workflow is
+        // defined by the Lua script, C++ only provides the operator table.
+        // Reuses the scripts shipped with samples/Custom.
+        // =================================================================
+        if (std::filesystem::exists("scripts/my_fdm_pipeline.lua"))
+        {
+            std::cout << "[4/4] Running custom Lua pipeline..." << std::endl;
+
+            HsBaCustomPipelineConfig_t lua_cfg = defaultCustomConfig();
+            lua_cfg.pipeline_lua_script = "scripts/my_fdm_pipeline.lua";
+            // Inline source runs before the script file: use it as a parameter prelude
+            lua_cfg.pipeline_lua_source = "machine = { layer_height = 0.3, first_layer_height = 0.35 }";
+            lua_cfg.model_name = "lua_bunny";
+            lua_cfg.model_path = model_path.c_str();
+            lua_cfg.output_path = "output/lib_module_lua.gcode";
+
+            CustomLuaPipeline lua_pipeline(lua_cfg);
+            lua_pipeline.setProgressFunc([](int percent, std::string_view stage)
+                                        { std::cout << std::format("  [lua {}%] {}", percent, stage) << std::endl; });
+
+            CustomLuaResult lua_result = lua_pipeline.run();
+            std::cout << std::format("  Layers: {}, Output: {}", lua_result.total_layers, lua_result.output_path)
+                      << std::endl;
+            if (!lua_result.result_string.empty())
+                std::cout << std::format("  Lua returned: {}", lua_result.result_string) << std::endl;
+        }
     }
     catch (const SlicerError& e)
     {

@@ -27,6 +27,8 @@
     Extends/EventSourceFunction.cpp
     Extends/LuaCommonTypes.hpp
     Extends/LuaCommonTypes.cpp
+    Extends/lua_pipeline.hpp
+    Extends/lua_pipeline.cpp
     )
 else()
     add_library(LibHsBaSlicer SHARED 
@@ -57,6 +59,8 @@ else()
     Extends/EventSourceFunction.cpp
     Extends/LuaCommonTypes.hpp
     Extends/LuaCommonTypes.cpp
+    Extends/lua_pipeline.hpp
+    Extends/lua_pipeline.cpp
     )
     # Define the export macro for Windows
     target_compile_definitions(LibHsBaSlicer PRIVATE HSBA_SLICER_EXPORTS)

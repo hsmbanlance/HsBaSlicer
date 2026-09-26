@@ -243,6 +243,53 @@ void HsBaFreeFileTransferPipelineResult(HsBaFileTransferPipelineResult_t* result
 | `file_paths` | NULL | Array of file paths to transfer |
 | `file_count` | 0 | Number of files |
 
+### Custom Lua Pipeline
+
+Unlike FDM/SLA/SLS (whose stage order is fixed in C++ with optional per-stage Lua customization), the Custom pipeline delegates the **entire workflow to a Lua script**: the C++ side only builds the Lua environment, exposes every pipeline building block through the global `HsBa` table and calls the script's entry function. New processes can be added by editing a script, without rebuilding the library.
+
+```c
+HsBaCustomPipelineConfig_t HsBaCreateDefaultCustomConfig(void);
+
+HsBaCustomPipelineResult_t HsBaRunCustomPipeline(const HsBaCustomPipelineConfig_t* config,
+                                                 HsBaCustomProgressCallback callback, void* user_data);
+
+void HsBaRunCustomPipelineAsync(const HsBaCustomPipelineConfig_t* config,
+                                HsBaCustomProgressCallback callback, void* user_data,
+                                HsBaCustomResultCallback result_callback, void* result_user_data);
+
+void HsBaFreeCustomPipelineResult(HsBaCustomPipelineResult_t* result);
+```
+
+#### Configuration Fields
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `pipeline_lua_script` | NULL | Path to the pipeline Lua script |
+| `pipeline_lua_source` | NULL | Inline Lua source, executed **before** the script file (parameter prelude) |
+| `entry_func` | NULL | Entry function name, `run_pipeline` when NULL |
+| `config_json` | NULL | Free-form JSON string, readable in Lua as `pipeline_config` |
+| `model_name` / `model_path` | NULL | Model name / file path, readable as `model_name` / `model_path` |
+| `output_path` | NULL | Default output path, readable as `output_path` |
+
+> At least one of `pipeline_lua_script` / `pipeline_lua_source` must be set. The Custom pipeline has no Proto serialization counterpart.
+
+#### Script Environment
+
+Injected globals: `HsBa` (operations table), `model_name`, `model_path`, `output_path`, `pipeline_config`, `pipeline_entry`. The pooled libraries (`PolygonOperations`, `Support`, `PolygonFill`, `PathOptimize`, `Zipper`, `Cipher`, `SQLiteAdapter`, ...) are available as well.
+
+`HsBa` operations (coordinates in mm):
+
+| Group | Operations |
+| --- | --- |
+| Reporting | `progress(pct[, stage])`, `setLayers(n)`, `setOutputPath(path)` |
+| Files | `readFile(path)`, `writeFile(path, content)` |
+| Model | `loadModel(n, path)`, `modelInfo(n)`, `translateModel`, `rotateModel`, `scaleModel`, `removeModel`, `modelNames` |
+| Slicing | `layerCount(n, lh, flh)`, `layerZ(i, lh, flh)`, `slice(n, z)`, `sliceUnsafe(n, z)`, `toInt`, `toDouble` |
+| Process | `fill(polys[, cfg])`, `fdmSupport(layers, cfg)`, `slaSupport(layers, cfg)`, `floor(bottom, cfg)` |
+| Output | `toGcode(layers, cfg)`, `saveSlaPackage(tbl)`, `saveSlsPackage(tbl)`, `renderImage(polys, w, h, path)` |
+
+Any truthy return value of the entry function means success (a string return is reported through `result_string`); returning `false`/`nil` or raising a Lua error means failure. `total_layers` and `output_path` are reported by the script via `HsBa.setLayers()` / `HsBa.setOutputPath()`.
+
 ### Proto Serialization Conversion
 
 Bidirectional conversion between C structs and Protobuf serialized bytes, suitable for cross-process / cross-language communication. All output buffers are allocated with `malloc`; the caller is responsible for `free`.
@@ -419,5 +466,6 @@ int main(void)
 - `samples/FDM/` — FDM sync/async, Lua custom support & infill full examples
 - `samples/SLA/` — SLA pipeline with Lua custom floor/support/export examples
 - `samples/SLS/` — SLS pipeline with Lua export example
+- `samples/Custom/` — Fully Lua-script-defined pipeline example (FDM / SLA / inline script / async)
 - `android/` — Android JNI sample project
 - `ios/HsBaSlicerExample/` — iOS Swift bridging sample

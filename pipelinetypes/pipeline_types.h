@@ -356,6 +356,64 @@ extern "C"
     typedef void (*HsBaFileTransferResultCallback)(HsBaFileTransferPipelineResult_t result, void* user_data);
 
     /* ========================================================================
+     *  Custom Lua Pipeline Types
+     * ====================================================================== */
+
+    /**
+     * @brief Fully Lua-driven custom pipeline configuration (C-compatible struct).
+     *
+     * Unlike the FDM/SLA/SLS pipelines, the entire workflow (stage order and
+     * content) is defined by the Lua entry function inside `pipeline_lua_script`
+     * (or `pipeline_lua_source`). The C++ side only exposes the pipeline
+     * building blocks (model loading, slicing, support, fill, floor, G-code
+     * path output, SLA/SLS packaging) through the global `HsBa` Lua table.
+     */
+    typedef struct HsBaCustomPipelineConfig
+    {
+        /* Lua Pipeline Definition */
+        const char* pipeline_lua_script;  ///< Path to the pipeline Lua script (must not be NULL unless source is set)
+        const char* pipeline_lua_source;  ///< Inline Lua source executed before the script file (can be NULL)
+        const char* entry_func;           ///< Lua entry function name (NULL = "run_pipeline")
+        const char* config_json;          ///< Free-form JSON string passed to Lua as `pipeline_config` (can be NULL)
+
+        /* Model Configuration (optional, passed to Lua as `model_name` / `model_path`) */
+        const char* model_name;  ///< Model name (can be NULL)
+        const char* model_path;  ///< Model file path (can be NULL)
+
+        /* Output Configuration */
+        const char* output_path;  ///< Default output path passed to Lua as `output_path` (can be NULL)
+
+    } HsBaCustomPipelineConfig_t;
+
+    /**
+     * @brief Custom Lua pipeline result (C-compatible struct).
+     *
+     * Must call HsBaFreeCustomPipelineResult to release memory after use.
+     */
+    typedef struct HsBaCustomPipelineResult
+    {
+        int success;             ///< Success flag (0=false, 1=true)
+        int total_layers;        ///< Layer count reported by the Lua script (0 if not set)
+        char* output_path;       ///< Output path reported by the Lua script (caller must free)
+        char* result_string;     ///< String returned by the Lua entry function (caller must free)
+        char* error_message;     ///< Error message (UTF-8, caller must free)
+        double elapsed_seconds;  ///< Elapsed time (seconds)
+    } HsBaCustomPipelineResult_t;
+
+    /**
+     * @brief Custom Lua pipeline progress callback function type.
+     * @param percent Progress percentage (0-100, chosen by the Lua script).
+     * @param stage Current stage description (UTF-8 string).
+     * @param user_data User-defined data pointer.
+     */
+    typedef void (*HsBaCustomProgressCallback)(int percent, const char* stage, void* user_data);
+
+    /**
+     * @brief Result callback for async custom Lua pipeline.
+     */
+    typedef void (*HsBaCustomResultCallback)(HsBaCustomPipelineResult_t result, void* user_data);
+
+    /* ========================================================================
      *  Default config initializers (inline, no DLL dependency)
      * ====================================================================== */
 
@@ -481,6 +539,23 @@ extern "C"
         cfg.pool_size = 4;
         cfg.file_paths = 0;
         cfg.file_count = 0;
+        return cfg;
+    }
+
+    /**
+     * @brief Initialize custom Lua pipeline config with default values.
+     * @return Default configuration struct (string fields are NULL).
+     */
+    static inline HsBaCustomPipelineConfig_t HsBaCustomConfigDefault(void)
+    {
+        HsBaCustomPipelineConfig_t cfg;
+        cfg.pipeline_lua_script = 0;
+        cfg.pipeline_lua_source = 0;
+        cfg.entry_func = 0;
+        cfg.config_json = 0;
+        cfg.model_name = 0;
+        cfg.model_path = 0;
+        cfg.output_path = 0;
         return cfg;
     }
 

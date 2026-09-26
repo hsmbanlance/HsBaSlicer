@@ -59,6 +59,10 @@ if(NOT ANDROID AND NOT IOS)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${_bunny_stl}"
                 "$<TARGET_FILE_DIR:lib_sample_module>/models/stanford_bunny.stl"
+            # Custom Lua 流水线示例复用 samples/Custom 的脚本
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/samples/Custom/scripts"
+                "$<TARGET_FILE_DIR:lib_sample_module>/scripts"
             COMMENT "Copying model resources for lib_sample_module"
             COMMAND_EXPAND_LISTS
         )
