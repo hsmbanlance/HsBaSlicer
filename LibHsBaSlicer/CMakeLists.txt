@@ -9,6 +9,7 @@
     Path/path_generator.hpp
     Path/path_optimizer.hpp
     Path/sls_export.hpp
+    Path/waam_export.hpp
     Floor/sla_floor.hpp
     Transfer/file_transfer.hpp
     version_info.cpp
@@ -19,6 +20,7 @@
     Path/path_generator.cpp
     Path/path_optimizer.cpp
     Path/sls_export.cpp
+    Path/waam_export.cpp
     Floor/sla_floor.cpp
     Transfer/file_transfer.cpp
     Extends/LuaAddFunction.hpp
@@ -41,6 +43,7 @@ else()
     Path/path_generator.hpp
     Path/path_optimizer.hpp
     Path/sls_export.hpp
+    Path/waam_export.hpp
     Floor/sla_floor.hpp
     Transfer/file_transfer.hpp
     version_info.cpp
@@ -51,6 +54,7 @@ else()
     Path/path_generator.cpp
     Path/path_optimizer.cpp
     Path/sls_export.cpp
+    Path/waam_export.cpp
     Floor/sla_floor.cpp
     Transfer/file_transfer.cpp
     Extends/LuaAddFunction.hpp

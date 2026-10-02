@@ -7,8 +7,12 @@
 #include "custom_pipeline.pb.h"
 #include "fdm_pipeline.pb.h"
 #include "file_transfer_pipeline.pb.h"
+#include "lom_pipeline.pb.h"
 #include "sla_pipeline.pb.h"
+#include "slm_pipeline.pb.h"
 #include "sls_pipeline.pb.h"
+#include "tdp_pipeline.pb.h"
+#include "waam_pipeline.pb.h"
 
 namespace HsBa::Slicer
 {
@@ -42,6 +46,30 @@ void CustomConfigToMsg(const HsBaCustomPipelineConfig_t& config, HsbaProto::cust
 
 /// @brief Convert custom Lua pipeline C result to proto message.
 void CustomResultToMsg(const HsBaCustomPipelineResult_t& result, HsbaProto::custom_pipe_result* msg);
+
+/// @brief Convert SLM pipeline C config to proto message.
+void SlmConfigToMsg(const HsBaSlmPipelineConfig_t& config, HsbaProto::slm_pipe_config* msg);
+
+/// @brief Convert SLM pipeline C result to proto message.
+void SlmResultToMsg(const HsBaSlmPipelineResult_t& result, HsbaProto::slm_pipe_result* msg);
+
+/// @brief Convert LOM pipeline C config to proto message.
+void LomConfigToMsg(const HsBaLomPipelineConfig_t& config, HsbaProto::lom_pipe_config* msg);
+
+/// @brief Convert LOM pipeline C result to proto message.
+void LomResultToMsg(const HsBaLomPipelineResult_t& result, HsbaProto::lom_pipe_result* msg);
+
+/// @brief Convert 3DP pipeline C config to proto message.
+void TdpConfigToMsg(const HsBaTdpPipelineConfig_t& config, HsbaProto::tdp_pipe_config* msg);
+
+/// @brief Convert 3DP pipeline C result to proto message.
+void TdpResultToMsg(const HsBaTdpPipelineResult_t& result, HsbaProto::tdp_pipe_result* msg);
+
+/// @brief Convert WAAM pipeline C config to proto message.
+void WaamConfigToMsg(const HsBaWaamPipelineConfig_t& config, HsbaProto::waam_pipe_config* msg);
+
+/// @brief Convert WAAM pipeline C result to proto message.
+void WaamResultToMsg(const HsBaWaamPipelineResult_t& result, HsbaProto::waam_pipe_result* msg);
 
 }  // namespace HsBa::Slicer
 

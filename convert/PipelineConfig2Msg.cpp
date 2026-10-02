@@ -226,4 +226,169 @@ void CustomResultToMsg(const HsBaCustomPipelineResult_t& result, HsbaProto::cust
     msg->set_custom_pipe_result_elapsed_seconds(result.elapsed_seconds);
 }
 
+void SlmConfigToMsg(const HsBaSlmPipelineConfig_t& config, HsbaProto::slm_pipe_config* msg)
+{
+    if (config.model_name)
+        msg->set_slm_pipe_config_model_name(config.model_name);
+    if (config.model_path)
+        msg->set_slm_pipe_config_model_path(config.model_path);
+
+    msg->set_slm_pipe_config_layer_height(config.layer_height);
+    msg->set_slm_pipe_config_first_layer_height(config.first_layer_height);
+
+    msg->set_slm_pipe_config_laser_power(config.laser_power);
+    msg->set_slm_pipe_config_scan_speed(config.scan_speed);
+    msg->set_slm_pipe_config_hatch_spacing(config.hatch_spacing);
+    msg->set_slm_pipe_config_hatch_rotation(config.hatch_rotation);
+    msg->set_slm_pipe_config_bed_temperature(config.bed_temperature);
+
+    msg->set_slm_pipe_config_material(static_cast<HsbaProto::slm_material>(config.material));
+    msg->set_slm_pipe_config_light_source(static_cast<HsbaProto::slm_light>(config.light_source));
+    msg->set_slm_pipe_config_protect_gas(static_cast<HsbaProto::slm_protect_gas>(config.protect_gas));
+
+    if (config.export_lua_script)
+        msg->set_slm_pipe_config_export_lua_script(config.export_lua_script);
+    if (config.export_lua_func)
+        msg->set_slm_pipe_config_export_lua_func(config.export_lua_func);
+
+    if (config.output_path)
+        msg->set_slm_pipe_config_output_path(config.output_path);
+}
+
+void SlmResultToMsg(const HsBaSlmPipelineResult_t& result, HsbaProto::slm_pipe_result* msg)
+{
+    msg->set_slm_pipe_result_success(result.success != 0);
+    msg->set_slm_pipe_result_total_layers(result.total_layers);
+    if (result.export_path)
+        msg->set_slm_pipe_result_export_path(result.export_path);
+    if (result.error_message)
+        msg->set_slm_pipe_result_error_message(result.error_message);
+    msg->set_slm_pipe_result_elapsed_seconds(result.elapsed_seconds);
+}
+
+void LomConfigToMsg(const HsBaLomPipelineConfig_t& config, HsbaProto::lom_pipe_config* msg)
+{
+    if (config.model_name)
+        msg->set_lom_pipe_config_model_name(config.model_name);
+    if (config.model_path)
+        msg->set_lom_pipe_config_model_path(config.model_path);
+
+    msg->set_lom_pipe_config_layer_height(config.layer_height);
+    msg->set_lom_pipe_config_first_layer_height(config.first_layer_height);
+
+    msg->set_lom_pipe_config_cut_speed(config.cut_speed);
+    msg->set_lom_pipe_config_cut_margin(config.cut_margin);
+    msg->set_lom_pipe_config_cut_power(config.cut_power);
+
+    msg->set_lom_pipe_config_bond_temperature(config.bond_temperature);
+    msg->set_lom_pipe_config_bond_pressure(config.bond_pressure);
+    msg->set_lom_pipe_config_bond_time(config.bond_time);
+
+    msg->set_lom_pipe_config_seal_contour(config.seal_contour != 0);
+    msg->set_lom_pipe_config_cut_mode(static_cast<HsbaProto::lom_cut_mode>(config.cut_mode));
+
+    if (config.export_lua_script)
+        msg->set_lom_pipe_config_export_lua_script(config.export_lua_script);
+    if (config.export_lua_func)
+        msg->set_lom_pipe_config_export_lua_func(config.export_lua_func);
+
+    if (config.output_path)
+        msg->set_lom_pipe_config_output_path(config.output_path);
+}
+
+void LomResultToMsg(const HsBaLomPipelineResult_t& result, HsbaProto::lom_pipe_result* msg)
+{
+    msg->set_lom_pipe_result_success(result.success != 0);
+    msg->set_lom_pipe_result_total_layers(result.total_layers);
+    if (result.export_path)
+        msg->set_lom_pipe_result_export_path(result.export_path);
+    if (result.error_message)
+        msg->set_lom_pipe_result_error_message(result.error_message);
+    msg->set_lom_pipe_result_elapsed_seconds(result.elapsed_seconds);
+}
+
+void TdpConfigToMsg(const HsBaTdpPipelineConfig_t& config, HsbaProto::tdp_pipe_config* msg)
+{
+    if (config.model_name)
+        msg->set_tdp_pipe_config_model_name(config.model_name);
+    if (config.model_path)
+        msg->set_tdp_pipe_config_model_path(config.model_path);
+
+    msg->set_tdp_pipe_config_layer_height(config.layer_height);
+    msg->set_tdp_pipe_config_first_layer_height(config.first_layer_height);
+
+    msg->set_tdp_pipe_config_head_count(config.head_count);
+    msg->set_tdp_pipe_config_drop_spacing(config.drop_spacing);
+    msg->set_tdp_pipe_config_binder_saturation(config.binder_saturation);
+    msg->set_tdp_pipe_config_ink_curing_time(config.ink_curing_time);
+    msg->set_tdp_pipe_config_bed_temperature(config.bed_temperature);
+
+    msg->set_tdp_pipe_config_binder_mode(static_cast<HsbaProto::tdp_binder_mode>(config.binder_mode));
+
+    if (config.export_lua_script)
+        msg->set_tdp_pipe_config_export_lua_script(config.export_lua_script);
+    if (config.export_lua_func)
+        msg->set_tdp_pipe_config_export_lua_func(config.export_lua_func);
+
+    if (config.output_path)
+        msg->set_tdp_pipe_config_output_path(config.output_path);
+}
+
+void TdpResultToMsg(const HsBaTdpPipelineResult_t& result, HsbaProto::tdp_pipe_result* msg)
+{
+    msg->set_tdp_pipe_result_success(result.success != 0);
+    msg->set_tdp_pipe_result_total_layers(result.total_layers);
+    if (result.export_path)
+        msg->set_tdp_pipe_result_export_path(result.export_path);
+    if (result.error_message)
+        msg->set_tdp_pipe_result_error_message(result.error_message);
+    msg->set_tdp_pipe_result_elapsed_seconds(result.elapsed_seconds);
+}
+
+void WaamConfigToMsg(const HsBaWaamPipelineConfig_t& config, HsbaProto::waam_pipe_config* msg)
+{
+    if (config.model_name)
+        msg->set_waam_pipe_config_model_name(config.model_name);
+    if (config.model_path)
+        msg->set_waam_pipe_config_model_path(config.model_path);
+
+    msg->set_waam_pipe_config_layer_height(config.layer_height);
+    msg->set_waam_pipe_config_first_layer_height(config.first_layer_height);
+
+    msg->set_waam_pipe_config_bead_width(config.bead_width);
+    msg->set_waam_pipe_config_travel_speed(config.travel_speed);
+
+    msg->set_waam_pipe_config_wire_feed_speed(config.wire_feed_speed);
+    msg->set_waam_pipe_config_arc_current(config.arc_current);
+    msg->set_waam_pipe_config_arc_voltage(config.arc_voltage);
+    msg->set_waam_pipe_config_gas_flow_rate(config.gas_flow_rate);
+
+    msg->set_waam_pipe_config_material(static_cast<HsbaProto::waam_material>(config.material));
+    msg->set_waam_pipe_config_welding_process(static_cast<HsbaProto::waam_weld_process>(config.welding_process));
+    msg->set_waam_pipe_config_protection(static_cast<HsbaProto::waam_protection>(config.protection));
+    msg->set_waam_pipe_config_protect_gas(static_cast<HsbaProto::waam_protect_gas>(config.protect_gas));
+    msg->set_waam_pipe_config_interpass_temperature(config.interpass_temperature);
+
+    msg->set_waam_pipe_config_robot_type(static_cast<HsbaProto::waam_robot_type>(config.robot_type));
+
+    if (config.path_lua_script)
+        msg->set_waam_pipe_config_path_lua_script(config.path_lua_script);
+    if (config.path_lua_func)
+        msg->set_waam_pipe_config_path_lua_func(config.path_lua_func);
+
+    if (config.output_path)
+        msg->set_waam_pipe_config_output_path(config.output_path);
+}
+
+void WaamResultToMsg(const HsBaWaamPipelineResult_t& result, HsbaProto::waam_pipe_result* msg)
+{
+    msg->set_waam_pipe_result_success(result.success != 0);
+    msg->set_waam_pipe_result_total_layers(result.total_layers);
+    if (result.output_path)
+        msg->set_waam_pipe_result_output_path(result.output_path);
+    if (result.error_message)
+        msg->set_waam_pipe_result_error_message(result.error_message);
+    msg->set_waam_pipe_result_elapsed_seconds(result.elapsed_seconds);
+}
+
 }  // namespace HsBa::Slicer

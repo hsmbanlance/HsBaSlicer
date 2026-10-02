@@ -20,6 +20,7 @@
 #include "LibHsBaSlicer/Path/path_generator.hpp"
 #include "LibHsBaSlicer/Path/path_optimizer.hpp"
 #include "LibHsBaSlicer/Path/sls_export.hpp"
+#include "LibHsBaSlicer/Path/waam_export.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
@@ -616,6 +617,62 @@ int Lp_saveSlsPackage(lua_State* L)
     return 1;
 }
 
+// HsBa.saveWaamPackage({outlines=layers, zHeights={...}, weld={current,voltage,...},
+//                       robotType=0, beadWidth=1.2, config="json", output="x.txt"
+//                       [, script="path.lua"][, func="export_waam"]}) -> bool|string
+// WAAM output is a robot language program; 'script' is an optional custom code
+// generator. On failure the error detail is returned as the second value.
+int Lp_saveWaamPackage(lua_State* L)
+{
+    luaL_checktype(L, 1, LUA_TTABLE);
+    WaamRobotPackage pkg;
+    lua_getfield(L, 1, "outlines");
+    pkg.layer_outlines = ReadLayerList(L, -1);
+    lua_pop(L, 1);
+    lua_getfield(L, 1, "zHeights");
+    if (lua_istable(L, -1))
+    {
+        const size_t len = lua_rawlen(L, -1);
+        pkg.layer_z_heights.reserve(len);
+        for (size_t i = 1; i <= len; ++i)
+        {
+            lua_rawgeti(L, -1, static_cast<int>(i));
+            pkg.layer_z_heights.push_back(static_cast<float>(lua_tonumber(L, -1)));
+            lua_pop(L, 1);
+        }
+    }
+    lua_pop(L, 1);
+
+    // Welding sub-table (all fields optional, defaults come from WaamWeldParams).
+    if (lua_getfield(L, 1, "weld") == LUA_TTABLE)
+    {
+        pkg.weld.current = static_cast<float>(GetNumberField(L, -1, "current", pkg.weld.current));
+        pkg.weld.voltage = static_cast<float>(GetNumberField(L, -1, "voltage", pkg.weld.voltage));
+        pkg.weld.wire_feed_speed =
+            static_cast<float>(GetNumberField(L, -1, "wireFeedSpeed", pkg.weld.wire_feed_speed));
+        pkg.weld.gas_flow_rate = static_cast<float>(GetNumberField(L, -1, "gasFlowRate", pkg.weld.gas_flow_rate));
+        pkg.weld.travel_speed = static_cast<float>(GetNumberField(L, -1, "travelSpeed", pkg.weld.travel_speed));
+        pkg.weld.process = GetIntField(L, -1, "process", pkg.weld.process);
+    }
+    lua_pop(L, 1);
+
+    pkg.robot_type = GetIntField(L, 1, "robotType", pkg.robot_type);
+    pkg.bead_width = static_cast<float>(GetNumberField(L, 1, "beadWidth", pkg.bead_width));
+    pkg.config_json = GetStringField(L, 1, "config");
+    const std::string output = GetStringField(L, 1, "output");
+    const std::string script = GetStringField(L, 1, "script");
+    const std::string func = GetStringField(L, 1, "func", "export_waam");
+    if (output.empty())
+        return luaL_error(L, "saveWaamPackage: 'output' field is required");
+
+    std::string error;
+    const bool ok = SaveWaamRobotPath(pkg, output, script, func, &error);
+    lua_pushboolean(L, ok ? 1 : 0);
+    if (!ok)
+        lua_pushstring(L, error.c_str());
+    return ok ? 1 : 2;
+}
+
 // HsBa.saveSlaPackage({outlines=layers, supports=layers, floor=polygons, config="json",
 //                     output="x.zip", imageWidth, imageHeight, imageExtension=".png"}) -> bool
 int Lp_saveSlaPackage(lua_State* L)
@@ -680,6 +737,7 @@ const luaL_Reg hsba_ops[] = {
     {"floor", Lp_floor},
     {"toGcode", Lp_toGcode},
     {"saveSlsPackage", Lp_saveSlsPackage},
+    {"saveWaamPackage", Lp_saveWaamPackage},
     {"saveSlaPackage", Lp_saveSlaPackage},
     {"renderImage", Lp_renderImage},
     {nullptr, nullptr},

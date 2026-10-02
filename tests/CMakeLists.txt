@@ -755,6 +755,9 @@ if(HSBA_RUN_TESTS_AFTER_BUILD)
   )
 endif()
 
+# The Lua polygon dump test exercises DumpPolygon/DumpPolygons via the Lua
+# bindings; it is only built and registered when the dump utilities are enabled.
+if(HSBA_POLYGON_DUMP)
 add_executable(lua_polygon_operations_test
     "PolygonFill/lua_polygon_operations_test.cpp"
 )
@@ -778,6 +781,7 @@ if(HSBA_RUN_TESTS_AFTER_BUILD)
   add_custom_command(TARGET lua_polygon_operations_test POST_BUILD
     COMMAND ${CMAKE_CTEST_COMMAND} -V -R lua_polygon_operations_test
   )
+endif()
 endif()
 
 ## ImagePolygons tests

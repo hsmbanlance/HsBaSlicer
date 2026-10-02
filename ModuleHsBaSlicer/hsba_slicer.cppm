@@ -53,6 +53,7 @@ module;
 #include "LibHsBaSlicer/Fill/polygon_fill.hpp"
 #include "LibHsBaSlicer/Path/path_generator.hpp"
 #include "LibHsBaSlicer/Path/sls_export.hpp"
+#include "LibHsBaSlicer/Path/waam_export.hpp"
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"
 #include "LibHsBaSlicer/Transfer/file_transfer.hpp"
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
@@ -103,6 +104,14 @@ using ::HsBaFileTransferPipelineConfig_t;
 using ::HsBaFileTransferPipelineResult_t;
 using ::HsBaCustomPipelineConfig_t;
 using ::HsBaCustomPipelineResult_t;
+using ::HsBaSlmPipelineConfig_t;
+using ::HsBaSlmPipelineResult_t;
+using ::HsBaLomPipelineConfig_t;
+using ::HsBaLomPipelineResult_t;
+using ::HsBaTdpPipelineConfig_t;
+using ::HsBaTdpPipelineResult_t;
+using ::HsBaWaamPipelineConfig_t;
+using ::HsBaWaamPipelineResult_t;
 
 // Re-export support config types into HsBa::Slicer namespace
 using Support::SupportConfig;
@@ -126,6 +135,14 @@ HsBaSlsPipelineConfig_t defaultSlsConfig();
 HsBaFileTransferPipelineConfig_t defaultFileTransferConfig();
 /// @brief Create default custom Lua pipeline config.
 HsBaCustomPipelineConfig_t defaultCustomConfig();
+/// @brief Create default SLM pipeline config.
+HsBaSlmPipelineConfig_t defaultSlmConfig();
+/// @brief Create default LOM pipeline config.
+HsBaLomPipelineConfig_t defaultLomConfig();
+/// @brief Create default 3DP pipeline config.
+HsBaTdpPipelineConfig_t defaultTdpConfig();
+/// @brief Create default WAAM pipeline config.
+HsBaWaamPipelineConfig_t defaultWaamConfig();
 
 // ===========================================================================
 // Model (RAII wrapper)
@@ -255,6 +272,78 @@ public:
 
 private:
     HsBaSlsPipelineConfig_t cfg_;
+};
+
+// ===========================================================================
+// SLM Pipeline (metal powder-bed, Lua-driven export like SLS)
+// ===========================================================================
+
+/// @brief SLM pipeline (Lua-driven export).
+class SlmPipeline
+{
+public:
+    explicit SlmPipeline(HsBaSlmPipelineConfig_t cfg = HsBaSlmConfigDefault());
+
+    /// @brief Run SLM export via Lua script.
+    /// @throws SlicerError on failure.
+    inline bool run(const Model& model) const;
+
+private:
+    HsBaSlmPipelineConfig_t cfg_;
+};
+
+// ===========================================================================
+// LOM Pipeline (laminated sheets, Lua-driven export like SLS)
+// ===========================================================================
+
+/// @brief LOM pipeline (Lua-driven export).
+class LomPipeline
+{
+public:
+    explicit LomPipeline(HsBaLomPipelineConfig_t cfg = HsBaLomConfigDefault());
+
+    /// @brief Run LOM export via Lua script.
+    /// @throws SlicerError on failure.
+    inline bool run(const Model& model) const;
+
+private:
+    HsBaLomPipelineConfig_t cfg_;
+};
+
+// ===========================================================================
+// 3DP Pipeline (binder jetting, Lua-driven export like SLS)
+// ===========================================================================
+
+/// @brief 3DP pipeline (Lua-driven export).
+class TdpPipeline
+{
+public:
+    explicit TdpPipeline(HsBaTdpPipelineConfig_t cfg = HsBaTdpConfigDefault());
+
+    /// @brief Run 3DP export via Lua script.
+    /// @throws SlicerError on failure.
+    inline bool run(const Model& model) const;
+
+private:
+    HsBaTdpPipelineConfig_t cfg_;
+};
+
+// ===========================================================================
+// WAAM Pipeline (wire arc deposition, robot-program export)
+// ===========================================================================
+
+/// @brief WAAM pipeline (robot path export).
+class WaamPipeline
+{
+public:
+    explicit WaamPipeline(HsBaWaamPipelineConfig_t cfg = HsBaWaamConfigDefault());
+
+    /// @brief Run WAAM robot-program export.
+    /// @throws SlicerError on failure.
+    inline bool run(const Model& model) const;
+
+private:
+    HsBaWaamPipelineConfig_t cfg_;
 };
 
 // ===========================================================================
@@ -398,6 +487,10 @@ HsBaSlaPipelineConfig_t defaultSlaConfig() { return HsBaSlaConfigDefault(); }
 HsBaSlsPipelineConfig_t defaultSlsConfig() { return HsBaSlsConfigDefault(); }
 HsBaFileTransferPipelineConfig_t defaultFileTransferConfig() { return HsBaFileTransferConfigDefault(); }
 HsBaCustomPipelineConfig_t defaultCustomConfig() { return HsBaCustomConfigDefault(); }
+HsBaSlmPipelineConfig_t defaultSlmConfig() { return HsBaSlmConfigDefault(); }
+HsBaLomPipelineConfig_t defaultLomConfig() { return HsBaLomConfigDefault(); }
+HsBaTdpPipelineConfig_t defaultTdpConfig() { return HsBaTdpConfigDefault(); }
+HsBaWaamPipelineConfig_t defaultWaamConfig() { return HsBaWaamConfigDefault(); }
 
 // ===========================================================================
 // Model
@@ -723,6 +816,132 @@ bool SlsPipeline::run(const Model& model) const
     const char* output = cfg_.output_path ? cfg_.output_path : "";
     return SaveSlsPackageLua(pkg, output, cfg_.export_lua_script,
                              cfg_.export_lua_func ? cfg_.export_lua_func : "export_sls");
+}
+
+// ===========================================================================
+// SlmPipeline
+// ===========================================================================
+
+SlmPipeline::SlmPipeline(HsBaSlmPipelineConfig_t cfg) : cfg_(cfg) {}
+
+bool SlmPipeline::run(const Model& model) const
+{
+    if (!cfg_.export_lua_script)
+        throw SlicerError("SLM pipeline requires export_lua_script");
+
+    const auto mi      = model.info();
+    const float height = mi.bbox_max.z() - mi.bbox_min.z();
+    const int layers   = static_cast<int>(height / cfg_.layer_height) + 1;
+
+    SlsPackage pkg;
+    pkg.layer_outlines.reserve(layers);
+    pkg.layer_z_heights.reserve(layers);
+    for (int i = 0; i < layers; ++i)
+    {
+        float z = cfg_.first_layer_height + i * cfg_.layer_height;
+        pkg.layer_outlines.push_back(UnIntegerization(Slice(model.raw(), z)));
+        pkg.layer_z_heights.push_back(z);
+    }
+
+    const char* output = cfg_.output_path ? cfg_.output_path : "";
+    return SaveSlsPackageLua(pkg, output, cfg_.export_lua_script,
+                             cfg_.export_lua_func ? cfg_.export_lua_func : "export_slm");
+}
+
+// ===========================================================================
+// LomPipeline
+// ===========================================================================
+
+LomPipeline::LomPipeline(HsBaLomPipelineConfig_t cfg) : cfg_(cfg) {}
+
+bool LomPipeline::run(const Model& model) const
+{
+    if (!cfg_.export_lua_script)
+        throw SlicerError("LOM pipeline requires export_lua_script");
+
+    const auto mi      = model.info();
+    const float height = mi.bbox_max.z() - mi.bbox_min.z();
+    const int layers   = static_cast<int>(height / cfg_.layer_height) + 1;
+
+    SlsPackage pkg;
+    pkg.layer_outlines.reserve(layers);
+    pkg.layer_z_heights.reserve(layers);
+    for (int i = 0; i < layers; ++i)
+    {
+        float z = cfg_.first_layer_height + i * cfg_.layer_height;
+        pkg.layer_outlines.push_back(UnIntegerization(Slice(model.raw(), z)));
+        pkg.layer_z_heights.push_back(z);
+    }
+
+    const char* output = cfg_.output_path ? cfg_.output_path : "";
+    return SaveSlsPackageLua(pkg, output, cfg_.export_lua_script,
+                             cfg_.export_lua_func ? cfg_.export_lua_func : "export_lom");
+}
+
+// ===========================================================================
+// TdpPipeline
+// ===========================================================================
+
+TdpPipeline::TdpPipeline(HsBaTdpPipelineConfig_t cfg) : cfg_(cfg) {}
+
+bool TdpPipeline::run(const Model& model) const
+{
+    if (!cfg_.export_lua_script)
+        throw SlicerError("3DP pipeline requires export_lua_script");
+
+    const auto mi      = model.info();
+    const float height = mi.bbox_max.z() - mi.bbox_min.z();
+    const int layers   = static_cast<int>(height / cfg_.layer_height) + 1;
+
+    SlsPackage pkg;
+    pkg.layer_outlines.reserve(layers);
+    pkg.layer_z_heights.reserve(layers);
+    for (int i = 0; i < layers; ++i)
+    {
+        float z = cfg_.first_layer_height + i * cfg_.layer_height;
+        pkg.layer_outlines.push_back(UnIntegerization(Slice(model.raw(), z)));
+        pkg.layer_z_heights.push_back(z);
+    }
+
+    const char* output = cfg_.output_path ? cfg_.output_path : "";
+    return SaveSlsPackageLua(pkg, output, cfg_.export_lua_script,
+                             cfg_.export_lua_func ? cfg_.export_lua_func : "export_tdp");
+}
+
+// ===========================================================================
+// WaamPipeline
+// ===========================================================================
+
+WaamPipeline::WaamPipeline(HsBaWaamPipelineConfig_t cfg) : cfg_(cfg) {}
+
+bool WaamPipeline::run(const Model& model) const
+{
+    const auto mi      = model.info();
+    const float height = mi.bbox_max.z() - mi.bbox_min.z();
+    const int layers   = static_cast<int>(height / cfg_.layer_height) + 1;
+
+    WaamRobotPackage pkg;
+    pkg.layer_outlines.reserve(layers);
+    pkg.layer_z_heights.reserve(layers);
+    for (int i = 0; i < layers; ++i)
+    {
+        float z = cfg_.first_layer_height + i * cfg_.layer_height;
+        pkg.layer_outlines.push_back(UnIntegerization(Slice(model.raw(), z)));
+        pkg.layer_z_heights.push_back(z);
+    }
+
+    pkg.bead_width = cfg_.bead_width;
+    pkg.robot_type = static_cast<int>(cfg_.robot_type);
+    pkg.weld.current = cfg_.arc_current;
+    pkg.weld.voltage = cfg_.arc_voltage;
+    pkg.weld.wire_feed_speed = cfg_.wire_feed_speed;
+    pkg.weld.gas_flow_rate = cfg_.gas_flow_rate;
+    pkg.weld.travel_speed = cfg_.travel_speed;
+    pkg.weld.process = (cfg_.welding_process == HSBA_WAAM_WELD_LASER) ? 1 : 0;
+
+    const char* output = cfg_.output_path ? cfg_.output_path : "waam_robot.txt";
+    const char* script = cfg_.path_lua_script ? cfg_.path_lua_script : "";
+    return SaveWaamRobotPath(pkg, output, script, cfg_.path_lua_func ? cfg_.path_lua_func : "export_waam");
 }
 
 // ===========================================================================

@@ -21,7 +21,7 @@ if(Freetype_FOUND)
 	target_compile_definitions(HsBaSlicer2D PUBLIC HSBA_HAVE_FREETYPE)
 endif()
 
-if(HSBA_DESKTOP)
+if(HSBA_POLYGON_DUMP)
  target_compile_definitions(HsBaSlicer2D PUBLIC HSBA_POLYGON_DUMP)
 endif()
 

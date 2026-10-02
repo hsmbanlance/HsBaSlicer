@@ -307,6 +307,224 @@ extern "C"
     typedef void (*HsBaSlsResultCallback)(HsBaSlsPipelineResult_t result, void* user_data);
 
     /* ========================================================================
+     *  SLM Types (metal powder-bed, laser/e-beam melting)
+     *
+     *  SLM mirrors the SLS process flow (Preprocess -> Slice -> Lua export).
+     *  Metal-specific parameters (material, energy source, shielding gas) are
+     *  folded into the config JSON handed to the export script.
+     * ====================================================================== */
+
+    typedef enum HsBaSlmMaterial
+    {
+        HSBA_SLM_MATERIAL_IRON = 0,
+        HSBA_SLM_MATERIAL_ALUMINUM = 1,
+        HSBA_SLM_MATERIAL_TITANIUM = 2,
+        HSBA_SLM_MATERIAL_UNKNOWN = 3
+    } HsBaSlmMaterial_t;
+
+    typedef enum HsBaSlmLight
+    {
+        HSBA_SLM_LIGHT_LASER = 0,
+        HSBA_SLM_LIGHT_EBEAM = 1,
+        HSBA_SLM_LIGHT_UNKNOWN = 2
+    } HsBaSlmLight_t;
+
+    /// @brief Shared metal shielding-gas enum (used by SLM and WAAM).
+    typedef enum HsBaMetalProtectGas
+    {
+        HSBA_METAL_GAS_ARGON = 0,
+        HSBA_METAL_GAS_HELIUM = 1,
+        HSBA_METAL_GAS_N2 = 2,
+        HSBA_METAL_GAS_CO2 = 3,
+        HSBA_METAL_GAS_UNKNOWN = 4
+    } HsBaMetalProtectGas_t;
+
+    typedef struct HsBaSlmPipelineConfig
+    {
+        const char* model_name;
+        const char* model_path;
+        float layer_height;
+        float first_layer_height;
+        float laser_power;
+        float scan_speed;
+        float hatch_spacing;
+        float hatch_rotation;
+        float bed_temperature;
+        HsBaSlmMaterial_t material;
+        HsBaSlmLight_t light_source;
+        HsBaMetalProtectGas_t protect_gas;
+        const char* export_lua_script; /* required */
+        const char* export_lua_func;
+        const char* output_path;
+    } HsBaSlmPipelineConfig_t;
+
+    typedef struct HsBaSlmPipelineResult
+    {
+        int success;
+        int total_layers;
+        char* export_path;
+        char* error_message;
+        double elapsed_seconds;
+    } HsBaSlmPipelineResult_t;
+
+    typedef void (*HsBaSlmProgressCallback)(int percent, const char* stage, void* user_data);
+    typedef void (*HsBaSlmResultCallback)(HsBaSlmPipelineResult_t result, void* user_data);
+
+    /* ========================================================================
+     *  LOM Types (laminated object manufacturing, sheet bonding + cutting)
+     * ====================================================================== */
+
+    typedef enum HsBaLomCutMode
+    {
+        HSBA_LOM_CUT_CONTOUR = 0,
+        HSBA_LOM_CUT_HALFTONE = 1
+    } HsBaLomCutMode_t;
+
+    typedef struct HsBaLomPipelineConfig
+    {
+        const char* model_name;
+        const char* model_path;
+        float layer_height;       /* sheet thickness (mm) */
+        float first_layer_height; /* first sheet thickness (mm) */
+        float cut_speed;          /* laser cut speed (mm/s) */
+        float cut_margin;         /* contour offset (mm) */
+        float cut_power;          /* laser cut power [0,1] */
+        float bond_temperature;   /* bonding temperature (C) */
+        float bond_pressure;      /* bonding pressure (MPa) */
+        float bond_time;          /* bonding time per layer (s) */
+        int seal_contour;         /* seal part edge (0=false, 1=true) */
+        HsBaLomCutMode_t cut_mode;
+        const char* export_lua_script; /* required */
+        const char* export_lua_func;
+        const char* output_path;
+    } HsBaLomPipelineConfig_t;
+
+    typedef struct HsBaLomPipelineResult
+    {
+        int success;
+        int total_layers;
+        char* export_path;
+        char* error_message;
+        double elapsed_seconds;
+    } HsBaLomPipelineResult_t;
+
+    typedef void (*HsBaLomProgressCallback)(int percent, const char* stage, void* user_data);
+    typedef void (*HsBaLomResultCallback)(HsBaLomPipelineResult_t result, void* user_data);
+
+    /* ========================================================================
+     *  3DP Types (binder jetting, powder bed + liquid binder)
+     * ====================================================================== */
+
+    typedef enum HsBaTdpBinderMode
+    {
+        HSBA_TDP_FULL_COLOR = 0,
+        HSBA_TDP_SINGLE = 1,
+        HSBA_TDP_SINTERING = 2
+    } HsBaTdpBinderMode_t;
+
+    typedef struct HsBaTdpPipelineConfig
+    {
+        const char* model_name;
+        const char* model_path;
+        float layer_height;
+        float first_layer_height;
+        int head_count;            /* print head nozzle count */
+        float drop_spacing;        /* binder drop spacing (mm) */
+        float binder_saturation;   /* binder saturation [0,1] */
+        float ink_curing_time;     /* per-layer curing time (s) */
+        float bed_temperature;     /* powder bed temperature (C) */
+        HsBaTdpBinderMode_t binder_mode;
+        const char* export_lua_script; /* required */
+        const char* export_lua_func;
+        const char* output_path;
+    } HsBaTdpPipelineConfig_t;
+
+    typedef struct HsBaTdpPipelineResult
+    {
+        int success;
+        int total_layers;
+        char* export_path;
+        char* error_message;
+        double elapsed_seconds;
+    } HsBaTdpPipelineResult_t;
+
+    typedef void (*HsBaTdpProgressCallback)(int percent, const char* stage, void* user_data);
+    typedef void (*HsBaTdpResultCallback)(HsBaTdpPipelineResult_t result, void* user_data);
+
+    /* ========================================================================
+     *  WAAM Types (wire arc additive manufacturing, robot deposition)
+     *
+     *  WAAM differs fundamentally from the bed-based modes: its output is a
+     *  robot language program (ABB/KUKA/FANUC) rather than a layer zip.
+     * ====================================================================== */
+
+    typedef enum HsBaWaamMaterial
+    {
+        HSBA_WAAM_MATERIAL_STEEL = 0,
+        HSBA_WAAM_MATERIAL_ALUMINUM = 1,
+        HSBA_WAAM_MATERIAL_TITANIUM = 2,
+        HSBA_WAAM_MATERIAL_COPPER = 3,
+        HSBA_WAAM_MATERIAL_UNKNOWN = 4
+    } HsBaWaamMaterial_t;
+
+    typedef enum HsBaWaamWeldProcess
+    {
+        HSBA_WAAM_WELD_ARC = 0,
+        HSBA_WAAM_WELD_LASER = 1,
+        HSBA_WAAM_WELD_UNKNOWN = 2
+    } HsBaWaamWeldProcess_t;
+
+    typedef enum HsBaWaamProtection
+    {
+        HSBA_WAAM_PROTECTION_SHIELD_GAS = 0,
+        HSBA_WAAM_PROTECTION_VACUUM = 1,
+        HSBA_WAAM_PROTECTION_UNKNOWN = 2
+    } HsBaWaamProtection_t;
+
+    typedef enum HsBaWaamRobotType
+    {
+        HSBA_WAAM_ROBOT_ABB = 0,
+        HSBA_WAAM_ROBOT_KUKA = 1,
+        HSBA_WAAM_ROBOT_FANUC = 2,
+        HSBA_WAAM_ROBOT_UNKNOWN = 3 /* requires a Lua path script */
+    } HsBaWaamRobotType_t;
+
+    typedef struct HsBaWaamPipelineConfig
+    {
+        const char* model_name;
+        const char* model_path;
+        float layer_height;          /* bead/layer height (mm) */
+        float first_layer_height;    /* first layer height (mm) */
+        float bead_width;            /* deposited bead width (mm) */
+        float travel_speed;          /* torch travel speed (mm/s) */
+        float wire_feed_speed;       /* wire feed speed (m/min) */
+        float arc_current;           /* welding current (A) */
+        float arc_voltage;           /* arc voltage (V) */
+        float gas_flow_rate;         /* shielding gas flow (L/min) */
+        HsBaWaamMaterial_t material;
+        HsBaWaamWeldProcess_t welding_process;
+        HsBaWaamProtection_t protection;
+        HsBaMetalProtectGas_t protect_gas;
+        float interpass_temperature; /* interpass temperature (C) */
+        HsBaWaamRobotType_t robot_type;
+        const char* path_lua_script; /* optional custom robot-code generator */
+        const char* path_lua_func;   /* optional Lua function name */
+        const char* output_path;
+    } HsBaWaamPipelineConfig_t;
+
+    typedef struct HsBaWaamPipelineResult
+    {
+        int success;
+        int total_layers;
+        char* output_path;
+        char* error_message;
+        double elapsed_seconds;
+    } HsBaWaamPipelineResult_t;
+
+    typedef void (*HsBaWaamProgressCallback)(int percent, const char* stage, void* user_data);
+    typedef void (*HsBaWaamResultCallback)(HsBaWaamPipelineResult_t result, void* user_data);
+
+    /* ========================================================================
      *  File Transfer Types
      * ====================================================================== */
 
@@ -523,6 +741,108 @@ extern "C"
         cfg.bed_temperature = 180.0f;
         cfg.export_lua_script = 0;
         cfg.export_lua_func = 0;
+        cfg.output_path = 0;
+        return cfg;
+    }
+
+    /**
+     * @brief Initialize SLM pipeline config with default values.
+     * @return Default configuration struct (string fields are NULL).
+     */
+    static inline HsBaSlmPipelineConfig_t HsBaSlmConfigDefault(void)
+    {
+        HsBaSlmPipelineConfig_t cfg;
+        cfg.model_name = 0;
+        cfg.model_path = 0;
+        cfg.layer_height = 0.06f;
+        cfg.first_layer_height = 0.08f;
+        cfg.laser_power = 200.0f;
+        cfg.scan_speed = 1000.0f;
+        cfg.hatch_spacing = 0.1f;
+        cfg.hatch_rotation = 67.0f;
+        cfg.bed_temperature = 100.0f;
+        cfg.material = HSBA_SLM_MATERIAL_TITANIUM;
+        cfg.light_source = HSBA_SLM_LIGHT_LASER;
+        cfg.protect_gas = HSBA_METAL_GAS_ARGON;
+        cfg.export_lua_script = 0;
+        cfg.export_lua_func = 0;
+        cfg.output_path = 0;
+        return cfg;
+    }
+
+    /**
+     * @brief Initialize LOM pipeline config with default values.
+     * @return Default configuration struct (string fields are NULL).
+     */
+    static inline HsBaLomPipelineConfig_t HsBaLomConfigDefault(void)
+    {
+        HsBaLomPipelineConfig_t cfg;
+        cfg.model_name = 0;
+        cfg.model_path = 0;
+        cfg.layer_height = 0.2f;
+        cfg.first_layer_height = 0.2f;
+        cfg.cut_speed = 300.0f;
+        cfg.cut_margin = 0.5f;
+        cfg.cut_power = 0.8f;
+        cfg.bond_temperature = 150.0f;
+        cfg.bond_pressure = 1.0f;
+        cfg.bond_time = 5.0f;
+        cfg.seal_contour = 1;
+        cfg.cut_mode = HSBA_LOM_CUT_CONTOUR;
+        cfg.export_lua_script = 0;
+        cfg.export_lua_func = 0;
+        cfg.output_path = 0;
+        return cfg;
+    }
+
+    /**
+     * @brief Initialize 3DP pipeline config with default values.
+     * @return Default configuration struct (string fields are NULL).
+     */
+    static inline HsBaTdpPipelineConfig_t HsBaTdpConfigDefault(void)
+    {
+        HsBaTdpPipelineConfig_t cfg;
+        cfg.model_name = 0;
+        cfg.model_path = 0;
+        cfg.layer_height = 0.1f;
+        cfg.first_layer_height = 0.12f;
+        cfg.head_count = 128;
+        cfg.drop_spacing = 0.05f;
+        cfg.binder_saturation = 0.6f;
+        cfg.ink_curing_time = 1.0f;
+        cfg.bed_temperature = 40.0f;
+        cfg.binder_mode = HSBA_TDP_SINGLE;
+        cfg.export_lua_script = 0;
+        cfg.export_lua_func = 0;
+        cfg.output_path = 0;
+        return cfg;
+    }
+
+    /**
+     * @brief Initialize WAAM pipeline config with default values.
+     * @return Default configuration struct (string fields are NULL).
+     */
+    static inline HsBaWaamPipelineConfig_t HsBaWaamConfigDefault(void)
+    {
+        HsBaWaamPipelineConfig_t cfg;
+        cfg.model_name = 0;
+        cfg.model_path = 0;
+        cfg.layer_height = 0.8f;
+        cfg.first_layer_height = 1.0f;
+        cfg.bead_width = 1.2f;
+        cfg.travel_speed = 8.0f;
+        cfg.wire_feed_speed = 5.0f;
+        cfg.arc_current = 180.0f;
+        cfg.arc_voltage = 22.0f;
+        cfg.gas_flow_rate = 15.0f;
+        cfg.material = HSBA_WAAM_MATERIAL_STEEL;
+        cfg.welding_process = HSBA_WAAM_WELD_ARC;
+        cfg.protection = HSBA_WAAM_PROTECTION_SHIELD_GAS;
+        cfg.protect_gas = HSBA_METAL_GAS_ARGON;
+        cfg.interpass_temperature = 100.0f;
+        cfg.robot_type = HSBA_WAAM_ROBOT_ABB;
+        cfg.path_lua_script = 0;
+        cfg.path_lua_func = 0;
         cfg.output_path = 0;
         return cfg;
     }

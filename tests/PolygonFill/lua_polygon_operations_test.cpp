@@ -9,6 +9,10 @@
 
 using namespace HsBa::Slicer;
 
+// This test verifies the SVG polygon dump utilities (DumpPolygon/DumpPolygons and
+// their Lua bindings). The macro is propagated by HsBaSlicer2D's PUBLIC compile
+// definition, so the whole test case only exists when polygon dump is enabled.
+#ifdef HSBA_POLYGON_DUMP
 BOOST_AUTO_TEST_CASE(lua_polygon_operation_dump)
 {
     auto temp_dir = std::filesystem::temp_directory_path();
@@ -113,3 +117,4 @@ assert(#poly3 == 1)
     std::filesystem::remove(dump_path1, ec);
     std::filesystem::remove(dump_path2, ec);
 }
+#endif  // HSBA_POLYGON_DUMP

@@ -230,6 +230,106 @@ extern "C"
                                                      int* out_size);
 
     /* ========================================================================
+     *  SLM / LOM / 3DP / WAAM Proto conversion
+     * ====================================================================== */
+
+    /**
+     * @brief Deserialize SLM config from proto bytes (slm_pipe_config).
+     */
+    HSBA_SLICER_API int HsBaSlmConfigFromProtoBytes(const void* proto_data, int proto_size,
+                                                    HsBaSlmPipelineConfig_t* config);
+
+    /**
+     * @brief Serialize SLM config to proto bytes.
+     */
+    HSBA_SLICER_API int HsBaSlmConfigToProtoBytes(const HsBaSlmPipelineConfig_t* config, void** out_data,
+                                                  int* out_size);
+
+    /**
+     * @brief Deserialize SLM result from proto bytes (slm_pipe_result).
+     */
+    HSBA_SLICER_API int HsBaSlmResultFromProtoBytes(const void* proto_data, int proto_size,
+                                                    HsBaSlmPipelineResult_t* result);
+
+    /**
+     * @brief Serialize SLM result to proto bytes.
+     */
+    HSBA_SLICER_API int HsBaSlmResultToProtoBytes(const HsBaSlmPipelineResult_t* result, void** out_data,
+                                                  int* out_size);
+
+    /**
+     * @brief Deserialize LOM config from proto bytes (lom_pipe_config).
+     */
+    HSBA_SLICER_API int HsBaLomConfigFromProtoBytes(const void* proto_data, int proto_size,
+                                                    HsBaLomPipelineConfig_t* config);
+
+    /**
+     * @brief Serialize LOM config to proto bytes.
+     */
+    HSBA_SLICER_API int HsBaLomConfigToProtoBytes(const HsBaLomPipelineConfig_t* config, void** out_data,
+                                                  int* out_size);
+
+    /**
+     * @brief Deserialize LOM result from proto bytes (lom_pipe_result).
+     */
+    HSBA_SLICER_API int HsBaLomResultFromProtoBytes(const void* proto_data, int proto_size,
+                                                    HsBaLomPipelineResult_t* result);
+
+    /**
+     * @brief Serialize LOM result to proto bytes.
+     */
+    HSBA_SLICER_API int HsBaLomResultToProtoBytes(const HsBaLomPipelineResult_t* result, void** out_data,
+                                                  int* out_size);
+
+    /**
+     * @brief Deserialize 3DP config from proto bytes (tdp_pipe_config).
+     */
+    HSBA_SLICER_API int HsBaTdpConfigFromProtoBytes(const void* proto_data, int proto_size,
+                                                    HsBaTdpPipelineConfig_t* config);
+
+    /**
+     * @brief Serialize 3DP config to proto bytes.
+     */
+    HSBA_SLICER_API int HsBaTdpConfigToProtoBytes(const HsBaTdpPipelineConfig_t* config, void** out_data,
+                                                  int* out_size);
+
+    /**
+     * @brief Deserialize 3DP result from proto bytes (tdp_pipe_result).
+     */
+    HSBA_SLICER_API int HsBaTdpResultFromProtoBytes(const void* proto_data, int proto_size,
+                                                    HsBaTdpPipelineResult_t* result);
+
+    /**
+     * @brief Serialize 3DP result to proto bytes.
+     */
+    HSBA_SLICER_API int HsBaTdpResultToProtoBytes(const HsBaTdpPipelineResult_t* result, void** out_data,
+                                                  int* out_size);
+
+    /**
+     * @brief Deserialize WAAM config from proto bytes (waam_pipe_config).
+     */
+    HSBA_SLICER_API int HsBaWaamConfigFromProtoBytes(const void* proto_data, int proto_size,
+                                                     HsBaWaamPipelineConfig_t* config);
+
+    /**
+     * @brief Serialize WAAM config to proto bytes.
+     */
+    HSBA_SLICER_API int HsBaWaamConfigToProtoBytes(const HsBaWaamPipelineConfig_t* config, void** out_data,
+                                                   int* out_size);
+
+    /**
+     * @brief Deserialize WAAM result from proto bytes (waam_pipe_result).
+     */
+    HSBA_SLICER_API int HsBaWaamResultFromProtoBytes(const void* proto_data, int proto_size,
+                                                     HsBaWaamPipelineResult_t* result);
+
+    /**
+     * @brief Serialize WAAM result to proto bytes.
+     */
+    HSBA_SLICER_API int HsBaWaamResultToProtoBytes(const HsBaWaamPipelineResult_t* result, void** out_data,
+                                                   int* out_size);
+
+    /* ========================================================================
      *  C struct memory cleanup helpers
      *
      *  Free malloc'd string fields in converted C structs.
@@ -264,6 +364,26 @@ extern "C"
      * @param config Config struct whose string fields should be freed.
      */
     HSBA_SLICER_API void HsBaFreeCustomConfigStrings(HsBaCustomPipelineConfig_t* config);
+
+    /**
+     * @brief Free malloc'd string fields in SLM config struct.
+     */
+    HSBA_SLICER_API void HsBaFreeSlmConfigStrings(HsBaSlmPipelineConfig_t* config);
+
+    /**
+     * @brief Free malloc'd string fields in LOM config struct.
+     */
+    HSBA_SLICER_API void HsBaFreeLomConfigStrings(HsBaLomPipelineConfig_t* config);
+
+    /**
+     * @brief Free malloc'd string fields in 3DP config struct.
+     */
+    HSBA_SLICER_API void HsBaFreeTdpConfigStrings(HsBaTdpPipelineConfig_t* config);
+
+    /**
+     * @brief Free malloc'd string fields in WAAM config struct.
+     */
+    HSBA_SLICER_API void HsBaFreeWaamConfigStrings(HsBaWaamPipelineConfig_t* config);
 
 #ifdef __cplusplus
 }  // extern "C"

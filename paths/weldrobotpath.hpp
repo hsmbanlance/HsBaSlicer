@@ -74,6 +74,9 @@ public:
     const std::vector<WeldRLPoint>& weldPoints() const;
 
     void Save(const std::filesystem::path&) const override;
+    /// Bring the base script/file Save overloads into scope (the override above
+    /// would otherwise hide them), so callers can pass a Lua script + func name.
+    using RobotPath::Save;
     std::string ToString() const override;
     std::string ToString(std::string_view script, const std::function<void(lua_State*)>& lua_reg = {}) const override;
 

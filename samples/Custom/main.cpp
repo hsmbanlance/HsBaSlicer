@@ -5,7 +5,8 @@
  * 内置的 FDM / SLA / SLS 流水线的阶段顺序在 C++ 中固定，Lua 只能替换个别阶段
  * （支撑、填充、地板、导出）。Custom 流水线则把整条工作流交给 Lua：C++ 侧只
  * 提供一个封装了全部流水线算子的 Lua 环境（全局表 `HsBa`）与一个入口函数名，
- * 做什么、按什么顺序做，完全由脚本决定。
+ * 做什么、按什么顺序做，完全由脚本决定。示例 1（FDM）、示例 2（SLS）与示例 4
+ * （SLA）分别用三条脚本演示如何在 Custom 流水线里重建三种 3D 打印模式。
  *
  * `HsBa` 算子表（参数与返回值均为 Lua 表 / 字符串，坐标单位 mm）:
  *   progress(p[, stage])          向 C++ 进度回调上报百分比
@@ -18,12 +19,13 @@
  *   fill(polys[, {spacing,mode,angle,borderCount}])
  *   fdmSupport(layers, cfg) / slaSupport(layers, cfg) / floor(bottom, cfg)
  *   toGcode(layers, cfg) -> 字符串
- *   saveSlaPackage({...}) / saveSlsPackage({...}) / renderImage(polys,w,h,p)
+ *   saveSlaPackage({...}) / saveSlsPackage({...}) / saveWaamPackage({...}) / renderImage(polys,w,h,p)
  *
  * 同时脚本还能使用项目注册池中的 PolygonOperations / Support / PolygonFill /
  * PathOptimize / Zipper / Cipher / SQLiteAdapter 等库。
  *
- * 调用方式共四种：脚本文件、内联源码、异步执行，以及示例 4 演示的 Protobuf
+ * 调用方式共四种：脚本文件（示例 1/2 的 FDM、SLS）、内联源码（示例 3），异步执行
+ * （示例 4），以及示例 5 演示的 Protobuf
  * 字节流（跨进程 / 跨语言：请求与结果都以 `proto/custom_pipeline.proto` 定义
  * 的 wire 格式传递，C++ / C# / Java / Python 只要能序列化该 schema 即可调用）。
  *
@@ -130,11 +132,144 @@ static int RunLuaDefinedFdmPipeline()
 }
 
 // ---------------------------------------------------------------------------
-// 示例 2: 不落地脚本文件 —— 流水线定义全部来自内联 Lua 源码
+// 示例 2: 纯 Lua SLS（粉末床）打包流水线（脚本文件，同步）
+//
+// SLS 无需支撑与地板，输出格式完全由导出脚本决定：这里用 saveSlsPackage
+// 把逐层轮廓打包为 zip，并交给内嵌的 my_sls_export.lua 完成归档与数据库注册
+// ---------------------------------------------------------------------------
+static int RunLuaDefinedSlsPipeline()
+{
+    LogMsg("=== 示例 2: 纯 Lua SLS 打包流水线（脚本文件） ===");
+
+    std::filesystem::create_directories("output");
+
+    HsBaCustomPipelineConfig_t cfg = HsBaCreateDefaultCustomConfig();
+
+    cfg.pipeline_lua_script = "scripts/my_sls_pipeline.lua";
+    cfg.entry_func = "run_pipeline";
+    cfg.model_name = "stanford_bunny";
+    cfg.model_path = "models/stanford_bunny.stl";
+    cfg.output_path = "output/custom_sls_pipeline.zip";
+
+    // 激光 / 扫描 / 粉末床工艺参数通过内联源码预置，脚本内的 param() 会优先读取
+    cfg.pipeline_lua_source = "machine = { layer_height = 0.1, first_layer_height = 0.15, "
+                              "laser_power = 45.0, scan_speed = 3500.0, hatch_spacing = 0.12, "
+                              "hatch_rotation = 67.0, bed_temperature = 175.0 }";
+
+    HsBaCustomPipelineResult_t result = HsBaRunCustomPipeline(&cfg, OnProgress, nullptr);
+    LogResult(result);
+    const int ok = result.success;
+
+    HsBaFreeCustomPipelineResult(&result);  // 必须释放
+    return ok;
+}
+
+// ---------------------------------------------------------------------------
+// 示例 2b: 纯 Lua SLM / LOM / 3DP / WAAM 流水线
+//
+// 这四条脚本演示 Custom 流水线如何覆盖其余 3D 打印模式：SLM / LOM / 3DP 与 SLS
+// 同属“切片 + zip 打包”族，复用 saveSlsPackage；WAAM 则输出机器人程序，调用
+// saveWaamPackage。换一条脚本就是一条完全不同的流水线。
+// ---------------------------------------------------------------------------
+static int RunLuaDefinedSlmPipeline()
+{
+    LogMsg("=== 示例 2b-1: 纯 Lua SLM 打包流水线（脚本文件） ===");
+
+    std::filesystem::create_directories("output");
+
+    HsBaCustomPipelineConfig_t cfg = HsBaCreateDefaultCustomConfig();
+    cfg.pipeline_lua_script = "scripts/my_slm_pipeline.lua";
+    cfg.entry_func = "run_pipeline";
+    cfg.model_name = "stanford_bunny";
+    cfg.model_path = "models/stanford_bunny.stl";
+    cfg.output_path = "output/custom_slm_pipeline.zip";
+    cfg.pipeline_lua_source = "machine = { layer_height = 0.06, first_layer_height = 0.08, "
+                              "laser_power = 220.0, scan_speed = 1100.0, hatch_spacing = 0.1, "
+                              "hatch_rotation = 67.0, material = 'TITANIUM', bed_temperature = 100.0 }";
+
+    HsBaCustomPipelineResult_t result = HsBaRunCustomPipeline(&cfg, OnProgress, nullptr);
+    LogResult(result);
+    const int ok = result.success;
+    HsBaFreeCustomPipelineResult(&result);
+    return ok;
+}
+
+static int RunLuaDefinedLomPipeline()
+{
+    LogMsg("=== 示例 2b-2: 纯 Lua LOM 打包流水线（脚本文件） ===");
+
+    std::filesystem::create_directories("output");
+
+    HsBaCustomPipelineConfig_t cfg = HsBaCreateDefaultCustomConfig();
+    cfg.pipeline_lua_script = "scripts/my_lom_pipeline.lua";
+    cfg.entry_func = "run_pipeline";
+    cfg.model_name = "stanford_bunny";
+    cfg.model_path = "models/stanford_bunny.stl";
+    cfg.output_path = "output/custom_lom_pipeline.zip";
+    cfg.pipeline_lua_source = "machine = { layer_height = 0.2, cut_speed = 320.0, cut_margin = 0.5, "
+                              "laser_power = 0.85, bond_temperature = 150.0, cut_mode = 'CONTOUR' }";
+
+    HsBaCustomPipelineResult_t result = HsBaRunCustomPipeline(&cfg, OnProgress, nullptr);
+    LogResult(result);
+    const int ok = result.success;
+    HsBaFreeCustomPipelineResult(&result);
+    return ok;
+}
+
+static int RunLuaDefinedTdpPipeline()
+{
+    LogMsg("=== 示例 2b-3: 纯 Lua 3DP 打包流水线（脚本文件） ===");
+
+    std::filesystem::create_directories("output");
+
+    HsBaCustomPipelineConfig_t cfg = HsBaCreateDefaultCustomConfig();
+    cfg.pipeline_lua_script = "scripts/my_tdp_pipeline.lua";
+    cfg.entry_func = "run_pipeline";
+    cfg.model_name = "stanford_bunny";
+    cfg.model_path = "models/stanford_bunny.stl";
+    cfg.output_path = "output/custom_tdp_pipeline.zip";
+    cfg.pipeline_lua_source = "machine = { layer_height = 0.1, first_layer_height = 0.12, "
+                              "head_count = 256, drop_spacing = 0.04, binder_saturation = 0.7, "
+                              "curing_time = 1.5, bed_temperature = 45.0, binder_mode = 'SINGLE' }";
+
+    HsBaCustomPipelineResult_t result = HsBaRunCustomPipeline(&cfg, OnProgress, nullptr);
+    LogResult(result);
+    const int ok = result.success;
+    HsBaFreeCustomPipelineResult(&result);
+    return ok;
+}
+
+static int RunLuaDefinedWaamPipeline()
+{
+    LogMsg("=== 示例 2b-4: 纯 Lua WAAM 机器人路径流水线（脚本文件） ===");
+
+    std::filesystem::create_directories("output");
+
+    HsBaCustomPipelineConfig_t cfg = HsBaCreateDefaultCustomConfig();
+    cfg.pipeline_lua_script = "scripts/my_waam_pipeline.lua";
+    cfg.entry_func = "run_pipeline";
+    cfg.model_name = "stanford_bunny";
+    cfg.model_path = "models/stanford_bunny.stl";
+    cfg.output_path = "output/custom_waam_pipeline.txt";
+    // robot_type 0=ABB, 1=KUKA, 2=FANUC（内置代码生成，无需导出脚本）
+    cfg.pipeline_lua_source = "machine = { layer_height = 0.8, first_layer_height = 1.0, "
+                              "bead_width = 1.2, travel_speed = 8.0, arc_current = 200.0, "
+                              "arc_voltage = 24.0, wire_feed_speed = 6.0, gas_flow_rate = 16.0, "
+                              "welding_process = 0, robot_type = 0 }";
+
+    HsBaCustomPipelineResult_t result = HsBaRunCustomPipeline(&cfg, OnProgress, nullptr);
+    LogResult(result);
+    const int ok = result.success;
+    HsBaFreeCustomPipelineResult(&result);
+    return ok;
+}
+
+// ---------------------------------------------------------------------------
+// 示例 3: 不落地脚本文件 —— 流水线定义全部来自内联 Lua 源码
 // ---------------------------------------------------------------------------
 static int RunInlineLuaPipeline()
 {
-    LogMsg("=== 示例 2: 内联 Lua 源码流水线（无脚本文件） ===");
+    LogMsg("=== 示例 3: 内联 Lua 源码流水线（无脚本文件） ===");
 
     static const char* kInlinePipeline =
         "function run_pipeline()\n"
@@ -179,7 +314,7 @@ static int RunInlineLuaPipeline()
 }
 
 // ---------------------------------------------------------------------------
-// 示例 3: 切换到另一条 Lua 工作流（SLA 打包），并异步执行
+// 示例 4: 切换到另一条 Lua 工作流（SLA 打包），并异步执行
 // ---------------------------------------------------------------------------
 namespace
 {
@@ -195,7 +330,7 @@ void OnCustomPipelineComplete(HsBaCustomPipelineResult_t result, void* user_data
 
 static int RunAsyncLuaPipeline()
 {
-    LogMsg("=== 示例 3: 纯 Lua SLA 打包流水线（异步） ===");
+    LogMsg("=== 示例 4: 纯 Lua SLA 打包流水线（异步） ===");
 
     HsBaCustomPipelineConfig_t cfg = HsBaCreateDefaultCustomConfig();
     cfg.pipeline_lua_script = "scripts/my_sla_pipeline.lua";
@@ -221,7 +356,7 @@ static int RunAsyncLuaPipeline()
 // ---------------------------------------------------------------------------
 // 极简 Protobuf wire 编解码
 //
-// 只覆盖示例 4 用到的 varint / length-delimited / fixed64 三种类型，字段编号与
+// 只覆盖示例 5 用到的 varint / length-delimited / fixed64 三种类型，字段编号与
 // proto/custom_pipeline.proto 一致。示例因此不必链接 protobuf 运行库 —— 这也正是
 // C# / Python / Java 调用方的处境：它们用自己的运行库产生字节。注意：C++ 调用方
 // 不要把 HsBaSlicerProto 里的 .pb.cc 与 DllHsBaSlicer 链进同一个进程，protobuf
@@ -372,7 +507,7 @@ enum CustomResultField : int
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// 示例 4: 以 Protobuf 字节流的方式调用 Custom 流水线
+// 示例 5: 以 Protobuf 字节流的方式调用 Custom 流水线
 //
 // 真实部署中，下面的请求字节通常由其它语言（C# / Python / Java）按
 // proto/custom_pipeline.proto 序列化后经 socket / 消息队列送来，接收端只需要
@@ -380,7 +515,7 @@ enum CustomResultField : int
 // ---------------------------------------------------------------------------
 static int RunPipelineFromProtoBytes()
 {
-    LogMsg("=== 示例 4: Protobuf 字节流驱动的 Custom 流水线 ===");
+    LogMsg("=== 示例 5: Protobuf 字节流驱动的 Custom 流水线 ===");
 
     // 1. 发送端：按 wire 格式组装 custom_pipe_config 请求
     std::string payload;
@@ -466,6 +601,11 @@ int main()
     std::filesystem::create_directories("output");
 
     RunLuaDefinedFdmPipeline();
+    RunLuaDefinedSlsPipeline();
+    RunLuaDefinedSlmPipeline();
+    RunLuaDefinedLomPipeline();
+    RunLuaDefinedTdpPipeline();
+    RunLuaDefinedWaamPipeline();
     RunInlineLuaPipeline();
     RunAsyncLuaPipeline();
     RunPipelineFromProtoBytes();

@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package HsbaProto;
+
+// SLM (Selective Laser Melting) metal powder-bed pipeline.
+// Enum value names are prefixed with pipe_slm_ to stay unique inside the
+// HsbaProto package (base_config.proto already declares msg_slm_material etc.).
+
+enum slm_material
+{
+    pipe_slm_iron = 0; // iron
+    pipe_slm_aluminum = 1; // aluminum
+    pipe_slm_titanium = 2; // titanium
+    pipe_slm_unknown = 3; // unknown
+}
+
+enum slm_light
+{
+    pipe_slm_laser = 0; // laser
+    pipe_slm_ebeam = 1; // electron beam
+    pipe_slm_light_unknown = 2; // unknown
+}
+
+enum slm_protect_gas
+{
+    pipe_slm_argon = 0; // argon
+    pipe_slm_helium = 1; // helium
+    pipe_slm_n2 = 2; // nitrogen
+    pipe_slm_co2 = 3; // co2
+    pipe_slm_gas_unknown = 4; // unknown
+}
+
+message slm_pipe_config
+{
+    string slm_pipe_config_model_name = 1; // model name
+    string slm_pipe_config_model_path = 2; // model path
+
+    float slm_pipe_config_layer_height = 3; // layer height (mm)
+    float slm_pipe_config_first_layer_height = 4; // first layer height (mm)
+
+    float slm_pipe_config_laser_power = 5; // laser power (W)
+    float slm_pipe_config_scan_speed = 6; // scan speed (mm/s)
+    float slm_pipe_config_hatch_spacing = 7; // hatch spacing (mm)
+    float slm_pipe_config_hatch_rotation = 8; // hatch rotation angle (degrees)
+    float slm_pipe_config_bed_temperature = 9; // powder bed temperature (C)
+
+    slm_material slm_pipe_config_material = 10; // metal powder material
+    slm_light slm_pipe_config_light_source = 11; // energy source
+    slm_protect_gas slm_pipe_config_protect_gas = 12; // shielding gas
+
+    string slm_pipe_config_export_lua_script = 13; // export lua script path (required)
+    string slm_pipe_config_export_lua_func = 14; // export lua function name
+
+    string slm_pipe_config_output_path = 15; // output path
+}
+
+message slm_pipe_result
+{
+    bool slm_pipe_result_success = 1; // result success
+    int32 slm_pipe_result_total_layers = 2; // total layers
+    string slm_pipe_result_export_path = 3; // export path
+    string slm_pipe_result_error_message = 4; // error message
+    double slm_pipe_result_elapsed_seconds = 5; // elapsed seconds
+}

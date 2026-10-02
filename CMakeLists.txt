@@ -148,6 +148,17 @@ else()
   message(STATUS "Building for unknown platform: ${CMAKE_SYSTEM_NAME}")
 endif()
 
+# SVG polygon dump utilities (HsBaSlicer2D: DumpPolygon/DumpPolygons and the Lua
+# dumpPolygon/dumpPolygons bindings). Enabled on desktop by default, but can be
+# toggled independently of HSBA_DESKTOP. When OFF, all dump code paths and the
+# lua_polygon_operations_test are excluded from the build.
+if(HSBA_DESKTOP)
+  set(_hsba_polygon_dump_default ON)
+else()
+  set(_hsba_polygon_dump_default OFF)
+endif()
+option(HSBA_POLYGON_DUMP "Enable SVG polygon dump utilities in HsBaSlicer2D (DumpPolygon/DumpPolygons)" ${_hsba_polygon_dump_default})
+
 # Copyleft kernels (CGAL, OpenCascade) are only installed by the vcpkg "copyleft"
 # manifest feature. HSBA_COPL is tri-state:
 #   AUTO - detect: VCPKG_MANIFEST_FEATURES env -> VCPKG_MANIFEST_NO_DEFAULT_FEATURES env
@@ -426,6 +437,10 @@ if(HSBA_SLICER_BUILD_SAMPLES)
   add_subdirectory("samples/FDM")
   add_subdirectory("samples/SLA")
   add_subdirectory("samples/SLS")
+  add_subdirectory("samples/SLM")
+  add_subdirectory("samples/LOM")
+  add_subdirectory("samples/TDP")
+  add_subdirectory("samples/WAAM")
   add_subdirectory("samples/Custom")
   add_subdirectory("samples/LibHsBaSlicer")
 endif()
