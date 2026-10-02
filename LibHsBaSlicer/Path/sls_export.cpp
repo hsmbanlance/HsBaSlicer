@@ -49,7 +49,8 @@ std::string PolygonsToJson(const PolygonsD& polys)
 }  // anonymous namespace
 
 HSBA_SLICER_LIB_API bool SaveSlsPackageLua(const SlsPackage& pkg, const std::string& output_zip,
-                                           const std::string& lua_script, const std::string& lua_func)
+                                           const std::string& lua_script, const std::string& lua_func,
+                                           std::string* error_out)
 {
     try
     {
@@ -89,8 +90,16 @@ HSBA_SLICER_LIB_API bool SaveSlsPackageLua(const SlsPackage& pkg, const std::str
                          std::string_view(lua_func), sql_reg);
         return true;
     }
+    catch (const std::exception& e)
+    {
+        if (error_out)
+            *error_out = e.what();
+        return false;
+    }
     catch (...)
     {
+        if (error_out)
+            *error_out = "unknown error in SaveSlsPackageLua";
         return false;
     }
 }

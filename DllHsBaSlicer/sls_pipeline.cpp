@@ -246,7 +246,8 @@ Utils::Task<InternalSlsResult> RunSlsPipelineAsync(const InternalSlsConfig& cfg)
         pkg.config_json = config_json;
 
         std::string func = cfg.export_lua_func.empty() ? "export_sls" : cfg.export_lua_func;
-        bool export_ok = SaveSlsPackageLua(pkg, output_path, cfg.export_lua_script, func);
+        std::string lua_error;
+        bool export_ok = SaveSlsPackageLua(pkg, output_path, cfg.export_lua_script, func, &lua_error);
 
         if (export_ok)
         {
@@ -256,7 +257,7 @@ Utils::Task<InternalSlsResult> RunSlsPipelineAsync(const InternalSlsConfig& cfg)
         else
         {
             result.success = false;
-            result.error_message = "Failed to export SLS package via Lua script";
+            result.error_message = "Failed to export SLS package via Lua script: " + lua_error;
         }
 
         ReportProgress(cfg, 100, "Pipeline complete");

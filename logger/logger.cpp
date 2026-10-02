@@ -154,9 +154,9 @@ HSBA_SLICER_LOG_API LoggerSingletone::LoggerSingletone(LoggerSingletone::Private
         try
         {
 #if _DEBUG
-            int log_level = ptree.get<int>("log.log_level_debug");
+            log_level_ = ptree.get<int>("log.log_level_debug");
 #else
-            int log_level = ptree.get<int>("log.log_level");
+            log_level_ = ptree.get<int>("log.log_level");
 #endif  // _DEBUG
             use_log_file_ = ptree.get<bool>("log.use_log_file");
             log_path_ = current_path.string() + ptree.get<std::string>("log.log_file");

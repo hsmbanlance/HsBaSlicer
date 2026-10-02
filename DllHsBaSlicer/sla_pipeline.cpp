@@ -366,10 +366,19 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
 
             if (!cfg.support_lua_script.empty())
             {
-                // Lua custom support via LibHsBaSlicer API
+                // Lua custom support via LibHsBaSlicer API (script content is required, load file first)
                 std::string func = cfg.support_lua_func.empty() ? "generate_support" : cfg.support_lua_func;
-                layer_supports = GenerateAllLuaSupport(
-                    layer_outlines, sla_support_cfg, std::string_view(cfg.support_lua_script), std::string_view(func));
+                std::ifstream ifs(cfg.support_lua_script);
+                std::string script_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+                if (script_content.empty())
+                {
+                    result.success = false;
+                    result.error_message = "Failed to read support Lua script: " + cfg.support_lua_script;
+                    co_return result;
+                }
+                layer_supports =
+                    GenerateAllLuaSupport(layer_outlines, sla_support_cfg, std::string_view(script_content),
+                                          std::string_view(func));
             }
             else
             {
