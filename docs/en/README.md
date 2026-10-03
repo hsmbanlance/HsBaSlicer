@@ -38,7 +38,7 @@ HsBaSlicer is a high-performance C++ software framework for 3D printing slicing,
 - **Paths** - Output path management (layer paths, point paths, image paths, robot paths)
 - **Support** - Support generation (FDM/SLA support, overhang detection, Lua custom support)
 - **[LibHsBaSlicer](./LibHsBaSlicer/)** - Core C++ static library providing five major interfaces: Preprocess, Slice, Support, Fill, Path Generation
-- **DllHsBaSlicer** - Upper-level C dynamic library providing coroutine-optimized FDM full-pipeline interface
+- **DllHsBaSlicer** - Upper-level C dynamic library providing coroutine-optimized full-pipeline interfaces (FDM / SLA / SLS / SLM / LOM / 3DP / WAAM / file transfer / custom Lua)
 - **HsBaSlicer** - Final application entry point
 
 ### Other
@@ -64,7 +64,7 @@ HsBaSlicer is a high-performance C++ software framework for 3D printing slicing,
 ### Slicing Core
 
 - [LibHsBaSlicer Module](./LibHsBaSlicer/) - Preprocess, Slice, Support, Fill, Path Generation
-- [DllHsBaSlicer Module](./DllHsBaSlicer/) - C export layer, FDM/SLA/SLS full pipelines, Qt/wxWidgets & Unity/UE cross-platform integration guides
+- [DllHsBaSlicer Module](./DllHsBaSlicer/) - C export layer, FDM/SLA/SLS/SLM/LOM/3DP/WAAM full pipelines, Qt/wxWidgets and Unity/UE cross-platform integration guides
 
 ### Quick Start
 
@@ -110,7 +110,7 @@ HsBaSlicer is a high-performance C++ software framework for 3D printing slicing,
 - **Paths** - Output path management (layer paths, point paths, image paths, robot paths)
 - **Support** - Support generation (FDM/SLA support, overhang detection, Lua custom support)
 - **LibHsBaSlicer** - Core C++ static library providing five major interfaces: Preprocess, Slice, Support, Fill, Path Generation
-- **DllHsBaSlicer** - Upper-level C dynamic library providing coroutine-optimized FDM full-pipeline interface
+- **DllHsBaSlicer** - Upper-level C dynamic library providing coroutine-optimized full-pipeline interfaces (FDM / SLA / SLS / SLM / LOM / 3DP / WAAM / file transfer / custom Lua)
 - **HsBaSlicer** - Final application entry point
 
 ### Other

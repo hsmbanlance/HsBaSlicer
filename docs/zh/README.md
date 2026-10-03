@@ -38,7 +38,7 @@ HsBaSlicer 是一个面向 3D 打印切片领域的高性能 C++ 软件框架，
 - **Paths** - 输出路径管理（层路径、点路径、图像路径、机器人路径）
 - **Support** - 支撑生成（FDM/SLA 支撑、悬垂检测、Lua 自定义支撑）
 - **[LibHsBaSlicer](./LibHsBaSlicer/)** - 底层 C++ 静态库，提供预处理、切片、支撑、填充、路径生成五大核心接口
-- **DllHsBaSlicer** - 上层 C 动态库，提供基于协程优化的 FDM 全流程 Pipeline 接口
+- **DllHsBaSlicer** - 上层 C 动态库，提供基于协程优化的全流程 Pipeline 接口（FDM / SLA / SLS / SLM / LOM / 3DP / WAAM / 文件传输 / 自定义 Lua）
 - **HsBaSlicer** - 最终应用程序入口
 
 ### 其他
@@ -64,7 +64,7 @@ HsBaSlicer 是一个面向 3D 打印切片领域的高性能 C++ 软件框架，
 ### 切片核心
 
 - [LibHsBaSlicer 模块](./LibHsBaSlicer/) - 预处理、切片、支撑、填充、路径生成
-- [DllHsBaSlicer 模块](./DllHsBaSlicer/) - C 导出层，FDM/SLA/SLS 全流程流水线，Qt/wxWidgets 与 Unity/UE 跨平台集成指南
+- [DllHsBaSlicer 模块](./DllHsBaSlicer/) - C 导出层，FDM/SLA/SLS/SLM/LOM/3DP/WAAM 全流程流水线，Qt/wxWidgets 与 Unity/UE 跨平台集成指南
 
 ### 快速开始
 
@@ -110,7 +110,7 @@ HsBaSlicer 是一个面向 3D 打印切片领域的高性能 C++ 软件框架，
 - **Paths** - 输出路径管理（层路径、点路径、图像路径、机器人路径）
 - **Support** - 支撑生成（FDM/SLA 支撑、悬垂检测、Lua 自定义支撑）
 - **LibHsBaSlicer** - 底层 C++ 静态库，提供预处理、切片、支撑、填充、路径生成五大核心接口
-- **DllHsBaSlicer** - 上层 C 动态库，提供基于协程优化的 FDM 全流程 Pipeline 接口
+- **DllHsBaSlicer** - 上层 C 动态库，提供基于协程优化的全流程 Pipeline 接口（FDM / SLA / SLS / SLM / LOM / 3DP / WAAM / 文件传输 / 自定义 Lua）
 - **HsBaSlicer** - 最终应用程序入口
 
 ### 其他
