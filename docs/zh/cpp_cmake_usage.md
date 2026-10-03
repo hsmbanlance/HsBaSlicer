@@ -227,7 +227,36 @@ int main()
 | `SlaPipeline` | SLA 全流程（切片→支撑→底座→渲染→打包） |
 | `SlsPipeline` | SLS Lua 导出 |
 | `FileTransferPipeline` | 文件传输（校验→连接池→传输） |
+| `ParamStorePipeline` | 工艺参数存储（按业务键写入/读取配置结构体） |
 | `SlicerError` | 统一异常类型 |
+
+### 工艺参数存储（模块版）
+
+`ParamStorePipeline` 封装 Lib 层，将 `HsBa*PipelineConfig_t` 结构体按业务键写入/读取数据库；失败抛 `SlicerError`。
+
+```cpp
+import hsba.slicer;
+using namespace HsBa::Slicer;
+
+ParamStoreConnection conn;
+conn.backend    = ParamStoreBackend::Sqlite;
+conn.sqlitePath = "params.db";
+ParamStorePipeline store(conn);
+
+HsBaFdmPipelineConfig_t cfg = defaultFdmConfig();
+cfg.model_name = "tough_template";
+
+// 写入：返回落库行 id
+store.save(ParamStoreKind::Fdm, &cfg, "tough_template");
+
+// 读取：回填到 out（const char* 由库 malloc 持有）
+HsBaFdmPipelineConfig_t out = defaultFdmConfig();
+store.load(ParamStoreKind::Fdm, "tough_template", &out);
+// 使用 out.model_name ...
+store.freeLoaded(ParamStoreKind::Fdm, &out);  // 释放读取到的堆字符串
+```
+
+> 配置结构体仍复用 `pipeline_types.h` 的 `HsBa*PipelineConfig_t`（模块不重复定义）；`save`/`load` 的 `table` 参数可省略以使用类型默认表名；Android/iOS 仅支持 `ParamStoreBackend::Sqlite`。
 
 ### Lua 扩展函数注册（模块版）
 

@@ -45,6 +45,7 @@ All public headers are exported to `include/HsBaSlicer/` in the install tree.
 | `tdp_pipeline.h` | 3DP binder-jetting full-pipeline interface |
 | `waam_pipeline.h` | WAAM arc-additive (robot) full-pipeline interface |
 | `file_transfer_pipeline.h` | File transfer pipeline interface (sync/async) |
+| `param_store_pipeline.h` | Process-parameter store pipeline interface (save/load) |
 | `custom_pipeline.h` | Custom Lua pipeline interface (sync/async) |
 | `pipeline_convert.h` | Proto serialized bytes ↔ C struct conversion |
 | `lua_register.h` | Lua extension function registration (2D/3D/File/Event callbacks) |
@@ -381,6 +382,76 @@ void HsBaFreeFileTransferPipelineResult(HsBaFileTransferPipelineResult_t* result
 | `pool_size` | 4 | Connection pool size [1, 16] |
 | `file_paths` | NULL | Array of file paths to transfer |
 | `file_count` | 0 | Number of files |
+
+### Param Store Pipeline
+
+Persists each pipeline's process parameters (`HsBa*PipelineConfig_t` structs) into a database for **reuse**: upsert by a business-unique key (Save), read back into a caller-supplied struct by key (Load). It reuses the fileoperator ParamStore reflection / type-coercion machinery, storing one wide table per pipeline kind so no per-process table needs to be hand-authored. Synchronous interface; a single call internally performs "connect -> ensure table -> execute -> disconnect".
+
+```c
+HsBaParamStoreResult_t HsBaSavePipelineParams(const HsBaParamStoreConn_t* conn, HsBaPipelineKind kind,
+                                              const char* table, const char* key, const void* config);
+
+HsBaParamStoreResult_t HsBaLoadPipelineParams(const HsBaParamStoreConn_t* conn, HsBaPipelineKind kind,
+                                              const char* table, const char* key, void* out_config);
+
+void HsBaFreeLoadedPipelineConfig(HsBaPipelineKind kind, void* config);
+void HsBaFreeParamStoreResult(HsBaParamStoreResult_t* result);
+```
+
+#### Connection struct `HsBaParamStoreConn_t`
+
+| Field | Description |
+| --- | --- |
+| `backend` | Storage backend: `HSBA_PARAM_BACKEND_SQLITE` / `_MYSQL` / `_POSTGRESQL` (Android/iOS: SQLite only) |
+| `sqlite_path` | SQLite database file path (used by the SQLite backend) |
+| `host` / `port` / `user` / `password` / `database` | MySQL/PostgreSQL connection parameters; `port` `0` means use the adapter's default port |
+
+#### Parameters
+
+| Parameter | Description |
+| --- | --- |
+| `kind` | Config type `HsBaPipelineKind` (FDM/SLA/SLS/SLM/LOM/TDP/WAAM/CUSTOM/FILETRANSFER); must match the struct `config` points to |
+| `table` | Target table name; `NULL` or `""` derives the default table from `kind` (e.g. `hsba_param_fdm`) |
+| `key` | Business-unique key (e.g. a template name); must not be `NULL` |
+| `config` / `out_config` | Pointer to the corresponding `HsBa*PipelineConfig_t` struct; for reads, initialize it with `HsBa*ConfigDefault()` first |
+
+#### Result struct `HsBaParamStoreResult_t`
+
+| Field | Description |
+| --- | --- |
+| `success` | `0`/`1`; `0` when a load misses or the backend is unavailable (errors are never swallowed) |
+| `param_id` | Save: the persisted row id; Load: the matched row id |
+| `error_message` | UTF-8 error message, freed via `HsBaFreeParamStoreResult` |
+| `elapsed_seconds` | Elapsed time of the call (seconds) |
+
+> **String ownership**: the `const char*` fields `HsBaLoadPipelineParams` fills into `out_config` are allocated by the library with `malloc` (`NULL` fields stay `NULL`); before reusing or discarding the struct you must call `HsBaFreeLoadedPipelineConfig(kind, &cfg)` to release them. `error_message` is released separately via `HsBaFreeParamStoreResult`.
+
+> **Backend availability**: the MySQL/PostgreSQL branches are gated at compile time by `HSBA_USE_MYSQL` / `HSBA_USE_PGSQL`; when not compiled in, calls against those backends return `success=0` with an error message instead of crashing.
+
+#### Example
+
+```c
+HsBaParamStoreConn_t conn = {0};
+conn.backend = HSBA_PARAM_BACKEND_SQLITE;
+conn.sqlite_path = "params.db";
+
+HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+cfg.layer_height = 0.2f;
+cfg.model_name = "tough_template";
+
+// Save (upsert by key)
+HsBaParamStoreResult_t rw = HsBaSavePipelineParams(&conn, HSBA_PIPELINE_FDM, NULL, "tough_template", &cfg);
+HsBaFreeParamStoreResult(&rw);
+
+// Load (read back by key)
+HsBaFdmPipelineConfig_t out = HsBaFdmConfigDefault();
+HsBaParamStoreResult_t rd = HsBaLoadPipelineParams(&conn, HSBA_PIPELINE_FDM, NULL, "tough_template", &out);
+if (rd.success) {
+    // use out.layer_height / out.model_name ...
+}
+HsBaFreeLoadedPipelineConfig(HSBA_PIPELINE_FDM, &out);  // free the library-malloc'd strings
+HsBaFreeParamStoreResult(&rd);
+```
 
 ### Custom Lua Pipeline
 

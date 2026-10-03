@@ -45,6 +45,7 @@ LibHsBaSlicer  ← C++ 静态库：预处理 / 切片 / 支撑 / 填充 / 路径
 | `tdp_pipeline.h` | 3DP 粘结剂喷射全流程接口 |
 | `waam_pipeline.h` | WAAM 电弧增材（机器人）全流程接口 |
 | `file_transfer_pipeline.h` | 文件传输流水线接口（同步/异步） |
+| `param_store_pipeline.h` | 工艺参数存储流水线接口（写入/读取） |
 | `custom_pipeline.h` | 自定义 Lua 流水线接口（同步/异步） |
 | `pipeline_convert.h` | Proto 序列化字节 ↔ C 结构体转换 |
 | `lua_register.h` | Lua 扩展函数注册接口（2D/3D/File/事件回调） |
@@ -381,6 +382,76 @@ void HsBaFreeFileTransferPipelineResult(HsBaFileTransferPipelineResult_t* result
 | `pool_size` | 4 | 连接池大小 [1, 16] |
 | `file_paths` | NULL | 待传输文件路径数组 |
 | `file_count` | 0 | 文件数量 |
+
+### 工艺参数存储流水线
+
+把各流水线的工艺参数（`HsBa*PipelineConfig_t` 结构体）持久化到数据库以便**复用**：按业务唯一键 upsert 写入（Save）、按键回填读取（Load）。底层复用 fileoperator 的 ParamStore 反射/类型收敛机制，按工艺类型分宽表存储，无需为每种工艺单独建表。同步接口，单次调用内部完成「建连 → 建表 → 执行 → 断开」。
+
+```c
+HsBaParamStoreResult_t HsBaSavePipelineParams(const HsBaParamStoreConn_t* conn, HsBaPipelineKind kind,
+                                              const char* table, const char* key, const void* config);
+
+HsBaParamStoreResult_t HsBaLoadPipelineParams(const HsBaParamStoreConn_t* conn, HsBaPipelineKind kind,
+                                              const char* table, const char* key, void* out_config);
+
+void HsBaFreeLoadedPipelineConfig(HsBaPipelineKind kind, void* config);
+void HsBaFreeParamStoreResult(HsBaParamStoreResult_t* result);
+```
+
+#### 连接结构 `HsBaParamStoreConn_t`
+
+| 字段 | 说明 |
+| --- | --- |
+| `backend` | 存储后端：`HSBA_PARAM_BACKEND_SQLITE` / `_MYSQL` / `_POSTGRESQL`（Android/iOS 仅 SQLite） |
+| `sqlite_path` | SQLite 数据库文件路径（SQLite 后端使用） |
+| `host` / `port` / `user` / `password` / `database` | MySQL/PostgreSQL 连接参数；`port` 传 `0` 表示使用适配器默认端口 |
+
+#### 参数说明
+
+| 参数 | 说明 |
+| --- | --- |
+| `kind` | 配置类型 `HsBaPipelineKind`（FDM/SLA/SLS/SLM/LOM/TDP/WAAM/CUSTOM/FILETRANSFER），须与 `config` 指向的结构体一致 |
+| `table` | 目标表名；传 `NULL` 或 `""` 时按 `kind` 派生默认表名（如 `hsba_param_fdm`） |
+| `key` | 业务唯一键（如模板名），不可为 `NULL` |
+| `config` / `out_config` | 指向对应的 `HsBa*PipelineConfig_t` 结构体；读取前建议先用 `HsBa*ConfigDefault()` 初始化 |
+
+#### 结果结构 `HsBaParamStoreResult_t`
+
+| 字段 | 说明 |
+| --- | --- |
+| `success` | `0`/`1`；读取未命中或后端不可用时为 `0`（不吞错误码） |
+| `param_id` | Save 落库行 id；Load 命中回填原 id |
+| `error_message` | UTF-8 错误信息，用 `HsBaFreeParamStoreResult` 释放 |
+| `elapsed_seconds` | 本次调用耗时（秒） |
+
+> **字符串所有权**：`HsBaLoadPipelineParams` 回填到 `out_config` 内的 `const char*` 字段由库 `malloc` 分配，`NULL` 字段保持 `NULL`；在复用或丢弃该结构体前必须调用 `HsBaFreeLoadedPipelineConfig(kind, &cfg)` 释放。`error_message` 独立由 `HsBaFreeParamStoreResult` 释放。
+
+> **后端可用性**：MySQL/PostgreSQL 分支在编译时受 `HSBA_USE_MYSQL` / `HSBA_USE_PGSQL` 控制；未编译进时对应后端调用返回 `success=0` 并给出错误信息，不会崩溃。
+
+#### 调用示例
+
+```c
+HsBaParamStoreConn_t conn = {0};
+conn.backend = HSBA_PARAM_BACKEND_SQLITE;
+conn.sqlite_path = "params.db";
+
+HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+cfg.layer_height = 0.2f;
+cfg.model_name = "tough_template";
+
+// 写入（按 key upsert）
+HsBaParamStoreResult_t rw = HsBaSavePipelineParams(&conn, HSBA_PIPELINE_FDM, NULL, "tough_template", &cfg);
+HsBaFreeParamStoreResult(&rw);
+
+// 读取（按 key 回填）
+HsBaFdmPipelineConfig_t out = HsBaFdmConfigDefault();
+HsBaParamStoreResult_t rd = HsBaLoadPipelineParams(&conn, HSBA_PIPELINE_FDM, NULL, "tough_template", &out);
+if (rd.success) {
+    // 使用 out.layer_height / out.model_name ...
+}
+HsBaFreeLoadedPipelineConfig(HSBA_PIPELINE_FDM, &out);  // 释放库 malloc 的字符串
+HsBaFreeParamStoreResult(&rd);
+```
 
 ### 自定义 Lua 流水线
 

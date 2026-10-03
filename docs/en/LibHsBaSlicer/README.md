@@ -12,6 +12,7 @@ LibHsBaSlicer is the core C++ library of HsBaSlicer, providing the full slicing 
 - **Floor (SLA Floor/Render/Package)** - SLA raft generation, layer image rendering and zip packaging
 - **Path/SLS Export** - SLS Lua-script-driven export (no standard format)
 - **Transfer (File Transfer)** - Remote executor file transfer (pooled TCP connections)
+- **ParamStore (Process Parameter Store)** - Persist/reuse per-pipeline process-parameter structs by writing/reading a database
 - **Extends (Extension Registration)** - External Lua function pools, event callbacks and C++ event sources
 
 ## Architecture
@@ -25,6 +26,7 @@ LibHsBaSlicer
 ├── Path/          G-code path generation + region path optimization + SLS Lua export
 ├── Floor/         SLA floor/raft generation, layer rendering, zip packaging
 ├── Transfer/      Remote file transfer (pooled connections)
+├── ParamStore/    Process-parameter write/read (wraps fileoperator ParamStore)
 └── Extends/       External Lua function registration + C++ event sources (Zipper/DB)
 ```
 
@@ -42,6 +44,7 @@ To use LibHsBaSlicer, include the corresponding header files:
 #include "LibHsBaSlicer/Path/sls_export.hpp"            // SLS Lua export
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"            // SLA floor/render/package
 #include "LibHsBaSlicer/Transfer/file_transfer.hpp"     // File transfer
+#include "LibHsBaSlicer/ParamStore/param_store_ops.hpp"  // Process parameter store
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"     // Lua extension registration
 #include "LibHsBaSlicer/Extends/EventSourceFunction.hpp" // C++ event sources
 #include "LibHsBaSlicer/version_info.hpp"               // Version info
@@ -131,6 +134,40 @@ if (result.success) {
     // result.files_transferred == result.total_files
 }
 ```
+
+## Process Parameter Store
+
+Use `ParamStore/param_store_ops.hpp` to write/read each pipeline's process parameters (`HsBa*PipelineConfig_t` structs) to/from a database for reuse. The Dll layer's `param_store_pipeline.h` wraps these very functions; the Lib layer returns a `ParamStoreOutcome` with `std::string`/enum values and does not expose the C ABI ownership details.
+
+```cpp
+#include "LibHsBaSlicer/ParamStore/param_store_ops.hpp"
+using namespace HsBa::Slicer;
+
+ParamStoreConn conn;
+conn.backend    = ParamBackend::Sqlite;
+conn.sqlitePath = "params.db";
+
+HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+cfg.model_name   = "tough_template";
+cfg.layer_height = 0.2f;
+
+// Save (upsert by key); empty table uses the type-derived default name
+ParamStoreOutcome saved = SavePipelineParams(conn, ParamPipelineKind::Fdm, "", "tough_template", &cfg);
+if (saved.success) { /* saved.paramId */ }
+
+// Load (read back into a caller-supplied struct)
+HsBaFdmPipelineConfig_t out = HsBaFdmConfigDefault();
+ParamStoreOutcome loaded = LoadPipelineParams(conn, ParamPipelineKind::Fdm, "", "tough_template", &out);
+if (loaded.success) {
+    // use out.model_name (heap-allocated by the library)...
+    FreeLoadedConfigStrings(ParamPipelineKind::Fdm, &out);  // release the loaded heap strings
+}
+```
+
+- `SavePipelineParams` / `LoadPipelineParams` build a SQLite/MySQL/PostgreSQL adapter from `conn.backend`, then `EnsureTable` -> `Save`/`Load`; exceptions are collapsed into `ParamStoreOutcome::error` (`success=false`) and never propagate outward.
+- The MySQL/PostgreSQL branches are gated by the `HSBA_USE_MYSQL` / `HSBA_USE_PGSQL` compile macros; when disabled they return `success=false` instead of crashing (mobile builds: SQLite only).
+- The `const char*` fields filled during a load are owned by `std::malloc` and must be released with `FreeLoadedConfigStrings`.
+- The underlying storage/reflection/CRUD capabilities (`List`/`Update`/`Delete`/Lua) live in fileoperator's `ParamStore`; this layer only exposes write/read against the C config structs.
 
 ## SLA Floor / Render / Package
 
