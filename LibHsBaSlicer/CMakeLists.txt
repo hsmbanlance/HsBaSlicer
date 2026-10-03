@@ -13,6 +13,7 @@
     Path/waam_export.hpp
     Floor/sla_floor.hpp
     Transfer/file_transfer.hpp
+    ParamStore/param_store_ops.hpp
     version_info.cpp
     Slice/mesh_slice.cpp
     Preprocess/model_preprocess.cpp
@@ -25,6 +26,7 @@
     Path/waam_export.cpp
     Floor/sla_floor.cpp
     Transfer/file_transfer.cpp
+    ParamStore/param_store_ops.cpp
     Extends/LuaAddFunction.hpp
     Extends/LuaAddFunction.cpp
     Extends/EventSourceFunction.hpp
@@ -49,6 +51,7 @@ else()
     Path/waam_export.hpp
     Floor/sla_floor.hpp
     Transfer/file_transfer.hpp
+    ParamStore/param_store_ops.hpp
     version_info.cpp
     Slice/mesh_slice.cpp
     Preprocess/model_preprocess.cpp
@@ -61,6 +64,7 @@ else()
     Path/waam_export.cpp
     Floor/sla_floor.cpp
     Transfer/file_transfer.cpp
+    ParamStore/param_store_ops.cpp
     Extends/LuaAddFunction.hpp
     Extends/LuaAddFunction.cpp
     Extends/EventSourceFunction.hpp

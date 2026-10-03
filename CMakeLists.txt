@@ -504,6 +504,7 @@ install(FILES
     DllHsBaSlicer/sla_pipeline.h
     DllHsBaSlicer/sls_pipeline.h
     DllHsBaSlicer/custom_pipeline.h
+    DllHsBaSlicer/param_store_pipeline.h
     DllHsBaSlicer/pipeline_convert.h
     DllHsBaSlicer/initialize.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer
@@ -555,6 +556,7 @@ install(FILES
     LibHsBaSlicer/Path/path_generator.hpp
     LibHsBaSlicer/Path/sls_export.hpp
     LibHsBaSlicer/Floor/sla_floor.hpp
+    LibHsBaSlicer/ParamStore/param_store_ops.hpp
     LibHsBaSlicer/Extends/lua_pipeline.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/LibHsBaSlicer
 )

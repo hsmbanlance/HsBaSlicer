@@ -887,6 +887,65 @@ extern "C"
         return cfg;
     }
 
+    /* ========================================================================
+     *  Param Store (工艺参数保存/读取) Types
+     * ====================================================================== */
+
+    /**
+     * @brief Pipeline config kind, aligned one-to-one with PipelineConfigTag
+     *        (Fdm..FileTransfer) in fileoperator/param_reflect.hpp.
+     */
+    typedef enum HsBaPipelineKind
+    {
+        HSBA_PIPELINE_FDM = 0,
+        HSBA_PIPELINE_SLA,
+        HSBA_PIPELINE_SLS,
+        HSBA_PIPELINE_SLM,
+        HSBA_PIPELINE_LOM,
+        HSBA_PIPELINE_TDP,
+        HSBA_PIPELINE_WAAM,
+        HSBA_PIPELINE_CUSTOM,
+        HSBA_PIPELINE_FILETRANSFER,
+        HSBA_PIPELINE_KIND_COUNT
+    } HsBaPipelineKind;
+
+    /**
+     * @brief ParamStore database backend (mobile platforms support SQLite only).
+     */
+    typedef enum HsBaParamStoreBackend
+    {
+        HSBA_PARAM_BACKEND_SQLITE = 0,
+        HSBA_PARAM_BACKEND_MYSQL,
+        HSBA_PARAM_BACKEND_POSTGRESQL
+    } HsBaParamStoreBackend;
+
+    /**
+     * @brief ParamStore connection parameters (POD).
+     *        SQLite uses sqlite_path; MySQL/PostgreSQL use host/port/user/password/database.
+     */
+    typedef struct HsBaParamStoreConn
+    {
+        HsBaParamStoreBackend backend; ///< Backend selector
+        const char* sqlite_path;       ///< SQLite database file path (NULL if unused)
+        const char* host;              ///< MySQL/PostgreSQL host (NULL if unused)
+        const char* user;              ///< MySQL/PostgreSQL user
+        const char* password;          ///< MySQL/PostgreSQL password
+        const char* database;          ///< MySQL/PostgreSQL database name
+        unsigned int port;             ///< MySQL/PostgreSQL port (0 = adapter default)
+    } HsBaParamStoreConn_t;
+
+    /**
+     * @brief ParamStore save/load result.
+     * Must call HsBaFreeParamStoreResult to release error_message after use.
+     */
+    typedef struct HsBaParamStoreResult
+    {
+        int success;           ///< Success flag (0=false, 1=true)
+        long long param_id;    ///< Save: persisted row id; Load: matched row id
+        char* error_message;   ///< Error message (UTF-8, caller must free via HsBaFreeParamStoreResult)
+        double elapsed_seconds;///< Elapsed time (seconds)
+    } HsBaParamStoreResult_t;
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif  // __cplusplus

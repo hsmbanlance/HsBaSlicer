@@ -56,6 +56,7 @@ module;
 #include "LibHsBaSlicer/Path/waam_export.hpp"
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"
 #include "LibHsBaSlicer/Transfer/file_transfer.hpp"
+#include "LibHsBaSlicer/ParamStore/param_store_ops.hpp"
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
 #include "LibHsBaSlicer/Extends/EventSourceFunction.hpp"
 #include "LibHsBaSlicer/Extends/lua_pipeline.hpp"
@@ -374,6 +375,73 @@ public:
 
 private:
     HsBaFileTransferPipelineConfig_t cfg_;
+};
+
+// ===========================================================================
+// Param Store Pipeline (persist / reuse process parameters)
+// ===========================================================================
+
+/// @brief Pipeline config kind for the parameter store (order aligned with
+///        HsBaPipelineKind / PipelineConfigTag).
+enum class ParamStoreKind
+{
+    Fdm,
+    Sla,
+    Sls,
+    Slm,
+    Lom,
+    Tdp,
+    Waam,
+    Custom,
+    FileTransfer,
+};
+
+/// @brief Storage backend; mobile builds only support Sqlite.
+enum class ParamStoreBackend
+{
+    Sqlite,
+    MySql,
+    PostgreSql,
+};
+
+/// @brief Connection parameters. Sqlite uses sqlitePath; MySql/PostgreSql use
+///        host/port/user/password/database.
+struct ParamStoreConnection
+{
+    ParamStoreBackend backend = ParamStoreBackend::Sqlite;
+    std::string sqlitePath;
+    std::string host;
+    std::string user;
+    std::string password;
+    std::string database;
+    unsigned port = 0;  ///< 0 means use the adapter's default port
+};
+
+/// @brief Process-parameter persistence pipeline: write (Save) and read (Load) a
+///        PipelineConfig struct via the Lib-layer ParamStore.
+class ParamStorePipeline
+{
+public:
+    explicit ParamStorePipeline(ParamStoreConnection conn);
+
+    /// @brief Upsert a config struct under @p key; returns the stored row id.
+    ///        @p cfg must point to the C config struct matching @p kind.
+    /// @throws SlicerError on failure.
+    inline long long save(ParamStoreKind kind, const void* cfg, const std::string& key,
+                          const std::string& table = {}) const;
+
+    /// @brief Load config under @p key into @p outCfg (a C config struct matching @p kind).
+    ///        The const char* fields of outCfg are heap-allocated by the library and must
+    ///        be released with freeLoaded().
+    /// @throws SlicerError on failure or when the key is not found.
+    inline long long load(ParamStoreKind kind, const std::string& key, void* outCfg,
+                          const std::string& table = {}) const;
+
+    /// @brief Release the heap strings produced by load() for this config struct.
+    inline void freeLoaded(ParamStoreKind kind, void* cfg) const;
+
+private:
+    ParamStoreConnection conn_;
 };
 
 // ===========================================================================
@@ -981,6 +1049,93 @@ FileTransferOutcome FileTransferPipeline::run(FileTransferProgressFunc progress)
     outcome.files_transferred = result.files_transferred;
     outcome.total_files = result.total_files;
     return outcome;
+}
+
+// ===========================================================================
+// ParamStorePipeline
+// ===========================================================================
+
+namespace
+{
+
+ParamPipelineKind ToLibKind(ParamStoreKind k)
+{
+    switch (k)
+    {
+        case ParamStoreKind::Sla:
+            return ParamPipelineKind::Sla;
+        case ParamStoreKind::Sls:
+            return ParamPipelineKind::Sls;
+        case ParamStoreKind::Slm:
+            return ParamPipelineKind::Slm;
+        case ParamStoreKind::Lom:
+            return ParamPipelineKind::Lom;
+        case ParamStoreKind::Tdp:
+            return ParamPipelineKind::Tdp;
+        case ParamStoreKind::Waam:
+            return ParamPipelineKind::Waam;
+        case ParamStoreKind::Custom:
+            return ParamPipelineKind::Custom;
+        case ParamStoreKind::FileTransfer:
+            return ParamPipelineKind::FileTransfer;
+        case ParamStoreKind::Fdm:
+        default:
+            return ParamPipelineKind::Fdm;
+    }
+}
+
+ParamBackend ToLibBackend(ParamStoreBackend b)
+{
+    switch (b)
+    {
+        case ParamStoreBackend::MySql:
+            return ParamBackend::MySql;
+        case ParamStoreBackend::PostgreSql:
+            return ParamBackend::PostgreSql;
+        case ParamStoreBackend::Sqlite:
+        default:
+            return ParamBackend::Sqlite;
+    }
+}
+
+ParamStoreConn ToLibConn(const ParamStoreConnection& c)
+{
+    ParamStoreConn o;
+    o.backend = ToLibBackend(c.backend);
+    o.sqlitePath = c.sqlitePath;
+    o.host = c.host;
+    o.user = c.user;
+    o.password = c.password;
+    o.database = c.database;
+    o.port = c.port;
+    return o;
+}
+
+}  // namespace
+
+ParamStorePipeline::ParamStorePipeline(ParamStoreConnection conn) : conn_(std::move(conn)) {}
+
+long long ParamStorePipeline::save(ParamStoreKind kind, const void* cfg, const std::string& key,
+                                   const std::string& table) const
+{
+    auto outcome = SavePipelineParams(ToLibConn(conn_), ToLibKind(kind), table, key, cfg);
+    if (!outcome.success)
+        throw SlicerError(outcome.error);
+    return outcome.paramId;
+}
+
+long long ParamStorePipeline::load(ParamStoreKind kind, const std::string& key, void* outCfg,
+                                   const std::string& table) const
+{
+    auto outcome = LoadPipelineParams(ToLibConn(conn_), ToLibKind(kind), table, key, outCfg);
+    if (!outcome.success)
+        throw SlicerError(outcome.error);
+    return outcome.paramId;
+}
+
+void ParamStorePipeline::freeLoaded(ParamStoreKind kind, void* cfg) const
+{
+    FreeLoadedConfigStrings(ToLibKind(kind), cfg);
 }
 
 // ===========================================================================

@@ -1,6 +1,7 @@
 /** @file param_store_test.cpp
  * @brief ParamStore 工艺参数流水线测试：反射完整性 / 类型收敛往返 / SQLite CRUD /
- *        Lua 冒烟 / 批量事务回滚。MySQL / PGSQL 用例仅在对应宏开启时启用。
+ *        Lua 冒烟 / 批量事务回滚 / Lib 层写入读取往返 / C 导出冒烟 / 后端可用性守卫。
+ *        MySQL / PGSQL 实连用例仅在对应宏开启且设置环境变量时启用。
  */
 #define BOOST_TEST_MODULE param_store_test
 #include <boost/test/included/unit_test.hpp>
@@ -20,6 +21,8 @@
 #include "fileoperator/param_schema.hpp"
 #include "fileoperator/param_store.hpp"
 #include "fileoperator/sql_adapter.hpp"
+#include "LibHsBaSlicer/ParamStore/param_store_ops.hpp"
+#include "DllHsBaSlicer/param_store_pipeline.h"
 
 using namespace HsBa::Slicer;
 using Utils::AnyObject;
@@ -350,6 +353,168 @@ BOOST_AUTO_TEST_CASE(schema_dialect)
     // 后端检测
     SQL::SQLiteAdapter db;
     BOOST_CHECK(ParamSchema::DetectBackend(db) == Backend::SQLite);
+}
+
+// 7. Lib 层写入/读取往返（SavePipelineParams / LoadPipelineParams）
+BOOST_AUTO_TEST_CASE(lib_param_ops_round_trip)
+{
+    auto path = TempDbPath("libops");
+    RemoveQuiet(path);
+
+    ParamStoreConn conn;
+    conn.backend = ParamBackend::Sqlite;
+    conn.sqlitePath = path.string();
+
+    HsBaFdmPipelineConfig_t src = HsBaFdmConfigDefault();
+    src.model_name = "lib_box";
+    src.model_path = nullptr;  // NULL const char* 应保持 NULL
+    src.layer_height = 0.22f;
+    src.wall_count = 6;
+    src.fill_mode = HSBA_FILL_LINE;
+
+    auto save = SavePipelineParams(conn, ParamPipelineKind::Fdm, "", "lib1", &src);
+    BOOST_CHECK(save.success);
+    BOOST_CHECK(save.paramId > 0);
+
+    HsBaFdmPipelineConfig_t dst = HsBaFdmConfigDefault();
+    auto load = LoadPipelineParams(conn, ParamPipelineKind::Fdm, "", "lib1", &dst);
+    BOOST_CHECK(load.success);
+    BOOST_CHECK_EQUAL(std::string(dst.model_name), "lib_box");
+    BOOST_CHECK_SMALL(dst.layer_height - 0.22f, 1e-6f);
+    BOOST_CHECK_EQUAL(dst.wall_count, 6);
+    BOOST_CHECK(dst.fill_mode == HSBA_FILL_LINE);
+    BOOST_CHECK(dst.model_path == nullptr);
+    // dst.model_name 现由库 malloc 持有，须显式释放（无崩溃 / ASan 干净）
+    FreeLoadedConfigStrings(ParamPipelineKind::Fdm, &dst);
+    BOOST_CHECK(dst.model_name == nullptr);
+
+    // 未命中：success=false 且 error 非空，不吞码
+    HsBaFdmPipelineConfig_t miss = HsBaFdmConfigDefault();
+    auto l2 = LoadPipelineParams(conn, ParamPipelineKind::Fdm, "", "ghost", &miss);
+    BOOST_CHECK(!l2.success);
+    BOOST_CHECK(!l2.error.empty());
+
+    RemoveQuiet(path);
+}
+
+// 8. C 导出冒烟（HsBaSavePipelineParams / HsBaLoadPipelineParams / 释放）
+BOOST_AUTO_TEST_CASE(c_api_param_store_smoke)
+{
+    auto path = TempDbPath("capi");
+    RemoveQuiet(path);
+    const std::string dbstr = path.string();
+
+    HsBaParamStoreConn_t conn{};
+    conn.backend = HSBA_PARAM_BACKEND_SQLITE;
+    conn.sqlite_path = dbstr.c_str();
+    conn.host = nullptr;
+    conn.user = nullptr;
+    conn.password = nullptr;
+    conn.database = nullptr;
+    conn.port = 0;
+
+    HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+    cfg.model_name = "capi_box";
+    cfg.layer_height = 0.33f;
+    cfg.wall_count = 3;
+
+    HsBaParamStoreResult_t r1 = HsBaSavePipelineParams(&conn, HSBA_PIPELINE_FDM, nullptr, "c1", &cfg);
+    BOOST_CHECK_EQUAL(r1.success, 1);
+    BOOST_CHECK(r1.param_id > 0);
+    BOOST_CHECK(r1.error_message == nullptr);
+    HsBaFreeParamStoreResult(&r1);
+
+    HsBaFdmPipelineConfig_t out = HsBaFdmConfigDefault();
+    HsBaParamStoreResult_t r2 = HsBaLoadPipelineParams(&conn, HSBA_PIPELINE_FDM, nullptr, "c1", &out);
+    BOOST_CHECK_EQUAL(r2.success, 1);
+    BOOST_CHECK_EQUAL(std::string(out.model_name), "capi_box");
+    BOOST_CHECK_EQUAL(out.wall_count, 3);
+    HsBaFreeLoadedPipelineConfig(HSBA_PIPELINE_FDM, &out);
+    HsBaFreeParamStoreResult(&r2);
+
+    // 未命中 key：success=0 + 非空 error_message
+    HsBaFdmPipelineConfig_t miss = HsBaFdmConfigDefault();
+    HsBaParamStoreResult_t r3 = HsBaLoadPipelineParams(&conn, HSBA_PIPELINE_FDM, nullptr, "ghost", &miss);
+    BOOST_CHECK_EQUAL(r3.success, 0);
+    BOOST_CHECK(r3.error_message != nullptr);
+    HsBaFreeParamStoreResult(&r3);
+
+    // 空指针入参守卫：不崩溃，返回 success=0
+    HsBaParamStoreResult_t r4 = HsBaSavePipelineParams(nullptr, HSBA_PIPELINE_FDM, nullptr, "x", &cfg);
+    BOOST_CHECK_EQUAL(r4.success, 0);
+    BOOST_CHECK(r4.error_message != nullptr);
+    HsBaFreeParamStoreResult(&r4);
+
+    RemoveQuiet(path);
+}
+
+// 9. 后端可用性守卫：未编译进的 MySQL/PGSQL 安全返回 success=false（不崩溃）
+//    注意：MySQL/PostgreSQLAdapter 在无实例时 Connect 会崩溃而非抛异常，
+//    因此编译进对应宏时必须仅在有实例（环境变量）时才发起调用。
+BOOST_AUTO_TEST_CASE(param_store_backend_guard)
+{
+#ifdef HSBA_USE_MYSQL
+    if (std::getenv("HSBA_TEST_MYSQL"))
+    {
+        ParamStoreConn conn;
+        conn.backend = ParamBackend::MySql;
+        conn.host = "localhost";
+        conn.user = "root";
+        conn.database = "hsba_test";
+        HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+        cfg.model_name = "guard_mysql";
+        auto o = SavePipelineParams(conn, ParamPipelineKind::Fdm, "", "guard_mysql", &cfg);
+        BOOST_CHECK(o.success);
+    }
+    else
+    {
+        BOOST_TEST_MESSAGE("skip live mysql in guard test (HSBA_TEST_MYSQL unset)");
+    }
+#else
+    {
+        // 未编译进：Lib 走 BackendUnavailable 安全路径，success=false 且 error 非空
+        ParamStoreConn conn;
+        conn.backend = ParamBackend::MySql;
+        conn.host = "localhost";
+        conn.user = "root";
+        conn.database = "hsba_test";
+        HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+        auto o = SavePipelineParams(conn, ParamPipelineKind::Fdm, "", "guard_mysql", &cfg);
+        BOOST_CHECK(!o.success);
+        BOOST_CHECK(!o.error.empty());
+    }
+#endif
+
+#ifdef HSBA_USE_PGSQL
+    if (std::getenv("HSBA_TEST_PGSQL"))
+    {
+        ParamStoreConn conn;
+        conn.backend = ParamBackend::PostgreSql;
+        conn.host = "localhost";
+        conn.user = "postgres";
+        conn.database = "hsba_test";
+        HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+        cfg.model_name = "guard_pg";
+        auto o = SavePipelineParams(conn, ParamPipelineKind::Fdm, "", "guard_pg", &cfg);
+        BOOST_CHECK(o.success);
+    }
+    else
+    {
+        BOOST_TEST_MESSAGE("skip live postgresql in guard test (HSBA_TEST_PGSQL unset)");
+    }
+#else
+    {
+        ParamStoreConn conn;
+        conn.backend = ParamBackend::PostgreSql;
+        conn.host = "localhost";
+        conn.user = "postgres";
+        conn.database = "hsba_test";
+        HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+        auto o = SavePipelineParams(conn, ParamPipelineKind::Fdm, "", "guard_pg", &cfg);
+        BOOST_CHECK(!o.success);
+        BOOST_CHECK(!o.error.empty());
+    }
+#endif
 }
 
 #ifdef HSBA_USE_MYSQL

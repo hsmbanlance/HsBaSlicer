@@ -46,6 +46,23 @@ void AnyToField(const std::any& value, Utils::TypeInfo* field_ti, void* ptr, Str
 
 /** @brief 判断给定的字段 TypeInfo* 是否为受支持的枚举类型（映射到 int64_t）。 */
 bool IsEnumFieldType(Utils::TypeInfo* field_ti) noexcept;
+
+/**
+ * @brief 遍历 Config 结构体的 const char* 字段，将非空值复制为 std::malloc 持有的堆副本
+ *        并回写指针，使其可被 std::free 逐个释放（用于跨 C ABI 交付读取结果）。
+ *
+ * ParamStore::Load 使用 StringArena（new[]）填充；本函数在其之后调用，把字段指针替换为
+ * malloc 副本，arena 析构只释放自身缓冲区，二者互不冲突（避免 new[]/free 混用 UB）。
+ * @param cfgTi Config 结构体的 TypeInfo*（须来自 GetTypeInfo<PipelineConfig*>）。
+ * @param cfg   Config 结构体内存起始地址。
+ */
+void ConfigStringsToOwning(Utils::TypeInfo* cfgTi, void* cfg);
+
+/**
+ * @brief 遍历 Config 结构体的 const char* 字段，对非空值 std::free 并置 NULL。
+ *        仅用于释放由 ConfigStringsToOwning 生成的 malloc 字符串。
+ */
+void FreeConfigStrings(Utils::TypeInfo* cfgTi, void* cfg);
 }  // namespace HsBa::Slicer
 
 #endif  // HSBA_SLICER_PARAM_CONVERT_HPP

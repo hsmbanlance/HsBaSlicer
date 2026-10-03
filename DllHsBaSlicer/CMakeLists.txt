@@ -25,7 +25,9 @@ if(IOS OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
   custom_pipeline.cpp
   pipeline_parallel.hpp
   file_transfer_pipeline.h
+  param_store_pipeline.h
   file_transfer_pipeline.cpp
+  param_store_pipeline.cpp
   model_preprocess.h
   model_preprocess.cpp
   pipeline_convert.h
@@ -61,7 +63,9 @@ else()
   custom_pipeline.cpp
   pipeline_parallel.hpp
   file_transfer_pipeline.h
+  param_store_pipeline.h
   file_transfer_pipeline.cpp
+  param_store_pipeline.cpp
   model_preprocess.h
   model_preprocess.cpp
   pipeline_convert.h

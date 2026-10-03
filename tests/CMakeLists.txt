@@ -424,6 +424,8 @@ target_link_libraries(param_store_test
 	HsBaSlicerBase
 	HsBaSlicerFileOperator
 	HsBaPipelineTypes
+	LibHsBaSlicer
+	DllHsBaSlicer
 	Boost::unit_test_framework
 	${LUA_LIBRARIES}
 )

@@ -4,6 +4,7 @@
 #include "param_convert.hpp"
 
 #include <array>
+#include <cstdlib>
 #include <cstring>
 
 #include "pipelinetypes/pipeline_types.h"
@@ -173,6 +174,45 @@ void AnyToField(const std::any& value, Utils::TypeInfo* field_ti, void* ptr, Str
     }
 
     ThrowUnsupported("<unknown>", "AnyToField");
+}
+
+void ConfigStringsToOwning(Utils::TypeInfo* cfgTi, void* cfg)
+{
+    if (!cfgTi || !cfg)
+        return;
+    Utils::AnyObject obj(cfgTi, cfg);
+    obj.ForeachField(
+        [](std::string_view, Utils::AnyObject child)
+        {
+            if (child.get_type_info() != Utils::GetTypeInfo<const char*>())
+                return;
+            const char** slot = static_cast<const char**>(child.get_data());
+            const char* src = *slot;
+            if (!src)
+                return;
+            const std::size_t n = std::strlen(src);
+            char* dup = static_cast<char*>(std::malloc(n + 1));
+            if (!dup)
+                return;
+            std::memcpy(dup, src, n + 1);
+            *slot = dup;
+        });
+}
+
+void FreeConfigStrings(Utils::TypeInfo* cfgTi, void* cfg)
+{
+    if (!cfgTi || !cfg)
+        return;
+    Utils::AnyObject obj(cfgTi, cfg);
+    obj.ForeachField(
+        [](std::string_view, Utils::AnyObject child)
+        {
+            if (child.get_type_info() != Utils::GetTypeInfo<const char*>())
+                return;
+            const char** slot = static_cast<const char**>(child.get_data());
+            std::free(const_cast<char*>(*slot));
+            *slot = nullptr;
+        });
 }
 
 }  // namespace HsBa::Slicer
