@@ -19,6 +19,7 @@
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"
 #include "LibHsBaSlicer/Path/path_generator.hpp"
 #include "LibHsBaSlicer/Path/path_optimizer.hpp"
+#include "LibHsBaSlicer/Path/spiral_path.hpp"
 #include "LibHsBaSlicer/Path/sls_export.hpp"
 #include "LibHsBaSlicer/Path/waam_export.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
@@ -513,6 +514,71 @@ int Lp_floor(lua_State* L)
 
 // --- Path / G-code output -------------------------------------------------------
 
+// Push a continuous 3D spiral path as an array of {x=, y=, z=} point tables.
+void PushSpiralPath(lua_State* L, const std::vector<SpiralPoint>& path)
+{
+    lua_createtable(L, static_cast<int>(path.size()), 0);
+    for (size_t i = 0; i < path.size(); ++i)
+    {
+        lua_createtable(L, 0, 3);
+        lua_pushnumber(L, path[i].x);
+        lua_setfield(L, -2, "x");
+        lua_pushnumber(L, path[i].y);
+        lua_setfield(L, -2, "y");
+        lua_pushnumber(L, path[i].z);
+        lua_setfield(L, -2, "z");
+        lua_rawseti(L, -2, static_cast<int>(i) + 1);
+    }
+}
+
+// HsBa.spiralize(sections[, {layerHeight, startZ, zHeights}]) -> path
+// sections: per-layer closed contours (array of layers, each = array of polygons
+//           made of {x, y} point tables), e.g. the outlines produced by HsBa.slice.
+// Returns a single continuous 3D polyline (array of {x, y, z}) whose Z rises one
+// layer per revolution: the classic spiralized / helical outer wall with no
+// retractions or per-layer travel. Intended for extrusion-style deposition
+// processes (FDM, WAAM, 3DP). Provide per-layer heights via {layerHeight, startZ}
+// or an explicit zHeights array.
+int Lp_spiralize(lua_State* L)
+{
+    const auto sections = ReadLayerList(L, 1);
+    std::vector<double> zs(sections.size(), 0.0);
+    bool explicit_z = false;
+    double layer_height = 0.4;
+    double start_z = 0.0;
+    if (lua_istable(L, 2))
+    {
+        layer_height = GetNumberField(L, 2, "layerHeight", layer_height);
+        start_z = GetNumberField(L, 2, "startZ", start_z);
+        lua_getfield(L, 2, "zHeights");
+        if (lua_istable(L, -1))
+        {
+            explicit_z = true;
+            size_t n = lua_rawlen(L, -1);
+            if (n > sections.size())
+            {
+                n = sections.size();
+            }
+            for (size_t i = 1; i <= n; ++i)
+            {
+                lua_rawgeti(L, -1, static_cast<int>(i));
+                zs[i - 1] = lua_tonumber(L, -1);
+                lua_pop(L, 1);
+            }
+        }
+        lua_pop(L, 1);  // pop zHeights field
+    }
+    if (!explicit_z)
+    {
+        for (size_t i = 0; i < sections.size(); ++i)
+        {
+            zs[i] = start_z + static_cast<double>(i) * layer_height;
+        }
+    }
+    PushSpiralPath(L, SpiralizeOuterWall(sections, zs));
+    return 1;
+}
+
 // HsBa.toGcode(layers, cfg) -> gcode string
 // layers: array of {outlines=..., fills=..., supports=..., zHeight=...} (double polygons)
 // cfg: {layerHeight, lineWidth, printSpeed, travelSpeed, extrusionMultiplier,
@@ -736,6 +802,7 @@ const luaL_Reg hsba_ops[] = {
     {"slaSupport", Lp_slaSupport},
     {"floor", Lp_floor},
     {"toGcode", Lp_toGcode},
+    {"spiralize", Lp_spiralize},
     {"saveSlsPackage", Lp_saveSlsPackage},
     {"saveWaamPackage", Lp_saveWaamPackage},
     {"saveSlaPackage", Lp_saveSlaPackage},

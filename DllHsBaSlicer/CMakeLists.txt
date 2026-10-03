@@ -23,6 +23,7 @@ if(IOS OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
   waam_pipeline.cpp
   custom_pipeline.h
   custom_pipeline.cpp
+  pipeline_parallel.hpp
   file_transfer_pipeline.h
   file_transfer_pipeline.cpp
   model_preprocess.h
@@ -58,6 +59,7 @@ else()
   waam_pipeline.cpp
   custom_pipeline.h
   custom_pipeline.cpp
+  pipeline_parallel.hpp
   file_transfer_pipeline.h
   file_transfer_pipeline.cpp
   model_preprocess.h

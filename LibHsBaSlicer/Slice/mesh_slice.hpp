@@ -2,6 +2,7 @@
 #ifndef HSBA_SLICER_MESH_SLICE_HPP
 #define HSBA_SLICER_MESH_SLICE_HPP
 
+#include <memory>
 #include <string>
 
 #include "../export.h"
@@ -34,6 +35,32 @@ HSBA_SLICER_LIB_API UnSafePolygons UnSafeSliceLua(const IModel& model, const std
  * @return Cleaned double-precision polygons suitable for downstream processing.
  */
 HSBA_SLICER_LIB_API PolygonsD NormalizeUnSafePolygons(const UnSafePolygons& unsafe_polys);
+
+/**
+ * @brief Build a reusable slicing topology once from a model.
+ *
+ * UnSafeSlice(model, z) rebuilds the full topology on every call, which is
+ * O(total_faces) per layer. For multi-layer pipelines, build the topology once
+ * with this function and reuse it via SliceLayer to avoid the repeated rebuild.
+ *
+ * @param model Source model to extract the triangle mesh from.
+ * @return Shared, self-contained topology independent of the source model's lifetime.
+ */
+HSBA_SLICER_LIB_API std::shared_ptr<FullTopoModel> BuildSliceTopology(const IModel& model);
+
+/**
+ * @brief Slice a single layer from a prebuilt topology and normalize to PolygonsD.
+ *
+ * Equivalent to NormalizeUnSafePolygons(topo.UnSafeSlice(z, tolerance)). The
+ * topology is only read (const), so concurrent calls sharing the same topo from
+ * different threads are safe as long as each writes to its own output slot.
+ *
+ * @param topo Prebuilt topology from BuildSliceTopology.
+ * @param z Layer height to slice at.
+ * @param tolerance Coordinate tolerance for point merging.
+ * @return Cleaned double-precision polygons for this layer.
+ */
+HSBA_SLICER_LIB_API PolygonsD SliceLayer(const FullTopoModel& topo, float z, double tolerance = 0.001);
 
 }  // namespace HsBa::Slicer
 

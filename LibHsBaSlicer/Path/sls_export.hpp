@@ -22,6 +22,10 @@ struct SlsPackage
     std::vector<PolygonsD> layer_outlines;  ///< Per-layer slice outlines
     std::vector<float> layer_z_heights;     ///< Z height per layer (mm)
     std::string config_json;                ///< Configuration JSON content
+    bool spiral_mode = false;               ///< When true, additionally expose a continuous, Z-rising
+                                            ///< spiralized outer-wall path (JSON at "spiral/path.json") to
+                                            ///< the Lua export. Per-layer images are still emitted so
+                                            ///< existing scripts keep working. Default false (unchanged).
 };
 
 /**

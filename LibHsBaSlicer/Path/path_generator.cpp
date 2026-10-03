@@ -3,6 +3,8 @@
 #include <cmath>
 #include <format>
 
+#include "spiral_path.hpp"
+
 namespace HsBa::Slicer
 {
 HSBA_SLICER_LIB_API std::vector<GPoint> PolygonsToGPoints(const PolygonsD& polys, float z, const FdmPathConfig& config,
@@ -106,6 +108,26 @@ HSBA_SLICER_LIB_API std::unique_ptr<GCodePath> GenerateGCodePathV2(const std::ve
         path->push_back(layer_config, combined);
     }
 
+    return path;
+}
+
+HSBA_SLICER_LIB_API std::unique_ptr<GCodePath> GenerateGCodePathSpiral(const std::vector<PolygonsD>& layer_outlines,
+                                                                      const std::vector<double>& layer_zs,
+                                                                      const GCodePrinterConfig& printer_config)
+{
+    auto path = std::make_unique<GCodePath>(printer_config);
+
+    // Merge all per-layer outer contours into one continuous, Z-rising helix.
+    const std::vector<SpiralPoint> helix = SpiralizeOuterWall(layer_outlines, layer_zs);
+
+    std::vector<PathPoint3D> wall;
+    wall.reserve(helix.size());
+    for (const auto& pt : helix)
+        wall.push_back(PathPoint3D{pt.x, pt.y, pt.z});
+
+    // Vase mode emits only the continuous wall (no per-layer polygons); ToGCode
+    // writes header + the single unbroken helix + footer.
+    path->setContinuousWall(std::move(wall));
     return path;
 }
 

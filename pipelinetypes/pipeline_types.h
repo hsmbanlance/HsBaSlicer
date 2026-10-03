@@ -87,6 +87,9 @@ extern "C"
         float print_speed;           ///< Print speed (mm/s), default 50.0
         float travel_speed;          ///< Travel speed (mm/s), default 100.0
         float extrusion_multiplier;  ///< Extrusion multiplier, default 1.0
+        int spiral_mode;             ///< Spiralize outer wall into a single continuous rising path (vase mode)
+                                     ///< (0=false, 1=true), default 0. When enabled, the outer wall is emitted as
+                                     ///< one extrusion-continuous helix and per-layer infill/support are skipped.
 
         /* GCode Output Configuration */
         HsBaGCodeFirmware_t gcode_firmware;  ///< Target firmware, default HSBA_GCODE_MARLIN
@@ -437,6 +440,7 @@ extern "C"
         const char* export_lua_script; /* required */
         const char* export_lua_func;
         const char* output_path;
+        int spiral_mode; /* spiralize outer contour into a continuous rising path (0=false, 1=true), default 0 */
     } HsBaTdpPipelineConfig_t;
 
     typedef struct HsBaTdpPipelineResult
@@ -510,6 +514,7 @@ extern "C"
         const char* path_lua_script; /* optional custom robot-code generator */
         const char* path_lua_func;   /* optional Lua function name */
         const char* output_path;
+        int spiral_mode; /* deposit the outer wall as one continuous, Z-rising bead (0=false, 1=true), default 0 */
     } HsBaWaamPipelineConfig_t;
 
     typedef struct HsBaWaamPipelineResult
@@ -665,6 +670,7 @@ extern "C"
         cfg.print_speed = 50.0f;
         cfg.travel_speed = 100.0f;
         cfg.extrusion_multiplier = 1.0f;
+        cfg.spiral_mode = 0;
         cfg.gcode_firmware = HSBA_GCODE_MARLIN;
         cfg.nozzle_diameter = 0.4f;
         cfg.filament_diameter = 1.75f;
@@ -815,6 +821,7 @@ extern "C"
         cfg.export_lua_script = 0;
         cfg.export_lua_func = 0;
         cfg.output_path = 0;
+        cfg.spiral_mode = 0;
         return cfg;
     }
 
@@ -844,6 +851,7 @@ extern "C"
         cfg.path_lua_script = 0;
         cfg.path_lua_func = 0;
         cfg.output_path = 0;
+        cfg.spiral_mode = 0;
         return cfg;
     }
 

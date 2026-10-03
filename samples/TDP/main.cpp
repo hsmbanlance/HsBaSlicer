@@ -170,6 +170,40 @@ static int RunAsyncTdpPipeline()
 }
 
 // ---------------------------------------------------------------------------
+// Example 4: Spiral mode - export a continuous rising deposition path
+// ---------------------------------------------------------------------------
+static int RunSpiralTdpPipeline()
+{
+    LogMsg("=== Example 4: 3DP Spiral Mode ===");
+
+    HsBaTdpPipelineConfig_t cfg = HsBaCreateDefaultTdpConfig();
+    cfg.model_name = "stanford_bunny";
+    cfg.model_path = "models/stanford_bunny.stl";
+    cfg.export_lua_script = "scripts/my_tdp_export.lua";
+    cfg.export_lua_func = "export_tdp";
+
+    // Key: additionally expose a continuous, Z-rising spiralized outer-wall path
+    // to the export script (spiral/path.json); per-layer images are still kept.
+    cfg.spiral_mode = 1;
+    cfg.output_path = "output/3dp_spiral_output.zip";
+
+    HsBaTdpPipelineResult_t result = HsBaRunTdpPipeline(&cfg, OnProgress, nullptr);
+
+    if (result.success)
+    {
+        LogMsg(std::format("3DP spiral slicing OK! Layers: {}, Export: {}, Time: {:.2f}s", result.total_layers,
+                           result.export_path ? result.export_path : "N/A", result.elapsed_seconds));
+    }
+    else
+    {
+        LogMsg(std::format("3DP spiral slicing FAILED: {}", result.error_message ? result.error_message : "Unknown error"));
+    }
+
+    HsBaFreeTdpPipelineResult(&result);
+    return result.success;
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 int main()
@@ -182,6 +216,7 @@ int main()
     RunBasicTdpPipeline();
     RunCustomTdpPipeline();
     RunAsyncTdpPipeline();
+    RunSpiralTdpPipeline();
 
     LogMsg("All examples finished.");
     return 0;

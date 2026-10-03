@@ -58,6 +58,24 @@ HSBA_SLICER_LIB_API std::unique_ptr<GCodePath> GenerateGCodePathV2(const std::ve
                                                                    const GCodePrinterConfig& printer_config);
 
 /**
+ * @brief Generate a spiralized (vase-mode) G-code path: the outer walls of all
+ *        layers are merged into a single continuous, Z-rising extrusion line.
+ *
+ * Uses SpiralizeOuterWall over the per-layer outer contours and emits it as a
+ * continuous 3D wall (no infill/support, no per-layer travel). Best suited for
+ * uniform-cross-section (prismatic) models. Returns a GCodePath carrying only a
+ * continuous wall (no layers); ToGCode emits header + helix + footer.
+ *
+ * @param layer_outlines Per-layer contours (outer loop chosen per layer).
+ * @param layer_zs Build height (Z) of each layer; same size as layer_outlines.
+ * @param printer_config Printer configuration for G-code generation.
+ * @return G-code path object with a continuous helical wall.
+ */
+HSBA_SLICER_LIB_API std::unique_ptr<GCodePath> GenerateGCodePathSpiral(const std::vector<PolygonsD>& layer_outlines,
+                                                                       const std::vector<double>& layer_zs,
+                                                                       const GCodePrinterConfig& printer_config);
+
+/**
  * @brief Convert PolygonsD to G-point sequence (helper function).
  * @param polys Input polygons.
  * @param z Z height.

@@ -32,6 +32,8 @@ message tdp_pipe_config
     string tdp_pipe_config_export_lua_func = 12; // export lua function name
 
     string tdp_pipe_config_output_path = 13; // output path
+
+    bool tdp_pipe_config_spiral_mode = 14; // expose a continuous spiralized deposition path to the export script
 }
 
 message tdp_pipe_result

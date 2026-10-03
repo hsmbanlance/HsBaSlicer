@@ -7,6 +7,7 @@
     Support/fdm_support.hpp
     Fill/polygon_fill.hpp
     Path/path_generator.hpp
+    Path/spiral_path.hpp
     Path/path_optimizer.hpp
     Path/sls_export.hpp
     Path/waam_export.hpp
@@ -18,6 +19,7 @@
     Support/fdm_support.cpp
     Fill/polygon_fill.cpp
     Path/path_generator.cpp
+    Path/spiral_path.cpp
     Path/path_optimizer.cpp
     Path/sls_export.cpp
     Path/waam_export.cpp
@@ -41,6 +43,7 @@ else()
     Support/fdm_support.hpp
     Fill/polygon_fill.hpp
     Path/path_generator.hpp
+    Path/spiral_path.hpp
     Path/path_optimizer.hpp
     Path/sls_export.hpp
     Path/waam_export.hpp
@@ -52,6 +55,7 @@ else()
     Support/fdm_support.cpp
     Fill/polygon_fill.cpp
     Path/path_generator.cpp
+    Path/spiral_path.cpp
     Path/path_optimizer.cpp
     Path/sls_export.cpp
     Path/waam_export.cpp

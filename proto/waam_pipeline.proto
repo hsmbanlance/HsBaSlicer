@@ -74,6 +74,8 @@ message waam_pipe_config
     string waam_pipe_config_path_lua_func = 18; // optional Lua path-generator function
 
     string waam_pipe_config_output_path = 19; // output robot program path
+
+    bool waam_pipe_config_spiral_mode = 20; // deposit outer wall as one continuous rising bead (vase mode)
 }
 
 message waam_pipe_result

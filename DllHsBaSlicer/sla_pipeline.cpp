@@ -15,6 +15,7 @@
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
+#include "pipeline_parallel.hpp"
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
 #include "base/coroutine.hpp"
 
@@ -315,13 +316,21 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
         std::vector<PolygonsD> layer_outlines(total_layers);
         float z_offset = info.bbox_min.z();
 
-        for (int i = 0; i < total_layers; ++i)
-        {
-            float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
-            layer_outlines[i] = NormalizeUnSafePolygons(UnSafeSlice(*model, z));
-            int progress = 15 + (i * 20) / total_layers;
-            ReportProgress(cfg, progress, "Slicing layer");
-        }
+        // Build the slicing topology once and slice layers in parallel: each layer
+        // is independent and SliceLayer only const-reads the shared topology.
+        auto topo = BuildSliceTopology(*model);
+        ParallelForLayers(
+            total_layers,
+            [&](int i)
+            {
+                float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
+                layer_outlines[i] = SliceLayer(*topo, z);
+            },
+            [&](int done)
+            {
+                int progress = 15 + (done * 20) / total_layers;
+                ReportProgress(cfg, progress, "Slicing layer");
+            });
         ReportProgress(cfg, 35, "Slicing complete");
 
         // ========== Stage 3: Floor / Raft ==========

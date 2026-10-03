@@ -67,6 +67,8 @@ message msg_fdm_pipeline_config
     string fdm_pipe_config_infill_lua_func = 26; // infill lua function
 
     string fdm_pipe_config_output_path = 27; // output path
+
+    bool fdm_pipe_config_spiral_mode = 36; // spiralize outer wall (vase mode), skips infill/support
 }
 
 message msg_fdm_pipe_result

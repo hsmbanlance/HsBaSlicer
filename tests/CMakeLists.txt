@@ -323,6 +323,7 @@ set(ALL_TEST_TARGETS
   igl_model_test
   full_topo_model_test
   polygon_fill_test
+  spiral_path_test
   image_polygons_test
   static_reflect_test
   support_test
@@ -752,6 +753,34 @@ add_test(
 if(HSBA_RUN_TESTS_AFTER_BUILD)
   add_custom_command(TARGET polygon_fill_test POST_BUILD
     COMMAND ${CMAKE_CTEST_COMMAND} -V -R polygon_fill_test
+  )
+endif()
+
+## SpiralPath (inter-layer helical outer wall) tests
+add_executable(spiral_path_test
+    "SpiralPath/spiral_path_test.cpp"
+)
+
+target_link_libraries(spiral_path_test
+    HsBaSlicer2D
+    LibHsBaSlicer
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(spiral_path_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME spiral_path_test
+  COMMAND $<TARGET_FILE:spiral_path_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET spiral_path_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R spiral_path_test
   )
 endif()
 

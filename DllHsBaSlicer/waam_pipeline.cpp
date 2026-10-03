@@ -12,6 +12,7 @@
 #include "LibHsBaSlicer/Path/waam_export.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
+#include "pipeline_parallel.hpp"
 #include "base/coroutine.hpp"
 
 namespace HsBa::Slicer::Pipeline
@@ -47,6 +48,7 @@ struct InternalWaamConfig
     std::string path_lua_script;
     std::string path_lua_func;
     std::string output_path;
+    bool spiral_mode = false;
     HsBaWaamProgressCallback progress_cb = nullptr;
     void* progress_user_data = nullptr;
 };
@@ -138,6 +140,7 @@ InternalWaamConfig BuildWaamConfig(const HsBaWaamPipelineConfig_t* cfg, HsBaWaam
     ic.path_lua_script = cfg->path_lua_script ? cfg->path_lua_script : "";
     ic.path_lua_func = cfg->path_lua_func ? cfg->path_lua_func : "";
     ic.output_path = cfg->output_path ? cfg->output_path : "";
+    ic.spiral_mode = cfg->spiral_mode != 0;
     ic.progress_cb = cb;
     ic.progress_user_data = ud;
     return ic;
@@ -197,14 +200,22 @@ Utils::Task<InternalWaamResult> RunWaamPipelineAsync(const InternalWaamConfig& c
         std::vector<float> layer_z_heights(total_layers);
         float z_offset = info.bbox_min.z();
 
-        for (int i = 0; i < total_layers; ++i)
-        {
-            float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
-            layer_z_heights[i] = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height);
-            layer_outlines[i] = NormalizeUnSafePolygons(UnSafeSlice(*model, z));
-            int progress = 15 + (i * 45) / total_layers;
-            ReportProgress(cfg, progress, "Slicing bead layer");
-        }
+        // Build the slicing topology once and slice bead layers in parallel: each
+        // layer is independent and SliceLayer only const-reads the shared topology.
+        auto topo = BuildSliceTopology(*model);
+        ParallelForLayers(
+            total_layers,
+            [&](int i)
+            {
+                float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
+                layer_z_heights[i] = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height);
+                layer_outlines[i] = SliceLayer(*topo, z);
+            },
+            [&](int done)
+            {
+                int progress = 15 + (done * 45) / total_layers;
+                ReportProgress(cfg, progress, "Slicing bead layer");
+            });
         ReportProgress(cfg, 60, "Slicing complete");
 
         // ========== Stage 3: Robot path export ==========
@@ -229,6 +240,7 @@ Utils::Task<InternalWaamResult> RunWaamPipelineAsync(const InternalWaamConfig& c
         pkg.weld.gas_flow_rate = cfg.gas_flow_rate;
         pkg.weld.travel_speed = cfg.travel_speed;
         pkg.weld.process = (cfg.welding_process == HSBA_WAAM_WELD_LASER) ? 1 : 0;
+        pkg.spiral_mode = cfg.spiral_mode;
 
         std::string lua_error;
         bool export_ok = SaveWaamRobotPath(pkg, output_path, cfg.path_lua_script,

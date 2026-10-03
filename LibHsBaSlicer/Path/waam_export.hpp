@@ -41,6 +41,10 @@ struct WaamRobotPackage
     int robot_type = 0;                     ///< 0=ABB, 1=KUKA, 2=FANUC, 3=Unknown
     float bead_width = 1.2f;                ///< Deposited bead width (mm), used for intra-layer spacing
     std::string config_json;                ///< Optional configuration sidecar content
+    bool spiral_mode = false;               ///< When true, the outer walls of all layers are merged into
+                                            ///< ONE continuous, Z-rising weld bead (no per-layer travel/arc
+                                            ///< restarts). Requires >=1 closed contour per layer; otherwise
+                                            ///< falls back to the standard per-layer deposition.
 };
 
 /**

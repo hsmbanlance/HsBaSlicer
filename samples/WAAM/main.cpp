@@ -177,6 +177,44 @@ static int RunAsyncWaamPipeline()
 }
 
 // ---------------------------------------------------------------------------
+// Example 4: Spiral / vase mode - one continuous, Z-rising weld bead
+// ---------------------------------------------------------------------------
+static int RunSpiralWaamPipeline()
+{
+    LogMsg("=== Example 4: WAAM Spiral Mode (continuous rising bead) ===");
+
+    HsBaWaamPipelineConfig_t cfg = HsBaCreateDefaultWaamConfig();
+
+    cfg.model_name = "stanford_bunny";
+    cfg.model_path = "models/stanford_bunny.stl";
+
+    cfg.layer_height = 0.6f;
+    cfg.first_layer_height = 0.8f;
+    cfg.bead_width = 1.0f;
+    cfg.robot_type = HSBA_WAAM_ROBOT_ABB;
+
+    // Key: merge the outer walls of all layers into ONE continuous bead that
+    // rises in Z - no per-layer travel moves or arc restarts between layers.
+    cfg.spiral_mode = 1;
+    cfg.output_path = "output/waam_spiral_output.txt";
+
+    HsBaWaamPipelineResult_t result = HsBaRunWaamPipeline(&cfg, OnProgress, nullptr);
+
+    if (result.success)
+    {
+        LogMsg(std::format("WAAM spiral slicing OK! Layers: {}, Robot program: {}, Time: {:.2f}s", result.total_layers,
+                           result.output_path ? result.output_path : "N/A", result.elapsed_seconds));
+    }
+    else
+    {
+        LogMsg(std::format("WAAM spiral slicing FAILED: {}", result.error_message ? result.error_message : "Unknown error"));
+    }
+
+    HsBaFreeWaamPipelineResult(&result);
+    return result.success;
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 int main()
@@ -189,6 +227,7 @@ int main()
     RunBasicWaamPipeline();
     RunCustomWaamPipeline();
     RunAsyncWaamPipeline();
+    RunSpiralWaamPipeline();
 
     LogMsg("All examples finished.");
     return 0;

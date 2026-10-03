@@ -6,6 +6,8 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 #include "layerspath.hpp"
 
@@ -42,6 +44,17 @@ struct GCodePrinterConfig
     bool enable_retraction = true;      ///< Enable retraction on travel moves
 };
 
+/// @brief A single point of a continuous 3D (helical) deposition path.
+///
+/// Unlike per-layer polygons (constant Z), a spiralized wall carries a distinct
+/// Z for every point so the extrusion rises continuously across layers.
+struct PathPoint3D
+{
+    double x = 0.0;
+    double y = 0.0;
+    double z = 0.0;
+};
+
 /// @brief GCode path output supporting multiple firmware formats.
 ///
 /// Inherits LayersPath for layer data storage and Lua extensibility.
@@ -67,12 +80,25 @@ public:
     /// @brief Get printer configuration.
     const GCodePrinterConfig& printerConfig() const { return printer_config_; }
 
+    /// @brief Set a continuous 3D (helical) outer wall to emit before any layers.
+    ///
+    /// Used by spiralize/vase mode: the wall is printed as one unbroken
+    /// extrusion line whose Z rises across layer boundaries. When set, ToGCode
+    /// emits this wall first, then any per-layer polygon data. Empty by default,
+    /// so existing per-layer output is unchanged.
+    void setContinuousWall(std::vector<PathPoint3D> wall) { continuous_wall_ = std::move(wall); }
+
+    /// @brief Whether a continuous (spiralized) wall has been provided.
+    bool hasContinuousWall() const { return !continuous_wall_.empty(); }
+
 private:
     GCodePrinterConfig printer_config_;
+    std::vector<PathPoint3D> continuous_wall_;
 
     std::string GenerateHeader(GCodeFirmware fw) const;
     std::string GenerateFooter(GCodeFirmware fw) const;
     std::string GenerateLayerGCode(int layer_idx, GCodeFirmware fw) const;
+    std::string GenerateContinuousWall() const;
     double CalcExtrusion(double segment_length) const;
 };
 

@@ -54,6 +54,8 @@ void FdmConfigToMsg(const HsBaFdmPipelineConfig_t& config, HsbaProto::msg_fdm_pi
 
     if (config.output_path)
         msg->set_fdm_pipe_config_output_path(config.output_path);
+
+    msg->set_fdm_pipe_config_spiral_mode(config.spiral_mode != 0);
 }
 
 void FdmResultToMsg(const HsBaFdmPipelineResult_t& result, HsbaProto::msg_fdm_pipe_result* msg)
@@ -332,6 +334,8 @@ void TdpConfigToMsg(const HsBaTdpPipelineConfig_t& config, HsbaProto::tdp_pipe_c
 
     if (config.output_path)
         msg->set_tdp_pipe_config_output_path(config.output_path);
+
+    msg->set_tdp_pipe_config_spiral_mode(config.spiral_mode != 0);
 }
 
 void TdpResultToMsg(const HsBaTdpPipelineResult_t& result, HsbaProto::tdp_pipe_result* msg)
@@ -378,6 +382,8 @@ void WaamConfigToMsg(const HsBaWaamPipelineConfig_t& config, HsbaProto::waam_pip
 
     if (config.output_path)
         msg->set_waam_pipe_config_output_path(config.output_path);
+
+    msg->set_waam_pipe_config_spiral_mode(config.spiral_mode != 0);
 }
 
 void WaamResultToMsg(const HsBaWaamPipelineResult_t& result, HsbaProto::waam_pipe_result* msg)

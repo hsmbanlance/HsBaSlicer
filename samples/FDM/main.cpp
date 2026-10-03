@@ -269,6 +269,55 @@ static int RunAsyncPipeline()
 }
 
 // ---------------------------------------------------------------------------
+// 示例 5: 螺旋/花瓶模式（内置配置项 spiral_mode）
+// ---------------------------------------------------------------------------
+static int RunSpiralPipeline()
+{
+    LogMsg("=== 示例 5: 螺旋/花瓶模式 ===");
+
+    HsBaFdmPipelineConfig_t cfg = HsBaCreateDefaultConfig();
+
+    cfg.model_name = "stanford_bunny";
+    cfg.model_path = "models/stanford_bunny.stl";
+
+    cfg.layer_height = 0.2f;
+    cfg.first_layer_height = 0.25f;
+    cfg.line_width = 0.4f;
+    cfg.print_speed = 50.0f;
+
+    // 关键：开启螺旋模式。外壁被合并为一条随 Z 连续上升的单次挤出路径，
+    // 无层间空走/回抽，同时跳过填充与支撑。
+    cfg.spiral_mode = 1;
+
+    HsBaFdmPipelineResult_t result = HsBaRunFdmPipeline(&cfg, OnProgress, nullptr);
+
+    if (result.success)
+    {
+        std::filesystem::path out_path = "output/stanford_bunny_spiral.gcode";
+        std::ofstream ofs(out_path, std::ios::binary);
+        if (ofs)
+        {
+            ofs << (result.gcode_content ? result.gcode_content : "");
+            ofs.close();
+            LogMsg(std::format("螺旋模式切片完成! 层数: {}, 耗时: {:.2f} 秒，G-code 已写入 {}", result.total_layers,
+                               result.elapsed_seconds, out_path.string()));
+        }
+        else
+        {
+            LogMsg(std::format("螺旋模式切片完成! 层数: {}, 耗时: {:.2f} 秒，但写入 G-code 失败", result.total_layers,
+                               result.elapsed_seconds));
+        }
+    }
+    else
+    {
+        LogMsg(std::format("螺旋模式切片失败: {}", result.error_message ? result.error_message : "未知错误"));
+    }
+
+    HsBaFreePipelineResult(&result);
+    return result.success;
+}
+
+// ---------------------------------------------------------------------------
 // 入口
 // ---------------------------------------------------------------------------
 int main()
@@ -280,6 +329,7 @@ int main()
     RunCustomPipeline();
     RunLuaCustomPipeline();
     RunAsyncPipeline();
+    RunSpiralPipeline();
 
     LogMsg("全部示例执行完毕。");
     return 0;

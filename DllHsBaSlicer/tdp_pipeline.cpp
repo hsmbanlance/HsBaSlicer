@@ -14,6 +14,7 @@
 #include "LibHsBaSlicer/Path/sls_export.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
+#include "pipeline_parallel.hpp"
 #include "base/coroutine.hpp"
 
 namespace HsBa::Slicer::Pipeline
@@ -43,6 +44,7 @@ struct InternalTdpConfig
     std::string export_lua_script;
     std::string export_lua_func;
     std::string output_path;
+    bool spiral_mode = false;
     HsBaTdpProgressCallback progress_cb = nullptr;
     void* progress_user_data = nullptr;
 };
@@ -143,7 +145,8 @@ std::string BuildTdpConfigJson(const InternalTdpConfig& cfg, int total_layers)
     json << "    \"curing_time\": " << cfg.ink_curing_time << ",\n";
     json << "    \"mode\": \"" << BinderModeName(cfg.binder_mode) << "\"\n";
     json << "  },\n";
-    json << "  \"bed_temperature\": " << cfg.bed_temperature << "\n";
+    json << "  \"bed_temperature\": " << cfg.bed_temperature << ",\n";
+    json << "  \"spiral_mode\": " << (cfg.spiral_mode ? "true" : "false") << "\n";
     json << "}\n";
     return json.str();
 }
@@ -166,6 +169,7 @@ InternalTdpConfig BuildTdpConfig(const HsBaTdpPipelineConfig_t* cfg, HsBaTdpProg
     ic.export_lua_script = cfg->export_lua_script ? cfg->export_lua_script : "";
     ic.export_lua_func = cfg->export_lua_func ? cfg->export_lua_func : "";
     ic.output_path = cfg->output_path ? cfg->output_path : "";
+    ic.spiral_mode = cfg->spiral_mode != 0;
     ic.progress_cb = cb;
     ic.progress_user_data = ud;
     return ic;
@@ -227,14 +231,22 @@ Utils::Task<InternalTdpResult> RunTdpPipelineAsync(const InternalTdpConfig& cfg)
         std::vector<float> layer_z_heights(total_layers);
         float z_offset = info.bbox_min.z();
 
-        for (int i = 0; i < total_layers; ++i)
-        {
-            float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
-            layer_z_heights[i] = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height);
-            layer_outlines[i] = NormalizeUnSafePolygons(UnSafeSlice(*model, z));
-            int progress = 15 + (i * 35) / total_layers;
-            ReportProgress(cfg, progress, "Slicing layer");
-        }
+        // Build the slicing topology once and slice layers in parallel: each layer
+        // is independent and SliceLayer only const-reads the shared topology.
+        auto topo = BuildSliceTopology(*model);
+        ParallelForLayers(
+            total_layers,
+            [&](int i)
+            {
+                float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
+                layer_z_heights[i] = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height);
+                layer_outlines[i] = SliceLayer(*topo, z);
+            },
+            [&](int done)
+            {
+                int progress = 15 + (done * 35) / total_layers;
+                ReportProgress(cfg, progress, "Slicing layer");
+            });
         ReportProgress(cfg, 50, "Slicing complete");
 
         // ========== Stage 3: Export via Lua ==========
@@ -261,6 +273,7 @@ Utils::Task<InternalTdpResult> RunTdpPipelineAsync(const InternalTdpConfig& cfg)
         pkg.layer_outlines = layer_outlines;
         pkg.layer_z_heights = layer_z_heights;
         pkg.config_json = config_json;
+        pkg.spiral_mode = cfg.spiral_mode;
 
         std::string func = cfg.export_lua_func.empty() ? "export_tdp" : cfg.export_lua_func;
         std::string lua_error;

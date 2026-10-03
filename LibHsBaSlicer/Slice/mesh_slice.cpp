@@ -47,4 +47,16 @@ HSBA_SLICER_LIB_API PolygonsD NormalizeUnSafePolygons(const UnSafePolygons& unsa
     return UnIntegerization(int_polys);
 }
 
+HSBA_SLICER_LIB_API std::shared_ptr<FullTopoModel> BuildSliceTopology(const IModel& model)
+{
+    // Build the full topology once; the resulting object owns its own vertex/face
+    // copies and no longer depends on the source model's lifetime.
+    return std::make_shared<FullTopoModel>(model);
+}
+
+HSBA_SLICER_LIB_API PolygonsD SliceLayer(const FullTopoModel& topo, float z, double tolerance)
+{
+    return NormalizeUnSafePolygons(topo.UnSafeSlice(z, tolerance));
+}
+
 }  // namespace HsBa::Slicer

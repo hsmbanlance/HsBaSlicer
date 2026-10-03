@@ -70,6 +70,8 @@ void MsgToFdmConfig(const HsbaProto::msg_fdm_pipeline_config& msg, HsBaFdmPipeli
     config->infill_lua_func = DupString(msg.fdm_pipe_config_infill_lua_func());
 
     config->output_path = DupString(msg.fdm_pipe_config_output_path());
+
+    config->spiral_mode = msg.fdm_pipe_config_spiral_mode() ? 1 : 0;
 }
 
 void MsgToFdmResult(const HsbaProto::msg_fdm_pipe_result& msg, HsBaFdmPipelineResult_t* result)
@@ -316,6 +318,8 @@ void MsgToTdpConfig(const HsbaProto::tdp_pipe_config& msg, HsBaTdpPipelineConfig
     config->export_lua_func = DupString(msg.tdp_pipe_config_export_lua_func());
 
     config->output_path = DupString(msg.tdp_pipe_config_output_path());
+
+    config->spiral_mode = msg.tdp_pipe_config_spiral_mode() ? 1 : 0;
 }
 
 void MsgToTdpResult(const HsbaProto::tdp_pipe_result& msg, HsBaTdpPipelineResult_t* result)
@@ -357,6 +361,8 @@ void MsgToWaamConfig(const HsbaProto::waam_pipe_config& msg, HsBaWaamPipelineCon
     config->path_lua_func = DupString(msg.waam_pipe_config_path_lua_func());
 
     config->output_path = DupString(msg.waam_pipe_config_output_path());
+
+    config->spiral_mode = msg.waam_pipe_config_spiral_mode() ? 1 : 0;
 }
 
 void MsgToWaamResult(const HsbaProto::waam_pipe_result& msg, HsBaWaamPipelineResult_t* result)
