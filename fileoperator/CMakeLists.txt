@@ -18,6 +18,14 @@
 	bit7z_unzipper.cpp
 	LuaAdapter.hpp
 	LuaAdapter.cpp
+	param_reflect.hpp
+	param_reflect.cpp
+	param_convert.hpp
+	param_convert.cpp
+	param_schema.hpp
+	param_schema.cpp
+	param_store.hpp
+	param_store.cpp
 	RemoteExecutor.hpp
 	RemoteExecutor.cpp)
 
@@ -28,6 +36,7 @@ endif()
 
 target_link_libraries(HsBaSlicerFileOperator PUBLIC HsBaSlicerBase 
 	rapidjson
+	HsBaPipelineTypes
 )
 
 if(HSBA_HSBA_USE_BIT7Z AND NOT ANDROID AND NOT IOS AND NOT HSBA_GAME_CONSOLE)

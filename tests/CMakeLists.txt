@@ -330,6 +330,7 @@ set(ALL_TEST_TARGETS
   model_loader_test
   openvdb_model_test
   lua_common_types_test
+  param_store_test
 )
 
 if(TARGET HsBaSlicerCADModel)
@@ -411,6 +412,38 @@ add_test(
 if(HSBA_RUN_TESTS_AFTER_BUILD)
   add_custom_command(TARGET sqlite_test POST_BUILD
     COMMAND ${CMAKE_CTEST_COMMAND} -V -R sqlite_test
+  )
+endif()
+
+# param store test (AnyObject + SQLAdapter 工艺参数保存流水线)
+add_executable(param_store_test
+	ParamStore/param_store_test.cpp
+)
+
+target_link_libraries(param_store_test
+	HsBaSlicerBase
+	HsBaSlicerFileOperator
+	HsBaPipelineTypes
+	Boost::unit_test_framework
+	${LUA_LIBRARIES}
+)
+
+target_include_directories(param_store_test PRIVATE ${LUA_INCLUDE_DIR} ${CMAKE_SOURCE_DIR})
+
+target_compile_definitions(param_store_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME param_store_test
+  COMMAND $<TARGET_FILE:param_store_test>
+  )
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET param_store_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R param_store_test
   )
 endif()
 

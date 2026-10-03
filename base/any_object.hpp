@@ -99,6 +99,12 @@ public:
         return *static_cast<T*>(data);
     }
     TypeInfo* get_type_info() const { return type_info; }
+    /** @brief Read-only accessor for the underlying data pointer.
+     *
+     * Pure getter: it does not alter ownership (the `flag` semantics are untouched) nor any
+     * behavior. Provided so reflection consumers (e.g. ParamStore field traversal) can reach a
+     * sub-object's address without needing to name its concrete type via cast<T>(). */
+    void* get_data() const noexcept { return data; }
     AnyObject Invoke(std::string_view method_name, std::span<AnyObject> args);
     void ForeachField(const std::function<void(std::string_view, AnyObject)>& callback);
 

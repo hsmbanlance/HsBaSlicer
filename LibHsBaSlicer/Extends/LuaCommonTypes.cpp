@@ -17,6 +17,8 @@
 
 #include "LuaAddFunction.hpp"
 
+#include "fileoperator/param_reflect.hpp"
+
 namespace HsBa::Slicer
 {
 namespace
@@ -482,6 +484,9 @@ void InstallCommonAnyObjectTypes()
         once,
         []
         {
+            // 流水线启动即完成 PipelineConfig 反射注册（内部 call_once 幂等），
+            // 使 ParamStore 与任意消费 GetFileFunctions() 的阶段都能立即遍历字段。
+            RegisterPipelineConfigTypes();
             // One LuaRegFunc per generic pool; the per-state guard above keeps stages that
             // consume several pools from registering the same Lua state twice.
             const LuaRegFunc reg = [](lua_State* L) { RegisterCommonAnyObjectTypes(L); };

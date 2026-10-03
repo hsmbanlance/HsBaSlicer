@@ -1,6 +1,11 @@
 ﻿#include "LuaAdapter.hpp"
 #include "sql_adapter.hpp"
+#include "param_reflect.hpp"
+#include "param_schema.hpp"
+#include "param_store.hpp"
 #include <format>
+#include <string>
+#include <unordered_map>
 
 namespace HsBa::Slicer
 {
@@ -1259,5 +1264,374 @@ void RegisterLuaPostgreSQLAdapter(lua_State* L)
 }
 #endif  // HSBA_USE_PGSQL
 
+namespace
+{
+// ============= ParamStore Wrapper =============
+constexpr Utils::TemplateString ParamStoreTypeName = "ParamStore";
+
+// 解析表参数：接受短标签("fdm")或完整表名("hsba_param_fdm")，返回 tag。
+PipelineConfigTag ResolveTag(std::string_view name)
+{
+    PipelineConfigTag tag = TagFromName(name);
+    if (tag == PipelineConfigTag::Unknown && name.rfind("hsba_param_", 0) == 0)
+        tag = TagFromName(name.substr(std::string_view("hsba_param_").size()));
+    return tag;
+}
+
+// 归一化表名：短标签展开为默认表名；未知则原样返回。
+std::string ActualTable(std::string_view name)
+{
+    PipelineConfigTag tag = ResolveTag(name);
+    if (tag != PipelineConfigTag::Unknown)
+        return std::string(DefaultTableName(tag));
+    return std::string(name);
+}
+
+// 按 tag 分配并默认初始化对应 Config 结构体，返回裸指针（调用方用 ti->destroy 释放）。
+void* CreateConfigByTag(PipelineConfigTag tag, Utils::TypeInfo** out_ti)
+{
+    switch (tag)
+    {
+    case PipelineConfigTag::Fdm:
+        *out_ti = Utils::GetTypeInfo<HsBaFdmPipelineConfig_t>();
+        return new HsBaFdmPipelineConfig_t(HsBaFdmConfigDefault());
+    case PipelineConfigTag::Sla:
+        *out_ti = Utils::GetTypeInfo<HsBaSlaPipelineConfig_t>();
+        return new HsBaSlaPipelineConfig_t(HsBaSlaConfigDefault());
+    case PipelineConfigTag::Sls:
+        *out_ti = Utils::GetTypeInfo<HsBaSlsPipelineConfig_t>();
+        return new HsBaSlsPipelineConfig_t(HsBaSlsConfigDefault());
+    case PipelineConfigTag::Slm:
+        *out_ti = Utils::GetTypeInfo<HsBaSlmPipelineConfig_t>();
+        return new HsBaSlmPipelineConfig_t(HsBaSlmConfigDefault());
+    case PipelineConfigTag::Lom:
+        *out_ti = Utils::GetTypeInfo<HsBaLomPipelineConfig_t>();
+        return new HsBaLomPipelineConfig_t(HsBaLomConfigDefault());
+    case PipelineConfigTag::Tdp:
+        *out_ti = Utils::GetTypeInfo<HsBaTdpPipelineConfig_t>();
+        return new HsBaTdpPipelineConfig_t(HsBaTdpConfigDefault());
+    case PipelineConfigTag::Waam:
+        *out_ti = Utils::GetTypeInfo<HsBaWaamPipelineConfig_t>();
+        return new HsBaWaamPipelineConfig_t(HsBaWaamConfigDefault());
+    case PipelineConfigTag::Custom:
+        *out_ti = Utils::GetTypeInfo<HsBaCustomPipelineConfig_t>();
+        return new HsBaCustomPipelineConfig_t(HsBaCustomConfigDefault());
+    case PipelineConfigTag::FileTransfer:
+        *out_ti = Utils::GetTypeInfo<HsBaFileTransferPipelineConfig_t>();
+        return new HsBaFileTransferPipelineConfig_t(HsBaFileTransferConfigDefault());
+    default:
+        return nullptr;
+    }
+}
+
+// 读取 Lua 值（栈索引 idx）并按字段收敛类型产出白名单 std::any。
+std::any LuaValueToAny(lua_State* L, int idx, Utils::TypeInfo* field_ti)
+{
+    if (lua_isnoneornil(L, idx))
+        return std::any(nullptr);
+    switch (ParamSchema::KindOf(field_ti))
+    {
+    case ColumnKind::Double:
+        return std::any(static_cast<double>(lua_tonumber(L, idx)));
+    case ColumnKind::Int64:
+        if (lua_isboolean(L, idx))
+            return std::any(static_cast<int64_t>(lua_toboolean(L, idx) ? 1 : 0));
+        return std::any(static_cast<int64_t>(lua_tointeger(L, idx)));
+    case ColumnKind::Text:
+    default:
+        size_t len = 0;
+        const char* s = lua_tolstring(L, idx, &len);
+        return std::any(std::string(s ? s : "", len));
+    }
+}
+
+// 遍历 config table（索引 tbl）填充 struct 反射字段。
+void FillConfigFromLua(lua_State* L, int tbl, Utils::AnyObject cfg, StringArena& arena)
+{
+    cfg.ForeachField(
+        [L, tbl, &arena](std::string_view name, Utils::AnyObject child)
+        {
+            lua_getfield(L, tbl, std::string(name).c_str());
+            std::any v = LuaValueToAny(L, -1, child.get_type_info());
+            AnyToField(v, child.get_type_info(), child.get_data(), arena);
+            lua_pop(L, 1);
+        });
+}
+
+// 把 struct 反射字段导出为 Lua 表。
+void PushConfigToLua(lua_State* L, Utils::AnyObject cfg)
+{
+    lua_createtable(L, 0, 16);
+    cfg.ForeachField(
+        [L](std::string_view name, Utils::AnyObject child)
+        {
+            std::any v = FieldToAny(name, child.get_type_info(), child.get_data());
+            PushAnyToLua(L, v);
+            lua_setfield(L, -2, std::string(name).c_str());
+        });
+}
+
+int lua_paramstore_new(lua_State* L)
+{
+    if (!lua_isuserdata(L, 1))
+    {
+        lua_pushstring(L, "ParamStore.new expects a SQL adapter object");
+        return lua_error(L);
+    }
+    auto* adapter = (SQL::ISQLAdapter*)lua_topointer(L, 1);
+    if (!adapter)
+    {
+        lua_pushstring(L, "ParamStore.new: null adapter pointer");
+        return lua_error(L);
+    }
+    try
+    {
+        NewLuaObject<ParamStore, ParamStoreTypeName>(L, *adapter);
+        return 1;
+    }
+    catch (const std::exception& e)
+    {
+        lua_pushstring(L, e.what());
+        return lua_error(L);
+    }
+}
+
+int lua_paramstore_ensure_schema(lua_State* L)
+{
+    auto* store = (ParamStore*)lua_topointer(L, 1);
+    if (!store)
+    {
+        lua_pushstring(L, std::format("Invalid {} object", ParamStoreTypeName).c_str());
+        return lua_error(L);
+    }
+    try
+    {
+        store->EnsureSchema();
+        lua_pushboolean(L, 1);
+        return 1;
+    }
+    catch (const std::exception& e)
+    {
+        lua_pushstring(L, e.what());
+        return lua_error(L);
+    }
+}
+
+int lua_paramstore_save(lua_State* L)
+{
+    auto* store = (ParamStore*)lua_topointer(L, 1);
+    std::string table = luaL_checkstring(L, 2);
+    std::string key = luaL_checkstring(L, 3);
+    luaL_checktype(L, 4, LUA_TTABLE);
+    if (!store)
+    {
+        lua_pushstring(L, std::format("Invalid {} object", ParamStoreTypeName).c_str());
+        return lua_error(L);
+    }
+    try
+    {
+        Utils::TypeInfo* ti = nullptr;
+        void* s = CreateConfigByTag(ResolveTag(table), &ti);
+        if (!s)
+            throw std::runtime_error("ParamStore.Save: unknown config table '" + table + "'");
+        StringArena arena;
+        Utils::AnyObject cfg(ti, s);
+        FillConfigFromLua(L, 4, cfg, arena);
+        int64_t id = store->Save(DefaultTableName(ti), key, cfg);
+        ti->destroy(s);
+        lua_pushinteger(L, static_cast<lua_Integer>(id));
+        return 1;
+    }
+    catch (const std::exception& e)
+    {
+        lua_pushstring(L, e.what());
+        return lua_error(L);
+    }
+}
+
+int lua_paramstore_load(lua_State* L)
+{
+    auto* store = (ParamStore*)lua_topointer(L, 1);
+    std::string table = luaL_checkstring(L, 2);
+    std::string key = luaL_checkstring(L, 3);
+    if (!store)
+    {
+        lua_pushstring(L, std::format("Invalid {} object", ParamStoreTypeName).c_str());
+        return lua_error(L);
+    }
+    try
+    {
+        Utils::TypeInfo* ti = nullptr;
+        void* s = CreateConfigByTag(ResolveTag(table), &ti);
+        if (!s)
+            throw std::runtime_error("ParamStore.Load: unknown config table '" + table + "'");
+        StringArena arena;
+        Utils::AnyObject cfg(ti, s);
+        bool ok = store->Load(DefaultTableName(ti), key, cfg, arena);
+        if (!ok)
+        {
+            ti->destroy(s);
+            lua_pushboolean(L, 0);
+            lua_pushstring(L, "not found");
+            return 2;
+        }
+        // 成功契约：返回 (true, configTable)，与失败路径 (false, errString) 对称。
+        lua_pushboolean(L, 1);
+        PushConfigToLua(L, cfg);
+        ti->destroy(s);
+        return 2;
+    }
+    catch (const std::exception& e)
+    {
+        lua_pushstring(L, e.what());
+        return lua_error(L);
+    }
+}
+
+int lua_paramstore_list(lua_State* L)
+{
+    auto* store = (ParamStore*)lua_topointer(L, 1);
+    std::string table = luaL_checkstring(L, 2);
+    std::string where_json = lua_isstring(L, 3) ? std::string(lua_tostring(L, 3)) : std::string();
+    if (!store)
+    {
+        lua_pushstring(L, std::format("Invalid {} object", ParamStoreTypeName).c_str());
+        return lua_error(L);
+    }
+    try
+    {
+        auto keys = store->List(ActualTable(table), where_json);
+        lua_createtable(L, static_cast<int>(keys.size()), 0);
+        int i = 1;
+        for (const auto& k : keys)
+        {
+            lua_pushstring(L, k.c_str());
+            lua_rawseti(L, -2, i++);
+        }
+        return 1;
+    }
+    catch (const std::exception& e)
+    {
+        lua_pushstring(L, e.what());
+        return lua_error(L);
+    }
+}
+
+int lua_paramstore_update(lua_State* L)
+{
+    auto* store = (ParamStore*)lua_topointer(L, 1);
+    std::string table = luaL_checkstring(L, 2);
+    std::string key = luaL_checkstring(L, 3);
+    luaL_checktype(L, 4, LUA_TTABLE);
+    luaL_checktype(L, 5, LUA_TTABLE);
+    if (!store)
+    {
+        lua_pushstring(L, std::format("Invalid {} object", ParamStoreTypeName).c_str());
+        return lua_error(L);
+    }
+    try
+    {
+        std::vector<std::string> changed;
+        const int n = static_cast<int>(lua_rawlen(L, 5));
+        for (int i = 1; i <= n; ++i)
+        {
+            lua_rawgeti(L, 5, i);
+            if (lua_isstring(L, -1))
+                changed.emplace_back(lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+        Utils::TypeInfo* ti = nullptr;
+        void* s = CreateConfigByTag(ResolveTag(table), &ti);
+        if (!s)
+            throw std::runtime_error("ParamStore.Update: unknown config table '" + table + "'");
+        StringArena arena;
+        Utils::AnyObject cfg(ti, s);
+        FillConfigFromLua(L, 4, cfg, arena);
+        bool ok = store->Update(DefaultTableName(ti), key, cfg, changed);
+        ti->destroy(s);
+        lua_pushboolean(L, ok ? 1 : 0);
+        return 1;
+    }
+    catch (const std::exception& e)
+    {
+        lua_pushstring(L, e.what());
+        return lua_error(L);
+    }
+}
+
+int lua_paramstore_delete(lua_State* L)
+{
+    auto* store = (ParamStore*)lua_topointer(L, 1);
+    std::string table = luaL_checkstring(L, 2);
+    std::string key = luaL_checkstring(L, 3);
+    if (!store)
+    {
+        lua_pushstring(L, std::format("Invalid {} object", ParamStoreTypeName).c_str());
+        return lua_error(L);
+    }
+    try
+    {
+        bool ok = store->Delete(ActualTable(table), key);
+        lua_pushboolean(L, ok ? 1 : 0);
+        return 1;
+    }
+    catch (const std::exception& e)
+    {
+        lua_pushstring(L, e.what());
+        return lua_error(L);
+    }
+}
+
+int lua_paramstore_gc(lua_State* L)
+{
+    LuaGC<ParamStore, ParamStoreTypeName>(L);
+    return 0;
+}
+}  // namespace
+
+void RegisterLuaParamStore(lua_State* L)
+{
+    // 静态注册守卫：允许流水线在多个阶段消费同一 lua_State。
+    static constexpr const char kRegistryKey[] = "HsBa.ParamStoreRegistered";
+    lua_getfield(L, LUA_REGISTRYINDEX, kRegistryKey);
+    if (!lua_isnil(L, -1))
+    {
+        lua_pop(L, 1);
+        return;
+    }
+    lua_pop(L, 1);
+
+    // 幂等触发反射注册，保证 TypeInfo::fields 已填充。
+    RegisterPipelineConfigTypes();
+
+    // metatable：实例方法
+    luaL_newmetatable(L, static_cast<const char*>(ParamStoreTypeName));
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -2, "__index");
+    lua_pushcfunction(L, lua_paramstore_gc);
+    lua_setfield(L, -2, "__gc");
+    lua_pushcfunction(L, lua_paramstore_ensure_schema);
+    lua_setfield(L, -2, "EnsureSchema");
+    lua_pushcfunction(L, lua_paramstore_save);
+    lua_setfield(L, -2, "Save");
+    lua_pushcfunction(L, lua_paramstore_load);
+    lua_setfield(L, -2, "Load");
+    lua_pushcfunction(L, lua_paramstore_list);
+    lua_setfield(L, -2, "List");
+    lua_pushcfunction(L, lua_paramstore_update);
+    lua_setfield(L, -2, "Update");
+    lua_pushcfunction(L, lua_paramstore_delete);
+    lua_setfield(L, -2, "Delete");
+    lua_pop(L, 1);
+
+    // 全局表：ParamStore.new
+    lua_newtable(L);
+    lua_pushcfunction(L, lua_paramstore_new);
+    lua_setfield(L, -2, "new");
+    lua_setglobal(L, "ParamStore");
+
+    lua_pushboolean(L, 1);
+    lua_setfield(L, LUA_REGISTRYINDEX, kRegistryKey);
+}
 
 }  // namespace HsBa::Slicer

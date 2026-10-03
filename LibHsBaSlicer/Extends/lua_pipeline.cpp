@@ -873,6 +873,7 @@ HSBA_SLICER_LIB_API void SetupLuaPipelineEnvironment(lua_State* L, LuaPipelineCo
     RegisterLuaZipper(L);
     Cipher::RegisterLuaCipher(L);
     RegisterLuaSQLiteAdapter(L);
+    RegisterLuaParamStore(L);
 #ifdef HSBA_USE_BIT7Z
     RegisterLuaBit7zZipper(L);
 #endif

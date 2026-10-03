@@ -515,6 +515,15 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/pipelinetypes
 )
 
+# fileoperator 工艺参数保存流水线（ParamStore）公开头文件
+install(FILES
+    fileoperator/param_reflect.hpp
+    fileoperator/param_convert.hpp
+    fileoperator/param_schema.hpp
+    fileoperator/param_store.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/fileoperator
+)
+
 # base
 install(FILES
     base/IModel.hpp
