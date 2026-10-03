@@ -69,6 +69,7 @@ HsBaSlicer is a high-performance C++ software framework for 3D printing slicing,
 ### Quick Start
 
 - [C++ Usage Guide (CMake Integration)](./cpp_cmake_usage.md) - How to use LibHsBaSlicer / DllHsBaSlicer / HsBaSlicer in external C++ projects via CMake (module & non-module)
+- [Pipeline Lua API Reference](./lua_pipeline_api.md) - The Lua operations, shared libraries, and stage-script conventions callable inside the slicing pipelines (custom pipeline & built-in stage hooks)
 
 # HsBaSlicer Documentation
 
