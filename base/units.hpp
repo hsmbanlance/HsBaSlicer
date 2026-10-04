@@ -204,6 +204,10 @@ constexpr auto operator"" _mL(unsigned long long value)
 {
     return static_cast<long double>(value) * MULTIPLIER_MICRO * boost::units::si::cubic_meter;
 }
+/** @brief Create a quantity with the specified value and millimeter unit.
+ * @param value The value of the quantity.
+ * @return A quantity with the specified value and millimeter unit.
+ */
 constexpr auto operator"" _mm(long double value)
 {
     return value * MULTIPLIER_MILLI * boost::units::si::meter;

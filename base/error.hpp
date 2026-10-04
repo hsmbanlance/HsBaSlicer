@@ -44,7 +44,7 @@ public:
     using RuntimeError::what;
 };
 /**
- * @brief Invalid Argument Error
+ * @brief IO Error
  */
 class IOError : public RuntimeError
 {
@@ -80,7 +80,7 @@ public:
     using RuntimeError::what;
 };
 /**
- * @brief Not Supported Error
+ * @brief Not Found Error
  */
 class NotFoundError : public RuntimeError
 {

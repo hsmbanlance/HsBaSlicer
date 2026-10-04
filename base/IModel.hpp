@@ -76,9 +76,9 @@ enum class ModelFormat : uint32_t
     OBJ,
     /** @brief Unknown STL format. */
     UnknownSTL,
-    /** @brief ASCII STL format. */
-    BinarySTL,
     /** @brief Binary STL format. */
+    BinarySTL,
+    /** @brief ASCII STL format. */
     ASCIISTL,
     /** @brief OFF format. */
     OFF,
@@ -104,6 +104,7 @@ enum class ModelFormat : uint32_t
     /** @brief VDB format. */
     VDB,
     // Unknown
+    /** @brief Unknown or unsupported format. */
     Unknown = 100
 };
 /** @brief An interface representing a 3D model in the HsBa Slicer project. */

@@ -1,4 +1,8 @@
-﻿#include "encoding_convert.hpp"
+﻿/** @file encoding_convert.cpp
+ * @brief Implementations of the encoding conversion and Windows console code-page helpers.
+ * @author HsBa
+ */
+#include "encoding_convert.hpp"
 
 //use qt for qstring
 #ifdef QT_VERSION 

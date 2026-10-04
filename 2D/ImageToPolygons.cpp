@@ -1,4 +1,8 @@
-﻿#include "ImageToPolygons.hpp"
+﻿/** @file ImageToPolygons.cpp
+ * @brief Implementations of raster-to-polygon thresholding, polygon-to-image rendering and Lua-driven image generation.
+ * @author HsBa
+ */
+#include "ImageToPolygons.hpp"
 
 #include <algorithm>
 #include <cstdint>

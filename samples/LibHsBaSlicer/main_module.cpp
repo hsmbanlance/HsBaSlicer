@@ -117,7 +117,7 @@ int main()
 
             CustomLuaPipeline lua_pipeline(lua_cfg);
             lua_pipeline.setProgressFunc([](int percent, std::string_view stage)
-                                        { std::cout << std::format("  [lua {}%] {}", percent, stage) << std::endl; });
+                                         { std::cout << std::format("  [lua {}%] {}", percent, stage) << std::endl; });
 
             CustomLuaResult lua_result = lua_pipeline.run();
             std::cout << std::format("  Layers: {}, Output: {}", lua_result.total_layers, lua_result.output_path)

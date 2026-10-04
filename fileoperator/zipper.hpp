@@ -1,3 +1,7 @@
+/**
+ * @file zipper.hpp
+ * @brief Declares the miniz-based ZIP compressor (@ref Zipper) and the standalone extraction helpers.
+ */
 #pragma once
 #ifndef HSBA_SLICER_ZIPPER_HPP
 #define HSBA_SLICER_ZIPPER_HPP
@@ -27,7 +31,6 @@ enum class MinizCompression
     Unknown    ///< Unknown compression level
 };
 
-// Zipper use miniz
 /**
  * @brief Miniz-based archive compressor implementation.
  *
@@ -54,8 +57,17 @@ public:
     void AddByteFile(std::string_view name, const std::string& data) override;
     void AddFile(std::string_view name, std::string_view path) override;
 
-    // To add duplicate file, filename add "_duplicate"
+    /**
+     * @brief Add an in-memory file, renaming to "<name>_duplicate" when the name is already taken.
+     * @param name Name of the file within the archive.
+     * @param data File content as string.
+     */
     void AddByteFileIgnoreDuplicate(std::string_view name, const std::string& data) override;
+    /**
+     * @brief Add an on-disk file, renaming to "<name>_duplicate" when the name is already taken.
+     * @param name Name of the file within the archive.
+     * @param path Path to the source file on disk.
+     */
     void AddFileIgnoreDuplicate(std::string_view name, std::string_view path) override;
     void Save(std::string_view filePath) override;
 

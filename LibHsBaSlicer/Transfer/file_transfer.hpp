@@ -1,3 +1,7 @@
+/** @file file_transfer.hpp
+ * @brief Lib-side file transfer C++ API: config/result types, progress callback and remote transfer.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_LIB_FILE_TRANSFER_HPP
 #define HSBA_SLICER_LIB_FILE_TRANSFER_HPP

@@ -94,7 +94,8 @@ BOOST_AUTO_TEST_CASE(point_cloud_operations)
     // 往返后点集必须一致（不保证顺序，按坐标排序后逐点比对）
     auto reloadedPoints = reloaded.Points();
     auto savedPoints = model.Points();
-    const auto pointLess = [](const Eigen::Vector3f& lhs, const Eigen::Vector3f& rhs) {
+    const auto pointLess = [](const Eigen::Vector3f& lhs, const Eigen::Vector3f& rhs)
+    {
         if (lhs.x() != rhs.x())
         {
             return lhs.x() < rhs.x();
@@ -140,16 +141,12 @@ BOOST_AUTO_TEST_CASE(point_cloud_neighbors_and_filter)
     const auto knnOverflow = model.KNN(Eigen::Vector3f{0.0f, 0.0f, 0.0f}, 100u);
     BOOST_CHECK_EQUAL(knnOverflow.size(), 4u);
 
-    const auto filtered = model.Filter([](const Eigen::Vector3f& point) {
-        return point.x() >= 2.0f;
-    });
+    const auto filtered = model.Filter([](const Eigen::Vector3f& point) { return point.x() >= 2.0f; });
     BOOST_REQUIRE_EQUAL(filtered.size(), 2u);
     BOOST_CHECK_CLOSE(filtered.front().x(), 2.0f, 1e-5f);
     BOOST_CHECK_CLOSE(filtered.back().x(), 3.0f, 1e-5f);
 
     // 无匹配时返回空集
-    const auto filteredNone = model.Filter([](const Eigen::Vector3f& point) {
-        return point.x() > 100.0f;
-    });
+    const auto filteredNone = model.Filter([](const Eigen::Vector3f& point) { return point.x() > 100.0f; });
     BOOST_CHECK(filteredNone.empty());
 }

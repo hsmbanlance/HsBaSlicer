@@ -40,7 +40,12 @@ All public headers are exported to `include/HsBaSlicer/` in the install tree.
 | `fdm_pipeline.h` | FDM full-pipeline interface |
 | `sla_pipeline.h` | SLA full-pipeline interface |
 | `sls_pipeline.h` | SLS full-pipeline interface |
+| `slm_pipeline.h` | SLM metal powder-bed full-pipeline interface |
+| `lom_pipeline.h` | LOM laminated-object full-pipeline interface |
+| `tdp_pipeline.h` | 3DP binder-jetting full-pipeline interface |
+| `waam_pipeline.h` | WAAM arc-additive (robot) full-pipeline interface |
 | `file_transfer_pipeline.h` | File transfer pipeline interface (sync/async) |
+| `param_store_pipeline.h` | Process-parameter store pipeline interface (save/load) |
 | `custom_pipeline.h` | Custom Lua pipeline interface (sync/async) |
 | `pipeline_convert.h` | Proto serialized bytes ↔ C struct conversion |
 | `lua_register.h` | Lua extension function registration (2D/3D/File/Event callbacks) |
@@ -178,6 +183,7 @@ Use the `gcode_firmware` field to specify the target firmware for standards-comp
 | `retract_length` | 1.0 | Retraction length (mm) |
 | `retract_speed` | 40.0 | Retraction speed (mm/s) |
 | `first_layer_speed` | 20.0 | First layer speed (mm/s) |
+| `spiral_mode` | 0 | Spiralize the outer wall into a single continuous rising path (vase mode, 0=false, 1=true); when enabled the outer contour is emitted as one extrusion-continuous helix and per-layer infill/support are skipped |
 
 ### SLA Pipeline
 
@@ -215,6 +221,139 @@ void HsBaFreeSlsPipelineResult(HsBaSlsPipelineResult_t* result);
 
 > The SLS `export_lua_script` field **must not be NULL**.
 
+### SLM Pipeline
+
+Selective Laser Melting of metal powder beds (laser / e-beam). The flow mirrors SLS exactly (Preprocess -> Slice -> Lua-script export: zip + database registration, no floor/support), additionally carrying metal-specific parameters (material, energy source, shielding gas) that are folded into the config handed to the export script.
+
+```c
+HsBaSlmPipelineConfig_t HsBaCreateDefaultSlmConfig(void);
+
+HsBaSlmPipelineResult_t HsBaRunSlmPipeline(const HsBaSlmPipelineConfig_t* config,
+                                           HsBaSlmProgressCallback callback, void* user_data);
+
+void HsBaRunSlmPipelineAsync(const HsBaSlmPipelineConfig_t* config,
+                             HsBaSlmProgressCallback callback, void* user_data,
+                             HsBaSlmResultCallback result_callback, void* result_user_data);
+
+void HsBaFreeSlmPipelineResult(HsBaSlmPipelineResult_t* result);
+```
+
+#### Configuration Fields
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `layer_height` / `first_layer_height` | 0.06 / 0.08 | Layer / first-layer height (mm) |
+| `laser_power` | 200.0 | Laser power (W) |
+| `scan_speed` | 1000.0 | Scan speed (mm/s) |
+| `hatch_spacing` / `hatch_rotation` | 0.1 / 67.0 | Hatch line spacing (mm) / inter-layer rotation (deg) |
+| `bed_temperature` | 100.0 | Powder bed temperature (°C) |
+| `material` | `HSBA_SLM_MATERIAL_TITANIUM` | Metal powder: IRON / ALUMINUM / TITANIUM / UNKNOWN |
+| `light_source` | `HSBA_SLM_LIGHT_LASER` | Energy source: LASER / EBEAM / UNKNOWN |
+| `protect_gas` | `HSBA_METAL_GAS_ARGON` | Shielding gas: ARGON / HELIUM / N2 / CO2 / UNKNOWN |
+| `export_lua_script` | NULL | Export Lua script path (**must not be NULL**) |
+| `export_lua_func` | NULL | Export function name, `export_slm` when NULL |
+| `output_path` | NULL | Output path |
+
+### LOM Pipeline
+
+Laminated Object Manufacturing (sheet-by-sheet bonding + laser cutting). Slices per sheet thickness and hands each layer's contour outlines plus cut/bond parameters to the Lua export script.
+
+```c
+HsBaLomPipelineConfig_t HsBaCreateDefaultLomConfig(void);
+
+HsBaLomPipelineResult_t HsBaRunLomPipeline(const HsBaLomPipelineConfig_t* config,
+                                           HsBaLomProgressCallback callback, void* user_data);
+
+void HsBaRunLomPipelineAsync(const HsBaLomPipelineConfig_t* config,
+                             HsBaLomProgressCallback callback, void* user_data,
+                             HsBaLomResultCallback result_callback, void* result_user_data);
+
+void HsBaFreeLomPipelineResult(HsBaLomPipelineResult_t* result);
+```
+
+#### Configuration Fields
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `layer_height` / `first_layer_height` | 0.2 / 0.2 | Sheet / first-sheet thickness (mm) |
+| `cut_speed` / `cut_power` / `cut_margin` | 300.0 / 0.8 / 0.5 | Laser cut speed (mm/s) / power [0,1] / contour offset (mm) |
+| `bond_temperature` / `bond_pressure` / `bond_time` | 150.0 / 1.0 / 5.0 | Bonding temperature (°C) / pressure (MPa) / per-layer time (s) |
+| `seal_contour` | 1 | Seal part edge (0=false, 1=true) |
+| `cut_mode` | `HSBA_LOM_CUT_CONTOUR` | Cut mode: CONTOUR / HALFTONE |
+| `export_lua_script` | NULL | Export Lua script path (**must not be NULL**) |
+| `export_lua_func` | NULL | Export function name, `export_lom` when NULL |
+| `output_path` | NULL | Output path |
+
+### 3DP Pipeline
+
+Binder jetting (powder bed + liquid binder). Slices per layer and hands each layer's binder-jet outlines plus head/curing parameters to the Lua export script.
+
+```c
+HsBaTdpPipelineConfig_t HsBaCreateDefaultTdpConfig(void);
+
+HsBaTdpPipelineResult_t HsBaRunTdpPipeline(const HsBaTdpPipelineConfig_t* config,
+                                           HsBaTdpProgressCallback callback, void* user_data);
+
+void HsBaRunTdpPipelineAsync(const HsBaTdpPipelineConfig_t* config,
+                             HsBaTdpProgressCallback callback, void* user_data,
+                             HsBaTdpResultCallback result_callback, void* result_user_data);
+
+void HsBaFreeTdpPipelineResult(HsBaTdpPipelineResult_t* result);
+```
+
+#### Configuration Fields
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `layer_height` / `first_layer_height` | 0.1 / 0.12 | Layer / first-layer height (mm) |
+| `head_count` | 128 | Print-head nozzle count |
+| `drop_spacing` | 0.05 | Binder drop spacing (mm) |
+| `binder_saturation` | 0.6 | Binder saturation [0,1] |
+| `ink_curing_time` | 1.0 | Per-layer curing time (s) |
+| `bed_temperature` | 40.0 | Powder bed temperature (°C) |
+| `binder_mode` | `HSBA_TDP_SINGLE` | Mode: FULL_COLOR / SINGLE / SINTERING |
+| `spiral_mode` | 0 | Spiralize outer contour into a continuous rising path (0=false, 1=true) |
+| `export_lua_script` | NULL | Export Lua script path (**must not be NULL**) |
+| `export_lua_func` | NULL | Export function name, `export_tdp` when NULL |
+| `output_path` | NULL | Output path |
+
+### WAAM Pipeline
+
+Wire Arc Additive Manufacturing (robot bead-by-bead metal deposition). Fundamentally different from bed-based modes: the output is a **robot language program** (ABB / KUKA / FANUC) rather than a layer-image zip. The `UNKNOWN` robot type requires a Lua path script to customize code generation.
+
+```c
+HsBaWaamPipelineConfig_t HsBaCreateDefaultWaamConfig(void);
+
+HsBaWaamPipelineResult_t HsBaRunWaamPipeline(const HsBaWaamPipelineConfig_t* config,
+                                             HsBaWaamProgressCallback callback, void* user_data);
+
+void HsBaRunWaamPipelineAsync(const HsBaWaamPipelineConfig_t* config,
+                              HsBaWaamProgressCallback callback, void* user_data,
+                              HsBaWaamResultCallback result_callback, void* result_user_data);
+
+void HsBaFreeWaamPipelineResult(HsBaWaamPipelineResult_t* result);
+```
+
+#### Configuration Fields
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `layer_height` / `first_layer_height` | 0.8 / 1.0 | Bead/layer height / first-layer height (mm) |
+| `bead_width` | 1.2 | Deposited bead width (mm) |
+| `travel_speed` / `wire_feed_speed` | 8.0 / 5.0 | Torch travel speed (mm/s) / wire feed speed (m/min) |
+| `arc_current` / `arc_voltage` | 180.0 / 22.0 | Welding current (A) / arc voltage (V) |
+| `gas_flow_rate` | 15.0 | Shielding gas flow (L/min) |
+| `material` | `HSBA_WAAM_MATERIAL_STEEL` | Material: STEEL / ALUMINUM / TITANIUM / COPPER / UNKNOWN |
+| `welding_process` | `HSBA_WAAM_WELD_ARC` | Process: ARC / LASER / UNKNOWN |
+| `protection` / `protect_gas` | `SHIELD_GAS` / `ARGON` | Protection method (shield-gas / vacuum) / shielding gas |
+| `interpass_temperature` | 100.0 | Interpass temperature (°C) |
+| `robot_type` | `HSBA_WAAM_ROBOT_ABB` | Robot: ABB / KUKA / FANUC / UNKNOWN (requires a Lua path script) |
+| `path_lua_script` / `path_lua_func` | NULL | Optional custom robot-code generator script and function name (built-in when NULL, default `export_waam`) |
+| `spiral_mode` | 0 | Deposit the outer wall as one continuous, Z-rising bead (0=false, 1=true) |
+| `output_path` | NULL | Output robot-program path |
+
+> The WAAM result struct reports its output through the `output_path` field (the robot-program path), rather than the `export_path` used by the other pipelines.
+
 ### File Transfer Pipeline
 
 Validate -> Establish connection pool -> Transfer files sequentially to a remote executor service.
@@ -243,6 +382,76 @@ void HsBaFreeFileTransferPipelineResult(HsBaFileTransferPipelineResult_t* result
 | `pool_size` | 4 | Connection pool size [1, 16] |
 | `file_paths` | NULL | Array of file paths to transfer |
 | `file_count` | 0 | Number of files |
+
+### Param Store Pipeline
+
+Persists each pipeline's process parameters (`HsBa*PipelineConfig_t` structs) into a database for **reuse**: upsert by a business-unique key (Save), read back into a caller-supplied struct by key (Load). It reuses the fileoperator ParamStore reflection / type-coercion machinery, storing one wide table per pipeline kind so no per-process table needs to be hand-authored. Synchronous interface; a single call internally performs "connect -> ensure table -> execute -> disconnect".
+
+```c
+HsBaParamStoreResult_t HsBaSavePipelineParams(const HsBaParamStoreConn_t* conn, HsBaPipelineKind kind,
+                                              const char* table, const char* key, const void* config);
+
+HsBaParamStoreResult_t HsBaLoadPipelineParams(const HsBaParamStoreConn_t* conn, HsBaPipelineKind kind,
+                                              const char* table, const char* key, void* out_config);
+
+void HsBaFreeLoadedPipelineConfig(HsBaPipelineKind kind, void* config);
+void HsBaFreeParamStoreResult(HsBaParamStoreResult_t* result);
+```
+
+#### Connection struct `HsBaParamStoreConn_t`
+
+| Field | Description |
+| --- | --- |
+| `backend` | Storage backend: `HSBA_PARAM_BACKEND_SQLITE` / `_MYSQL` / `_POSTGRESQL` (Android/iOS: SQLite only) |
+| `sqlite_path` | SQLite database file path (used by the SQLite backend) |
+| `host` / `port` / `user` / `password` / `database` | MySQL/PostgreSQL connection parameters; `port` `0` means use the adapter's default port |
+
+#### Parameters
+
+| Parameter | Description |
+| --- | --- |
+| `kind` | Config type `HsBaPipelineKind` (FDM/SLA/SLS/SLM/LOM/TDP/WAAM/CUSTOM/FILETRANSFER); must match the struct `config` points to |
+| `table` | Target table name; `NULL` or `""` derives the default table from `kind` (e.g. `hsba_param_fdm`) |
+| `key` | Business-unique key (e.g. a template name); must not be `NULL` |
+| `config` / `out_config` | Pointer to the corresponding `HsBa*PipelineConfig_t` struct; for reads, initialize it with `HsBa*ConfigDefault()` first |
+
+#### Result struct `HsBaParamStoreResult_t`
+
+| Field | Description |
+| --- | --- |
+| `success` | `0`/`1`; `0` when a load misses or the backend is unavailable (errors are never swallowed) |
+| `param_id` | Save: the persisted row id; Load: the matched row id |
+| `error_message` | UTF-8 error message, freed via `HsBaFreeParamStoreResult` |
+| `elapsed_seconds` | Elapsed time of the call (seconds) |
+
+> **String ownership**: the `const char*` fields `HsBaLoadPipelineParams` fills into `out_config` are allocated by the library with `malloc` (`NULL` fields stay `NULL`); before reusing or discarding the struct you must call `HsBaFreeLoadedPipelineConfig(kind, &cfg)` to release them. `error_message` is released separately via `HsBaFreeParamStoreResult`.
+
+> **Backend availability**: the MySQL/PostgreSQL branches are gated at compile time by `HSBA_USE_MYSQL` / `HSBA_USE_PGSQL`; when not compiled in, calls against those backends return `success=0` with an error message instead of crashing.
+
+#### Example
+
+```c
+HsBaParamStoreConn_t conn = {0};
+conn.backend = HSBA_PARAM_BACKEND_SQLITE;
+conn.sqlite_path = "params.db";
+
+HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+cfg.layer_height = 0.2f;
+cfg.model_name = "tough_template";
+
+// Save (upsert by key)
+HsBaParamStoreResult_t rw = HsBaSavePipelineParams(&conn, HSBA_PIPELINE_FDM, NULL, "tough_template", &cfg);
+HsBaFreeParamStoreResult(&rw);
+
+// Load (read back by key)
+HsBaFdmPipelineConfig_t out = HsBaFdmConfigDefault();
+HsBaParamStoreResult_t rd = HsBaLoadPipelineParams(&conn, HSBA_PIPELINE_FDM, NULL, "tough_template", &out);
+if (rd.success) {
+    // use out.layer_height / out.model_name ...
+}
+HsBaFreeLoadedPipelineConfig(HSBA_PIPELINE_FDM, &out);  // free the library-malloc'd strings
+HsBaFreeParamStoreResult(&rd);
+```
 
 ### Custom Lua Pipeline
 
@@ -338,6 +547,30 @@ int HsBaSlsConfigToProtoBytes(const HsBaSlsPipelineConfig_t* config, void** out_
 int HsBaSlsResultFromProtoBytes(const void* proto_data, int proto_size, HsBaSlsPipelineResult_t* result);
 int HsBaSlsResultToProtoBytes(const HsBaSlsPipelineResult_t* result, void** out_data, int* out_size);
 
+// SLM
+int HsBaSlmConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaSlmPipelineConfig_t* config);
+int HsBaSlmConfigToProtoBytes(const HsBaSlmPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaSlmResultFromProtoBytes(const void* proto_data, int proto_size, HsBaSlmPipelineResult_t* result);
+int HsBaSlmResultToProtoBytes(const HsBaSlmPipelineResult_t* result, void** out_data, int* out_size);
+
+// LOM
+int HsBaLomConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaLomPipelineConfig_t* config);
+int HsBaLomConfigToProtoBytes(const HsBaLomPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaLomResultFromProtoBytes(const void* proto_data, int proto_size, HsBaLomPipelineResult_t* result);
+int HsBaLomResultToProtoBytes(const HsBaLomPipelineResult_t* result, void** out_data, int* out_size);
+
+// 3DP
+int HsBaTdpConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaTdpPipelineConfig_t* config);
+int HsBaTdpConfigToProtoBytes(const HsBaTdpPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaTdpResultFromProtoBytes(const void* proto_data, int proto_size, HsBaTdpPipelineResult_t* result);
+int HsBaTdpResultToProtoBytes(const HsBaTdpPipelineResult_t* result, void** out_data, int* out_size);
+
+// WAAM
+int HsBaWaamConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaWaamPipelineConfig_t* config);
+int HsBaWaamConfigToProtoBytes(const HsBaWaamPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaWaamResultFromProtoBytes(const void* proto_data, int proto_size, HsBaWaamPipelineResult_t* result);
+int HsBaWaamResultToProtoBytes(const HsBaWaamPipelineResult_t* result, void** out_data, int* out_size);
+
 // File Transfer
 int HsBaFileTransferConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaFileTransferPipelineConfig_t* config);
 int HsBaFileTransferConfigToProtoBytes(const HsBaFileTransferPipelineConfig_t* config, void** out_data, int* out_size);
@@ -354,11 +587,15 @@ int HsBaCustomResultToProtoBytes(const HsBaCustomPipelineResult_t* result, void*
 void HsBaFreeFdmConfigStrings(HsBaFdmPipelineConfig_t* config);
 void HsBaFreeSlaConfigStrings(HsBaSlaPipelineConfig_t* config);
 void HsBaFreeSlsConfigStrings(HsBaSlsPipelineConfig_t* config);
+void HsBaFreeSlmConfigStrings(HsBaSlmPipelineConfig_t* config);
+void HsBaFreeLomConfigStrings(HsBaLomPipelineConfig_t* config);
+void HsBaFreeTdpConfigStrings(HsBaTdpPipelineConfig_t* config);
+void HsBaFreeWaamConfigStrings(HsBaWaamPipelineConfig_t* config);
 void HsBaFreeFileTransferConfigStrings(HsBaFileTransferPipelineConfig_t* config);
 void HsBaFreeCustomConfigStrings(HsBaCustomPipelineConfig_t* config);
 ```
 
-> Proto message definitions are in the `proto/` directory (`fdm_pipeline.proto`, `sla_pipeline.proto`, `sls_pipeline.proto`, `file_transfer_pipeline.proto`, `custom_pipeline.proto`), with multi-language output support for C++/C#/Java/Python/PHP.
+> Proto message definitions are in the `proto/` directory (`fdm_pipeline.proto`, `sla_pipeline.proto`, `sls_pipeline.proto`, `slm_pipeline.proto`, `lom_pipeline.proto`, `tdp_pipeline.proto`, `waam_pipeline.proto`, `file_transfer_pipeline.proto`, `custom_pipeline.proto`), with multi-language output support for C++/C#/Java/Python/PHP.
 >
 > The strings produced by `HsBaCustomResultFromProtoBytes` are `malloc`'d as well; release them with `HsBaFreeCustomPipelineResult()` (Custom has no separate ResultStrings helper).
 >
@@ -459,10 +696,10 @@ typedef void (*HsBaResultCallback)(HsBaFdmPipelineResult_t result, void* user_da
 ## Memory Management Rules
 
 1. `HsBaCreateDefault*Config()` returns a **value-type** struct that needs no freeing; the caller guarantees the lifetime of memory referenced by its string fields;
-2. `gcode_content` / `export_path` / `error_message` inside result structs are allocated by the library and **must** be released with the matching `HsBaFree*PipelineResult()`;
+2. `gcode_content` / `export_path` (`output_path` for WAAM) / `error_message` inside result structs are allocated by the library and **must** be released with the matching `HsBaFree*PipelineResult()`;
 3. Version strings must be freed with `HsBaFreeVersionString()`;
 4. Model handles (`void*` returned by `HsBaLoadModel` / `HsBaGetModel` / `HsBaBoolean*` / `HsBaThickSolidModel`) must be released with `HsBaReleaseModelHandle()`;
-5. `pipeline_types.h` also provides DLL-independent inline initializers `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()` / `HsBaFileTransferConfigDefault()`, handy for header-only scenarios (e.g. mirroring structs for P/Invoke);
+5. `pipeline_types.h` also provides DLL-independent inline initializers `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()` / `HsBaSlmConfigDefault()` / `HsBaLomConfigDefault()` / `HsBaTdpConfigDefault()` / `HsBaWaamConfigDefault()` / `HsBaFileTransferConfigDefault()`, handy for header-only scenarios (e.g. mirroring structs for P/Invoke);
 6. Proto deserialization (`*FromProtoBytes`) allocates string fields with `malloc`—release them with the matching `HsBaFree*ConfigStrings()` (for Custom results use `HsBaFreeCustomPipelineResult()`); `*ToProtoBytes` output buffers (`out_data`) must be `free`'d by the caller.
 
 ## Minimal Example (C/C++)
@@ -502,6 +739,10 @@ int main(void)
 - `samples/FDM/` — FDM sync/async, Lua custom support & infill full examples
 - `samples/SLA/` — SLA pipeline with Lua custom floor/support/export examples
 - `samples/SLS/` — SLS pipeline with Lua export example
+- `samples/SLM/` — SLM metal powder-bed pipeline with Lua export example (basic / custom metal params / async)
+- `samples/LOM/` — LOM laminated-object pipeline with Lua export example
+- `samples/TDP/` — 3DP binder-jetting pipeline with Lua export example
+- `samples/WAAM/` — WAAM arc-additive robot path export example
 - `samples/Custom/` — Fully Lua-script-defined pipeline example (FDM / SLA / inline script / async / Protobuf bytes)
 - `android/` — Android JNI sample project
 - `ios/HsBaSlicerExample/` — iOS Swift bridging sample

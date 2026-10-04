@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file model_preprocess.hpp
+ * @brief Lib-side model loading, transform, query and boolean/thick-solid preprocessing C++ API.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_MODEL_PREPROCESS_HPP
 #define HSBA_SLICER_MODEL_PREPROCESS_HPP
 

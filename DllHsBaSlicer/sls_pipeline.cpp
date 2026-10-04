@@ -1,3 +1,7 @@
+/** @file sls_pipeline.cpp
+ * @brief Implementation of the SLS (selective laser sintering) slicing pipeline C ABI.
+ * @author HsBa
+ */
 #include "sls_pipeline.h"
 
 #include <chrono>
@@ -15,6 +19,8 @@
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
 #include "base/coroutine.hpp"
+#include "base/error.hpp"
+#include "pipeline_parallel.hpp"
 
 namespace HsBa::Slicer::Pipeline
 {
@@ -169,7 +175,7 @@ HsBaSlsPipelineResult_t ToCResult(const InternalSlsResult& ir)
 
 Utils::Task<InternalSlsResult> RunSlsPipelineAsync(const InternalSlsConfig& cfg)
 {
-    // 把常用自定义类型的 AnyObject/Lua 注册函数装入通用注册池，供各阶段 Lua 环境使用
+    // Load the AnyObject/Lua registration functions for common custom types into the generic registry pool for the per-stage Lua environments to use
     HsBa::Slicer::InstallCommonAnyObjectTypes();
 
     InternalSlsResult result;
@@ -191,9 +197,9 @@ Utils::Task<InternalSlsResult> RunSlsPipelineAsync(const InternalSlsConfig& cfg)
             co_return result;
         }
 
-        ModelInfo info;
-        model->BoundingBox(info.bbox_min, info.bbox_max);
-        info.volume = model->Volume();
+        // Fetch bbox/volume through the Lib model funnel so any third-party
+        // geometry exception is translated into the project's RuntimeError family.
+        ModelInfo info = GetModelInfo(cfg.model_name);
         int total_layers = CalculateLayerCount(info, cfg.layer_height, cfg.first_layer_height);
         if (total_layers <= 0)
         {
@@ -210,14 +216,22 @@ Utils::Task<InternalSlsResult> RunSlsPipelineAsync(const InternalSlsConfig& cfg)
         std::vector<float> layer_z_heights(total_layers);
         float z_offset = info.bbox_min.z();
 
-        for (int i = 0; i < total_layers; ++i)
-        {
-            float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
-            layer_z_heights[i] = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height);
-            layer_outlines[i] = NormalizeUnSafePolygons(UnSafeSlice(*model, z));
-            int progress = 15 + (i * 35) / total_layers;
-            ReportProgress(cfg, progress, "Slicing layer");
-        }
+        // Build the slicing topology once and slice layers in parallel: each layer
+        // is independent and SliceLayer only const-reads the shared topology.
+        auto topo = BuildSliceTopology(*model);
+        ParallelForLayers(
+            total_layers,
+            [&](int i)
+            {
+                float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
+                layer_z_heights[i] = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height);
+                layer_outlines[i] = SliceLayer(*topo, z);
+            },
+            [&](int done)
+            {
+                int progress = 15 + (done * 35) / total_layers;
+                ReportProgress(cfg, progress, "Slicing layer");
+            });
         ReportProgress(cfg, 50, "Slicing complete");
 
         // ========== Stage 3: Export via Lua ==========
@@ -246,7 +260,8 @@ Utils::Task<InternalSlsResult> RunSlsPipelineAsync(const InternalSlsConfig& cfg)
         pkg.config_json = config_json;
 
         std::string func = cfg.export_lua_func.empty() ? "export_sls" : cfg.export_lua_func;
-        bool export_ok = SaveSlsPackageLua(pkg, output_path, cfg.export_lua_script, func);
+        std::string lua_error;
+        bool export_ok = SaveSlsPackageLua(pkg, output_path, cfg.export_lua_script, func, &lua_error);
 
         if (export_ok)
         {
@@ -256,12 +271,12 @@ Utils::Task<InternalSlsResult> RunSlsPipelineAsync(const InternalSlsConfig& cfg)
         else
         {
             result.success = false;
-            result.error_message = "Failed to export SLS package via Lua script";
+            result.error_message = "Failed to export SLS package via Lua script: " + lua_error;
         }
 
         ReportProgress(cfg, 100, "Pipeline complete");
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         result.success = false;
         result.error_message = std::string("Pipeline error: ") + e.what();

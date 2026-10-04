@@ -227,7 +227,36 @@ int main()
 | `SlaPipeline` | SLA full pipeline (slice→support→floor→render→package) |
 | `SlsPipeline` | SLS Lua-driven export |
 | `FileTransferPipeline` | File transfer (validate→connect pool→transfer) |
+| `ParamStorePipeline` | Process-parameter store (write/read config structs by business key) |
 | `SlicerError` | Unified exception type |
+
+### Process Parameter Store (Module Version)
+
+`ParamStorePipeline` wraps the Lib layer to write/read `HsBa*PipelineConfig_t` structs to/from a database by a business key; failures throw `SlicerError`.
+
+```cpp
+import hsba.slicer;
+using namespace HsBa::Slicer;
+
+ParamStoreConnection conn;
+conn.backend    = ParamStoreBackend::Sqlite;
+conn.sqlitePath = "params.db";
+ParamStorePipeline store(conn);
+
+HsBaFdmPipelineConfig_t cfg = defaultFdmConfig();
+cfg.model_name = "tough_template";
+
+// Save: returns the persisted row id
+store.save(ParamStoreKind::Fdm, &cfg, "tough_template");
+
+// Load: reads back into out (const char* fields are malloc-owned by the library)
+HsBaFdmPipelineConfig_t out = defaultFdmConfig();
+store.load(ParamStoreKind::Fdm, "tough_template", &out);
+// use out.model_name ...
+store.freeLoaded(ParamStoreKind::Fdm, &out);  // release the loaded heap strings
+```
+
+> Config structs still reuse `HsBa*PipelineConfig_t` from `pipeline_types.h` (the module does not redefine them); the `table` argument of `save`/`load` may be omitted to use the type-derived default table; Android/iOS support `ParamStoreBackend::Sqlite` only.
 
 ### Lua Extension Function Registration (Module Version)
 

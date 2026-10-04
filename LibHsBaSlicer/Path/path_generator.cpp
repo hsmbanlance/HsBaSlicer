@@ -1,7 +1,13 @@
+/** @file path_generator.cpp
+ * @brief Implementation of FDM G-code path generation (per-layer paths, multi-firmware and spiral/vase mode).
+ * @author HsBa
+ */
 #include "path_generator.hpp"
 
 #include <cmath>
 #include <format>
+
+#include "spiral_path.hpp"
 
 namespace HsBa::Slicer
 {
@@ -9,14 +15,14 @@ HSBA_SLICER_LIB_API std::vector<GPoint> PolygonsToGPoints(const PolygonsD& polys
                                                           bool is_extrude)
 {
     std::vector<GPoint> points;
-    points.reserve(polys.size() * 4);  // 预估
+    points.reserve(polys.size() * 4);  // Rough estimate
 
     for (const auto& poly : polys)
     {
         if (poly.empty())
             continue;
 
-        // 第一个点：空走到起点
+        // First point: travel to the start
         GPoint travel;
         travel.type = GcodeType::G0;
         travel.p1 = {static_cast<float>(poly.front().x), static_cast<float>(poly.front().y), z};
@@ -24,7 +30,7 @@ HSBA_SLICER_LIB_API std::vector<GPoint> PolygonsToGPoints(const PolygonsD& polys
         travel.extrusion = 0.0;
         points.push_back(travel);
 
-        // 后续点：打印到各顶点
+        // Subsequent points: print to each vertex
         for (size_t i = 1; i <= poly.size(); ++i)
         {
             const auto& pt = poly[i % poly.size()];
@@ -35,7 +41,7 @@ HSBA_SLICER_LIB_API std::vector<GPoint> PolygonsToGPoints(const PolygonsD& polys
 
             if (is_extrude)
             {
-                // 计算挤出量：线宽 * 层高 * 段长 * 倍率
+                // Compute extrusion: line_width * layer_height * segment_length * multiplier
                 const auto& prev = poly[(i - 1) % poly.size()];
                 double dx = pt.x - prev.x;
                 double dy = pt.y - prev.y;
@@ -61,21 +67,21 @@ HSBA_SLICER_LIB_API std::unique_ptr<PointsPath> GenerateGCodePath(const std::vec
     {
         float z = layer.z_height;
 
-        // 1. 打印轮廓（外壁）
+        // 1. Print outlines (outer wall)
         auto outline_pts = PolygonsToGPoints(layer.outlines, z, config, true);
         for (auto& pt : outline_pts)
         {
             path->push_back(pt);
         }
 
-        // 2. 打印填充（内部）
+        // 2. Print infill (interior)
         auto fill_pts = PolygonsToGPoints(layer.fills, z, config, true);
         for (auto& pt : fill_pts)
         {
             path->push_back(pt);
         }
 
-        // 3. 打印支撑
+        // 3. Print support
         auto support_pts = PolygonsToGPoints(layer.supports, z, config, true);
         for (auto& pt : support_pts)
         {
@@ -106,6 +112,26 @@ HSBA_SLICER_LIB_API std::unique_ptr<GCodePath> GenerateGCodePathV2(const std::ve
         path->push_back(layer_config, combined);
     }
 
+    return path;
+}
+
+HSBA_SLICER_LIB_API std::unique_ptr<GCodePath> GenerateGCodePathSpiral(const std::vector<PolygonsD>& layer_outlines,
+                                                                       const std::vector<double>& layer_zs,
+                                                                       const GCodePrinterConfig& printer_config)
+{
+    auto path = std::make_unique<GCodePath>(printer_config);
+
+    // Merge all per-layer outer contours into one continuous, Z-rising helix.
+    const std::vector<SpiralPoint> helix = SpiralizeOuterWall(layer_outlines, layer_zs);
+
+    std::vector<PathPoint3D> wall;
+    wall.reserve(helix.size());
+    for (const auto& pt : helix)
+        wall.push_back(PathPoint3D{pt.x, pt.y, pt.z});
+
+    // Vase mode emits only the continuous wall (no per-layer polygons); ToGCode
+    // writes header + the single unbroken helix + footer.
+    path->setContinuousWall(std::move(wall));
     return path;
 }
 

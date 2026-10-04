@@ -1,4 +1,8 @@
-﻿#include "ModelLoader.hpp"
+﻿/** @file ModelLoader.cpp
+ * @brief Implementation of the unified model loader and its model-pool operations.
+ * @author HsBa
+ */
+#include "ModelLoader.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -22,20 +26,21 @@ namespace HsBa::Slicer
 
 namespace
 {
-    std::shared_ptr<IModel> LoadPointCloudModel(const std::string& name, std::string_view filePath)
-    {
+std::shared_ptr<IModel> LoadPointCloudModel(const std::string& name, std::string_view filePath)
+{
 #ifdef USE_OPENVDB
-        auto model = std::make_shared<OpenVdbModel>();
-        if (!model->Load(filePath))
-        {
-            throw RuntimeError(std::format("Failed to load point cloud model: {}", std::string(filePath)));
-        }
-        return model;
-#else
-        throw RuntimeError(std::format("Point cloud formats are not supported on this platform (OpenVDB not available): {}", std::string(filePath)));
-#endif
+    auto model = std::make_shared<OpenVdbModel>();
+    if (!model->Load(filePath))
+    {
+        throw RuntimeError(std::format("Failed to load point cloud model: {}", std::string(filePath)));
     }
+    return model;
+#else
+    throw RuntimeError(std::format("Point cloud formats are not supported on this platform (OpenVDB not available): {}",
+                                   std::string(filePath)));
+#endif
 }
+}  // namespace
 
 std::shared_ptr<IModel> ModelLoader::LoadModel(const std::string& name, std::string_view filePath)
 {
@@ -70,7 +75,8 @@ std::shared_ptr<IModel> ModelLoader::LoadModel(const std::string& name, std::str
         }
         return pool_.insert(name, std::static_pointer_cast<IModel>(model));
 #else
-        throw RuntimeError(std::format("BRep format is not supported on this platform (OCCT not available): {}", std::string(filePath)));
+        throw RuntimeError(std::format("BRep format is not supported on this platform (OCCT not available): {}",
+                                       std::string(filePath)));
 #endif
     }
 
@@ -393,8 +399,8 @@ std::shared_ptr<IModel> ModelLoader::DownsamplePointCloud(const std::string& sou
 }
 
 std::shared_ptr<IModel> ModelLoader::RemovePointCloudOutliers(const std::string& sourceName,
-                                                              const std::string& resultName,
-                                                              std::size_t k, float multiplier)
+                                                              const std::string& resultName, std::size_t k,
+                                                              float multiplier)
 {
     auto src = GetModel(sourceName);
     if (!src)

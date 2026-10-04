@@ -1,4 +1,9 @@
-﻿#pragma once
+﻿/** @file concepts.hpp
+ * @brief A header file containing the definition of reusable C++20 concepts for type constraints.
+ * @author HsBa
+ * @date 2024-06-01
+ */
+#pragma once
 #ifndef HSBA_SLICER_CONCEPTS_HPP
 
 #include <concepts>
@@ -10,8 +15,7 @@
 namespace HsBa::Slicer
 {
 /**
- * @brief streamable type,which can be used in stream operator,include input and output streamstreamable type,which can
- * be used in stream operator,include input and output stream
+ * @brief streamable type, which can be used in stream operators, including both input and output streams
  * @tparam T The type to check.
  */
 template <typename T>

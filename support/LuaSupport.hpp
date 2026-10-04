@@ -1,3 +1,7 @@
+/** @file LuaSupport.hpp
+ * @brief Lua script-based custom support generator that replaces built-in algorithms.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_LUA_SUPPORT_HPP
 #define HSBA_SLICER_LUA_SUPPORT_HPP

@@ -1,5 +1,10 @@
 ﻿#include "FullTopoModel.hpp"
 
+/**
+ * @file FullTopoModel.cpp
+ * @brief Implementation of the topology-reconstructed slicing mesh model.
+ */
+
 #include <boost/container_hash/hash.hpp>
 #include <climits>
 #include <cmath>
@@ -157,7 +162,7 @@ bool FullTopoModel::CheckTopo() const
     size_t vsize = vertices_.size();
     size_t esize = edges_.size();
     size_t fsize = faces_.size();
-    const auto check_faces = [this, vsize, esize, fsize]() { //所有面的点和边被定义
+    const auto check_faces = [this, vsize, esize, fsize]() { // all faces' vertices and edges are defined
 			std::set<int> vertex_set;
 			std::set<int> edge_set;
 			for (const auto& f : faces_)
@@ -185,7 +190,7 @@ bool FullTopoModel::CheckTopo() const
 			}
 			return vertex_set.size() == vsize && edge_set.size() == esize;
 			};
-    const auto check_edges = [this, vsize, esize, fsize]() {//所有边的点和面被定义
+    const auto check_edges = [this, vsize, esize, fsize]() { // all edges' vertices and faces are defined
 			std::set<int> vertex_set;
 			std::set<int> face_set;
 			for (const auto& e : edges_)
@@ -241,7 +246,7 @@ int FullTopoModel::EulerCharacteristic() const
 bool FullTopoModel::Intersection(const Eigen::Vector3f& v1, const Eigen::Vector3f& v2, const float height,
                                  Eigen::Vector3f& intersection)
 {
-    // 不相交的情况
+    // No-intersection case
     if (v1.z() > height && v2.z() > height)
     {
         return false;
@@ -250,7 +255,7 @@ bool FullTopoModel::Intersection(const Eigen::Vector3f& v1, const Eigen::Vector3
     {
         return false;
     }
-    // 平行返回其中之一
+    // Parallel: return one of the endpoints
     if (v1.z() == height && v2.z() == height)
     {
         if (v1.x() == v2.x() && v1.y() == v2.y())
@@ -341,7 +346,7 @@ Polygons FullTopoModel::Slice(const float height, double tolerance) const
     };
 
     /* ============================================================
-       1. 构建原始邻接表（精确整数 Key）
+       1. Build the raw adjacency list (exact integer Key)
        ============================================================ */
     std::unordered_map<Key, std::vector<Key>, boost::hash<Key>> raw_adj;
     raw_adj.reserve(faces_.size() * 2);
@@ -383,7 +388,7 @@ Polygons FullTopoModel::Slice(const float height, double tolerance) const
     }
 
     /* ============================================================
-       2. 合并接近节点：网格哈希 + 并查集
+       2. Merge nearby nodes: grid hashing + union-find
        ============================================================ */
     struct UnionFind
     {
@@ -459,7 +464,7 @@ Polygons FullTopoModel::Slice(const float height, double tolerance) const
         key_to_rep[kv.first] = uf.find(kv.first);
 
     /* ============================================================
-       3. 构建合并后的拓扑邻接表
+       3. Build the merged topological adjacency list
        ============================================================ */
     std::unordered_map<Key, std::vector<Key>, boost::hash<Key>> adj;
     for (const auto& kv : raw_adj)
@@ -480,7 +485,7 @@ Polygons FullTopoModel::Slice(const float height, double tolerance) const
     }
 
     /* ============================================================
-       4. 遍历提取封闭环
+       4. Traverse to extract closed loops
        ============================================================ */
     auto pick_next = [](const Key& cur, const Key& prev, const std::vector<Key>& neis) -> Key
     {
@@ -616,7 +621,7 @@ UnSafePolygons FullTopoModel::UnSafeSlice(const float height, double tolerance) 
         return dx <= coord_eps && dy <= coord_eps;
     };
 
-    /* 1. 原始邻接表 */
+    /* 1. Raw adjacency list */
     std::unordered_map<Key, std::vector<Key>, boost::hash<Key>> raw_adj;
     raw_adj.reserve(faces_.size() * 2);
 
@@ -656,7 +661,7 @@ UnSafePolygons FullTopoModel::UnSafeSlice(const float height, double tolerance) 
         neis.erase(std::unique(neis.begin(), neis.end()), neis.end());
     }
 
-    /* 2. 合并接近节点 */
+    /* 2. Merge nearby nodes */
     struct UnionFind
     {
         std::unordered_map<Key, Key, boost::hash<Key>> parent;
@@ -730,7 +735,7 @@ UnSafePolygons FullTopoModel::UnSafeSlice(const float height, double tolerance) 
     for (const auto& kv : raw_adj)
         key_to_rep[kv.first] = uf.find(kv.first);
 
-    /* 3. 合并后邻接表 */
+    /* 3. Merged adjacency list */
     std::unordered_map<Key, std::vector<Key>, boost::hash<Key>> adj;
     for (const auto& kv : raw_adj)
     {
@@ -749,7 +754,7 @@ UnSafePolygons FullTopoModel::UnSafeSlice(const float height, double tolerance) 
         neis.erase(std::unique(neis.begin(), neis.end()), neis.end());
     }
 
-    /* 4. 遍历 */
+    /* 4. Traversal */
     auto pick_next = [](const Key& cur, const Key& prev, const std::vector<Key>& neis) -> Key
     {
         Key sentinel = {LLONG_MIN, LLONG_MIN};

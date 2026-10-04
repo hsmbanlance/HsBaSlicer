@@ -1,4 +1,8 @@
-﻿#ifndef HSBA_NO_DLL_LOADER
+﻿/** @file UserCustomCADModel.cpp
+ * @brief Implementation of the user-supplied custom CAD model loaded from an external DLL/SO.
+ * @author HsBa
+ */
+#ifndef HSBA_NO_DLL_LOADER
 
 
 #include "UserCustomCADModel.hpp"

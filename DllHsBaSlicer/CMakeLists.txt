@@ -13,10 +13,21 @@ if(IOS OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
   sla_pipeline.cpp
   sls_pipeline.h
   sls_pipeline.cpp
+  slm_pipeline.h
+  slm_pipeline.cpp
+  lom_pipeline.h
+  lom_pipeline.cpp
+  tdp_pipeline.h
+  tdp_pipeline.cpp
+  waam_pipeline.h
+  waam_pipeline.cpp
   custom_pipeline.h
   custom_pipeline.cpp
+  pipeline_parallel.hpp
   file_transfer_pipeline.h
+  param_store_pipeline.h
   file_transfer_pipeline.cpp
+  param_store_pipeline.cpp
   model_preprocess.h
   model_preprocess.cpp
   pipeline_convert.h
@@ -40,10 +51,21 @@ else()
   sla_pipeline.cpp
   sls_pipeline.h
   sls_pipeline.cpp
+  slm_pipeline.h
+  slm_pipeline.cpp
+  lom_pipeline.h
+  lom_pipeline.cpp
+  tdp_pipeline.h
+  tdp_pipeline.cpp
+  waam_pipeline.h
+  waam_pipeline.cpp
   custom_pipeline.h
   custom_pipeline.cpp
+  pipeline_parallel.hpp
   file_transfer_pipeline.h
+  param_store_pipeline.h
   file_transfer_pipeline.cpp
+  param_store_pipeline.cpp
   model_preprocess.h
   model_preprocess.cpp
   pipeline_convert.h

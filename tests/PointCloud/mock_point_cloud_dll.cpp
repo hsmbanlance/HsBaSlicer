@@ -109,21 +109,36 @@ public:
     }
 };
 
-MockPointCloudModel* AsMockModel(HsBa::Slicer::IModel* model) { return dynamic_cast<MockPointCloudModel*>(model); }
+MockPointCloudModel* AsMockModel(HsBa::Slicer::IModel* model)
+{
+    return dynamic_cast<MockPointCloudModel*>(model);
+}
 
 const MockPointCloudModel* AsMockModel(const HsBa::Slicer::IModel* model)
 {
     return dynamic_cast<const MockPointCloudModel*>(model);
 }
 
-Eigen::Vector3f ToEigen(const HsBaVector3f_t& point) { return Eigen::Vector3f{point.x, point.y, point.z}; }
+Eigen::Vector3f ToEigen(const HsBaVector3f_t& point)
+{
+    return Eigen::Vector3f{point.x, point.y, point.z};
+}
 
-HsBaVector3f_t ToHsBa(const Eigen::Vector3f& point) { return HsBaVector3f_t{point.x(), point.y(), point.z()}; }
+HsBaVector3f_t ToHsBa(const Eigen::Vector3f& point)
+{
+    return HsBaVector3f_t{point.x(), point.y(), point.z()};
+}
 }  // namespace
 
-MOCK_PC_EXPORT HsBa::Slicer::IModel* mockpc_create_model() { return new MockPointCloudModel(); }
+MOCK_PC_EXPORT HsBa::Slicer::IModel* mockpc_create_model()
+{
+    return new MockPointCloudModel();
+}
 
-MOCK_PC_EXPORT void mockpc_destroy_model(HsBa::Slicer::IModel* model) { delete model; }
+MOCK_PC_EXPORT void mockpc_destroy_model(HsBa::Slicer::IModel* model)
+{
+    delete model;
+}
 
 MOCK_PC_EXPORT void mockpc_add_point(HsBa::Slicer::IModel* model, HsBaVector3f_t point)
 {

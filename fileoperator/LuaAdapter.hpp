@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/**
+ * @file LuaAdapter.hpp
+ * @brief Declares the Lua registration entry points for the file-operator layer.
+ */
+#pragma once
 #ifndef FILEOPERATOR_LUAADAPTER_HPP
 #define FILEOPERATOR_LUAADAPTER_HPP
 
@@ -56,5 +60,15 @@ void RegisterLuaPostgreSQLAdapter(lua_State* L);
  */
 void RegisterLuaBit7zZipper(lua_State* L);
 #endif  // HSBA_USE_BIT7Z
+
+/**
+ * @brief Register the ParamStore process-parameter pipeline in Lua.
+ *
+ * Exposes a `ParamStore` global table with PascalCase methods
+ * `new/EnsureSchema/Save/Load/List/Update/Delete`. The first argument to `new` is any
+ * registered SQL adapter userdata (SQLiteAdapter / MySQLAdapter / PostgreSQLAdapter).
+ * @param L Lua state pointer.
+ */
+void RegisterLuaParamStore(lua_State* L);
 }  // namespace HsBa::Slicer
 #endif  // FILEOPERATOR_LUAADAPTER_HPP

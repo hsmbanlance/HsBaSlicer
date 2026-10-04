@@ -1,4 +1,8 @@
-﻿#include "FloatPolygons.hpp"
+﻿/** @file FloatPolygons.cpp
+ * @brief Implementations of double-precision polygon operations, shape/text generators and int<->double conversion.
+ * @author HsBa
+ */
+#include "FloatPolygons.hpp"
 
 #include <algorithm>
 #include <boost/container_hash/hash.hpp>

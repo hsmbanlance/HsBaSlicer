@@ -1,33 +1,32 @@
 -- my_infill.lua
 -- 自定义填充生成脚本（不含壁厚）
 --
--- Lua 环境全局变量:
---   current_layer : 当前层多边形（已扣除壁厚区域）
---   layer_index   : 当前层索引（从 0 开始）
---   layer_height  : 层高（mm）
---   config        : 填充配置表，含 fill_spacing, fill_mode, fill_angle 等
+-- 调用约定（与 LuaCustomFill 胶水一致）:
+--   胶水先执行本 chunk（仅定义函数，不要末尾自调用），
+--   再调用 generate_fill(polygons)，以"参数"传入当前层多边形并接收返回的填充多边形。
+--   本阶段不注入任何全局变量，层号/配置不可用，请使用脚本内默认值。
+--
+-- 参数 current_layer : 当前层多边形（已扣除壁厚区域）{ { {x=..,y=..}, ... }, ... }
+-- 返回值: 填充多边形表
 --
 -- 可用 PolygonOperations 函数:
 --   offsetOperation(polys, delta)   -- 偏移
 --   union / intersection / difference / xor
 --   makeCircle / makeRectangle / makeRegularPolygon
 --   area(poly)
---
--- 返回值: 填充多边形表
 
 local PO = PolygonOperations
 
-function generate_fill()
+function generate_fill(current_layer)
     if #current_layer == 0 then
         return {}
     end
 
-    local spacing = config.fill_spacing or 0.4
-    local angle = config.fill_angle or 45.0
+    -- 填充参数（胶水未传入 config，此处使用脚本内默认值）
+    local spacing = 0.4
+    local angle = 45.0
 
-    -- 计算当前层的填充角度（逐层旋转 60°，形成更均匀的力学结构）
-    local layer_angle = angle + (layer_index % 6) * 60.0
-    local rad = layer_angle * math.pi / 180.0
+    local rad = angle * math.pi / 180.0
 
     -- 计算当前层的边界框
     local min_x, min_y = math.huge, math.huge
@@ -87,5 +86,3 @@ function generate_fill()
 
     return result
 end
-
-return generate_fill()

@@ -294,8 +294,8 @@ BOOST_AUTO_TEST_CASE(any_object_mock_argument_dependent_rules)
     // Rule 1: arg == 0 -> throw runtime_error.
     reg.add_rule<Standard>("Add", Mock::ArgAtIs<int>(0, 0), Mock::ThrowOf<std::runtime_error>("zero not allowed"));
     // Rule 2: arg > 100 -> return -1.
-    reg.add_rule<Standard>("Add",
-                           Mock::ArgAtMatches<int>(0, [](const int& v) { return v > 100; }), Mock::Return<int>(-1));
+    reg.add_rule<Standard>("Add", Mock::ArgAtMatches<int>(0, [](const int& v) { return v > 100; }),
+                           Mock::Return<int>(-1));
     // Fallback stub for any other value: return real self->value + arg (mirrors the real method).
     reg.stub<Standard>("Add",
                        [](void* self, std::span<AnyObject> a) -> AnyObject
@@ -341,8 +341,7 @@ BOOST_AUTO_TEST_CASE(any_object_mock_rule_precedence_and_helpers)
 
     // Fallback would return 111, but the rule below matches and returns 222.
     reg.stub_return<Standard>("Add", 111);
-    reg.add_rule<Standard>("Add", Mock::AllOf(Mock::ArgCountIs(1u), Mock::ArgAtIs<int>(0, 7)),
-                           Mock::Return<int>(222));
+    reg.add_rule<Standard>("Add", Mock::AllOf(Mock::ArgCountIs(1u), Mock::ArgAtIs<int>(0, 7)), Mock::Return<int>(222));
     BOOST_CHECK_EQUAL(obj.Invoke("Add", args).cast<int>(), 222);
 
     // Not(...) inverts a predicate -> no match, fallback stub fires.
@@ -358,14 +357,13 @@ BOOST_AUTO_TEST_CASE(any_object_mock_rule_precedence_and_helpers)
 
     // Mock::Do wraps a user lambda that both reads args and self.
     reg.clear_rules<Standard>("Add");
-    reg.when_called<Standard>("Add",
-                              Mock::Do(
-                                  [](void* self, std::span<AnyObject> a) -> AnyObject
-                                  {
-                                      auto* s = static_cast<Standard*>(self);
-                                      s->value += a[0].cast<int>();
-                                      return AnyObject{s->value};
-                                  }));
+    reg.when_called<Standard>("Add", Mock::Do(
+                                         [](void* self, std::span<AnyObject> a) -> AnyObject
+                                         {
+                                             auto* s = static_cast<Standard*>(self);
+                                             s->value += a[0].cast<int>();
+                                             return AnyObject{s->value};
+                                         }));
     BOOST_CHECK_EQUAL(obj.Invoke("Add", args).cast<int>(), 7);
     BOOST_CHECK_EQUAL(obj.Invoke("Add", args).cast<int>(), 14);
 }

@@ -1,3 +1,7 @@
+/** @file Msg2FullTopoModel.cpp
+ * @brief Implementation of the protobuf-to-FullTopoModel converter.
+ * @author HsBa
+ */
 #include "Msg2FullTopoModel.hpp"
 
 namespace HsBa::Slicer

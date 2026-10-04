@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file custom_pipeline.h
+ * @brief C ABI for the fully Lua-driven custom pipeline: create config, run sync/async and free results.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_CUSTOM_PIPELINE_H
 #define HSBA_SLICER_CUSTOM_PIPELINE_H
 
@@ -48,8 +52,7 @@ extern "C"
      */
     HSBA_SLICER_API void HsBaRunCustomPipelineAsync(const HsBaCustomPipelineConfig_t* config,
                                                     HsBaCustomProgressCallback callback, void* user_data,
-                                                    HsBaCustomResultCallback result_callback,
-                                                    void* result_user_data);
+                                                    HsBaCustomResultCallback result_callback, void* result_user_data);
 
     /**
      * @brief Free memory allocated in custom pipeline result.

@@ -1,4 +1,8 @@
-﻿#include "IglModel.hpp"
+﻿/** @file IglModel.cpp
+ * @brief Implementation of the libigl-backed triangle mesh model.
+ * @author HsBa
+ */
+#include "IglModel.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -18,8 +22,8 @@
 #include <igl/volume.h>
 
 #ifdef USE_CGAL
-#include <igl/copyleft/cgal/mesh_boolean.h>
 #include "CgalModel.hpp"
+#include <igl/copyleft/cgal/mesh_boolean.h>
 #endif
 
 #include "base/ModelFormat.hpp"
@@ -96,15 +100,15 @@ bool IglModel::Save(std::string_view filename, ModelFormat format) const
 
 void IglModel::Translate(const Eigen::Vector3f& translation)
 {
-    // 顶点按行存储（N×3）：MatrixXf += Vector3f 尺寸不匹配，在 Release 下是
-    // 未定义行为（越界读取），必须用 rowwise 广播逐行相加
+    // Vertices are stored row-wise (N×3): MatrixXf += Vector3f has a size mismatch
+    // and is undefined behavior (out-of-bounds read) in Release; use rowwise broadcast to add per row
     vertices_.rowwise() += translation.transpose();
 }
 void IglModel::Rotate(const Eigen::Quaternionf& rotation)
 {
     Eigen::Matrix3f rotationMatrix = rotation.toRotationMatrix();
-    // 行存储下 p' = R·p 等价于行向量右乘 R^T；旋转矩阵为 3×3，
-    // 原先 rotationMatrix * vertices_（3×3 乘 N×3）尺寸非法
+    // With row storage, p' = R·p is equivalent to right-multiplying the row vector by R^T;
+    // the rotation matrix is 3×3, so the previous rotationMatrix * vertices_ (3×3 times N×3) was an invalid size
     vertices_ = vertices_ * rotationMatrix.transpose();
     if (normals_.cols() == faces_.cols())
     {
@@ -121,7 +125,7 @@ void IglModel::Scale(const Eigen::Vector3f& scaleFactors)
 }
 void IglModel::Transform(const Eigen::Isometry3f& transform)
 {
-    // 行存储齐次变换：p'^T = p_h^T · M^T（p_h 为行末补 1 的齐次行向量）
+    // Row-storage homogeneous transform: p'^T = p_h^T · M^T (p_h is the homogeneous row vector with a trailing 1)
     vertices_ = (vertices_.rowwise().homogeneous() * transform.matrix().transpose()).rowwise().hnormalized();
     if (normals_.cols() == faces_.cols())
     {
@@ -191,9 +195,10 @@ std::pair<Eigen::MatrixXf, Eigen::MatrixXi> IglModel::TriangleMesh() const
 #ifdef USE_CGAL
 namespace
 {
-// igl::copyleft::cgal::mesh_boolean 基于 CGAL 精确几何内核，float 顶点可能因精度不足
-// 导致 winding number 场不一致而静默失败（返回 false 与空网格），必须先提升至 double；
-// 若仍失败则回退到 CgalModel 的 Nef 多面体布尔（同一 CGAL 内核，已在测试中验证可靠）
+// igl::copyleft::cgal::mesh_boolean relies on the CGAL exact geometry kernel; float vertices may
+// produce an inconsistent winding-number field and fail silently (returning false with an empty mesh),
+// so they must first be promoted to double; if it still fails, fall back to CgalModel's Nef polyhedron
+// boolean (same CGAL kernel, verified reliable in tests)
 bool IglMeshBooleanImpl(const Eigen::MatrixXf& va, const Eigen::MatrixXi& fa, const Eigen::MatrixXf& vb,
                         const Eigen::MatrixXi& fb, igl::MeshBooleanType type, Eigen::MatrixXf& v_out,
                         Eigen::MatrixXi& f_out)
@@ -210,7 +215,7 @@ bool IglMeshBooleanImpl(const Eigen::MatrixXf& va, const Eigen::MatrixXi& fa, co
         return true;
     }
 
-    // 回退：经 CgalModel 的 Nef 布尔运算
+    // Fallback: Nef boolean via CgalModel
     CgalModel ca(va, fa);
     CgalModel cb(vb, fb);
     CgalModel rc = ca;
@@ -281,8 +286,7 @@ IglModel Union(const IglModel& left, const IglModel& right)
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
     }
 
-    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_UNION, v,
-                       f);
+    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_UNION, v, f);
 
     if (v.rows() == 0 || f.rows() == 0)
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
@@ -314,8 +318,8 @@ IglModel Intersection(const IglModel& left, const IglModel& right)
     if (!is_valid_mesh(left.vertices_, left.faces_) || !is_valid_mesh(right.vertices_, right.faces_))
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
 
-    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_INTERSECT,
-                       v, f);
+    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_INTERSECT, v,
+                       f);
 
     if (v.rows() == 0 || f.rows() == 0)
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
@@ -347,8 +351,7 @@ IglModel Difference(const IglModel& left, const IglModel& right)
     if (!is_valid_mesh(left.vertices_, left.faces_) || !is_valid_mesh(right.vertices_, right.faces_))
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
 
-    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_MINUS, v,
-                       f);
+    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_MINUS, v, f);
 
     if (v.rows() == 0 || f.rows() == 0)
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
@@ -380,8 +383,7 @@ IglModel Xor(const IglModel& left, const IglModel& right)
     if (!is_valid_mesh(left.vertices_, left.faces_) || !is_valid_mesh(right.vertices_, right.faces_))
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
 
-    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_XOR, v,
-                       f);
+    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_XOR, v, f);
 
     if (v.rows() == 0 || f.rows() == 0)
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
@@ -412,8 +414,9 @@ IglModel IglModel::CreateBox(const Eigen::Vector3f& size)
     std::vector<Eigen::Vector3f> verts{{-h.x(), -h.y(), -h.z()}, {h.x(), -h.y(), -h.z()}, {h.x(), h.y(), -h.z()},
                                        {-h.x(), h.y(), -h.z()},  {-h.x(), -h.y(), h.z()}, {h.x(), -h.y(), h.z()},
                                        {h.x(), h.y(), h.z()},    {-h.x(), h.y(), h.z()}};
-    // 绕序必须使法向朝外：mesh_boolean 等基于 winding number 的布尔运算
-    // 依赖一致的外法向朝向（原先全部朝内时 winding number 为 -1，布尔分类错误）
+    // Winding must orient normals outward: winding-number-based booleans such as mesh_boolean
+    // rely on a consistent outward normal orientation (when all normals previously pointed inward, the
+    // winding number was -1 and boolean classification was wrong)
     std::vector<Eigen::Vector3i> faces{
         {0, 2, 1}, {0, 3, 2},  // bottom
         {4, 5, 6}, {4, 6, 7},  // top
@@ -499,12 +502,12 @@ IglModel IglModel::CreateCylinder(const float radius, const float height, const 
     {
         int i0 = i * 2;
         int i1 = ((i + 1) % seg) * 2;
-        // quad -> two triangles，环 CCW（角度递增）时下列绕序法向朝外
+        // quad -> two triangles; when the ring is CCW (angle increasing), the following winding orients normals outward
         faces.emplace_back(i0, i1, i0 + 1);
         faces.emplace_back(i1, i1 + 1, i0 + 1);
-        // bottom cap（法向朝下）
+        // bottom cap (normal points down)
         faces.emplace_back(bottomCenter, i1, i0);
-        // top cap（法向朝上）
+        // top cap (normal points up)
         faces.emplace_back(topCenter, i0 + 1, i1 + 1);
     }
     Eigen::MatrixXf v(verts.size(), 3);
@@ -602,15 +605,15 @@ IglModel IglModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& dire
 
     const Eigen::Vector3f dir(direction.x(), direction.y(), direction.z());
 
-    // 归一化绕序：盖面/侧面构建假设底面多边形为 CCW（笛卡尔坐标下 Clipper2 Area > 0），
-    // 若输入为 CW 则反转，避免盖面与侧面法向朝内
+    // Normalize winding: cap/side construction assumes the base polygon is CCW (Clipper2 Area > 0 in
+    // Cartesian coordinates); if the input is CW, reverse it to avoid inward-facing cap and side normals
     PolygonD ccw_poly = poly;
     if (Clipper2Lib::Area(ccw_poly) < 0.0)
     {
         std::reverse(ccw_poly.begin(), ccw_poly.end());
     }
 
-    // ========== 1. 三角化底面（Clipper2） ==========
+    // ========== 1. Triangulate the base face (Clipper2) ==========
     Clipper2Lib::PathsD paths_in{ccw_poly};
     Clipper2Lib::PathsD triangles;
 
@@ -620,7 +623,7 @@ IglModel IglModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& dire
         throw RuntimeError("Triangulation failed");
     }
 
-    // 将三角化结果映射回原始顶点索引
+    // Map the triangulation result back to original vertex indices
     auto findIndex = [&](const Clipper2Lib::PointD& p) -> int
     {
         for (int i = 0; i < static_cast<int>(n); ++i)
@@ -649,7 +652,7 @@ IglModel IglModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& dire
                 throw RuntimeError("Triangulation produced unexpected vertex");
             }
         }
-        // 强制底面三角形为 CCW（笛卡尔坐标下有向面积为正），不依赖 Triangulate 的输出绕序
+        // Force base triangles to CCW (positive signed area in Cartesian coordinates), not relying on Triangulate's output winding
         if (Clipper2Lib::Area(tri) < 0.0)
         {
             std::swap(idx[1], idx[2]);
@@ -657,14 +660,14 @@ IglModel IglModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& dire
         bottom_tris.push_back(idx);
     }
 
-    // Clipper2 Triangulate 对已是三角形的输入不产出三角形，回退直接以原三角形作底面
-    // （ccw_poly 已归一化为 CCW，{0,1,2} 绕序即 CCW）
+    // Clipper2 Triangulate produces no triangles for already-triangular input; fall back to using the
+    // original triangle as the base face (ccw_poly is already normalized to CCW, so {0,1,2} winding is CCW)
     if (bottom_tris.empty() && n == 3)
     {
         bottom_tris.push_back({0, 1, 2});
     }
 
-    // ========== 2. 构建 3D 顶点 ==========
+    // ========== 2. Build 3D vertices ==========
     Eigen::MatrixXf V(2 * n, 3);
     for (size_t i = 0; i < n; ++i)
     {
@@ -672,25 +675,25 @@ IglModel IglModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& dire
         V.row(i + n) = V.row(i) + dir.transpose();
     }
 
-    // ========== 3. 构建面 ==========
+    // ========== 3. Build faces ==========
     const int n_bottom = static_cast<int>(bottom_tris.size());
     const int n_side = 2 * static_cast<int>(n);
     Eigen::MatrixXi F(2 * n_bottom + n_side, 3);
     int f = 0;
 
-    // 底面：法向朝下（-Z），反转 winding
+    // Base face: normal points down (-Z), reverse winding
     for (const auto& tri : bottom_tris)
     {
         F.row(f++) << tri[0], tri[2], tri[1];
     }
 
-    // 顶面：法向朝上（+Z），保持 CCW winding
+    // Top face: normal points up (+Z), keep CCW winding
     for (const auto& tri : bottom_tris)
     {
         F.row(f++) << tri[0] + n, tri[1] + n, tri[2] + n;
     }
 
-    // 侧面：基于原始多边形边
+    // Side faces: based on original polygon edges
     for (size_t i = 0; i < n; ++i)
     {
         size_t j = (i + 1) % n;
@@ -718,20 +721,22 @@ IglModel IglModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& di
 
     const Eigen::Vector3f dir(direction.x(), direction.y(), direction.z());
 
-    // 归一化绕序：外轮廓 CCW（笛卡尔坐标下 Area > 0），孔洞 CW（Area < 0）。
-    // Clipper2 Triangulate 按此约定识别孔洞（其 y-down 约定为"outer clockwise,
-    // inner counter-clockwise"，对应笛卡尔有向面积 outer>0 / hole<0）；
-    // 若外轮廓与孔洞同号，孔洞会被当作独立实体三角化导致体积偏大。
-    // 通过几何包含关系判定孔洞，不依赖调用方传入的绕序。
+    // Normalize winding: outer contours CCW (Area > 0 in Cartesian coordinates), holes CW (Area < 0).
+    // Clipper2 Triangulate identifies holes by this convention (its y-down convention is "outer clockwise,
+    // inner counter-clockwise", corresponding to Cartesian signed area outer>0 / hole<0);
+    // if outer contours and holes share the same sign, holes are triangulated as independent solids,
+    // inflating the volume. Holes are determined by geometric containment, not relying on the caller's winding.
     Clipper2Lib::PathsD norm_paths = paths;
     std::vector<bool> is_hole(norm_paths.size(), false);
-    // 通过嵌套深度奇偶判定孔洞：路径 i 的深度 = 严格包含它的其他路径数，深度为奇即孔洞。
-    // 包含判定用"多数顶点在内部"而非质心——质心可能落在内层子路径内
-    // （如外方框质心恰在内孔中），导致外轮廓被误判为孔洞而整体反转绕序。
-    // 注意：不能直接对 double 路径调用 Clipper2Lib::PointInPolygon——其 MSVC 分支按
-    // int64 精确算术编写（TriSign 仅有 int64_t 重载，double 被隐式截断），
-    // 非整数坐标会被误判共线而返回 IsOn。故按项目惯例先整型化（×integerization）
-    // 到 Path64 再做包含判定（int64 精确算术），包含关系在缩放下不变，无需反整型化。
+    // Determine holes by nesting-depth parity: the depth of path i = the number of other paths strictly
+    // containing it; an odd depth means a hole. Containment uses "majority of vertices inside" rather than the
+    // centroid - the centroid may fall inside an inner sub-path (e.g. an outer box's centroid lands exactly in
+    // an inner hole), causing an outer contour to be misclassified as a hole and its winding fully reversed.
+    // Note: Clipper2Lib::PointInPolygon cannot be called directly on double paths - its MSVC branch is written
+    // for int64 exact arithmetic (TriSign only has int64_t overloads, double is implicitly truncated), so
+    // non-integer coordinates are misjudged as collinear and return IsOn. Following project convention, first
+    // integerize (x integerization) to Path64, then test containment (int64 exact arithmetic); containment is
+    // invariant under scaling, so no de-integerization is needed.
     const Clipper2Lib::Paths64 int_paths = Integerization(norm_paths);
     for (size_t i = 0; i < norm_paths.size(); ++i)
     {
@@ -764,7 +769,7 @@ IglModel IglModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& di
         }
     }
 
-    // ========== 1. 三角化底面（Clipper2） ==========
+    // ========== 1. Triangulate the base face (Clipper2) ==========
     Clipper2Lib::PathsD triangles;
     auto result = Clipper2Lib::Triangulate(norm_paths, 0, triangles, true);
     if (result != Clipper2Lib::TriangulateResult::success)
@@ -772,7 +777,7 @@ IglModel IglModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& di
         throw RuntimeError("Triangulation failed");
     }
 
-    // ========== 2. 收集所有唯一顶点 ==========
+    // ========== 2. Collect all unique vertices ==========
     std::vector<Eigen::Vector2f> unique_verts;
     auto findOrAdd = [&](const Clipper2Lib::PointD& p) -> int
     {
@@ -788,7 +793,7 @@ IglModel IglModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& di
         return static_cast<int>(unique_verts.size()) - 1;
     };
 
-    // 先收集所有原始路径的顶点（确保侧面能正确关联）
+    // First collect vertices of all original paths (ensuring side faces can be linked correctly)
     for (const auto& path : paths)
     {
         for (const auto& pt : path)
@@ -797,7 +802,7 @@ IglModel IglModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& di
         }
     }
 
-    // 再收集三角化可能引入的新顶点（简单多边形通常不会有）
+    // Then collect new vertices possibly introduced by triangulation (simple polygons usually have none)
     for (const auto& tri : triangles)
     {
         for (const auto& pt : tri)
@@ -808,7 +813,7 @@ IglModel IglModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& di
 
     const int n = static_cast<int>(unique_verts.size());
 
-    // ========== 3. 构建底面三角形索引 ==========
+    // ========== 3. Build base-triangle indices ==========
     std::vector<std::array<int, 3>> bottom_tris;
     bottom_tris.reserve(triangles.size());
 
@@ -821,8 +826,8 @@ IglModel IglModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& di
         {
             idx[i] = findOrAdd(tri[i]);
         }
-        // 强制底面三角形为 CCW（笛卡尔坐标下有向面积为正），不依赖 Triangulate 的输出绕序；
-        // 孔洞区域不会被三角化（已按约定传入），因此所有三角形均属于实体区域
+        // Force base triangles to CCW (positive signed area in Cartesian coordinates), not relying on Triangulate's output winding;
+        // hole regions are not triangulated (already passed in per convention), so all triangles belong to solid regions
         if (Clipper2Lib::Area(tri) < 0.0)
         {
             std::swap(idx[1], idx[2]);
@@ -830,10 +835,10 @@ IglModel IglModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& di
         bottom_tris.push_back(idx);
     }
 
-    // Clipper2 Triangulate 对三角形路径不产出三角形，追加原始三角形路径补全底面，避免盖面丢失；
-    // 外轮廓三角形归一化为 CCW，孔洞三角形归一化为 CW（盖面贡献相消）
-    const size_t trianglePathCount = std::count_if(paths.begin(), paths.end(),
-                                                   [](const PolygonD& p) { return p.size() == 3; });
+    // Clipper2 Triangulate produces no triangles for triangular paths; append the original triangle paths to complete the base face, avoiding lost caps;
+    // outer-contour triangles are normalized to CCW, hole triangles to CW (cap contributions cancel)
+    const size_t trianglePathCount =
+        std::count_if(paths.begin(), paths.end(), [](const PolygonD& p) { return p.size() == 3; });
     if (bottom_tris.size() < trianglePathCount)
     {
         for (size_t pi = 0; pi < paths.size(); ++pi)
@@ -855,7 +860,7 @@ IglModel IglModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& di
         }
     }
 
-    // ========== 4. 构建 3D 顶点 ==========
+    // ========== 4. Build 3D vertices ==========
     Eigen::MatrixXf V(2 * n, 3);
     for (int i = 0; i < n; ++i)
     {
@@ -863,10 +868,10 @@ IglModel IglModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& di
         V.row(i + n) = V.row(i) + dir.transpose();
     }
 
-    // ========== 5. 构建面 ==========
+    // ========== 5. Build faces ==========
     const int n_bottom = static_cast<int>(bottom_tris.size());
 
-    // 侧面：基于归一化 paths 的每条边（孔洞为 CW，保证侧壁法向指向孔内）
+    // Side faces: per edge of the normalized paths (holes are CW, ensuring wall normals point into the hole)
     int n_side_tris = 0;
     for (const auto& path : norm_paths)
     {
@@ -876,19 +881,19 @@ IglModel IglModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& di
     Eigen::MatrixXi F(2 * n_bottom + n_side_tris, 3);
     int f = 0;
 
-    // 底面：法向朝下（-Z），反转 winding
+    // Base face: normal points down (-Z), reverse winding
     for (const auto& tri : bottom_tris)
     {
         F.row(f++) << tri[0], tri[2], tri[1];
     }
 
-    // 顶面：法向朝上（+Z），保持 CCW winding
+    // Top face: normal points up (+Z), keep CCW winding
     for (const auto& tri : bottom_tris)
     {
         F.row(f++) << tri[0] + n, tri[1] + n, tri[2] + n;
     }
 
-    // 侧面：基于原始 paths 的边
+    // Side faces: based on edges of the original paths
     auto findVertIdx = [&](const Clipper2Lib::PointD& p) -> int
     {
         for (int i = 0; i < n; ++i)

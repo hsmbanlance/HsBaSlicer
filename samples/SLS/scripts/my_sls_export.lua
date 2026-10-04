@@ -10,12 +10,12 @@
 --   images      : array, 每个元素为 { path="layers/N.json", data="<polygon JSON>" }
 --   output_path : string, 输出文件路径（由C++传入）
 --
--- 可用的已注册Lua库:
---   Zipper          : zip压缩包操作（add_file, save）
---   Cipher          : 加密/哈希
---   Bit7zZipper     : 7z压缩（可选）
---   SQLiteAdapter   : SQLite数据库操作
---   MySQLAdapter    : MySQL数据库操作（如果编译时启用）
+-- 可用的已注册Lua库（方法名与 C++ 绑定注册一致）:
+--   Zipper            : zip压缩包操作（AddByteFile(name, data), AddFile(name, path), Save(path)）
+--   Cipher            : 加密/哈希
+--   Bit7zZipper       : 7z压缩（可选）
+--   SQLiteAdapter     : SQLite数据库操作（new() 后调用 Connect/Execute/Query...）
+--   MySQLAdapter      : MySQL数据库操作（如果编译时启用）
 --   PostgreSQLAdapter : PostgreSQL数据库操作（如果编译时启用）
 --
 -- 返回值: table { success = true/false, export_path = "..." }
@@ -25,11 +25,11 @@ function export_sls()
     local zipper = Zipper.new()
 
     -- 2. 写入配置文件
-    zipper:add_file(config.path, config.configStr)
+    zipper:AddByteFile(config.path, config.configStr)
 
     -- 3. 写入每层的多边形轮廓数据
     for i, img in ipairs(images) do
-        zipper:add_file(img.path, img.data)
+        zipper:AddByteFile(img.path, img.data)
     end
 
     -- 4. 写入README说明
@@ -41,16 +41,17 @@ function export_sls()
     readme = readme .. "  - layers/: Per-layer polygon outlines (JSON format)\n\n"
     readme = readme .. "Layer JSON format:\n"
     readme = readme .. '  { "layer": N, "z_height": Z, "outlines": { "polygons": [...] } }\n'
-    zipper:add_file("README.txt", readme)
+    zipper:AddByteFile("README.txt", readme)
 
     -- 5. 保存zip文件
     local out_path = output_path or "sls_output.zip"
-    zipper:save(out_path)
+    zipper:Save(out_path)
 
     -- 6. 注册数据库记录（可选 - 使用SQLite示例）
     local db_ok, db_err = pcall(function()
-        local db = SQLiteAdapter.open("sls_history.db")
-        db:execute([[
+        local db = SQLiteAdapter.new()
+        db:Connect("sls_history.db")
+        db:Execute([[
             CREATE TABLE IF NOT EXISTS sls_exports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 output_path TEXT NOT NULL,
@@ -58,11 +59,10 @@ function export_sls()
                 export_time TEXT DEFAULT (datetime('now'))
             )
         ]])
-        db:execute(string.format(
+        db:Execute(string.format(
             "INSERT INTO sls_exports (output_path, total_layers) VALUES ('%s', %d)",
             out_path, #images
         ))
-        db:close()
     end)
 
     if not db_ok then

@@ -1,3 +1,7 @@
+/** @file file_transfer.cpp
+ * @brief Implementation of the Lib-side file transfer to a remote executor service.
+ * @author HsBa
+ */
 #include "file_transfer.hpp"
 
 #include "fileoperator/RemoteExecutor.hpp"

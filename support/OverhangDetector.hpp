@@ -1,3 +1,7 @@
+/** @file OverhangDetector.hpp
+ * @brief Detects overhang regions between adjacent layers that require support.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_OVERHANG_DETECTOR_HPP
 #define HSBA_SLICER_OVERHANG_DETECTOR_HPP

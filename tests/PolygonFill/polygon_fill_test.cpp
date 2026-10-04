@@ -257,10 +257,7 @@ BOOST_AUTO_TEST_CASE(optimizer_cluster_order)
     BOOST_CHECK(sorted == expectedIds);
 
     // 聚簇区域 1、2 在环游中应相邻（含首尾相邻）
-    auto pos = [&](int id)
-    {
-        return static_cast<int>(std::find(order.begin(), order.end(), id) - order.begin());
-    };
+    auto pos = [&](int id) { return static_cast<int>(std::find(order.begin(), order.end(), id) - order.begin()); };
     int d = std::abs(pos(1) - pos(2));
     BOOST_CHECK(d == 1 || d == static_cast<int>(order.size()) - 1);
 
@@ -354,10 +351,7 @@ BOOST_AUTO_TEST_CASE(polygon_mode_cluster_order)
     BOOST_CHECK(sorted == expectedIds);
 
     // 聚簇区域 1、2 在环游中应相邻（含首尾相邻）
-    auto pos = [&](int id)
-    {
-        return static_cast<int>(std::find(order.begin(), order.end(), id) - order.begin());
-    };
+    auto pos = [&](int id) { return static_cast<int>(std::find(order.begin(), order.end(), id) - order.begin()); };
     int d = std::abs(pos(1) - pos(2));
     BOOST_CHECK(d == 1 || d == static_cast<int>(order.size()) - 1);
 

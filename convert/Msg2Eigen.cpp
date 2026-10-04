@@ -1,4 +1,8 @@
-﻿#include "Msg2Eigen.hpp"
+﻿/** @file Msg2Eigen.cpp
+ * @brief Implementations of protobuf-to-Eigen converters.
+ * @author HsBa
+ */
+#include "Msg2Eigen.hpp"
 
 #include "base/error.hpp"
 

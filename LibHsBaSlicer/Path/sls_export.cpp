@@ -1,4 +1,8 @@
-﻿#include "sls_export.hpp"
+﻿/** @file sls_export.cpp
+ * @brief Implementation of the Lua-driven SLS export save API.
+ * @author HsBa
+ */
+#include "sls_export.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -7,8 +11,10 @@
 
 
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
+#include "base/error.hpp"
 #include "fileoperator/LuaAdapter.hpp"
 #include "paths/imagespath.hpp"
+#include "spiral_path.hpp"
 
 namespace HsBa::Slicer
 {
@@ -46,10 +52,26 @@ std::string PolygonsToJson(const PolygonsD& polys)
     return oss.str();
 }
 
+/// @brief Serialize a continuous 3D spiral path to a JSON object.
+std::string SpiralPathToJson(const std::vector<SpiralPoint>& path)
+{
+    std::ostringstream oss;
+    oss << "{\"type\":\"spiral\",\"points\":[";
+    for (size_t i = 0; i < path.size(); ++i)
+    {
+        if (i > 0)
+            oss << ",";
+        oss << "{\"x\":" << path[i].x << ",\"y\":" << path[i].y << ",\"z\":" << path[i].z << "}";
+    }
+    oss << "]}";
+    return oss.str();
+}
+
 }  // anonymous namespace
 
 HSBA_SLICER_LIB_API bool SaveSlsPackageLua(const SlsPackage& pkg, const std::string& output_zip,
-                                           const std::string& lua_script, const std::string& lua_func)
+                                           const std::string& lua_script, const std::string& lua_func,
+                                           std::string* error_out)
 {
     try
     {
@@ -68,6 +90,16 @@ HSBA_SLICER_LIB_API bool SaveSlsPackageLua(const SlsPackage& pkg, const std::str
                 wrapper << "{\"layer\":" << i << ",\"z_height\":" << z << ",\"outlines\":" << layer_json << "}";
                 images_path.AddImage("layers/" + std::to_string(i) + ".json", wrapper.str());
             }
+        }
+
+        // Spiral/vase mode: expose one continuous, Z-rising deposition path as an
+        // extra data stream for the export script to consume if it supports it.
+        if (pkg.spiral_mode)
+        {
+            std::vector<double> zs(pkg.layer_z_heights.begin(), pkg.layer_z_heights.end());
+            const std::vector<SpiralPoint> helix = SpiralizeOuterWall(pkg.layer_outlines, zs);
+            if (helix.size() >= 2)
+                images_path.AddImage("spiral/path.json", SpiralPathToJson(helix));
         }
 
         // Register SQL adapters so Lua script can perform database registration
@@ -89,8 +121,10 @@ HSBA_SLICER_LIB_API bool SaveSlsPackageLua(const SlsPackage& pkg, const std::str
                          std::string_view(lua_func), sql_reg);
         return true;
     }
-    catch (...)
+    catch (const RuntimeError& e)
     {
+        if (error_out)
+            *error_out = e.what();
         return false;
     }
 }

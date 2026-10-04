@@ -1,4 +1,8 @@
-﻿#include "sla_pipeline.h"
+﻿/** @file sla_pipeline.cpp
+ * @brief Implementation of the SLA (stereolithography) slicing pipeline C ABI.
+ * @author HsBa
+ */
+#include "sla_pipeline.h"
 
 #include <chrono>
 #include <cmath>
@@ -17,6 +21,8 @@
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
 #include "base/coroutine.hpp"
+#include "base/error.hpp"
+#include "pipeline_parallel.hpp"
 
 namespace HsBa::Slicer::Pipeline
 {
@@ -274,7 +280,7 @@ HsBaSlaPipelineResult_t ToCResult(const InternalSlaResult& ir)
 
 Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
 {
-    // 把常用自定义类型的 AnyObject/Lua 注册函数装入通用注册池，供各阶段 Lua 环境使用
+    // Load the AnyObject/Lua registration functions for common custom types into the generic registry pool for the per-stage Lua environments to use
     HsBa::Slicer::InstallCommonAnyObjectTypes();
 
     InternalSlaResult result;
@@ -297,9 +303,9 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
             co_return result;
         }
 
-        ModelInfo info;
-        model->BoundingBox(info.bbox_min, info.bbox_max);
-        info.volume = model->Volume();
+        // Fetch bbox/volume through the Lib model funnel so any third-party
+        // geometry exception is translated into the project's RuntimeError family.
+        ModelInfo info = GetModelInfo(cfg.model_name);
         int total_layers = CalculateLayerCount(info, cfg.layer_height, cfg.first_layer_height);
         if (total_layers <= 0)
         {
@@ -315,13 +321,21 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
         std::vector<PolygonsD> layer_outlines(total_layers);
         float z_offset = info.bbox_min.z();
 
-        for (int i = 0; i < total_layers; ++i)
-        {
-            float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
-            layer_outlines[i] = NormalizeUnSafePolygons(UnSafeSlice(*model, z));
-            int progress = 15 + (i * 20) / total_layers;
-            ReportProgress(cfg, progress, "Slicing layer");
-        }
+        // Build the slicing topology once and slice layers in parallel: each layer
+        // is independent and SliceLayer only const-reads the shared topology.
+        auto topo = BuildSliceTopology(*model);
+        ParallelForLayers(
+            total_layers,
+            [&](int i)
+            {
+                float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
+                layer_outlines[i] = SliceLayer(*topo, z);
+            },
+            [&](int done)
+            {
+                int progress = 15 + (done * 20) / total_layers;
+                ReportProgress(cfg, progress, "Slicing layer");
+            });
         ReportProgress(cfg, 35, "Slicing complete");
 
         // ========== Stage 3: Floor / Raft ==========
@@ -366,10 +380,18 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
 
             if (!cfg.support_lua_script.empty())
             {
-                // Lua custom support via LibHsBaSlicer API
+                // Lua custom support via LibHsBaSlicer API (script content is required, load file first)
                 std::string func = cfg.support_lua_func.empty() ? "generate_support" : cfg.support_lua_func;
-                layer_supports = GenerateAllLuaSupport(
-                    layer_outlines, sla_support_cfg, std::string_view(cfg.support_lua_script), std::string_view(func));
+                std::ifstream ifs(cfg.support_lua_script);
+                std::string script_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+                if (script_content.empty())
+                {
+                    result.success = false;
+                    result.error_message = "Failed to read support Lua script: " + cfg.support_lua_script;
+                    co_return result;
+                }
+                layer_supports = GenerateAllLuaSupport(layer_outlines, sla_support_cfg,
+                                                       std::string_view(script_content), std::string_view(func));
             }
             else
             {
@@ -428,7 +450,7 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
 
         ReportProgress(cfg, 100, "Pipeline complete");
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         result.success = false;
         result.error_message = std::string("Pipeline error: ") + e.what();

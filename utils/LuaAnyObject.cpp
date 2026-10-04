@@ -1,3 +1,7 @@
+/** @file LuaAnyObject.cpp
+ * @brief Implementation of Lua bindings for the any-object variant container.
+ * @author HsBa
+ */
 #include "LuaAnyObject.hpp"
 
 namespace HsBa::Slicer

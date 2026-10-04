@@ -22,6 +22,8 @@ namespace HsBa::Slicer
  *
  * This class provides archive extraction functionality using the Bit7z library,
  * supporting various formats (ZIP, 7Z, RAR, etc.) with password protection and caching.
+ * Compressed tar archives (.tar.gz / .tgz / .tar.xz / .txz) are unpacked in one step:
+ * the inner tar archive is opened transparently through the outer archive's subfile stream.
  */
 class Bit7ZUnzipper : public IUnzipper<Bit7ZUnzipper>,
                       public std::enable_shared_from_this<Bit7ZUnzipper>,
@@ -77,6 +79,7 @@ public:
 private:
     void ReadFromFileImpl(std::string_view path, bool reopen);
     std::shared_ptr<UnzipperStream> GetStreamImpl(std::string_view part_file);
+    void ClearInnerTarTempFile();
     Bit7ZUnzipper(const Bit7ZUnzipper&) = delete;
     Bit7ZUnzipper& operator=(const Bit7ZUnzipper&) = delete;
     Bit7ZUnzipper(Bit7ZUnzipper&&) = delete;
@@ -85,6 +88,9 @@ private:
     inline static constexpr size_t user_buff_size = 4096;
     std::string dll_path_;
     std::unique_ptr<bit7z::BitArchiveReader> archiver_;
+    // For compressed tars (.tar.gz/.tgz/.tar.xz/.txz) the inner tar is unpacked to this temp file,
+    // which archiver_ then reads; it is removed when reopening or destroying the unzipper.
+    std::filesystem::path inner_tar_path_;
     std::unordered_map<std::string, UnzipperStream::BufferOrFile> memory_cache_;
     std::string archiver_path_;
     std::string cache_dir_;

@@ -323,12 +323,14 @@ set(ALL_TEST_TARGETS
   igl_model_test
   full_topo_model_test
   polygon_fill_test
+  spiral_path_test
   image_polygons_test
   static_reflect_test
   support_test
   model_loader_test
   openvdb_model_test
   lua_common_types_test
+  param_store_test
 )
 
 if(TARGET HsBaSlicerCADModel)
@@ -410,6 +412,40 @@ add_test(
 if(HSBA_RUN_TESTS_AFTER_BUILD)
   add_custom_command(TARGET sqlite_test POST_BUILD
     COMMAND ${CMAKE_CTEST_COMMAND} -V -R sqlite_test
+  )
+endif()
+
+# param store test (AnyObject + SQLAdapter 工艺参数保存流水线)
+add_executable(param_store_test
+	ParamStore/param_store_test.cpp
+)
+
+target_link_libraries(param_store_test
+	HsBaSlicerBase
+	HsBaSlicerFileOperator
+	HsBaPipelineTypes
+	LibHsBaSlicer
+	DllHsBaSlicer
+	Boost::unit_test_framework
+	${LUA_LIBRARIES}
+)
+
+target_include_directories(param_store_test PRIVATE ${LUA_INCLUDE_DIR} ${CMAKE_SOURCE_DIR})
+
+target_compile_definitions(param_store_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME param_store_test
+  COMMAND $<TARGET_FILE:param_store_test>
+  )
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET param_store_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R param_store_test
   )
 endif()
 
@@ -755,6 +791,37 @@ if(HSBA_RUN_TESTS_AFTER_BUILD)
   )
 endif()
 
+## SpiralPath (inter-layer helical outer wall) tests
+add_executable(spiral_path_test
+    "SpiralPath/spiral_path_test.cpp"
+)
+
+target_link_libraries(spiral_path_test
+    HsBaSlicer2D
+    LibHsBaSlicer
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(spiral_path_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME spiral_path_test
+  COMMAND $<TARGET_FILE:spiral_path_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET spiral_path_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R spiral_path_test
+  )
+endif()
+
+# The Lua polygon dump test exercises DumpPolygon/DumpPolygons via the Lua
+# bindings; it is only built and registered when the dump utilities are enabled.
+if(HSBA_POLYGON_DUMP)
 add_executable(lua_polygon_operations_test
     "PolygonFill/lua_polygon_operations_test.cpp"
 )
@@ -778,6 +845,7 @@ if(HSBA_RUN_TESTS_AFTER_BUILD)
   add_custom_command(TARGET lua_polygon_operations_test POST_BUILD
     COMMAND ${CMAKE_CTEST_COMMAND} -V -R lua_polygon_operations_test
   )
+endif()
 endif()
 
 ## ImagePolygons tests

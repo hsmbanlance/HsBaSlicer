@@ -8,7 +8,7 @@ enum msg_technology_type
     techt_Sla=1;// sla
     techt_Slm=2;//slm
     techt_Sls=3;//sls
-    techt_Lom=4;//lon
+    techt_Lom=4;//lom
     techt_3dp=5;//3dp
     techt_Waam=6;//waam
     techt_Unknown=7;//unknown

@@ -1,4 +1,8 @@
-﻿#include "robotpath.hpp"
+﻿/** @file robotpath.cpp
+ * @brief Implementation of brand-specific robot language program generation for RobotPath.
+ * @author HsBa
+ */
+#include "robotpath.hpp"
 
 #include <format>
 #include <fstream>

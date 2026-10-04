@@ -1,4 +1,8 @@
-﻿#include "app_config.hpp"
+﻿/** @file app_config.cpp
+ * @brief Implementation of the application configuration singleton.
+ * @author HsBa
+ */
+#include "app_config.hpp"
 
 namespace HsBa::Slicer
 {

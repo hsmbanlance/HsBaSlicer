@@ -1,3 +1,7 @@
+/** @file ISupport.hpp
+ * @brief Abstract interface for per-layer support generators.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_ISUPPORT_HPP
 #define HSBA_SLICER_ISUPPORT_HPP

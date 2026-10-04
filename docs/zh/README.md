@@ -38,7 +38,7 @@ HsBaSlicer 是一个面向 3D 打印切片领域的高性能 C++ 软件框架，
 - **Paths** - 输出路径管理（层路径、点路径、图像路径、机器人路径）
 - **Support** - 支撑生成（FDM/SLA 支撑、悬垂检测、Lua 自定义支撑）
 - **[LibHsBaSlicer](./LibHsBaSlicer/)** - 底层 C++ 静态库，提供预处理、切片、支撑、填充、路径生成五大核心接口
-- **DllHsBaSlicer** - 上层 C 动态库，提供基于协程优化的 FDM 全流程 Pipeline 接口
+- **DllHsBaSlicer** - 上层 C 动态库，提供基于协程优化的全流程 Pipeline 接口（FDM / SLA / SLS / SLM / LOM / 3DP / WAAM / 文件传输 / 自定义 Lua）
 - **HsBaSlicer** - 最终应用程序入口
 
 ### 其他
@@ -64,11 +64,12 @@ HsBaSlicer 是一个面向 3D 打印切片领域的高性能 C++ 软件框架，
 ### 切片核心
 
 - [LibHsBaSlicer 模块](./LibHsBaSlicer/) - 预处理、切片、支撑、填充、路径生成
-- [DllHsBaSlicer 模块](./DllHsBaSlicer/) - C 导出层，FDM/SLA/SLS 全流程流水线，Qt/wxWidgets 与 Unity/UE 跨平台集成指南
+- [DllHsBaSlicer 模块](./DllHsBaSlicer/) - C 导出层，FDM/SLA/SLS/SLM/LOM/3DP/WAAM 全流程流水线，Qt/wxWidgets 与 Unity/UE 跨平台集成指南
 
 ### 快速开始
 
 - [C++ 使用指南（CMake 集成）](./cpp_cmake_usage.md) - 如何在外部 C++ 项目中通过 CMake 使用 LibHsBaSlicer / DllHsBaSlicer / HsBaSlicer（模块与非模块版）
+- [流水线 Lua API 参考](./lua_pipeline_api.md) - 各类切片流水线中可直接调用的 Lua 算子、共享库与阶段脚本约定（含自定义流水线与内置阶段替换）
 
 # HsBaSlicer 文档
 
@@ -110,7 +111,7 @@ HsBaSlicer 是一个面向 3D 打印切片领域的高性能 C++ 软件框架，
 - **Paths** - 输出路径管理（层路径、点路径、图像路径、机器人路径）
 - **Support** - 支撑生成（FDM/SLA 支撑、悬垂检测、Lua 自定义支撑）
 - **LibHsBaSlicer** - 底层 C++ 静态库，提供预处理、切片、支撑、填充、路径生成五大核心接口
-- **DllHsBaSlicer** - 上层 C 动态库，提供基于协程优化的 FDM 全流程 Pipeline 接口
+- **DllHsBaSlicer** - 上层 C 动态库，提供基于协程优化的全流程 Pipeline 接口（FDM / SLA / SLS / SLM / LOM / 3DP / WAAM / 文件传输 / 自定义 Lua）
 - **HsBaSlicer** - 最终应用程序入口
 
 ### 其他
@@ -162,6 +163,7 @@ HsBaSlicer 是一款用于增材制造的3D切片软件，提供了处理3D模�
 
 - **Zipper** - 基于miniz的ZIP压缩功能
 - **Unzipper** - 基于miniz的ZIP解压缩功能
+- **Bit7zZipper / Bit7ZUnzipper** - 基于7-Zip（bit7z）的多格式压缩/解压，直接支持 `.tar.gz` / `.tar.xz`（需启用 `HSBA_USE_BIT7Z`）
 - **SQL Adapter** - SQLite数据库操作功能
 
 ## Logger 模块

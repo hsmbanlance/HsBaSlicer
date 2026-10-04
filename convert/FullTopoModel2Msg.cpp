@@ -1,3 +1,7 @@
+/** @file FullTopoModel2Msg.cpp
+ * @brief Implementation of the FullTopoModel-to-protobuf converter.
+ * @author HsBa
+ */
 #include "FullTopoModel2Msg.hpp"
 
 namespace HsBa::Slicer

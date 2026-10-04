@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package HsbaProto;
+
+// 3DP (Three-Dimensional Printing / binder jetting) powder-bed + binder pipeline.
+// Enum value names use pipe_tdp_ to stay unique inside the HsbaProto package.
+
+enum tdp_binder_mode
+{
+    pipe_tdp_full_color = 0; // colored binder jets
+    pipe_tdp_single = 1; // single binder channel
+    pipe_tdp_sintering = 2; // sintering-assisted binder
+}
+
+message tdp_pipe_config
+{
+    string tdp_pipe_config_model_name = 1; // model name
+    string tdp_pipe_config_model_path = 2; // model path
+
+    float tdp_pipe_config_layer_height = 3; // layer height (mm)
+    float tdp_pipe_config_first_layer_height = 4; // first layer height (mm)
+
+    int32 tdp_pipe_config_head_count = 5; // print head nozzle count
+    float tdp_pipe_config_drop_spacing = 6; // binder drop spacing (mm)
+    float tdp_pipe_config_binder_saturation = 7; // binder saturation [0,1]
+    float tdp_pipe_config_ink_curing_time = 8; // per-layer curing time (s)
+    float tdp_pipe_config_bed_temperature = 9; // powder bed temperature (C)
+
+    tdp_binder_mode tdp_pipe_config_binder_mode = 10; // binder jetting mode
+
+    string tdp_pipe_config_export_lua_script = 11; // export lua script path (required)
+    string tdp_pipe_config_export_lua_func = 12; // export lua function name
+
+    string tdp_pipe_config_output_path = 13; // output path
+
+    bool tdp_pipe_config_spiral_mode = 14; // expose a continuous spiralized deposition path to the export script
+}
+
+message tdp_pipe_result
+{
+    bool tdp_pipe_result_success = 1; // result success
+    int32 tdp_pipe_result_total_layers = 2; // total layers
+    string tdp_pipe_result_export_path = 3; // export path
+    string tdp_pipe_result_error_message = 4; // error message
+    double tdp_pipe_result_elapsed_seconds = 5; // elapsed seconds
+}

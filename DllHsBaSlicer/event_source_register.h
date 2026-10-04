@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file event_source_register.h
+ * @brief C ABI for registering zipper and database event-source callbacks.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_EVENT_SOURCE_REGISTER_H
 #define HSBA_SLICER_EVENT_SOURCE_REGISTER_H
 

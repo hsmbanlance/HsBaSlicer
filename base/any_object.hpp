@@ -31,11 +31,11 @@
 // none of the mock code below is compiled and AnyObject::Invoke has zero
 // additional overhead.
 #if !defined(HSBA_ANY_OBJECT_ENABLE_MOCK)
-#if defined(BOOST_TEST_MODULE) || defined(BOOST_TEST_INCLUDED) || defined(BOOST_TEST_DYN_LINK)                       \
-    || defined(BOOST_TEST_ALTERNATIVE_INIT_API) || defined(GTEST_INCLUDE_GTEST_GTEST_H_) || defined(GTEST_API_)     \
-    || defined(GTEST_HAS_MOCK) || defined(CATCH_VERSION_MAJOR) || defined(CATCH_CONFIG_MAIN)                        \
-    || defined(CATCH_CONFIG_RUNNER) || defined(DOCTEST_LIBRARY_INCLUDED) || defined(DOCTEST_CONFIG_IMPLEMENT)       \
-    || defined(DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN)
+#if defined(BOOST_TEST_MODULE) || defined(BOOST_TEST_INCLUDED) || defined(BOOST_TEST_DYN_LINK) ||                      \
+    defined(BOOST_TEST_ALTERNATIVE_INIT_API) || defined(GTEST_INCLUDE_GTEST_GTEST_H_) || defined(GTEST_API_) ||        \
+    defined(GTEST_HAS_MOCK) || defined(CATCH_VERSION_MAJOR) || defined(CATCH_CONFIG_MAIN) ||                           \
+    defined(CATCH_CONFIG_RUNNER) || defined(DOCTEST_LIBRARY_INCLUDED) || defined(DOCTEST_CONFIG_IMPLEMENT) ||          \
+    defined(DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN)
 #define HSBA_ANY_OBJECT_ENABLE_MOCK 1
 #endif
 #endif
@@ -63,10 +63,10 @@ struct TypeInfo
  */
 template <typename T>
 TypeInfo* GetTypeInfo();
-/** @brief Create an AnyObject instance of type T.
- * @tparam T The type of the instance to create.
- * @param value The value to initialize the instance with.
- * @return The created AnyObject instance.
+/** @brief A type-erased object wrapper backed by TypeInfo for reflection and method dispatch.
+ *
+ * Holds an opaque value pointer together with its TypeInfo, supporting copy/move, typed
+ * cast<T>(), reflective field traversal (ForeachField) and method invocation (Invoke).
  */
 class AnyObject
 {
@@ -99,6 +99,12 @@ public:
         return *static_cast<T*>(data);
     }
     TypeInfo* get_type_info() const { return type_info; }
+    /** @brief Read-only accessor for the underlying data pointer.
+     *
+     * Pure getter: it does not alter ownership (the `flag` semantics are untouched) nor any
+     * behavior. Provided so reflection consumers (e.g. ParamStore field traversal) can reach a
+     * sub-object's address without needing to name its concrete type via cast<T>(). */
+    void* get_data() const noexcept { return data; }
     AnyObject Invoke(std::string_view method_name, std::span<AnyObject> args);
     void ForeachField(const std::function<void(std::string_view, AnyObject)>& callback);
 
@@ -492,8 +498,7 @@ public:
      * when mocking is disabled or neither a rule nor a stub matches, in
      * which case AnyObject::Invoke falls through to the real method.
      */
-    bool try_invoke(TypeInfo* type, std::string_view method_name, void* data, std::span<AnyObject> args,
-                    AnyObject& out)
+    bool try_invoke(TypeInfo* type, std::string_view method_name, void* data, std::span<AnyObject> args, AnyObject& out)
     {
         std::vector<Rule> rules_snapshot;
         MockFn fallback;
@@ -609,11 +614,26 @@ private:
 };
 
 /// Free-function shortcuts mirroring the typical Mockit API.
-inline void EnableMock() { MockRegistry::instance().enable(); }
-inline void DisableMock() { MockRegistry::instance().disable(); }
-inline void SetMockEnabled(bool on) { MockRegistry::instance().set_enabled(on); }
-inline bool IsMockEnabled() { return MockRegistry::instance().is_enabled(); }
-inline void ClearMocks() { MockRegistry::instance().clear(); }
+inline void EnableMock()
+{
+    MockRegistry::instance().enable();
+}
+inline void DisableMock()
+{
+    MockRegistry::instance().disable();
+}
+inline void SetMockEnabled(bool on)
+{
+    MockRegistry::instance().set_enabled(on);
+}
+inline bool IsMockEnabled()
+{
+    return MockRegistry::instance().is_enabled();
+}
+inline void ClearMocks()
+{
+    MockRegistry::instance().clear();
+}
 
 template <typename T>
 inline void StubMethod(std::string_view method_name, MockFn fn)

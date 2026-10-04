@@ -1,4 +1,8 @@
-﻿#include "ModelFormat.hpp"
+﻿/** @file ModelFormat.cpp
+ * @brief Implementations of the model format extension/enum helpers.
+ * @author HsBa
+ */
+#include "ModelFormat.hpp"
 
 #include <filesystem>
 #include <regex>

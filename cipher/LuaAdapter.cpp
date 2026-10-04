@@ -1,3 +1,7 @@
+/** @file LuaAdapter.cpp
+ * @brief Implementation of the Lua bindings exposing the Cipher module to scripts.
+ * @author HsBa
+ */
 #include "LuaAdapter.hpp"
 #include "encoder.hpp"
 #include <format>

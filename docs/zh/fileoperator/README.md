@@ -4,6 +4,6 @@ FileOperator 模块提供了压缩、解压缩、文件读写等多种文件操�
 
 ## 组件列表
 
-- [Zipper (压缩类)](./zipper.md) - 基于miniz的ZIP压缩功能
-- [Unzipper (解压缩类)](./unzipper.md) - 基于miniz的ZIP解压缩功能
+- [Zipper (压缩类)](./zipper.md) - 基于miniz的ZIP压缩功能，另含基于bit7z（7-Zip）的 Bit7zZipper 多格式压缩（直接支持 `.tar.gz`/`.tar.xz`）
+- [Unzipper (解压缩类)](./unzipper.md) - 基于miniz的ZIP解压缩功能，另含基于bit7z（7-Zip）的 Bit7ZUnzipper 多格式解压（直接支持 `.tar.gz`/`.tar.xz`）
 - [SQL Adapter (SQL适配器)](./sql_adapter.md) - SQLite数据库操作功能

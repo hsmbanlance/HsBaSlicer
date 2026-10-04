@@ -1,3 +1,7 @@
+/** @file pipeline_convert.cpp
+ * @brief Implementation of proto-bytes to/from C struct conversion helpers for pipeline configs and results.
+ * @author HsBa
+ */
 #include "pipeline_convert.h"
 
 #include <cstdlib>
@@ -406,6 +410,264 @@ HSBA_SLICER_API int HsBaCustomResultToProtoBytes(const HsBaCustomPipelineResult_
     return 1;
 }
 
+// ========== SLM ==========
+
+HSBA_SLICER_API int HsBaSlmConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaSlmPipelineConfig_t* config)
+{
+    if (!proto_data || proto_size <= 0 || !config)
+        return 0;
+    HsbaProto::slm_pipe_config msg;
+    if (!msg.ParseFromArray(proto_data, proto_size))
+        return 0;
+    HsBa::Slicer::MsgToSlmConfig(msg, config);
+    return 1;
+}
+
+HSBA_SLICER_API int HsBaSlmConfigToProtoBytes(const HsBaSlmPipelineConfig_t* config, void** out_data, int* out_size)
+{
+    if (!config || !out_data || !out_size)
+        return 0;
+    HsbaProto::slm_pipe_config msg;
+    HsBa::Slicer::SlmConfigToMsg(*config, &msg);
+    int size = static_cast<int>(msg.ByteSizeLong());
+    void* buf = std::malloc(static_cast<size_t>(size));
+    if (!buf)
+        return 0;
+    if (!msg.SerializeToArray(buf, size))
+    {
+        std::free(buf);
+        return 0;
+    }
+    *out_data = buf;
+    *out_size = size;
+    return 1;
+}
+
+HSBA_SLICER_API int HsBaSlmResultFromProtoBytes(const void* proto_data, int proto_size, HsBaSlmPipelineResult_t* result)
+{
+    if (!proto_data || proto_size <= 0 || !result)
+        return 0;
+    HsbaProto::slm_pipe_result msg;
+    if (!msg.ParseFromArray(proto_data, proto_size))
+        return 0;
+    HsBa::Slicer::MsgToSlmResult(msg, result);
+    return 1;
+}
+
+HSBA_SLICER_API int HsBaSlmResultToProtoBytes(const HsBaSlmPipelineResult_t* result, void** out_data, int* out_size)
+{
+    if (!result || !out_data || !out_size)
+        return 0;
+    HsbaProto::slm_pipe_result msg;
+    HsBa::Slicer::SlmResultToMsg(*result, &msg);
+    int size = static_cast<int>(msg.ByteSizeLong());
+    void* buf = std::malloc(static_cast<size_t>(size));
+    if (!buf)
+        return 0;
+    if (!msg.SerializeToArray(buf, size))
+    {
+        std::free(buf);
+        return 0;
+    }
+    *out_data = buf;
+    *out_size = size;
+    return 1;
+}
+
+// ========== LOM ==========
+
+HSBA_SLICER_API int HsBaLomConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaLomPipelineConfig_t* config)
+{
+    if (!proto_data || proto_size <= 0 || !config)
+        return 0;
+    HsbaProto::lom_pipe_config msg;
+    if (!msg.ParseFromArray(proto_data, proto_size))
+        return 0;
+    HsBa::Slicer::MsgToLomConfig(msg, config);
+    return 1;
+}
+
+HSBA_SLICER_API int HsBaLomConfigToProtoBytes(const HsBaLomPipelineConfig_t* config, void** out_data, int* out_size)
+{
+    if (!config || !out_data || !out_size)
+        return 0;
+    HsbaProto::lom_pipe_config msg;
+    HsBa::Slicer::LomConfigToMsg(*config, &msg);
+    int size = static_cast<int>(msg.ByteSizeLong());
+    void* buf = std::malloc(static_cast<size_t>(size));
+    if (!buf)
+        return 0;
+    if (!msg.SerializeToArray(buf, size))
+    {
+        std::free(buf);
+        return 0;
+    }
+    *out_data = buf;
+    *out_size = size;
+    return 1;
+}
+
+HSBA_SLICER_API int HsBaLomResultFromProtoBytes(const void* proto_data, int proto_size, HsBaLomPipelineResult_t* result)
+{
+    if (!proto_data || proto_size <= 0 || !result)
+        return 0;
+    HsbaProto::lom_pipe_result msg;
+    if (!msg.ParseFromArray(proto_data, proto_size))
+        return 0;
+    HsBa::Slicer::MsgToLomResult(msg, result);
+    return 1;
+}
+
+HSBA_SLICER_API int HsBaLomResultToProtoBytes(const HsBaLomPipelineResult_t* result, void** out_data, int* out_size)
+{
+    if (!result || !out_data || !out_size)
+        return 0;
+    HsbaProto::lom_pipe_result msg;
+    HsBa::Slicer::LomResultToMsg(*result, &msg);
+    int size = static_cast<int>(msg.ByteSizeLong());
+    void* buf = std::malloc(static_cast<size_t>(size));
+    if (!buf)
+        return 0;
+    if (!msg.SerializeToArray(buf, size))
+    {
+        std::free(buf);
+        return 0;
+    }
+    *out_data = buf;
+    *out_size = size;
+    return 1;
+}
+
+// ========== 3DP ==========
+
+HSBA_SLICER_API int HsBaTdpConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaTdpPipelineConfig_t* config)
+{
+    if (!proto_data || proto_size <= 0 || !config)
+        return 0;
+    HsbaProto::tdp_pipe_config msg;
+    if (!msg.ParseFromArray(proto_data, proto_size))
+        return 0;
+    HsBa::Slicer::MsgToTdpConfig(msg, config);
+    return 1;
+}
+
+HSBA_SLICER_API int HsBaTdpConfigToProtoBytes(const HsBaTdpPipelineConfig_t* config, void** out_data, int* out_size)
+{
+    if (!config || !out_data || !out_size)
+        return 0;
+    HsbaProto::tdp_pipe_config msg;
+    HsBa::Slicer::TdpConfigToMsg(*config, &msg);
+    int size = static_cast<int>(msg.ByteSizeLong());
+    void* buf = std::malloc(static_cast<size_t>(size));
+    if (!buf)
+        return 0;
+    if (!msg.SerializeToArray(buf, size))
+    {
+        std::free(buf);
+        return 0;
+    }
+    *out_data = buf;
+    *out_size = size;
+    return 1;
+}
+
+HSBA_SLICER_API int HsBaTdpResultFromProtoBytes(const void* proto_data, int proto_size, HsBaTdpPipelineResult_t* result)
+{
+    if (!proto_data || proto_size <= 0 || !result)
+        return 0;
+    HsbaProto::tdp_pipe_result msg;
+    if (!msg.ParseFromArray(proto_data, proto_size))
+        return 0;
+    HsBa::Slicer::MsgToTdpResult(msg, result);
+    return 1;
+}
+
+HSBA_SLICER_API int HsBaTdpResultToProtoBytes(const HsBaTdpPipelineResult_t* result, void** out_data, int* out_size)
+{
+    if (!result || !out_data || !out_size)
+        return 0;
+    HsbaProto::tdp_pipe_result msg;
+    HsBa::Slicer::TdpResultToMsg(*result, &msg);
+    int size = static_cast<int>(msg.ByteSizeLong());
+    void* buf = std::malloc(static_cast<size_t>(size));
+    if (!buf)
+        return 0;
+    if (!msg.SerializeToArray(buf, size))
+    {
+        std::free(buf);
+        return 0;
+    }
+    *out_data = buf;
+    *out_size = size;
+    return 1;
+}
+
+// ========== WAAM ==========
+
+HSBA_SLICER_API int HsBaWaamConfigFromProtoBytes(const void* proto_data, int proto_size,
+                                                 HsBaWaamPipelineConfig_t* config)
+{
+    if (!proto_data || proto_size <= 0 || !config)
+        return 0;
+    HsbaProto::waam_pipe_config msg;
+    if (!msg.ParseFromArray(proto_data, proto_size))
+        return 0;
+    HsBa::Slicer::MsgToWaamConfig(msg, config);
+    return 1;
+}
+
+HSBA_SLICER_API int HsBaWaamConfigToProtoBytes(const HsBaWaamPipelineConfig_t* config, void** out_data, int* out_size)
+{
+    if (!config || !out_data || !out_size)
+        return 0;
+    HsbaProto::waam_pipe_config msg;
+    HsBa::Slicer::WaamConfigToMsg(*config, &msg);
+    int size = static_cast<int>(msg.ByteSizeLong());
+    void* buf = std::malloc(static_cast<size_t>(size));
+    if (!buf)
+        return 0;
+    if (!msg.SerializeToArray(buf, size))
+    {
+        std::free(buf);
+        return 0;
+    }
+    *out_data = buf;
+    *out_size = size;
+    return 1;
+}
+
+HSBA_SLICER_API int HsBaWaamResultFromProtoBytes(const void* proto_data, int proto_size,
+                                                 HsBaWaamPipelineResult_t* result)
+{
+    if (!proto_data || proto_size <= 0 || !result)
+        return 0;
+    HsbaProto::waam_pipe_result msg;
+    if (!msg.ParseFromArray(proto_data, proto_size))
+        return 0;
+    HsBa::Slicer::MsgToWaamResult(msg, result);
+    return 1;
+}
+
+HSBA_SLICER_API int HsBaWaamResultToProtoBytes(const HsBaWaamPipelineResult_t* result, void** out_data, int* out_size)
+{
+    if (!result || !out_data || !out_size)
+        return 0;
+    HsbaProto::waam_pipe_result msg;
+    HsBa::Slicer::WaamResultToMsg(*result, &msg);
+    int size = static_cast<int>(msg.ByteSizeLong());
+    void* buf = std::malloc(static_cast<size_t>(size));
+    if (!buf)
+        return 0;
+    if (!msg.SerializeToArray(buf, size))
+    {
+        std::free(buf);
+        return 0;
+    }
+    *out_data = buf;
+    *out_size = size;
+    return 1;
+}
+
 // ========== Cleanup helpers ==========
 
 HSBA_SLICER_API void HsBaFreeFdmConfigStrings(HsBaFdmPipelineConfig_t* config)
@@ -475,5 +737,49 @@ HSBA_SLICER_API void HsBaFreeCustomConfigStrings(HsBaCustomPipelineConfig_t* con
     FreeIfNotNull(const_cast<char*&>(config->config_json));
     FreeIfNotNull(const_cast<char*&>(config->model_name));
     FreeIfNotNull(const_cast<char*&>(config->model_path));
+    FreeIfNotNull(const_cast<char*&>(config->output_path));
+}
+
+HSBA_SLICER_API void HsBaFreeSlmConfigStrings(HsBaSlmPipelineConfig_t* config)
+{
+    if (!config)
+        return;
+    FreeIfNotNull(const_cast<char*&>(config->model_name));
+    FreeIfNotNull(const_cast<char*&>(config->model_path));
+    FreeIfNotNull(const_cast<char*&>(config->export_lua_script));
+    FreeIfNotNull(const_cast<char*&>(config->export_lua_func));
+    FreeIfNotNull(const_cast<char*&>(config->output_path));
+}
+
+HSBA_SLICER_API void HsBaFreeLomConfigStrings(HsBaLomPipelineConfig_t* config)
+{
+    if (!config)
+        return;
+    FreeIfNotNull(const_cast<char*&>(config->model_name));
+    FreeIfNotNull(const_cast<char*&>(config->model_path));
+    FreeIfNotNull(const_cast<char*&>(config->export_lua_script));
+    FreeIfNotNull(const_cast<char*&>(config->export_lua_func));
+    FreeIfNotNull(const_cast<char*&>(config->output_path));
+}
+
+HSBA_SLICER_API void HsBaFreeTdpConfigStrings(HsBaTdpPipelineConfig_t* config)
+{
+    if (!config)
+        return;
+    FreeIfNotNull(const_cast<char*&>(config->model_name));
+    FreeIfNotNull(const_cast<char*&>(config->model_path));
+    FreeIfNotNull(const_cast<char*&>(config->export_lua_script));
+    FreeIfNotNull(const_cast<char*&>(config->export_lua_func));
+    FreeIfNotNull(const_cast<char*&>(config->output_path));
+}
+
+HSBA_SLICER_API void HsBaFreeWaamConfigStrings(HsBaWaamPipelineConfig_t* config)
+{
+    if (!config)
+        return;
+    FreeIfNotNull(const_cast<char*&>(config->model_name));
+    FreeIfNotNull(const_cast<char*&>(config->model_path));
+    FreeIfNotNull(const_cast<char*&>(config->path_lua_script));
+    FreeIfNotNull(const_cast<char*&>(config->path_lua_func));
     FreeIfNotNull(const_cast<char*&>(config->output_path));
 }

@@ -1,3 +1,7 @@
+/** @file ImageToPolygons.hpp
+ * @brief Conversion between raster images and polygons (thresholding, multi-threshold, rendering, Lua-driven).
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_IMAGETOPOLYGONS_HPP
 #define HSBA_SLICER_IMAGETOPOLYGONS_HPP

@@ -1,3 +1,7 @@
+/** @file sls_pipeline.h
+ * @brief C ABI for the SLS (selective laser sintering) slicing pipeline.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_SLS_PIPELINE_H
 #define HSBA_SLICER_SLS_PIPELINE_H

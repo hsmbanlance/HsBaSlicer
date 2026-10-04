@@ -1,3 +1,7 @@
+/** @file LuaAdapter.cpp
+ * @brief Lua binding implementation for the support module.
+ * @author HsBa
+ */
 #include "LuaAdapter.hpp"
 
 #include <memory>

@@ -1,3 +1,7 @@
+/** @file model_preprocess.cpp
+ * @brief Implementation of model loading, transform, query and boolean preprocessing C ABI.
+ * @author HsBa
+ */
 #include "model_preprocess.h"
 
 #include <exception>
@@ -5,6 +9,7 @@
 #include <string>
 
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
+#include "base/error.hpp"
 
 // Helper: convert shared_ptr<IModel> to opaque handle (adds a reference)
 static void* ToHandle(std::shared_ptr<HsBa::Slicer::IModel> model)
@@ -27,7 +32,7 @@ HSBA_SLICER_API void* HsBaLoadModel(const char* name, const char* file_path)
         auto model = HsBa::Slicer::LoadModel(name, file_path);
         return ToHandle(std::move(model));
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
         return nullptr;
     }
@@ -42,7 +47,7 @@ HSBA_SLICER_API void* HsBaGetModel(const char* name)
         auto model = HsBa::Slicer::GetModel(name);
         return ToHandle(std::move(model));
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
         return nullptr;
     }
@@ -56,7 +61,7 @@ HSBA_SLICER_API void HsBaRemoveModel(const char* name)
     {
         HsBa::Slicer::RemoveModel(name);
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
     }
 }
@@ -69,7 +74,7 @@ HSBA_SLICER_API int HsBaContainsModel(const char* name)
     {
         return HsBa::Slicer::ContainsModel(name) ? 1 : 0;
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
         return 0;
     }
@@ -81,7 +86,7 @@ HSBA_SLICER_API int HsBaModelCount(void)
     {
         return static_cast<int>(HsBa::Slicer::ModelCount());
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
         return 0;
     }
@@ -93,7 +98,7 @@ HSBA_SLICER_API int HsBaCleanupModels(void)
     {
         return static_cast<int>(HsBa::Slicer::CleanupModels());
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
         return 0;
     }
@@ -110,7 +115,7 @@ HSBA_SLICER_API int HsBaTranslateModel(const char* name, float tx, float ty, flo
         HsBa::Slicer::TranslateModel(name, Eigen::Vector3f(tx, ty, tz));
         return 1;
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
         return 0;
     }
@@ -125,7 +130,7 @@ HSBA_SLICER_API int HsBaRotateModel(const char* name, float qx, float qy, float 
         HsBa::Slicer::RotateModel(name, Eigen::Quaternionf(qw, qx, qy, qz));
         return 1;
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
         return 0;
     }
@@ -140,7 +145,7 @@ HSBA_SLICER_API int HsBaScaleModelUniform(const char* name, float scale)
         HsBa::Slicer::ScaleModel(name, scale);
         return 1;
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
         return 0;
     }
@@ -155,7 +160,7 @@ HSBA_SLICER_API int HsBaScaleModel(const char* name, float sx, float sy, float s
         HsBa::Slicer::ScaleModel(name, Eigen::Vector3f(sx, sy, sz));
         return 1;
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
         return 0;
     }
@@ -188,7 +193,7 @@ HSBA_SLICER_API int HsBaGetModelInfo(const char* name, float out_bbox_min[3], fl
         }
         return 1;
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
         return 0;
     }
@@ -206,7 +211,7 @@ HSBA_SLICER_API void* HsBaThickSolidModel(const char* source_name, const char* r
         auto model = HsBa::Slicer::ThickSolidModel(source_name, result_name, thickness);
         return ToHandle(std::move(model));
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
         return nullptr;
     }
@@ -226,7 +231,7 @@ HSBA_SLICER_API void* HsBaBooleanUnion(const char* left_name, const char* right_
         auto model = HsBa::Slicer::BooleanUnion(left_name, right_name, result_name);
         return ToHandle(std::move(model));
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
         return nullptr;
     }
@@ -245,7 +250,7 @@ HSBA_SLICER_API void* HsBaBooleanIntersection(const char* left_name, const char*
         auto model = HsBa::Slicer::BooleanIntersection(left_name, right_name, result_name);
         return ToHandle(std::move(model));
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
         return nullptr;
     }
@@ -264,7 +269,7 @@ HSBA_SLICER_API void* HsBaBooleanDifference(const char* left_name, const char* r
         auto model = HsBa::Slicer::BooleanDifference(left_name, right_name, result_name);
         return ToHandle(std::move(model));
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
         return nullptr;
     }
@@ -283,7 +288,7 @@ HSBA_SLICER_API void* HsBaBooleanXor(const char* left_name, const char* right_na
         auto model = HsBa::Slicer::BooleanXor(left_name, right_name, result_name);
         return ToHandle(std::move(model));
     }
-    catch (const std::exception&)
+    catch (const HsBa::Slicer::RuntimeError&)
     {
         return nullptr;
     }

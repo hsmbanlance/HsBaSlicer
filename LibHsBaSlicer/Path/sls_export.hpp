@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file sls_export.hpp
+ * @brief SLS export package type and Lua-driven export save API.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_LIB_SLS_EXPORT_HPP
 #define HSBA_SLICER_LIB_SLS_EXPORT_HPP
 
@@ -22,6 +26,10 @@ struct SlsPackage
     std::vector<PolygonsD> layer_outlines;  ///< Per-layer slice outlines
     std::vector<float> layer_z_heights;     ///< Z height per layer (mm)
     std::string config_json;                ///< Configuration JSON content
+    bool spiral_mode = false;               ///< When true, additionally expose a continuous, Z-rising
+                                            ///< spiralized outer-wall path (JSON at "spiral/path.json") to
+                                            ///< the Lua export. Per-layer images are still emitted so
+                                            ///< existing scripts keep working. Default false (unchanged).
 };
 
 /**
@@ -40,10 +48,12 @@ struct SlsPackage
  * @param output_zip Output file path (passed to Lua as `output_path`).
  * @param lua_script Path to the Lua script file.
  * @param lua_func Lua function name (reserved for future use; script is executed inline).
+ * @param error_out Optional out-parameter receiving the failure detail message.
  * @return true if export succeeded, false otherwise.
  */
 HSBA_SLICER_LIB_API bool SaveSlsPackageLua(const SlsPackage& pkg, const std::string& output_zip,
-                                           const std::string& lua_script, const std::string& lua_func = "export_sls");
+                                           const std::string& lua_script, const std::string& lua_func = "export_sls",
+                                           std::string* error_out = nullptr);
 
 }  // namespace HsBa::Slicer
 

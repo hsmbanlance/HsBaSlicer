@@ -1,4 +1,8 @@
-﻿#include "lua_pipeline.hpp"
+﻿/** @file lua_pipeline.cpp
+ * @brief Implementation of the fully Lua-driven custom pipeline environment and run entry points.
+ * @author HsBa
+ */
+#include "lua_pipeline.hpp"
 
 #include <cmath>
 #include <cstring>
@@ -20,9 +24,12 @@
 #include "LibHsBaSlicer/Path/path_generator.hpp"
 #include "LibHsBaSlicer/Path/path_optimizer.hpp"
 #include "LibHsBaSlicer/Path/sls_export.hpp"
+#include "LibHsBaSlicer/Path/spiral_path.hpp"
+#include "LibHsBaSlicer/Path/waam_export.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
+#include "base/error.hpp"
 #include "cipher/LuaAdapter.hpp"
 #include "fileoperator/LuaAdapter.hpp"
 #include "paths/gcodepath.hpp"
@@ -512,6 +519,71 @@ int Lp_floor(lua_State* L)
 
 // --- Path / G-code output -------------------------------------------------------
 
+// Push a continuous 3D spiral path as an array of {x=, y=, z=} point tables.
+void PushSpiralPath(lua_State* L, const std::vector<SpiralPoint>& path)
+{
+    lua_createtable(L, static_cast<int>(path.size()), 0);
+    for (size_t i = 0; i < path.size(); ++i)
+    {
+        lua_createtable(L, 0, 3);
+        lua_pushnumber(L, path[i].x);
+        lua_setfield(L, -2, "x");
+        lua_pushnumber(L, path[i].y);
+        lua_setfield(L, -2, "y");
+        lua_pushnumber(L, path[i].z);
+        lua_setfield(L, -2, "z");
+        lua_rawseti(L, -2, static_cast<int>(i) + 1);
+    }
+}
+
+// HsBa.spiralize(sections[, {layerHeight, startZ, zHeights}]) -> path
+// sections: per-layer closed contours (array of layers, each = array of polygons
+//           made of {x, y} point tables), e.g. the outlines produced by HsBa.slice.
+// Returns a single continuous 3D polyline (array of {x, y, z}) whose Z rises one
+// layer per revolution: the classic spiralized / helical outer wall with no
+// retractions or per-layer travel. Intended for extrusion-style deposition
+// processes (FDM, WAAM, 3DP). Provide per-layer heights via {layerHeight, startZ}
+// or an explicit zHeights array.
+int Lp_spiralize(lua_State* L)
+{
+    const auto sections = ReadLayerList(L, 1);
+    std::vector<double> zs(sections.size(), 0.0);
+    bool explicit_z = false;
+    double layer_height = 0.4;
+    double start_z = 0.0;
+    if (lua_istable(L, 2))
+    {
+        layer_height = GetNumberField(L, 2, "layerHeight", layer_height);
+        start_z = GetNumberField(L, 2, "startZ", start_z);
+        lua_getfield(L, 2, "zHeights");
+        if (lua_istable(L, -1))
+        {
+            explicit_z = true;
+            size_t n = lua_rawlen(L, -1);
+            if (n > sections.size())
+            {
+                n = sections.size();
+            }
+            for (size_t i = 1; i <= n; ++i)
+            {
+                lua_rawgeti(L, -1, static_cast<int>(i));
+                zs[i - 1] = lua_tonumber(L, -1);
+                lua_pop(L, 1);
+            }
+        }
+        lua_pop(L, 1);  // pop zHeights field
+    }
+    if (!explicit_z)
+    {
+        for (size_t i = 0; i < sections.size(); ++i)
+        {
+            zs[i] = start_z + static_cast<double>(i) * layer_height;
+        }
+    }
+    PushSpiralPath(L, SpiralizeOuterWall(sections, zs));
+    return 1;
+}
+
 // HsBa.toGcode(layers, cfg) -> gcode string
 // layers: array of {outlines=..., fills=..., supports=..., zHeight=...} (double polygons)
 // cfg: {layerHeight, lineWidth, printSpeed, travelSpeed, extrusionMultiplier,
@@ -552,8 +624,8 @@ int Lp_toGcode(lua_State* L)
         path_config.line_width = static_cast<float>(GetNumberField(L, 2, "lineWidth", path_config.line_width));
         path_config.print_speed = static_cast<float>(GetNumberField(L, 2, "printSpeed", path_config.print_speed));
         path_config.travel_speed = static_cast<float>(GetNumberField(L, 2, "travelSpeed", path_config.travel_speed));
-        path_config.extrusion_multiplier = static_cast<float>(
-            GetNumberField(L, 2, "extrusionMultiplier", path_config.extrusion_multiplier));
+        path_config.extrusion_multiplier =
+            static_cast<float>(GetNumberField(L, 2, "extrusionMultiplier", path_config.extrusion_multiplier));
         firmware = ParseFirmware(GetStringField(L, 2, "firmware"));
 
         printer_config.nozzle_diameter =
@@ -614,6 +686,61 @@ int Lp_saveSlsPackage(lua_State* L)
     const bool ok = SaveSlsPackageLua(pkg, output, script, func);
     lua_pushboolean(L, ok ? 1 : 0);
     return 1;
+}
+
+// HsBa.saveWaamPackage({outlines=layers, zHeights={...}, weld={current,voltage,...},
+//                       robotType=0, beadWidth=1.2, config="json", output="x.txt"
+//                       [, script="path.lua"][, func="export_waam"]}) -> bool|string
+// WAAM output is a robot language program; 'script' is an optional custom code
+// generator. On failure the error detail is returned as the second value.
+int Lp_saveWaamPackage(lua_State* L)
+{
+    luaL_checktype(L, 1, LUA_TTABLE);
+    WaamRobotPackage pkg;
+    lua_getfield(L, 1, "outlines");
+    pkg.layer_outlines = ReadLayerList(L, -1);
+    lua_pop(L, 1);
+    lua_getfield(L, 1, "zHeights");
+    if (lua_istable(L, -1))
+    {
+        const size_t len = lua_rawlen(L, -1);
+        pkg.layer_z_heights.reserve(len);
+        for (size_t i = 1; i <= len; ++i)
+        {
+            lua_rawgeti(L, -1, static_cast<int>(i));
+            pkg.layer_z_heights.push_back(static_cast<float>(lua_tonumber(L, -1)));
+            lua_pop(L, 1);
+        }
+    }
+    lua_pop(L, 1);
+
+    // Welding sub-table (all fields optional, defaults come from WaamWeldParams).
+    if (lua_getfield(L, 1, "weld") == LUA_TTABLE)
+    {
+        pkg.weld.current = static_cast<float>(GetNumberField(L, -1, "current", pkg.weld.current));
+        pkg.weld.voltage = static_cast<float>(GetNumberField(L, -1, "voltage", pkg.weld.voltage));
+        pkg.weld.wire_feed_speed = static_cast<float>(GetNumberField(L, -1, "wireFeedSpeed", pkg.weld.wire_feed_speed));
+        pkg.weld.gas_flow_rate = static_cast<float>(GetNumberField(L, -1, "gasFlowRate", pkg.weld.gas_flow_rate));
+        pkg.weld.travel_speed = static_cast<float>(GetNumberField(L, -1, "travelSpeed", pkg.weld.travel_speed));
+        pkg.weld.process = GetIntField(L, -1, "process", pkg.weld.process);
+    }
+    lua_pop(L, 1);
+
+    pkg.robot_type = GetIntField(L, 1, "robotType", pkg.robot_type);
+    pkg.bead_width = static_cast<float>(GetNumberField(L, 1, "beadWidth", pkg.bead_width));
+    pkg.config_json = GetStringField(L, 1, "config");
+    const std::string output = GetStringField(L, 1, "output");
+    const std::string script = GetStringField(L, 1, "script");
+    const std::string func = GetStringField(L, 1, "func", "export_waam");
+    if (output.empty())
+        return luaL_error(L, "saveWaamPackage: 'output' field is required");
+
+    std::string error;
+    const bool ok = SaveWaamRobotPath(pkg, output, script, func, &error);
+    lua_pushboolean(L, ok ? 1 : 0);
+    if (!ok)
+        lua_pushstring(L, error.c_str());
+    return ok ? 1 : 2;
 }
 
 // HsBa.saveSlaPackage({outlines=layers, supports=layers, floor=polygons, config="json",
@@ -679,7 +806,9 @@ const luaL_Reg hsba_ops[] = {
     {"slaSupport", Lp_slaSupport},
     {"floor", Lp_floor},
     {"toGcode", Lp_toGcode},
+    {"spiralize", Lp_spiralize},
     {"saveSlsPackage", Lp_saveSlsPackage},
+    {"saveWaamPackage", Lp_saveWaamPackage},
     {"saveSlaPackage", Lp_saveSlaPackage},
     {"renderImage", Lp_renderImage},
     {nullptr, nullptr},
@@ -718,7 +847,7 @@ bool RunLuaSource(lua_State* L, std::string_view source, std::string_view chunk_
         const char* err = lua_tostring(L, -1);
         std::string message = std::string("Lua error in ") + std::string(chunk_name) + ": " + (err ? err : "unknown");
         lua_pop(L, 1);
-        throw std::runtime_error(message);
+        throw RuntimeError(message);
     }
     return true;
 }
@@ -748,6 +877,7 @@ HSBA_SLICER_LIB_API void SetupLuaPipelineEnvironment(lua_State* L, LuaPipelineCo
     RegisterLuaZipper(L);
     Cipher::RegisterLuaCipher(L);
     RegisterLuaSQLiteAdapter(L);
+    RegisterLuaParamStore(L);
 #ifdef HSBA_USE_BIT7Z
     RegisterLuaBit7zZipper(L);
 #endif
@@ -791,7 +921,7 @@ HSBA_SLICER_LIB_API LuaPipelineOutput RunLuaPipeline(const LuaPipelineContext& c
     {
         SetupLuaPipelineEnvironment(L.get(), const_cast<LuaPipelineContext&>(ctx), &out, &run_state);
 
-        // 内联源码先执行，作为脚本文件的参数预置（prelude）；随后加载脚本文件。
+        // Execute the inline source first as a parameter prelude for the script file, then load the script file.
         if (!ctx.script.empty())
             RunLuaSource(L.get(), ctx.script, "=(custom pipeline prelude)");
 
@@ -842,7 +972,7 @@ HSBA_SLICER_LIB_API LuaPipelineOutput RunLuaPipeline(const LuaPipelineContext& c
         if (!truthy && out.result_string.empty())
             out.error_message = "Lua pipeline reported failure (entry function returned false/nil)";
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         out.success = false;
         out.error_message = std::string("Pipeline error: ") + e.what();

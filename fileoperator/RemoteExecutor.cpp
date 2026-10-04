@@ -1,4 +1,11 @@
-﻿#include "RemoteExecutor.hpp"
+﻿/**
+ * @file RemoteExecutor.cpp
+ * @brief Implements the socket-based remote executor connection and its connection pool.
+ *
+ * Public behavior is documented on the declarations in RemoteExecutor.hpp; this file carries the
+ * platform-specific socket plumbing (Winsock/POSIX) behind the PIMPL implementation.
+ */
+#include "RemoteExecutor.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -28,6 +35,7 @@ namespace HsBa::Slicer
 {
 namespace
 {
+// Initialize Winsock once on Windows; a no-op on POSIX where no startup is required.
 #ifdef _WIN32
 void EnsureSocketInitialized()
 {
@@ -43,6 +51,7 @@ void EnsureSocketInitialized()
     }
 }
 
+// Return a human-readable message for the last socket error on the current platform.
 std::string GetLastSocketError()
 {
     int error = WSAGetLastError();
@@ -80,6 +89,7 @@ using SocketHandle = int;
 static constexpr SocketHandle InvalidSocketHandle = -1;
 #endif
 
+// Send exactly @p size bytes over @p socket, retrying partial writes until all data is flushed.
 void SendAll(SocketHandle socket, const void* data, std::size_t size)
 {
     const char* buffer = static_cast<const char*>(data);
@@ -106,6 +116,7 @@ void SendAll(SocketHandle socket, const void* data, std::size_t size)
 }
 
 
+// Reverse the byte order of a 64-bit integer using the best available intrinsic.
 std::uint64_t ByteSwap64(std::uint64_t value) noexcept
 {
 #if defined(__clang__) || defined(__GNUC__)
@@ -120,6 +131,7 @@ std::uint64_t ByteSwap64(std::uint64_t value) noexcept
 #endif
 }
 
+// Convert a 64-bit host-order value to network (big-endian) byte order.
 static std::uint64_t HostToNetwork64(std::uint64_t value) noexcept
 {
     if constexpr (std::endian::native == std::endian::big)

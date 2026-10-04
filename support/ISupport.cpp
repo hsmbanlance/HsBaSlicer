@@ -1,3 +1,7 @@
+/** @file ISupport.cpp
+ * @brief Default implementations for the ISupport interface.
+ * @author HsBa
+ */
 #include "ISupport.hpp"
 
 namespace HsBa::Slicer::Support

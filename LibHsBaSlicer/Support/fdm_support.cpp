@@ -1,3 +1,7 @@
+/** @file fdm_support.cpp
+ * @brief Implementation of FDM/SLA/Lua support generation for single and all layers.
+ * @author HsBa
+ */
 #include "fdm_support.hpp"
 
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
@@ -10,7 +14,7 @@ namespace HsBa::Slicer
 HSBA_SLICER_LIB_API PolygonsD GenerateFdmSupport(const PolygonsD& current_layer, const PolygonsD& prev_layer,
                                                  float layer_height, const Support::FdmSupportConfig& config)
 {
-    // 根据配置选择支撑类型
+    // Select the support type according to the configuration
     std::unique_ptr<Support::ISupport> support_gen;
     switch (config.support_pattern)
     {
@@ -30,7 +34,7 @@ HSBA_SLICER_LIB_API PolygonsD GenerateFdmSupport(const PolygonsD& current_layer,
 HSBA_SLICER_LIB_API std::vector<PolygonsD> GenerateAllFdmSupport(const std::vector<PolygonsD>& layers,
                                                                  const Support::FdmSupportConfig& config)
 {
-    // 根据配置选择支撑类型
+    // Select the support type according to the configuration
     std::unique_ptr<Support::ISupport> support_gen;
     switch (config.support_pattern)
     {

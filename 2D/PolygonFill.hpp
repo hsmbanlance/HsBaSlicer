@@ -1,3 +1,7 @@
+/** @file PolygonFill.hpp
+ * @brief Polygon infill pattern generators (offset, line, zigzag, composite, hybrid and Lua-custom fills).
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_POLYGONFILL_HPP
 #define HSBA_SLICER_POLYGONFILL_HPP

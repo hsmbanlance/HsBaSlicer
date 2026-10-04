@@ -1,6 +1,15 @@
-﻿#include "bit7z_zipper.hpp"
+﻿/**
+ * @file bit7z_zipper.cpp
+ * @brief Implements the bit7z-based compressor (@ref Bit7zZipper) and standalone extraction helpers.
+ *
+ * Public member behavior is documented on their declarations in bit7z_zipper.hpp; this file only
+ * adds notes for the internal helpers used to transparently read compressed tar archives.
+ */
+#include "bit7z_zipper.hpp"
 
 #include <format>
+#include <fstream>
+#include <memory>
 
 #ifdef HSBA_USE_BIT7Z
 #include <bit7z/bitexception.hpp>
@@ -15,10 +24,67 @@
 namespace HsBa::Slicer
 {
 #ifdef HSBA_USE_BIT7Z
+namespace
+{
+/**
+ * @brief Open the inner tar of a compressed tar archive as a standalone reader.
+ * @param lib bit7z library instance to read with.
+ * @param archive Path to the outer compressed tar (.tar.gz/.tar.xz).
+ * @param password Optional password.
+ * @param out_temp_tar Receives the temporary inner-tar path on success (empty on failure).
+ * @return Reader over the inner tar, or nullptr when @p archive is not a real compressed tar.
+ *
+ * 7z sees only the compression layer of .tar.gz/.tar.xz (a single .tar entry); this unpacks that
+ * entry into a temporary file and opens it so the real archive files are accessible in one step.
+ */
+std::unique_ptr<bit7z::BitArchiveReader> OpenInnerTarReader(const bit7z::Bit7zLibrary& lib, const std::string& archive,
+                                                            const std::string& password,
+                                                            /*out*/ std::string& out_temp_tar)
+{
+    std::filesystem::path temp_tar = MakeInnerTarTempPath(archive);
+    try
+    {
+        bit7z::BitArchiveReader outer{lib, archive, bit7z::BitFormat::Auto, password};
+        std::ofstream ofs(temp_tar, std::ios_base::out | std::ios_base::binary);
+        outer.extractTo(ofs, 0u);
+        ofs.close();
+        out_temp_tar = temp_tar.string();
+        return std::make_unique<bit7z::BitArchiveReader>(lib, out_temp_tar, bit7z::BitFormat::Tar, password);
+    }
+    catch (const bit7z::BitException&)
+    {
+        std::filesystem::remove(temp_tar);
+        return nullptr;
+    }
+}
+}  // namespace
+
 void Bit7zExtract(const std::string& archive, const std::string& outdir, const std::string& password,
                   const std::string& dll_path)
 {
     bit7z::Bit7zLibrary lib{dll_path};
+    if (IsCompressedTarPath(archive))
+    {
+        std::string temp_tar;
+        auto inner = OpenInnerTarReader(lib, archive, password, temp_tar);
+        if (inner)
+        {
+            try
+            {
+                inner->extractTo(outdir);
+            }
+            catch (...)
+            {
+                inner.reset();
+                std::filesystem::remove(temp_tar);
+                throw;
+            }
+            inner.reset();
+            std::filesystem::remove(temp_tar);
+            return;
+        }
+        // Not a real compressed tar: fall back to the plain extraction below.
+    }
     bit7z::BitFileExtractor ex{lib, bit7z::BitFormat::SevenZip};
     if (!password.empty())
     {
@@ -30,6 +96,28 @@ void Bit7zExtract(const std::string& archive, std::map<std::string, std::vector<
                   const std::string& password, const std::string& dll_path)
 {
     bit7z::Bit7zLibrary lib{dll_path};
+    if (IsCompressedTarPath(archive))
+    {
+        std::string temp_tar;
+        auto inner = OpenInnerTarReader(lib, archive, password, temp_tar);
+        if (inner)
+        {
+            try
+            {
+                inner->extractTo(bufs);
+            }
+            catch (...)
+            {
+                inner.reset();
+                std::filesystem::remove(temp_tar);
+                throw;
+            }
+            inner.reset();
+            std::filesystem::remove(temp_tar);
+            return;
+        }
+        // Not a real compressed tar: fall back to the plain extraction below.
+    }
     bit7z::BitFileExtractor ex{lib, bit7z::BitFormat::SevenZip};
     if (!password.empty())
     {
@@ -145,6 +233,16 @@ void Bit7zZipper::Save(std::string_view filePath)
             SaveAllFile(compress, path);
             break;
         }
+        case HsBa::Slicer::ZipperFormat::TarGz:
+        {
+            SaveCompressedTar(lib, bit7z::BitFormat::GZip, path);
+            break;
+        }
+        case HsBa::Slicer::ZipperFormat::TarXz:
+        {
+            SaveCompressedTar(lib, bit7z::BitFormat::Xz, path);
+            break;
+        }
         default:
             throw NotSupportedError("Unsupported format");
             break;
@@ -156,7 +254,7 @@ void Bit7zZipper::Save(std::string_view filePath)
     }
 }
 
-void Bit7zZipper::SaveAllFile(bit7z::BitArchiveWriter& compress, const std::string& path)
+void Bit7zZipper::AddAllWaitFiles(bit7z::BitArchiveWriter& compress)
 {
     size_t fileCount = byteFilesWaitCompress_.size();
     size_t currentFileIndex = 0;
@@ -169,8 +267,36 @@ void Bit7zZipper::SaveAllFile(bit7z::BitArchiveWriter& compress, const std::stri
                    bytes);
         double progress = static_cast<double>(currentFileIndex) / fileCount;
         RaiseEvent(progress, name);
+        ++currentFileIndex;
     }
+}
+
+void Bit7zZipper::SaveAllFile(bit7z::BitArchiveWriter& compress, const std::string& path)
+{
+    AddAllWaitFiles(compress);
     compress.compressTo(path);
+}
+
+void Bit7zZipper::SaveAllFile(bit7z::BitArchiveWriter& compress, bit7z::buffer_t& out_buffer)
+{
+    AddAllWaitFiles(compress);
+    compress.compressTo(out_buffer);
+}
+
+void Bit7zZipper::SaveCompressedTar(const bit7z::Bit7zLibrary& lib, const bit7z::BitInOutFormat& compress_format,
+                                    const std::string& path)
+{
+    // Two-stage packaging performed fully in memory: the wait-to-compress items are first packed
+    // into a tar archive, then the tar bytes are compressed into the final .tar.gz/.tar.xz file.
+    bit7z::BitArchiveWriter tar{lib, bit7z::BitFormat::Tar};
+    bit7z::buffer_t tar_buffer;
+    SaveAllFile(tar, tar_buffer);
+
+    bit7z::BitArchiveWriter compressed{lib, compress_format};
+    compressed.setPassword(password_);
+    compressed.setOverwriteMode(bit7z::OverwriteMode::Overwrite);
+    compressed.addFile(tar_buffer, "archive.tar");
+    compressed.compressTo(path);
 }
 
 #endif  // HSBA_USE_BIT7Z

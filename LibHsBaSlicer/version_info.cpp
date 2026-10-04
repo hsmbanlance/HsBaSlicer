@@ -1,3 +1,7 @@
+/** @file version_info.cpp
+ * @brief Implementation of the library version-info query API (JSON/XML).
+ * @author HsBa
+ */
 #include "version_info.hpp"
 
 #include "utils/struct_json.hpp"

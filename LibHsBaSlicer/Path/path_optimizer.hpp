@@ -2,6 +2,11 @@
 #ifndef HSBA_SLICER_LIB_PATH_OPTIMIZER_HPP
 #define HSBA_SLICER_LIB_PATH_OPTIMIZER_HPP
 
+/**
+ * @file path_optimizer.hpp
+ * @brief Region-based path pre-optimizer and its Lua bindings.
+ */
+
 #include <functional>
 #include <memory>
 #include <string>
@@ -16,19 +21,25 @@ struct lua_State;
 namespace HsBa::Slicer
 {
 /**
- * @brief 路径输出前置优化器：把独立的多边形区域作为图顶点（AreaGraph 区域），
- *        求解使空走代价最小的区域访问顺序。
+ * @brief Path output pre-optimizer: treats each independent polygon region as a
+ *        graph vertex (an AreaGraph region) and solves the visit order that
+ *        minimizes total travel (air-move) cost.
  *
- * 按执行时机分两种优化模式（同一优化器内不可混用）：
- * - 多边形模式（填充前）：区域输入为多边形本身（轮廓），全部顶点作为出入门禁，
- *   输出优化顺序的多边形集合，供后续填充使用；
- * - 填充结果模式（填充后）：区域输入为填充路径，支持多点折线，每条折线的首/尾端点作为门禁，
- *   输出完整填充路径。
+ * Two optimization modes are available depending on when the optimizer runs
+ * (they cannot be mixed within one optimizer instance):
+ * - Polygon mode (before fill): regions are polygons themselves (outlines); all
+ *   vertices act as entry/exit gates; outputs the polygon set in optimized
+ *   order for subsequent filling.
+ * - Fill-result mode (after fill): regions are fill paths, supporting multi-point
+ *   polylines; the head/tail endpoint of each polyline acts as a gate; outputs the
+ *   complete fill paths.
  *
- * 建模方式：
- * - 每个区域（region）是图中的一个面积顶点，门禁为候选出入门点；
- * - 区域内部门禁间代价为门禁直线距离（区域内移动），区域间路由代价为门禁直线距离（空走）；
- * - 通过遗传 TSP 求解区域访问顺序，区域内按最近邻贪心编排出入顺序。
+ * Modeling:
+ * - Each region is one area vertex in the graph; gates are candidate entry/exit points;
+ * - Intra-region gate-to-gate cost is the straight-line gate distance (movement inside
+ *   the region); inter-region routing cost is the straight-line gate distance (air-move);
+ * - The region visit order is solved by a genetic TSP; intra-region entry/exit order is
+ *   arranged by a nearest-neighbor greedy scheme.
  */
 class HSBA_SLICER_LIB_API RegionPathOptimizer
 {
@@ -39,42 +50,47 @@ public:
     RegionPathOptimizer& operator=(const RegionPathOptimizer&) = delete;
 
     /**
-     * @brief 添加一个基于填充结果的区域（填充后优化，支持多点折线）。
-     * @param regionId 区域唯一标识。
-     * @param paths 该区域的填充路径集合（每条为多点折线）。
-     * @note 不可与 addPolygonRegion 在同一优化器内混用。
+     * @brief Add a fill-result based region (post-fill optimization, supports
+     *        multi-point polylines).
+     * @param regionId Unique region identifier.
+     * @param paths The region's fill-path set (each a multi-point polyline).
+     * @note Cannot be mixed with addPolygonRegion within the same optimizer.
      */
     void addRegion(int regionId, const PolygonsD& paths);
 
     /**
-     * @brief 添加一个基于多边形本身的区域（填充前优化）。
-     * @param regionId 区域唯一标识。
-     * @param polygons 该区域包含的多边形（轮廓）集合，全部顶点作为出入门禁。
-     * @note 不可与 addRegion 在同一优化器内混用。
+     * @brief Add a polygon-based region (pre-fill optimization).
+     * @param regionId Unique region identifier.
+     * @param polygons The region's polygon (outline) set; all vertices act as entry/exit gates.
+     * @note Cannot be mixed with addRegion within the same optimizer.
      */
     void addPolygonRegion(int regionId, const PolygonsD& polygons);
 
     /**
-     * @brief 手动指定区域间空走代价（对称），覆盖自动计算的端点最小距离。
+     * @brief Manually specify the symmetric air-move cost between regions,
+     *        overriding the auto-computed minimum endpoint distance.
      */
     void addRoute(int fromId, int toId, double cost);
 
     /**
-     * @brief 求解区域访问顺序（区域数 >= 2 时用 TSP，否则按添加顺序）。
-     * @return 按序排列的区域 id 列表。
+     * @brief Solve the region visit order (uses TSP when region count >= 2, otherwise
+     *        keeps insertion order).
+     * @return The ordered list of region ids.
      */
     std::vector<int> optimizeOrder();
 
     /**
-     * @brief 按优化顺序输出完整填充路径（填充结果模式；区域内路径方向/次序经贪心编排以减少跳变）。
-     * @note 需先调用 optimizeOrder()；仅可用于填充结果模式。
+     * @brief Output the complete fill paths in optimized order (fill-result mode;
+     *        intra-region path direction/order is greedily arranged to reduce jumps).
+     * @note Requires optimizeOrder() first; only valid in fill-result mode.
      */
     PolygonsD buildPaths();
 
     /**
-     * @brief 按优化顺序输出多边形集合（多边形模式；区域内多边形次序经贪心编排，
-     *        每个多边形旋转起点至入门禁顶点，不改变环绕方向）。
-     * @note 需先调用 optimizeOrder()；仅可用于多边形模式。
+     * @brief Output the polygon set in optimized order (polygon mode; intra-region polygon
+     *        order is greedily arranged, and each polygon's start vertex is rotated to the
+     *        entry gate without changing its winding direction).
+     * @note Requires optimizeOrder() first; only valid in polygon mode.
      */
     PolygonsD buildPolygons();
 
@@ -84,31 +100,36 @@ private:
 };
 
 /**
- * @brief 注册 Lua 路径优化函数（全局表 PathOptimize）。
+ * @brief Register Lua path-optimization functions (global table PathOptimize).
  *
- * 注册后 Lua 中可用：
- * - PathOptimize.new()                -> 优化器对象（addRegion/addPolygons/addRoute/optimizeOrder/buildPaths/buildPolygons）
- * - PathOptimize.optimizeRegions(regions)  -> 填充结果模式一键优化，返回完整填充路径表（支持多点折线）
- * - PathOptimize.optimizePolygons(regions) -> 多边形模式一键优化，返回优化顺序的多边形表（填充前执行）
- * 其中 regions = 区域数组，每个区域 = 折线/多边形数组，每条折线/多边形 = {x=.., y=..} 点数组。
+ * After registration the following are available in Lua:
+ * - PathOptimize.new()                ->
+ * optimizer object (addRegion/addPolygons/addRoute/optimizeOrder/buildPaths/buildPolygons)
+ * - PathOptimize.optimizeRegions(regions)  -> one-shot fill-result-mode optimization, returns the complete fill-path table (supports multi-point polylines)
+ * - PathOptimize.optimizePolygons(regions) -> one-shot polygon-mode optimization, returns the polygon table in optimized order (runs before filling)
+ * where regions = an array of regions, each region = an array of polylines/polygons,
+ * each polyline/polygon = an array of {x=.., y=..} points.
  *
  * @param L Lua state pointer.
  */
 HSBA_SLICER_LIB_API void RegisterLuaPathOptimizeFunctions(lua_State* L);
 
 /**
- * @brief 通过 Lua 脚本文件对独立区域的填充路径做前置优化（Lua 脚本嵌入方案）。
+ * @brief Pre-optimize the fill paths of independent regions via a Lua script file
+ *        (embedded Lua script approach).
  *
- * Lua 函数签名：function optimize_paths(regions) return paths end
- * - regions: 区域数组，每个区域为折线数组（折线为 {x=.., y=..} 点数组）
- * - 返回值: 优化后的完整填充路径（折线数组）
- * 脚本环境中已注册多边形操作函数、填充函数与 PathOptimize 优化函数。
+ * Lua function signature: function optimize_paths(regions) return paths end
+ * - regions: an array of regions, each region an array of polylines (a polyline being
+ *   an array of {x=.., y=..} points)
+ * - return value: the optimized complete fill paths (an array of polylines)
+ * The script environment already has polygon-operation functions, fill functions, and
+ * the PathOptimize optimization functions registered.
  *
- * @param regions 独立多边形区域集合（每个区域一组填充路径）。
- * @param scriptPath Lua 脚本文件路径。
- * @param functionName Lua 函数名（默认 "optimize_paths"）。
- * @param lua_reg 可选的额外 Lua 注册回调。
- * @return 优化后的完整填充路径。
+ * @param regions Independent polygon regions (each region a set of fill paths).
+ * @param scriptPath Lua script file path.
+ * @param functionName Lua function name (default "optimize_paths").
+ * @param lua_reg Optional extra Lua registration callback.
+ * @return The optimized complete fill paths.
  */
 HSBA_SLICER_LIB_API PolygonsD LuaOptimizeRegionPaths(const std::vector<PolygonsD>& regions,
                                                      const std::string& scriptPath,
@@ -116,12 +137,12 @@ HSBA_SLICER_LIB_API PolygonsD LuaOptimizeRegionPaths(const std::vector<PolygonsD
                                                      const std::function<void(lua_State*)>& lua_reg = {});
 
 /**
- * @brief 通过内联 Lua 脚本代码对独立区域的填充路径做前置优化。
- * @param regions 独立多边形区域集合（每个区域一组填充路径）。
- * @param script 内联 Lua 脚本代码。
- * @param functionName Lua 函数名（默认 "optimize_paths"）。
- * @param lua_reg 可选的额外 Lua 注册回调。
- * @return 优化后的完整填充路径。
+ * @brief Pre-optimize the fill paths of independent regions via inline Lua script code.
+ * @param regions Independent polygon regions (each region a set of fill paths).
+ * @param script Inline Lua script code.
+ * @param functionName Lua function name (default "optimize_paths").
+ * @param lua_reg Optional extra Lua registration callback.
+ * @return The optimized complete fill paths.
  */
 HSBA_SLICER_LIB_API PolygonsD LuaOptimizeRegionPathsString(const std::vector<PolygonsD>& regions,
                                                            const std::string& script,
@@ -129,18 +150,21 @@ HSBA_SLICER_LIB_API PolygonsD LuaOptimizeRegionPathsString(const std::vector<Pol
                                                            const std::function<void(lua_State*)>& lua_reg = {});
 
 /**
- * @brief 通过 Lua 脚本文件对独立区域的多边形本身做前置优化（填充前执行，Lua 脚本嵌入方案）。
+ * @brief Pre-optimize the polygons of independent regions via a Lua script file
+ *        (runs before filling, embedded Lua script approach).
  *
- * Lua 函数签名：function optimize_polygons(regions) return polygons end
- * - regions: 区域数组，每个区域为多边形数组（多边形为 {x=.., y=..} 点数组）
- * - 返回值: 优化顺序后的多边形集合（多边形数组）
- * 脚本环境中已注册多边形操作函数、填充函数与 PathOptimize 优化函数。
+ * Lua function signature: function optimize_polygons(regions) return polygons end
+ * - regions: an array of regions, each region an array of polygons (a polygon being
+ *   an array of {x=.., y=..} points)
+ * - return value: the polygon set in optimized order (an array of polygons)
+ * The script environment already has polygon-operation functions, fill functions, and
+ * the PathOptimize optimization functions registered.
  *
- * @param regions 独立多边形区域集合（每个区域一组多边形）。
- * @param scriptPath Lua 脚本文件路径。
- * @param functionName Lua 函数名（默认 "optimize_polygons"）。
- * @param lua_reg 可选的额外 Lua 注册回调。
- * @return 优化顺序后的多边形集合。
+ * @param regions Independent polygon regions (each region a set of polygons).
+ * @param scriptPath Lua script file path.
+ * @param functionName Lua function name (default "optimize_polygons").
+ * @param lua_reg Optional extra Lua registration callback.
+ * @return The polygon set in optimized order.
  */
 HSBA_SLICER_LIB_API PolygonsD LuaOptimizeRegionPolygons(const std::vector<PolygonsD>& regions,
                                                         const std::string& scriptPath,
@@ -148,12 +172,13 @@ HSBA_SLICER_LIB_API PolygonsD LuaOptimizeRegionPolygons(const std::vector<Polygo
                                                         const std::function<void(lua_State*)>& lua_reg = {});
 
 /**
- * @brief 通过内联 Lua 脚本代码对独立区域的多边形本身做前置优化（填充前执行）。
- * @param regions 独立多边形区域集合（每个区域一组多边形）。
- * @param script 内联 Lua 脚本代码。
- * @param functionName Lua 函数名（默认 "optimize_polygons"）。
- * @param lua_reg 可选的额外 Lua 注册回调。
- * @return 优化顺序后的多边形集合。
+ * @brief Pre-optimize the polygons of independent regions via inline Lua script code
+ *        (runs before filling).
+ * @param regions Independent polygon regions (each region a set of polygons).
+ * @param script Inline Lua script code.
+ * @param functionName Lua function name (default "optimize_polygons").
+ * @param lua_reg Optional extra Lua registration callback.
+ * @return The polygon set in optimized order.
  */
 HSBA_SLICER_LIB_API PolygonsD LuaOptimizeRegionPolygonsString(const std::vector<PolygonsD>& regions,
                                                               const std::string& script,

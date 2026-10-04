@@ -16,6 +16,14 @@
 
 namespace HsBa::Slicer::Utils
 {
+/** @brief Internal implementation of TupleEach: applies fn to each tuple element via an index sequence.
+ * @tparam Tuple The tuple type.
+ * @tparam Fn The callable type.
+ * @tparam Is The index sequence pack.
+ * @param fn The function to apply to each element.
+ * @param tuple The tuple to iterate over.
+ * @return A tuple of results, or void if fn returns void for every element.
+ */
 template <typename Tuple, typename Fn, size_t... Is>
 constexpr auto TupleEachImpl(Fn&& fn, Tuple&& tuple, std::index_sequence<Is...>)
 {

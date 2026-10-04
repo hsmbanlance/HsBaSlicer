@@ -1,4 +1,8 @@
-﻿#include "PolygonFill.hpp"
+﻿/** @file PolygonFill.cpp
+ * @brief Implementations of polygon infill pattern generators (offset, line, zigzag, composite, hybrid and Lua-custom fills).
+ * @author HsBa
+ */
+#include "PolygonFill.hpp"
 
 #include <cmath>
 #include <cstring>

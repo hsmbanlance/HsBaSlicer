@@ -1,9 +1,14 @@
+/** @file gcodepath.cpp
+ * @brief Implementation of multi-firmware G-code generation for GCodePath.
+ * @author HsBa
+ */
 #include "gcodepath.hpp"
 
 #include <cmath>
 #include <format>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
 
 #include <lua.hpp>
 
@@ -27,7 +32,10 @@ float ParseLayerZ(const std::string& config)
         {
             return std::stof(config.substr(2));
         }
-        catch (...)
+        catch (const std::invalid_argument&)
+        {
+        }
+        catch (const std::out_of_range&)
         {
         }
     }
@@ -260,11 +268,55 @@ std::string GCodePath::GenerateLayerGCode(int layer_idx, GCodeFirmware fw) const
     return ss.str();
 }
 
+std::string GCodePath::GenerateContinuousWall() const
+{
+    if (continuous_wall_.size() < 2)
+        return "";
+
+    std::ostringstream ss;
+    const auto& cfg = printer_config_;
+    float feed_rate = cfg.print_speed * kSpeedFactor;
+
+    // Move to the base of the helix, then extrude it as ONE unbroken line whose
+    // Z rises continuously. No travel/retraction between points keeps the wall
+    // extrusion-continuous (the essence of spiralize / vase mode).
+    const auto& p0 = continuous_wall_[0];
+    ss << std::format("G0 X{:.3f} Y{:.3f} Z{:.3f} F{:.0f}\n", p0.x, p0.y, p0.z, cfg.travel_speed * kSpeedFactor);
+
+    double cumulative_e = 0.0;
+    for (size_t i = 1; i < continuous_wall_.size(); ++i)
+    {
+        const auto& a = continuous_wall_[i - 1];
+        const auto& b = continuous_wall_[i];
+        double dx = b.x - a.x;
+        double dy = b.y - a.y;
+        double seg_len = std::sqrt(dx * dx + dy * dy);
+        double e_value = CalcExtrusion(seg_len);
+
+        if (cfg.relative_extrusion)
+        {
+            ss << std::format("G1 X{:.3f} Y{:.3f} Z{:.3f} E{:.5f} F{:.0f}\n", b.x, b.y, b.z, e_value, feed_rate);
+        }
+        else
+        {
+            cumulative_e += e_value;
+            ss << std::format("G1 X{:.3f} Y{:.3f} Z{:.3f} E{:.5f} F{:.0f}\n", b.x, b.y, b.z, cumulative_e, feed_rate);
+        }
+    }
+
+    return ss.str();
+}
+
 std::string GCodePath::ToGCode(GCodeFirmware firmware) const
 {
     std::ostringstream ss;
     ss << GenerateHeader(firmware);
 
+    // Spiralize/vase mode: emit the continuous rising outer wall first.
+    if (!continuous_wall_.empty())
+        ss << GenerateContinuousWall();
+
+    // Then any per-layer polygon data (empty in pure vase mode).
     for (int i = 0; i < static_cast<int>(layers_.size()); ++i)
     {
         ss << GenerateLayerGCode(i, firmware);

@@ -1,3 +1,7 @@
+/** @file struct_yaml.hpp
+ * @brief Generic reflection-driven serialization of aggregate/reflectable types to and from YAML nodes.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_STRUCT_YAML_HPP
 #define HSBA_SLICER_STRUCT_YAML_HPP

@@ -1,3 +1,7 @@
+/** @file LuaDllLoader.cpp
+ * @brief Implementation of the Lua-visible dynamic library loader.
+ * @author HsBa
+ */
 #ifndef HSBA_NO_DLL_LOADER
 
 #include "LuaDllLoader.hpp"

@@ -1,4 +1,8 @@
-﻿#include "filename_check.hpp"
+﻿/** @file filename_check.cpp
+ * @brief Implementations of the filename and path validity checking helpers.
+ * @author HsBa
+ */
+#include "filename_check.hpp"
 
 #include <regex>
 

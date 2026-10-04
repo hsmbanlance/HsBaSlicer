@@ -1,3 +1,7 @@
+/** @file OpenVdbModel.cpp
+ * @brief Implementation of the OpenVDB-backed point cloud model.
+ * @author HsBa
+ */
 #include "OpenVdbModel.hpp"
 #include "OpenVdbModel_internal.h"
 
@@ -12,23 +16,26 @@
 
 #include <openvdb/io/File.h>
 
-#include "base/error.hpp"
 #include "base/ModelFormat.hpp"
+#include "base/error.hpp"
 
 namespace HsBa::Slicer
 {
 namespace
 {
-static const bool kOpenVdbInitialized = []() {
+static const bool kOpenVdbInitialized = []()
+{
     openvdb::initialize();
     return true;
 }();
 
 bool IsVdbFile(std::string_view fileName)
 {
-    const std::string lower = [&]() {
+    const std::string lower = [&]()
+    {
         std::string result{fileName};
-        std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        std::transform(result.begin(), result.end(), result.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         return result;
     }();
 
@@ -37,9 +44,11 @@ bool IsVdbFile(std::string_view fileName)
 
 bool IsXYZFormat(std::string_view fileName)
 {
-    const std::string lower = [&]() {
+    const std::string lower = [&]()
+    {
         std::string result{fileName};
-        std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        std::transform(result.begin(), result.end(), result.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         return result;
     }();
 
@@ -100,9 +109,9 @@ bool WritePointsToFile(const std::string& fileName, const std::vector<Eigen::Vec
 
 }  // namespace
 
+using vdb_internal::NormalizePath;
 using vdb_internal::ToCoord;
 using vdb_internal::ToEigen;
-using vdb_internal::NormalizePath;
 
 OpenVdbModel::OpenVdbModel() : grid_{openvdb::Vec3fGrid::create(openvdb::Vec3f(0.0f))}
 {
@@ -445,9 +454,7 @@ std::vector<Eigen::Vector3f> OpenVdbModel::KNN(const Eigen::Vector3f& query, std
         ranked.emplace_back((point - query).squaredNorm(), point);
     }
 
-    std::sort(ranked.begin(), ranked.end(), [](const auto& lhs, const auto& rhs) {
-        return lhs.first < rhs.first;
-    });
+    std::sort(ranked.begin(), ranked.end(), [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
 
     std::vector<Eigen::Vector3f> result;
     result.reserve(std::min<std::size_t>(k, ranked.size()));
@@ -514,11 +521,11 @@ std::vector<Eigen::Vector3f> OpenVdbModel::VoxelCenters(float voxelSize) const
     for (auto iter = grid_->cbeginValueOn(); iter; ++iter)
     {
         const auto coord = iter.getCoord();
-        const openvdb::Vec3d center = grid_->transform().indexToWorld(openvdb::Vec3d(
-            static_cast<double>(coord.x()) + 0.5,
-            static_cast<double>(coord.y()) + 0.5,
-            static_cast<double>(coord.z()) + 0.5));
-        centers.emplace_back(static_cast<float>(center.x()), static_cast<float>(center.y()), static_cast<float>(center.z()));
+        const openvdb::Vec3d center = grid_->transform().indexToWorld(
+            openvdb::Vec3d(static_cast<double>(coord.x()) + 0.5, static_cast<double>(coord.y()) + 0.5,
+                           static_cast<double>(coord.z()) + 0.5));
+        centers.emplace_back(static_cast<float>(center.x()), static_cast<float>(center.y()),
+                             static_cast<float>(center.z()));
     }
     return centers;
 }

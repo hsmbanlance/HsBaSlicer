@@ -1,3 +1,7 @@
+/** @file Msg2PipelineConfig.hpp
+ * @brief Converters from HsbaProto pipeline-config messages to native pipeline configuration structs.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_MSG2PIPELINE_CONFIG_HPP
 #define HSBA_SLICER_MSG2PIPELINE_CONFIG_HPP
@@ -7,8 +11,12 @@
 #include "custom_pipeline.pb.h"
 #include "fdm_pipeline.pb.h"
 #include "file_transfer_pipeline.pb.h"
+#include "lom_pipeline.pb.h"
 #include "sla_pipeline.pb.h"
+#include "slm_pipeline.pb.h"
 #include "sls_pipeline.pb.h"
+#include "tdp_pipeline.pb.h"
+#include "waam_pipeline.pb.h"
 
 namespace HsBa::Slicer
 {
@@ -63,6 +71,32 @@ void MsgToCustomConfig(const HsbaProto::custom_pipe_config& msg, HsBaCustomPipel
 /// @note String fields (output_path, result_string, error_message) are allocated
 ///       with malloc; caller must call HsBaFreeCustomPipelineResult to release.
 void MsgToCustomResult(const HsbaProto::custom_pipe_result& msg, HsBaCustomPipelineResult_t* result);
+
+/// @brief Convert proto message to SLM pipeline C config.
+/// @note String fields are allocated with malloc; caller must free the struct
+///       or pass it through HsBaRunSlmPipeline which copies internally.
+void MsgToSlmConfig(const HsbaProto::slm_pipe_config& msg, HsBaSlmPipelineConfig_t* config);
+
+/// @brief Convert proto message to SLM pipeline C result.
+void MsgToSlmResult(const HsbaProto::slm_pipe_result& msg, HsBaSlmPipelineResult_t* result);
+
+/// @brief Convert proto message to LOM pipeline C config.
+void MsgToLomConfig(const HsbaProto::lom_pipe_config& msg, HsBaLomPipelineConfig_t* config);
+
+/// @brief Convert proto message to LOM pipeline C result.
+void MsgToLomResult(const HsbaProto::lom_pipe_result& msg, HsBaLomPipelineResult_t* result);
+
+/// @brief Convert proto message to 3DP pipeline C config.
+void MsgToTdpConfig(const HsbaProto::tdp_pipe_config& msg, HsBaTdpPipelineConfig_t* config);
+
+/// @brief Convert proto message to 3DP pipeline C result.
+void MsgToTdpResult(const HsbaProto::tdp_pipe_result& msg, HsBaTdpPipelineResult_t* result);
+
+/// @brief Convert proto message to WAAM pipeline C config.
+void MsgToWaamConfig(const HsbaProto::waam_pipe_config& msg, HsBaWaamPipelineConfig_t* config);
+
+/// @brief Convert proto message to WAAM pipeline C result.
+void MsgToWaamResult(const HsbaProto::waam_pipe_result& msg, HsBaWaamPipelineResult_t* result);
 
 }  // namespace HsBa::Slicer
 

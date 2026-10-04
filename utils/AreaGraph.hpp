@@ -1,12 +1,16 @@
-﻿#ifndef HSBA_SLICER_AREAGRAPH_HPP
+﻿/** @file AreaGraph.hpp
+ * @brief Two-level area/gate graph supporting gate-aware shortest paths and TSP tour planning across areas.
+ * @author HsBa
+ */
+#ifndef HSBA_SLICER_AREAGRAPH_HPP
 #define HSBA_SLICER_AREAGRAPH_HPP
 #pragma once
 
 #include "Graph.hpp"
+#include <boost/container_hash/hash.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/graph_traits.hpp>
 #include <boost/property_map/property_map.hpp>
-#include <boost/container_hash/hash.hpp>
 
 #include <algorithm>
 #include <map>
@@ -25,37 +29,43 @@ namespace HsBa::Slicer
 namespace graph
 {
 
+/// @brief A directional gate on an area: an entry/exit point with per-side permissions.
 template <typename GateId, typename Weight>
 struct GateInfo
 {
-    GateId id;
-    bool canEnter = true;
-    bool canExit = true; 
+    GateId id;             ///< Gate identifier.
+    bool canEnter = true;  ///< Whether the gate can be used to enter the area.
+    bool canExit = true;   ///< Whether the gate can be used to exit the area.
 };
 
+/// @brief Per-area configuration: its gates, same-gate transit policy and internal gate-to-gate costs.
 template <typename GateId, typename Weight>
 struct AreaConfig
 {
-    std::vector<GateInfo<GateId, Weight>> gates;
+    std::vector<GateInfo<GateId, Weight>> gates;  ///< Gates belonging to this area.
 
-    bool allowSameGateInOut = true;
+    bool allowSameGateInOut = true;  ///< Whether the same gate may serve as both entry and exit.
 
-    Weight sameGateInternalCost = Weight{};
+    Weight sameGateInternalCost = Weight{};  ///< Default internal cost when entering and exiting the same gate.
 
-    std::map<std::pair<GateId, GateId>, Weight> internalCosts;
+    std::map<std::pair<GateId, GateId>, Weight> internalCosts;  ///< Explicit entry->exit internal traversal costs.
 };
 
+/// @brief Result of a gate-aware shortest path: the traversed areas with the entry/exit gate used at each.
 template <typename AreaId, typename GateId, typename Weight>
 struct AreaPathResult
 {
-    std::vector<AreaId> areaPath;
-    std::vector<GateId> entryGates;
-    std::vector<GateId> exitGates;
-    Weight totalCost;
+    std::vector<AreaId> areaPath;   ///< Sequence of areas traversed.
+    std::vector<GateId> entryGates; ///< Gate used to enter each area.
+    std::vector<GateId> exitGates;  ///< Gate used to exit each area.
+    Weight totalCost;               ///< Total accumulated cost.
 
+    /// @brief Whether the path is empty (no reachable route).
     bool empty() const { return areaPath.empty(); }
+    /// @brief Number of areas on the path.
     std::size_t size() const { return areaPath.size(); }
 
+    /// @brief Stream a readable summary of the path result.
     friend std::ostream& operator<<(std::ostream& os, const AreaPathResult& r)
     {
         os << "AreaPathResult{cost=" << detail::toString(r.totalCost) << ", path=[";
@@ -70,17 +80,28 @@ struct AreaPathResult
     }
 };
 
+/// @brief Result of a TSP tour over a set of areas, with per-stop entry/exit gates and evolution statistics.
 template <typename AreaId, typename GateId, typename Weight>
 struct AreaTSPResult
 {
-    std::vector<AreaId> tour;
-    std::vector<std::vector<GateId>> entryGates;
-    std::vector<std::vector<GateId>> exitGates;
-    Weight totalCost;
-    std::size_t generations;
+    std::vector<AreaId> tour;                            ///< Ordered areas visited.
+    std::vector<std::vector<GateId>> entryGates;         ///< Entry gates used at each stop.
+    std::vector<std::vector<GateId>> exitGates;          ///< Exit gates used at each stop.
+    Weight totalCost;                                    ///< Total tour cost.
+    std::size_t generations;                             ///< Generations run by the genetic solver.
 };
 
 
+/**
+ * @class AreaGraph
+ * @brief Graph of areas connected by routes; expands each area into per-gate entry/exit vertices to compute gate-aware shortest paths and TSP tours.
+ * @tparam AreaId Area identifier type.
+ * @tparam GateId Gate identifier type.
+ * @tparam Weight Path cost type.
+ * @tparam AreaProperty Per-area property type.
+ * @tparam RouteProperty Per-route property type.
+ * @tparam AreaDescription Optional per-area description payload.
+ */
 template <concepts::VertexIdType AreaId, concepts::VertexIdType GateId, typename Weight,
           typename AreaProperty = boost::no_property, typename RouteProperty = boost::no_property,
           typename AreaDescription = void>
@@ -92,12 +113,14 @@ public:
     using TSPResult = AreaTSPResult<AreaId, GateId, Weight>;
     using AreaDescriptionType = AreaDescription;
 
+    /// @brief Add an area with its gate configuration and optional property.
     void addArea(const AreaId& id, const Config& config, const AreaProperty& prop = {})
     {
         areas_[id] = InternalArea{config, prop};
         dirty_ = true;
     }
 
+    /// @brief Add an area together with an associated description (enabled when AreaDescription is set).
     template <typename AD = AreaDescription>
     requires(!std::is_same_v<AD, void>) void addArea(const AreaId& id, const Config& config, const AreaProperty& prop,
                                                      const AD& desc)
@@ -107,11 +130,15 @@ public:
         dirty_ = true;
     }
 
+    /// @brief Whether an area with the given id exists.
     bool hasArea(const AreaId& id) const { return areas_.contains(id); }
 
+    /// @brief Get the mutable property of an area.
     AreaProperty& areaProperty(const AreaId& id) { return areas_.at(id).property; }
+    /// @brief Get the read-only property of an area.
     const AreaProperty& areaProperty(const AreaId& id) const { return areas_.at(id).property; }
 
+    /// @brief Attach a description payload to an area.
     template <typename AD = AreaDescription>
     requires(!std::is_same_v<AD, void>) void setAreaDescription(const AreaId& id, const AD& desc)
     {
@@ -120,6 +147,7 @@ public:
         areaDescriptions_.set(id, desc);
     }
 
+    /// @brief Get the mutable description of an area.
     template <typename AD = AreaDescription>
     requires(!std::is_same_v<AD, void>) AD& areaDescription(const AreaId& id)
     {
@@ -128,6 +156,7 @@ public:
         return areaDescriptions_.get(id);
     }
 
+    /// @brief Get the read-only description of an area.
     template <typename AD = AreaDescription>
     requires(!std::is_same_v<AD, void>) const AD& areaDescription(const AreaId& id) const
     {
@@ -136,24 +165,28 @@ public:
         return areaDescriptions_.get(id);
     }
 
+    /// @brief Whether an area has an attached description.
     template <typename AD = AreaDescription>
     requires(!std::is_same_v<AD, void>) bool hasAreaDescription(const AreaId& id) const
     {
         return areaDescriptions_.has(id);
     }
 
+    /// @brief Remove the description attached to an area.
     template <typename AD = AreaDescription>
     requires(!std::is_same_v<AD, void>) void removeAreaDescription(const AreaId& id)
     {
         areaDescriptions_.erase(id);
     }
 
+    /// @brief Return the underlying area-id to description storage.
     template <typename AD = AreaDescription>
     requires(!std::is_same_v<AD, void>) const auto& areaDescriptions() const
     {
         return areaDescriptions_.data;
     }
 
+    /// @brief Add a route between two areas, specifying gate-pair weights and an optional route property.
     void addRoute(const AreaId& from, const AreaId& to, const std::map<std::pair<GateId, GateId>, Weight>& gateWeights,
                   const RouteProperty& prop = {})
     {
@@ -161,12 +194,14 @@ public:
         dirty_ = true;
     }
 
+    /// @brief Compute the cheapest gate-aware path between two areas, choosing optimal exit/entry gates.
     PathResult shortestPath(const AreaId& from, const AreaId& to)
     {
         ensureExpanded();
 
-        // 起点区域视为已在内部：从各出口出发，初始代价为"入口->该出口"的最小内部代价
-        // （起点不受 allowSameGateInOut 限制；无入口时直接以零代价出发）
+        // Treat the source area as already inside: depart from each exit, with the initial cost being the
+        // minimum internal cost from the entry to that exit (the source is not constrained by
+        // allowSameGateInOut; when there is no entry, depart directly at zero cost)
         const auto& fromCfg = areas_.at(from).config;
         bool hasEntry = false;
         for (const auto& g : fromCfg.gates)
@@ -207,7 +242,7 @@ public:
         if (sources.empty())
             throw RuntimeError("Source area has no exit gates");
 
-        // 终点区域到达入口即结束，无需再穿越其内部
+        // Reaching an entry of the target area ends the search; no need to traverse its interior
         std::vector<ExpandedVD> targets;
         for (const auto& g : areas_.at(to).config.gates)
         {
@@ -220,6 +255,7 @@ public:
         return solveShortestPath(sources, targets);
     }
 
+    /// @brief Compute the cheapest path pinning the source exit gate and the target entry gate.
     PathResult shortestPath(const AreaId& from, const GateId& fromExit, const AreaId& to, const GateId& toEntry)
     {
         ensureExpanded();
@@ -228,6 +264,7 @@ public:
         return solveShortestPath({{src, Weight{}}}, {tgt});
     }
 
+    /// @brief Solve a TSP tour over the given must-visit areas using a genetic algorithm over cached pairwise paths.
     TSPResult solveTSP(const std::vector<AreaId>& mustVisit, std::size_t populationSize = 150,
                        std::size_t maxGenerations = 500, double mutationRate = 0.03, double crossoverRate = 0.85)
     {
@@ -307,6 +344,7 @@ public:
         return result;
     }
 
+    /// @brief Return the ids of all added areas.
     std::vector<AreaId> allAreas() const
     {
         std::vector<AreaId> result;
@@ -315,6 +353,7 @@ public:
         return result;
     }
 
+    /// @brief Number of areas in the graph.
     std::size_t areaCount() const { return areas_.size(); }
 
 private:
@@ -554,5 +593,5 @@ private:
 };
 
 }  // namespace graph
-} // namespace HsBa::Slicer
-#endif // !HSBA_SLICER_AREAGRAPH_HPP
+}  // namespace HsBa::Slicer
+#endif  // !HSBA_SLICER_AREAGRAPH_HPP

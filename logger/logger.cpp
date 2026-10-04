@@ -1,4 +1,8 @@
-﻿#include "logger.hpp"
+﻿/** @file logger.cpp
+ * @brief Implementation of the cross-platform singleton logger.
+ * @author HsBa
+ */
+#include "logger.hpp"
 #include <cstddef>
 #include <filesystem>
 
@@ -154,9 +158,9 @@ HSBA_SLICER_LOG_API LoggerSingletone::LoggerSingletone(LoggerSingletone::Private
         try
         {
 #if _DEBUG
-            int log_level = ptree.get<int>("log.log_level_debug");
+            log_level_ = ptree.get<int>("log.log_level_debug");
 #else
-            int log_level = ptree.get<int>("log.log_level");
+            log_level_ = ptree.get<int>("log.log_level");
 #endif  // _DEBUG
             use_log_file_ = ptree.get<bool>("log.use_log_file");
             log_path_ = current_path.string() + ptree.get<std::string>("log.log_file");
@@ -404,7 +408,7 @@ HSBA_SLICER_LOG_API LogState operator""_log_error(const char* message, std::size
 }  // namespace LogLiterals
 }  // namespace HsBa::Slicer::Log
 
-// 定义LoggerSingletone的静态成员
+// Define the static members of LoggerSingleton
 namespace HsBa::Slicer::Log
 {
 HSBA_SLICER_LOG_API std::shared_ptr<LoggerSingletone> LoggerSingletone::instance_ = nullptr;

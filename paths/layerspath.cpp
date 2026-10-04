@@ -1,4 +1,8 @@
-﻿#include "layerspath.hpp"
+﻿/** @file layerspath.cpp
+ * @brief Implementation of layer-based path output and its Lua-driven save/serialize.
+ * @author HsBa
+ */
+#include "layerspath.hpp"
 
 #include <format>
 #include <fstream>

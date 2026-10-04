@@ -1,3 +1,7 @@
+/** @file lua_register.cpp
+ * @brief Implementation of external Lua function and event-callback registration.
+ * @author HsBa
+ */
 #include "lua_register.h"
 
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"

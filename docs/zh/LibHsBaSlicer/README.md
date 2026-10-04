@@ -12,6 +12,7 @@ LibHsBaSlicer 是 HsBaSlicer 的核心 C++ 库，提供完整的切片流水线�
 - **Floor（SLA 地板/渲染/打包）** - SLA 底座生成、层图渲染与 zip 打包导出
 - **Path/SLS 导出** - SLS Lua 脚本驱动导出（无标准格式）
 - **Transfer（文件传输）** - 远程执行器文件传输（连接池化 TCP 传输）
+- **ParamStore（工艺参数存储）** - 将各流水线工艺参数结构体写入/读取数据库以供复用
 - **Extends（扩展注册）** - 外部 Lua 函数注册池、事件回调与 C++ 事件源
 
 ## 架构
@@ -25,6 +26,7 @@ LibHsBaSlicer
 ├── Path/          G-code 路径生成 + 区域路径优化 + SLS Lua 导出
 ├── Floor/         SLA 地板/筏生成、层图渲染、zip 打包
 ├── Transfer/      远程文件传输（连接池化）
+├── ParamStore/    工艺参数写入/读取（封装 fileoperator ParamStore）
 └── Extends/       外部 Lua 函数注册 + C++ 事件源（Zipper/DB）
 ```
 
@@ -42,6 +44,7 @@ LibHsBaSlicer
 #include "LibHsBaSlicer/Path/sls_export.hpp"            // SLS Lua 导出
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"            // SLA 地板/渲染/打包
 #include "LibHsBaSlicer/Transfer/file_transfer.hpp"     // 文件传输
+#include "LibHsBaSlicer/ParamStore/param_store_ops.hpp"  // 工艺参数存储
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"     // Lua 扩展注册
 #include "LibHsBaSlicer/Extends/EventSourceFunction.hpp" // C++ 事件源
 #include "LibHsBaSlicer/version_info.hpp"               // 版本信息
@@ -131,6 +134,40 @@ if (result.success) {
     // result.files_transferred == result.total_files
 }
 ```
+
+## 工艺参数存储
+
+通过 `ParamStore/param_store_ops.hpp` 把各流水线的工艺参数（`HsBa*PipelineConfig_t` 结构体）写入/读取数据库以供复用。Dll 层的 `param_store_pipeline.h` 即封装本组函数；Lib 层以 `std::string`/枚举返回 `ParamStoreOutcome`，不暴露 C ABI 所有权细节。
+
+```cpp
+#include "LibHsBaSlicer/ParamStore/param_store_ops.hpp"
+using namespace HsBa::Slicer;
+
+ParamStoreConn conn;
+conn.backend    = ParamBackend::Sqlite;
+conn.sqlitePath = "params.db";
+
+HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+cfg.model_name   = "tough_template";
+cfg.layer_height = 0.2f;
+
+// 写入（按 key upsert），table 传 "" 使用类型默认表名
+ParamStoreOutcome saved = SavePipelineParams(conn, ParamPipelineKind::Fdm, "", "tough_template", &cfg);
+if (saved.success) { /* saved.paramId */ }
+
+// 读取（回填到调用方结构体）
+HsBaFdmPipelineConfig_t out = HsBaFdmConfigDefault();
+ParamStoreOutcome loaded = LoadPipelineParams(conn, ParamPipelineKind::Fdm, "", "tough_template", &out);
+if (loaded.success) {
+    // 使用 out.model_name（由库 malloc 持有）...
+    FreeLoadedConfigStrings(ParamPipelineKind::Fdm, &out);  // 释放读取到的堆字符串
+}
+```
+
+- `SavePipelineParams` / `LoadPipelineParams` 依 `conn.backend` 构造 SQLite/MySQL/PostgreSQL 适配器，连接后 `EnsureTable` → `Save`/`Load`；异常收敛进 `ParamStoreOutcome::error`（`success=false`），不向外抛出。
+- MySQL/PostgreSQL 分支受 `HSBA_USE_MYSQL` / `HSBA_USE_PGSQL` 编译宏守卫，未启用时返回 `success=false` 而非崩溃（移动端仅 SQLite）。
+- 读取回填的 `const char*` 字段由 `std::malloc` 持有，须用 `FreeLoadedConfigStrings` 释放。
+- 底层存储/反射/CRUD（含 `List`/`Update`/`Delete`/Lua）能力位于 fileoperator 的 `ParamStore`，本层仅面向 C 配置结构体暴露写入/读取。
 
 ## SLA 地板/渲染/打包
 

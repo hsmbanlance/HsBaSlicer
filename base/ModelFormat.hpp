@@ -102,6 +102,10 @@ bool IsMeshFormat(const std::string& file_name);
  * @return true if the file name corresponds to a BRep format, false otherwise.
  */
 bool IsBrepFormat(const std::string& file_name);
+/** @brief Check if a file name corresponds to a CSG format.
+ * @param file_name The file name to check.
+ * @return true if the file name corresponds to a CSG format, false otherwise.
+ */
 bool IsCSGFormat(const std::string& file_name);
 /** @brief Check if a file name corresponds to a point cloud format.
  * @param file_name The file name to check.

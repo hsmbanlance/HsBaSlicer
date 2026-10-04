@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file 2Dhull.hpp
+ * @brief Convex and concave hull computation for polygons (integer, double and multi-polygon overloads).
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_2DHULL_HPP
 #define HSBA_SLICER_2DHULL_HPP
 

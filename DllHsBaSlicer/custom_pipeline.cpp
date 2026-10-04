@@ -1,4 +1,8 @@
-﻿#include "custom_pipeline.h"
+﻿/** @file custom_pipeline.cpp
+ * @brief Implementation of the fully Lua-driven custom pipeline C ABI.
+ * @author HsBa
+ */
+#include "custom_pipeline.h"
 
 #include <chrono>
 #include <cstdlib>
@@ -111,7 +115,7 @@ HsBaCustomPipelineResult_t ToCCustomResult(const InternalCustomResult& ir)
 
 Utils::Task<InternalCustomResult> RunCustomPipelineAsync(const InternalCustomConfig& cfg)
 {
-    // 把常用自定义类型的 AnyObject/Lua 注册函数装入通用注册池，供流水线 Lua 环境使用
+    // Load the AnyObject/Lua registration functions for common custom types into the generic registry pool for the pipeline Lua environment to use
     HsBa::Slicer::InstallCommonAnyObjectTypes();
 
     InternalCustomResult result;

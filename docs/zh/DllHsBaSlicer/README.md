@@ -40,7 +40,12 @@ LibHsBaSlicer  ← C++ 静态库：预处理 / 切片 / 支撑 / 填充 / 路径
 | `fdm_pipeline.h` | FDM 全流程接口 |
 | `sla_pipeline.h` | SLA 全流程接口 |
 | `sls_pipeline.h` | SLS 全流程接口 |
+| `slm_pipeline.h` | SLM 金属粉末床全流程接口 |
+| `lom_pipeline.h` | LOM 叠层实体全流程接口 |
+| `tdp_pipeline.h` | 3DP 粘结剂喷射全流程接口 |
+| `waam_pipeline.h` | WAAM 电弧增材（机器人）全流程接口 |
 | `file_transfer_pipeline.h` | 文件传输流水线接口（同步/异步） |
+| `param_store_pipeline.h` | 工艺参数存储流水线接口（写入/读取） |
 | `custom_pipeline.h` | 自定义 Lua 流水线接口（同步/异步） |
 | `pipeline_convert.h` | Proto 序列化字节 ↔ C 结构体转换 |
 | `lua_register.h` | Lua 扩展函数注册接口（2D/3D/File/事件回调） |
@@ -178,6 +183,7 @@ void HsBaFreePipelineResult(HsBaFdmPipelineResult_t* result);
 | `retract_length` | 1.0 | 回抽长度 (mm) |
 | `retract_speed` | 40.0 | 回抽速度 (mm/s) |
 | `first_layer_speed` | 20.0 | 首层速度 (mm/s) |
+| `spiral_mode` | 0 | 外壁螺旋连续化（花瓶模式，0=false, 1=true）；启用后外轮廓输出为单条挤出连续的爬升螺旋线，并跳过逐层填充与支撑 |
 
 ### SLA 流水线
 
@@ -215,6 +221,139 @@ void HsBaFreeSlsPipelineResult(HsBaSlsPipelineResult_t* result);
 
 > SLS 的 `export_lua_script` 字段**不可为 NULL**。
 
+### SLM 流水线
+
+金属粉末床熔融（激光 / 电子束选区熔化）。流程与 SLS 完全一致（预处理 → 切片 → Lua 脚本导出 zip + 数据库登记，无地板/支撑），额外携带金属专属参数（材料、能量源、保护气），随配置一并交给导出脚本。
+
+```c
+HsBaSlmPipelineConfig_t HsBaCreateDefaultSlmConfig(void);
+
+HsBaSlmPipelineResult_t HsBaRunSlmPipeline(const HsBaSlmPipelineConfig_t* config,
+                                           HsBaSlmProgressCallback callback, void* user_data);
+
+void HsBaRunSlmPipelineAsync(const HsBaSlmPipelineConfig_t* config,
+                             HsBaSlmProgressCallback callback, void* user_data,
+                             HsBaSlmResultCallback result_callback, void* result_user_data);
+
+void HsBaFreeSlmPipelineResult(HsBaSlmPipelineResult_t* result);
+```
+
+#### 配置字段
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `layer_height` / `first_layer_height` | 0.06 / 0.08 | 层高 / 首层高 (mm) |
+| `laser_power` | 200.0 | 激光功率 (W) |
+| `scan_speed` | 1000.0 | 扫描速度 (mm/s) |
+| `hatch_spacing` / `hatch_rotation` | 0.1 / 67.0 | 填充线距 (mm) / 层间旋转角 (°) |
+| `bed_temperature` | 100.0 | 粉末床温度 (°C) |
+| `material` | `HSBA_SLM_MATERIAL_TITANIUM` | 金属粉末：IRON / ALUMINUM / TITANIUM / UNKNOWN |
+| `light_source` | `HSBA_SLM_LIGHT_LASER` | 能量源：LASER / EBEAM / UNKNOWN |
+| `protect_gas` | `HSBA_METAL_GAS_ARGON` | 保护气：ARGON / HELIUM / N2 / CO2 / UNKNOWN |
+| `export_lua_script` | NULL | 导出 Lua 脚本路径（**不可为 NULL**） |
+| `export_lua_func` | NULL | 导出函数名，NULL 时为 `export_slm` |
+| `output_path` | NULL | 输出路径 |
+
+### LOM 流水线
+
+叠层实体制造（薄片逐层粘结 + 激光切割）。按片厚逐层切片，把每层轮廓及切割 / 粘结参数交给 Lua 导出脚本。
+
+```c
+HsBaLomPipelineConfig_t HsBaCreateDefaultLomConfig(void);
+
+HsBaLomPipelineResult_t HsBaRunLomPipeline(const HsBaLomPipelineConfig_t* config,
+                                           HsBaLomProgressCallback callback, void* user_data);
+
+void HsBaRunLomPipelineAsync(const HsBaLomPipelineConfig_t* config,
+                             HsBaLomProgressCallback callback, void* user_data,
+                             HsBaLomResultCallback result_callback, void* result_user_data);
+
+void HsBaFreeLomPipelineResult(HsBaLomPipelineResult_t* result);
+```
+
+#### 配置字段
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `layer_height` / `first_layer_height` | 0.2 / 0.2 | 片厚 / 首片厚 (mm) |
+| `cut_speed` / `cut_power` / `cut_margin` | 300.0 / 0.8 / 0.5 | 激光切割速度 (mm/s) / 功率 [0,1] / 轮廓偏移 (mm) |
+| `bond_temperature` / `bond_pressure` / `bond_time` | 150.0 / 1.0 / 5.0 | 粘结温度 (°C) / 压力 (MPa) / 每层时间 (s) |
+| `seal_contour` | 1 | 零件边缘封边 (0=false, 1=true) |
+| `cut_mode` | `HSBA_LOM_CUT_CONTOUR` | 切割模式：CONTOUR（轮廓切割）/ HALFTONE（半调切割） |
+| `export_lua_script` | NULL | 导出 Lua 脚本路径（**不可为 NULL**） |
+| `export_lua_func` | NULL | 导出函数名，NULL 时为 `export_lom` |
+| `output_path` | NULL | 输出路径 |
+
+### 3DP 流水线
+
+粘结剂喷射（粉末床 + 液体粘结剂）。逐层切片，把每层喷头点阵轮廓及喷头 / 固化参数交给 Lua 导出脚本。
+
+```c
+HsBaTdpPipelineConfig_t HsBaCreateDefaultTdpConfig(void);
+
+HsBaTdpPipelineResult_t HsBaRunTdpPipeline(const HsBaTdpPipelineConfig_t* config,
+                                           HsBaTdpProgressCallback callback, void* user_data);
+
+void HsBaRunTdpPipelineAsync(const HsBaTdpPipelineConfig_t* config,
+                             HsBaTdpProgressCallback callback, void* user_data,
+                             HsBaTdpResultCallback result_callback, void* result_user_data);
+
+void HsBaFreeTdpPipelineResult(HsBaTdpPipelineResult_t* result);
+```
+
+#### 配置字段
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `layer_height` / `first_layer_height` | 0.1 / 0.12 | 层高 / 首层高 (mm) |
+| `head_count` | 128 | 打印喷头喷嘴数 |
+| `drop_spacing` | 0.05 | 粘结剂墨点间距 (mm) |
+| `binder_saturation` | 0.6 | 粘结剂饱和度 [0,1] |
+| `ink_curing_time` | 1.0 | 每层固化时间 (s) |
+| `bed_temperature` | 40.0 | 粉末床温度 (°C) |
+| `binder_mode` | `HSBA_TDP_SINGLE` | 模式：FULL_COLOR（全彩）/ SINGLE（单色）/ SINTERING（烧结） |
+| `spiral_mode` | 0 | 外轮廓螺旋连续化 (0=false, 1=true) |
+| `export_lua_script` | NULL | 导出 Lua 脚本路径（**不可为 NULL**） |
+| `export_lua_func` | NULL | 导出函数名，NULL 时为 `export_tdp` |
+| `output_path` | NULL | 输出路径 |
+
+### WAAM 流水线
+
+电弧增材制造（机器人逐道金属熔敷）。与粉床工艺根本不同：输出为**机器人语言程序**（ABB / KUKA / FANUC），而非层图压缩包。`UNKNOWN` 机器人型号需提供 Lua 路径脚本自定义代码生成。
+
+```c
+HsBaWaamPipelineConfig_t HsBaCreateDefaultWaamConfig(void);
+
+HsBaWaamPipelineResult_t HsBaRunWaamPipeline(const HsBaWaamPipelineConfig_t* config,
+                                             HsBaWaamProgressCallback callback, void* user_data);
+
+void HsBaRunWaamPipelineAsync(const HsBaWaamPipelineConfig_t* config,
+                              HsBaWaamProgressCallback callback, void* user_data,
+                              HsBaWaamResultCallback result_callback, void* result_user_data);
+
+void HsBaFreeWaamPipelineResult(HsBaWaamPipelineResult_t* result);
+```
+
+#### 配置字段
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `layer_height` / `first_layer_height` | 0.8 / 1.0 | 道高/层高 / 首层高 (mm) |
+| `bead_width` | 1.2 | 熔敷焊道宽度 (mm) |
+| `travel_speed` / `wire_feed_speed` | 8.0 / 5.0 | 焊枪行走速度 (mm/s) / 送丝速度 (m/min) |
+| `arc_current` / `arc_voltage` | 180.0 / 22.0 | 焊接电流 (A) / 电弧电压 (V) |
+| `gas_flow_rate` | 15.0 | 保护气流量 (L/min) |
+| `material` | `HSBA_WAAM_MATERIAL_STEEL` | 材料：STEEL / ALUMINUM / TITANIUM / COPPER / UNKNOWN |
+| `welding_process` | `HSBA_WAAM_WELD_ARC` | 工艺：ARC（电弧）/ LASER（激光）/ UNKNOWN |
+| `protection` / `protect_gas` | `SHIELD_GAS` / `ARGON` | 保护方式（屏蔽气/真空）/ 保护气体 |
+| `interpass_temperature` | 100.0 | 道间温度 (°C) |
+| `robot_type` | `HSBA_WAAM_ROBOT_ABB` | 机器人：ABB / KUKA / FANUC / UNKNOWN（需 Lua 路径脚本） |
+| `path_lua_script` / `path_lua_func` | NULL | 自定义机器人代码生成脚本与函数名（可选，NULL 时内置，默认 `export_waam`） |
+| `spiral_mode` | 0 | 外壁单道连续爬升熔敷 (0=false, 1=true) |
+| `output_path` | NULL | 输出机器人程序路径 |
+
+> WAAM 结果结构体的输出字段为 `output_path`（机器人程序路径），而非其余流水线的 `export_path`。
+
 ### 文件传输流水线
 
 校验 → 连接池建立 → 逐文件传输，将本地文件发送至远程执行器服务。
@@ -243,6 +382,76 @@ void HsBaFreeFileTransferPipelineResult(HsBaFileTransferPipelineResult_t* result
 | `pool_size` | 4 | 连接池大小 [1, 16] |
 | `file_paths` | NULL | 待传输文件路径数组 |
 | `file_count` | 0 | 文件数量 |
+
+### 工艺参数存储流水线
+
+把各流水线的工艺参数（`HsBa*PipelineConfig_t` 结构体）持久化到数据库以便**复用**：按业务唯一键 upsert 写入（Save）、按键回填读取（Load）。底层复用 fileoperator 的 ParamStore 反射/类型收敛机制，按工艺类型分宽表存储，无需为每种工艺单独建表。同步接口，单次调用内部完成「建连 → 建表 → 执行 → 断开」。
+
+```c
+HsBaParamStoreResult_t HsBaSavePipelineParams(const HsBaParamStoreConn_t* conn, HsBaPipelineKind kind,
+                                              const char* table, const char* key, const void* config);
+
+HsBaParamStoreResult_t HsBaLoadPipelineParams(const HsBaParamStoreConn_t* conn, HsBaPipelineKind kind,
+                                              const char* table, const char* key, void* out_config);
+
+void HsBaFreeLoadedPipelineConfig(HsBaPipelineKind kind, void* config);
+void HsBaFreeParamStoreResult(HsBaParamStoreResult_t* result);
+```
+
+#### 连接结构 `HsBaParamStoreConn_t`
+
+| 字段 | 说明 |
+| --- | --- |
+| `backend` | 存储后端：`HSBA_PARAM_BACKEND_SQLITE` / `_MYSQL` / `_POSTGRESQL`（Android/iOS 仅 SQLite） |
+| `sqlite_path` | SQLite 数据库文件路径（SQLite 后端使用） |
+| `host` / `port` / `user` / `password` / `database` | MySQL/PostgreSQL 连接参数；`port` 传 `0` 表示使用适配器默认端口 |
+
+#### 参数说明
+
+| 参数 | 说明 |
+| --- | --- |
+| `kind` | 配置类型 `HsBaPipelineKind`（FDM/SLA/SLS/SLM/LOM/TDP/WAAM/CUSTOM/FILETRANSFER），须与 `config` 指向的结构体一致 |
+| `table` | 目标表名；传 `NULL` 或 `""` 时按 `kind` 派生默认表名（如 `hsba_param_fdm`） |
+| `key` | 业务唯一键（如模板名），不可为 `NULL` |
+| `config` / `out_config` | 指向对应的 `HsBa*PipelineConfig_t` 结构体；读取前建议先用 `HsBa*ConfigDefault()` 初始化 |
+
+#### 结果结构 `HsBaParamStoreResult_t`
+
+| 字段 | 说明 |
+| --- | --- |
+| `success` | `0`/`1`；读取未命中或后端不可用时为 `0`（不吞错误码） |
+| `param_id` | Save 落库行 id；Load 命中回填原 id |
+| `error_message` | UTF-8 错误信息，用 `HsBaFreeParamStoreResult` 释放 |
+| `elapsed_seconds` | 本次调用耗时（秒） |
+
+> **字符串所有权**：`HsBaLoadPipelineParams` 回填到 `out_config` 内的 `const char*` 字段由库 `malloc` 分配，`NULL` 字段保持 `NULL`；在复用或丢弃该结构体前必须调用 `HsBaFreeLoadedPipelineConfig(kind, &cfg)` 释放。`error_message` 独立由 `HsBaFreeParamStoreResult` 释放。
+
+> **后端可用性**：MySQL/PostgreSQL 分支在编译时受 `HSBA_USE_MYSQL` / `HSBA_USE_PGSQL` 控制；未编译进时对应后端调用返回 `success=0` 并给出错误信息，不会崩溃。
+
+#### 调用示例
+
+```c
+HsBaParamStoreConn_t conn = {0};
+conn.backend = HSBA_PARAM_BACKEND_SQLITE;
+conn.sqlite_path = "params.db";
+
+HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+cfg.layer_height = 0.2f;
+cfg.model_name = "tough_template";
+
+// 写入（按 key upsert）
+HsBaParamStoreResult_t rw = HsBaSavePipelineParams(&conn, HSBA_PIPELINE_FDM, NULL, "tough_template", &cfg);
+HsBaFreeParamStoreResult(&rw);
+
+// 读取（按 key 回填）
+HsBaFdmPipelineConfig_t out = HsBaFdmConfigDefault();
+HsBaParamStoreResult_t rd = HsBaLoadPipelineParams(&conn, HSBA_PIPELINE_FDM, NULL, "tough_template", &out);
+if (rd.success) {
+    // 使用 out.layer_height / out.model_name ...
+}
+HsBaFreeLoadedPipelineConfig(HSBA_PIPELINE_FDM, &out);  // 释放库 malloc 的字符串
+HsBaFreeParamStoreResult(&rd);
+```
 
 ### 自定义 Lua 流水线
 
@@ -338,6 +547,30 @@ int HsBaSlsConfigToProtoBytes(const HsBaSlsPipelineConfig_t* config, void** out_
 int HsBaSlsResultFromProtoBytes(const void* proto_data, int proto_size, HsBaSlsPipelineResult_t* result);
 int HsBaSlsResultToProtoBytes(const HsBaSlsPipelineResult_t* result, void** out_data, int* out_size);
 
+// SLM
+int HsBaSlmConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaSlmPipelineConfig_t* config);
+int HsBaSlmConfigToProtoBytes(const HsBaSlmPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaSlmResultFromProtoBytes(const void* proto_data, int proto_size, HsBaSlmPipelineResult_t* result);
+int HsBaSlmResultToProtoBytes(const HsBaSlmPipelineResult_t* result, void** out_data, int* out_size);
+
+// LOM
+int HsBaLomConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaLomPipelineConfig_t* config);
+int HsBaLomConfigToProtoBytes(const HsBaLomPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaLomResultFromProtoBytes(const void* proto_data, int proto_size, HsBaLomPipelineResult_t* result);
+int HsBaLomResultToProtoBytes(const HsBaLomPipelineResult_t* result, void** out_data, int* out_size);
+
+// 3DP
+int HsBaTdpConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaTdpPipelineConfig_t* config);
+int HsBaTdpConfigToProtoBytes(const HsBaTdpPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaTdpResultFromProtoBytes(const void* proto_data, int proto_size, HsBaTdpPipelineResult_t* result);
+int HsBaTdpResultToProtoBytes(const HsBaTdpPipelineResult_t* result, void** out_data, int* out_size);
+
+// WAAM
+int HsBaWaamConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaWaamPipelineConfig_t* config);
+int HsBaWaamConfigToProtoBytes(const HsBaWaamPipelineConfig_t* config, void** out_data, int* out_size);
+int HsBaWaamResultFromProtoBytes(const void* proto_data, int proto_size, HsBaWaamPipelineResult_t* result);
+int HsBaWaamResultToProtoBytes(const HsBaWaamPipelineResult_t* result, void** out_data, int* out_size);
+
 // File Transfer
 int HsBaFileTransferConfigFromProtoBytes(const void* proto_data, int proto_size, HsBaFileTransferPipelineConfig_t* config);
 int HsBaFileTransferConfigToProtoBytes(const HsBaFileTransferPipelineConfig_t* config, void** out_data, int* out_size);
@@ -354,11 +587,15 @@ int HsBaCustomResultToProtoBytes(const HsBaCustomPipelineResult_t* result, void*
 void HsBaFreeFdmConfigStrings(HsBaFdmPipelineConfig_t* config);
 void HsBaFreeSlaConfigStrings(HsBaSlaPipelineConfig_t* config);
 void HsBaFreeSlsConfigStrings(HsBaSlsPipelineConfig_t* config);
+void HsBaFreeSlmConfigStrings(HsBaSlmPipelineConfig_t* config);
+void HsBaFreeLomConfigStrings(HsBaLomPipelineConfig_t* config);
+void HsBaFreeTdpConfigStrings(HsBaTdpPipelineConfig_t* config);
+void HsBaFreeWaamConfigStrings(HsBaWaamPipelineConfig_t* config);
 void HsBaFreeFileTransferConfigStrings(HsBaFileTransferPipelineConfig_t* config);
 void HsBaFreeCustomConfigStrings(HsBaCustomPipelineConfig_t* config);
 ```
 
-> Proto 消息定义位于 `proto/` 目录（`fdm_pipeline.proto`、`sla_pipeline.proto`、`sls_pipeline.proto`、`file_transfer_pipeline.proto`、`custom_pipeline.proto`），支持 C++/C#/Java/Python/PHP 多语言输出。
+> Proto 消息定义位于 `proto/` 目录（`fdm_pipeline.proto`、`sla_pipeline.proto`、`sls_pipeline.proto`、`slm_pipeline.proto`、`lom_pipeline.proto`、`tdp_pipeline.proto`、`waam_pipeline.proto`、`file_transfer_pipeline.proto`、`custom_pipeline.proto`），支持 C++/C#/Java/Python/PHP 多语言输出。
 >
 > `HsBaCustomResultFromProtoBytes` 得到的结果字符串同样由 `malloc` 分配，请使用 `HsBaFreeCustomPipelineResult()` 释放（Custom 没有单独的 ResultStrings 释放函数）。
 >
@@ -459,10 +696,10 @@ typedef void (*HsBaResultCallback)(HsBaFdmPipelineResult_t result, void* user_da
 ## 内存管理规则
 
 1. `HsBaCreateDefault*Config()` 返回**值类型**结构体，无需释放；字符串字段指向的内存由调用方保证生命周期；
-2. 结果结构体中的 `gcode_content` / `export_path` / `error_message` 由库内部分配，**必须**调用对应的 `HsBaFree*PipelineResult()` 释放；
+2. 结果结构体中的 `gcode_content` / `export_path`（WAAM 为 `output_path`）/ `error_message` 由库内部分配，**必须**调用对应的 `HsBaFree*PipelineResult()` 释放；
 3. 版本字符串必须用 `HsBaFreeVersionString()` 释放；
 4. 模型句柄（`HsBaLoadModel` / `HsBaGetModel` / `HsBaBoolean*` / `HsBaThickSolidModel` 返回的 `void*`）必须用 `HsBaReleaseModelHandle()` 释放引用；
-5. `pipeline_types.h` 还提供无 DLL 依赖的内联初始化器 `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()` / `HsBaFileTransferConfigDefault()`，便于纯头文件场景（如 P/Invoke 结构体对照）使用；
+5. `pipeline_types.h` 还提供无 DLL 依赖的内联初始化器 `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()` / `HsBaSlmConfigDefault()` / `HsBaLomConfigDefault()` / `HsBaTdpConfigDefault()` / `HsBaWaamConfigDefault()` / `HsBaFileTransferConfigDefault()`，便于纯头文件场景（如 P/Invoke 结构体对照）使用；
 6. Proto 反序列化（`*FromProtoBytes`）产生的字符串字段由 `malloc` 分配，必须调用对应的 `HsBaFree*ConfigStrings()` 释放（Custom 结果例外，用 `HsBaFreeCustomPipelineResult()`）；`*ToProtoBytes` 产生的 `out_data` 缓冲区由调用方 `free`。
 
 ## 最小示例（C/C++）
@@ -502,6 +739,10 @@ int main(void)
 - `samples/FDM/` —— FDM 同步/异步、Lua 自定义支撑与填充完整示例
 - `samples/SLA/` —— SLA 流水线与 Lua 自定义地板/支撑/导出示例
 - `samples/SLS/` —— SLS 流水线与 Lua 导出示例
+- `samples/SLM/` —— SLM 金属粉末床流水线与 Lua 导出示例（基础/自定义金属参数/异步）
+- `samples/LOM/` —— LOM 叠层实体流水线与 Lua 导出示例
+- `samples/TDP/` —— 3DP 粘结剂喷射流水线与 Lua 导出示例
+- `samples/WAAM/` —— WAAM 电弧增材机器人路径导出示例
 - `samples/Custom/` —— 整条流水线完全由 Lua 脚本定义的示例（FDM/SLA/内联脚本/异步/Protobuf 字节流）
 - `android/` —— Android JNI 调用示例工程
 - `ios/HsBaSlicerExample/` —— iOS Swift 桥接调用示例

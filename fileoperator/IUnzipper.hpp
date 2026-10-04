@@ -1,4 +1,9 @@
-﻿#pragma once
+﻿/**
+ * @file IUnzipper.hpp
+ * @brief Defines the archive-extraction stream (@ref UnzipperStream) and the CRTP unzipper
+ *        interface (@ref IUnzipper) shared by all concrete archive backends.
+ */
+#pragma once
 #ifndef HSBA_SLICER_IUNZIPPER_HPP
 #define HSBA_SLICER_IUNZIPPER_HPP
 
@@ -81,6 +86,8 @@ public:
         }
         return *this;
     }
+
+    /// @brief Destroy the stream and close the underlying file or string source.
     ~UnzipperStream()
     {
         std::visit(Utils::Overloaded{[](std::ifstream& ifs)
@@ -147,8 +154,7 @@ public:
 
 private:
     std::variant<std::ifstream, std::istringstream> stream_;  ///< Underlying stream source
-    // Removed CloseStream and MakeOperator structs since they're now replaced with Overloaded lambdas
-    std::any unzipper_;  ///< Type-erased pointer to unzipper implementation
+    std::any unzipper_;                                       ///< Type-erased pointer to unzipper implementation
 };
 
 /**

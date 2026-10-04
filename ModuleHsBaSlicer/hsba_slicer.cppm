@@ -53,8 +53,10 @@ module;
 #include "LibHsBaSlicer/Fill/polygon_fill.hpp"
 #include "LibHsBaSlicer/Path/path_generator.hpp"
 #include "LibHsBaSlicer/Path/sls_export.hpp"
+#include "LibHsBaSlicer/Path/waam_export.hpp"
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"
 #include "LibHsBaSlicer/Transfer/file_transfer.hpp"
+#include "LibHsBaSlicer/ParamStore/param_store_ops.hpp"
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
 #include "LibHsBaSlicer/Extends/EventSourceFunction.hpp"
 #include "LibHsBaSlicer/Extends/lua_pipeline.hpp"
@@ -103,6 +105,14 @@ using ::HsBaFileTransferPipelineConfig_t;
 using ::HsBaFileTransferPipelineResult_t;
 using ::HsBaCustomPipelineConfig_t;
 using ::HsBaCustomPipelineResult_t;
+using ::HsBaSlmPipelineConfig_t;
+using ::HsBaSlmPipelineResult_t;
+using ::HsBaLomPipelineConfig_t;
+using ::HsBaLomPipelineResult_t;
+using ::HsBaTdpPipelineConfig_t;
+using ::HsBaTdpPipelineResult_t;
+using ::HsBaWaamPipelineConfig_t;
+using ::HsBaWaamPipelineResult_t;
 
 // Re-export support config types into HsBa::Slicer namespace
 using Support::SupportConfig;
@@ -126,6 +136,14 @@ HsBaSlsPipelineConfig_t defaultSlsConfig();
 HsBaFileTransferPipelineConfig_t defaultFileTransferConfig();
 /// @brief Create default custom Lua pipeline config.
 HsBaCustomPipelineConfig_t defaultCustomConfig();
+/// @brief Create default SLM pipeline config.
+HsBaSlmPipelineConfig_t defaultSlmConfig();
+/// @brief Create default LOM pipeline config.
+HsBaLomPipelineConfig_t defaultLomConfig();
+/// @brief Create default 3DP pipeline config.
+HsBaTdpPipelineConfig_t defaultTdpConfig();
+/// @brief Create default WAAM pipeline config.
+HsBaWaamPipelineConfig_t defaultWaamConfig();
 
 // ===========================================================================
 // Model (RAII wrapper)
@@ -258,6 +276,78 @@ private:
 };
 
 // ===========================================================================
+// SLM Pipeline (metal powder-bed, Lua-driven export like SLS)
+// ===========================================================================
+
+/// @brief SLM pipeline (Lua-driven export).
+class SlmPipeline
+{
+public:
+    explicit SlmPipeline(HsBaSlmPipelineConfig_t cfg = HsBaSlmConfigDefault());
+
+    /// @brief Run SLM export via Lua script.
+    /// @throws SlicerError on failure.
+    inline bool run(const Model& model) const;
+
+private:
+    HsBaSlmPipelineConfig_t cfg_;
+};
+
+// ===========================================================================
+// LOM Pipeline (laminated sheets, Lua-driven export like SLS)
+// ===========================================================================
+
+/// @brief LOM pipeline (Lua-driven export).
+class LomPipeline
+{
+public:
+    explicit LomPipeline(HsBaLomPipelineConfig_t cfg = HsBaLomConfigDefault());
+
+    /// @brief Run LOM export via Lua script.
+    /// @throws SlicerError on failure.
+    inline bool run(const Model& model) const;
+
+private:
+    HsBaLomPipelineConfig_t cfg_;
+};
+
+// ===========================================================================
+// 3DP Pipeline (binder jetting, Lua-driven export like SLS)
+// ===========================================================================
+
+/// @brief 3DP pipeline (Lua-driven export).
+class TdpPipeline
+{
+public:
+    explicit TdpPipeline(HsBaTdpPipelineConfig_t cfg = HsBaTdpConfigDefault());
+
+    /// @brief Run 3DP export via Lua script.
+    /// @throws SlicerError on failure.
+    inline bool run(const Model& model) const;
+
+private:
+    HsBaTdpPipelineConfig_t cfg_;
+};
+
+// ===========================================================================
+// WAAM Pipeline (wire arc deposition, robot-program export)
+// ===========================================================================
+
+/// @brief WAAM pipeline (robot path export).
+class WaamPipeline
+{
+public:
+    explicit WaamPipeline(HsBaWaamPipelineConfig_t cfg = HsBaWaamConfigDefault());
+
+    /// @brief Run WAAM robot-program export.
+    /// @throws SlicerError on failure.
+    inline bool run(const Model& model) const;
+
+private:
+    HsBaWaamPipelineConfig_t cfg_;
+};
+
+// ===========================================================================
 // File Transfer Pipeline
 // ===========================================================================
 
@@ -285,6 +375,73 @@ public:
 
 private:
     HsBaFileTransferPipelineConfig_t cfg_;
+};
+
+// ===========================================================================
+// Param Store Pipeline (persist / reuse process parameters)
+// ===========================================================================
+
+/// @brief Pipeline config kind for the parameter store (order aligned with
+///        HsBaPipelineKind / PipelineConfigTag).
+enum class ParamStoreKind
+{
+    Fdm,
+    Sla,
+    Sls,
+    Slm,
+    Lom,
+    Tdp,
+    Waam,
+    Custom,
+    FileTransfer,
+};
+
+/// @brief Storage backend; mobile builds only support Sqlite.
+enum class ParamStoreBackend
+{
+    Sqlite,
+    MySql,
+    PostgreSql,
+};
+
+/// @brief Connection parameters. Sqlite uses sqlitePath; MySql/PostgreSql use
+///        host/port/user/password/database.
+struct ParamStoreConnection
+{
+    ParamStoreBackend backend = ParamStoreBackend::Sqlite;
+    std::string sqlitePath;
+    std::string host;
+    std::string user;
+    std::string password;
+    std::string database;
+    unsigned port = 0;  ///< 0 means use the adapter's default port
+};
+
+/// @brief Process-parameter persistence pipeline: write (Save) and read (Load) a
+///        PipelineConfig struct via the Lib-layer ParamStore.
+class ParamStorePipeline
+{
+public:
+    explicit ParamStorePipeline(ParamStoreConnection conn);
+
+    /// @brief Upsert a config struct under @p key; returns the stored row id.
+    ///        @p cfg must point to the C config struct matching @p kind.
+    /// @throws SlicerError on failure.
+    inline long long save(ParamStoreKind kind, const void* cfg, const std::string& key,
+                          const std::string& table = {}) const;
+
+    /// @brief Load config under @p key into @p outCfg (a C config struct matching @p kind).
+    ///        The const char* fields of outCfg are heap-allocated by the library and must
+    ///        be released with freeLoaded().
+    /// @throws SlicerError on failure or when the key is not found.
+    inline long long load(ParamStoreKind kind, const std::string& key, void* outCfg,
+                          const std::string& table = {}) const;
+
+    /// @brief Release the heap strings produced by load() for this config struct.
+    inline void freeLoaded(ParamStoreKind kind, void* cfg) const;
+
+private:
+    ParamStoreConnection conn_;
 };
 
 // ===========================================================================
@@ -359,7 +516,7 @@ inline void addEventCallback(const std::string& event_name, LuaRegFunc func);
 /// @brief Register a C++ event callback for zipper events.
 inline void addZipperEventCallback(ZipperEventCallbackFunc func);
 
-// @brief Register a C++ event callback for database events.
+/// @brief Register a C++ event callback for database events.
 inline void addDBEventCallback(DBEventCallbackFunc func);
 
 // ===========================================================================
@@ -398,6 +555,10 @@ HsBaSlaPipelineConfig_t defaultSlaConfig() { return HsBaSlaConfigDefault(); }
 HsBaSlsPipelineConfig_t defaultSlsConfig() { return HsBaSlsConfigDefault(); }
 HsBaFileTransferPipelineConfig_t defaultFileTransferConfig() { return HsBaFileTransferConfigDefault(); }
 HsBaCustomPipelineConfig_t defaultCustomConfig() { return HsBaCustomConfigDefault(); }
+HsBaSlmPipelineConfig_t defaultSlmConfig() { return HsBaSlmConfigDefault(); }
+HsBaLomPipelineConfig_t defaultLomConfig() { return HsBaLomConfigDefault(); }
+HsBaTdpPipelineConfig_t defaultTdpConfig() { return HsBaTdpConfigDefault(); }
+HsBaWaamPipelineConfig_t defaultWaamConfig() { return HsBaWaamConfigDefault(); }
 
 // ===========================================================================
 // Model
@@ -726,6 +887,132 @@ bool SlsPipeline::run(const Model& model) const
 }
 
 // ===========================================================================
+// SlmPipeline
+// ===========================================================================
+
+SlmPipeline::SlmPipeline(HsBaSlmPipelineConfig_t cfg) : cfg_(cfg) {}
+
+bool SlmPipeline::run(const Model& model) const
+{
+    if (!cfg_.export_lua_script)
+        throw SlicerError("SLM pipeline requires export_lua_script");
+
+    const auto mi      = model.info();
+    const float height = mi.bbox_max.z() - mi.bbox_min.z();
+    const int layers   = static_cast<int>(height / cfg_.layer_height) + 1;
+
+    SlsPackage pkg;
+    pkg.layer_outlines.reserve(layers);
+    pkg.layer_z_heights.reserve(layers);
+    for (int i = 0; i < layers; ++i)
+    {
+        float z = cfg_.first_layer_height + i * cfg_.layer_height;
+        pkg.layer_outlines.push_back(UnIntegerization(Slice(model.raw(), z)));
+        pkg.layer_z_heights.push_back(z);
+    }
+
+    const char* output = cfg_.output_path ? cfg_.output_path : "";
+    return SaveSlsPackageLua(pkg, output, cfg_.export_lua_script,
+                             cfg_.export_lua_func ? cfg_.export_lua_func : "export_slm");
+}
+
+// ===========================================================================
+// LomPipeline
+// ===========================================================================
+
+LomPipeline::LomPipeline(HsBaLomPipelineConfig_t cfg) : cfg_(cfg) {}
+
+bool LomPipeline::run(const Model& model) const
+{
+    if (!cfg_.export_lua_script)
+        throw SlicerError("LOM pipeline requires export_lua_script");
+
+    const auto mi      = model.info();
+    const float height = mi.bbox_max.z() - mi.bbox_min.z();
+    const int layers   = static_cast<int>(height / cfg_.layer_height) + 1;
+
+    SlsPackage pkg;
+    pkg.layer_outlines.reserve(layers);
+    pkg.layer_z_heights.reserve(layers);
+    for (int i = 0; i < layers; ++i)
+    {
+        float z = cfg_.first_layer_height + i * cfg_.layer_height;
+        pkg.layer_outlines.push_back(UnIntegerization(Slice(model.raw(), z)));
+        pkg.layer_z_heights.push_back(z);
+    }
+
+    const char* output = cfg_.output_path ? cfg_.output_path : "";
+    return SaveSlsPackageLua(pkg, output, cfg_.export_lua_script,
+                             cfg_.export_lua_func ? cfg_.export_lua_func : "export_lom");
+}
+
+// ===========================================================================
+// TdpPipeline
+// ===========================================================================
+
+TdpPipeline::TdpPipeline(HsBaTdpPipelineConfig_t cfg) : cfg_(cfg) {}
+
+bool TdpPipeline::run(const Model& model) const
+{
+    if (!cfg_.export_lua_script)
+        throw SlicerError("3DP pipeline requires export_lua_script");
+
+    const auto mi      = model.info();
+    const float height = mi.bbox_max.z() - mi.bbox_min.z();
+    const int layers   = static_cast<int>(height / cfg_.layer_height) + 1;
+
+    SlsPackage pkg;
+    pkg.layer_outlines.reserve(layers);
+    pkg.layer_z_heights.reserve(layers);
+    for (int i = 0; i < layers; ++i)
+    {
+        float z = cfg_.first_layer_height + i * cfg_.layer_height;
+        pkg.layer_outlines.push_back(UnIntegerization(Slice(model.raw(), z)));
+        pkg.layer_z_heights.push_back(z);
+    }
+
+    const char* output = cfg_.output_path ? cfg_.output_path : "";
+    return SaveSlsPackageLua(pkg, output, cfg_.export_lua_script,
+                             cfg_.export_lua_func ? cfg_.export_lua_func : "export_tdp");
+}
+
+// ===========================================================================
+// WaamPipeline
+// ===========================================================================
+
+WaamPipeline::WaamPipeline(HsBaWaamPipelineConfig_t cfg) : cfg_(cfg) {}
+
+bool WaamPipeline::run(const Model& model) const
+{
+    const auto mi      = model.info();
+    const float height = mi.bbox_max.z() - mi.bbox_min.z();
+    const int layers   = static_cast<int>(height / cfg_.layer_height) + 1;
+
+    WaamRobotPackage pkg;
+    pkg.layer_outlines.reserve(layers);
+    pkg.layer_z_heights.reserve(layers);
+    for (int i = 0; i < layers; ++i)
+    {
+        float z = cfg_.first_layer_height + i * cfg_.layer_height;
+        pkg.layer_outlines.push_back(UnIntegerization(Slice(model.raw(), z)));
+        pkg.layer_z_heights.push_back(z);
+    }
+
+    pkg.bead_width = cfg_.bead_width;
+    pkg.robot_type = static_cast<int>(cfg_.robot_type);
+    pkg.weld.current = cfg_.arc_current;
+    pkg.weld.voltage = cfg_.arc_voltage;
+    pkg.weld.wire_feed_speed = cfg_.wire_feed_speed;
+    pkg.weld.gas_flow_rate = cfg_.gas_flow_rate;
+    pkg.weld.travel_speed = cfg_.travel_speed;
+    pkg.weld.process = (cfg_.welding_process == HSBA_WAAM_WELD_LASER) ? 1 : 0;
+
+    const char* output = cfg_.output_path ? cfg_.output_path : "waam_robot.txt";
+    const char* script = cfg_.path_lua_script ? cfg_.path_lua_script : "";
+    return SaveWaamRobotPath(pkg, output, script, cfg_.path_lua_func ? cfg_.path_lua_func : "export_waam");
+}
+
+// ===========================================================================
 // FileTransferPipeline
 // ===========================================================================
 
@@ -762,6 +1049,93 @@ FileTransferOutcome FileTransferPipeline::run(FileTransferProgressFunc progress)
     outcome.files_transferred = result.files_transferred;
     outcome.total_files = result.total_files;
     return outcome;
+}
+
+// ===========================================================================
+// ParamStorePipeline
+// ===========================================================================
+
+namespace
+{
+
+ParamPipelineKind ToLibKind(ParamStoreKind k)
+{
+    switch (k)
+    {
+        case ParamStoreKind::Sla:
+            return ParamPipelineKind::Sla;
+        case ParamStoreKind::Sls:
+            return ParamPipelineKind::Sls;
+        case ParamStoreKind::Slm:
+            return ParamPipelineKind::Slm;
+        case ParamStoreKind::Lom:
+            return ParamPipelineKind::Lom;
+        case ParamStoreKind::Tdp:
+            return ParamPipelineKind::Tdp;
+        case ParamStoreKind::Waam:
+            return ParamPipelineKind::Waam;
+        case ParamStoreKind::Custom:
+            return ParamPipelineKind::Custom;
+        case ParamStoreKind::FileTransfer:
+            return ParamPipelineKind::FileTransfer;
+        case ParamStoreKind::Fdm:
+        default:
+            return ParamPipelineKind::Fdm;
+    }
+}
+
+ParamBackend ToLibBackend(ParamStoreBackend b)
+{
+    switch (b)
+    {
+        case ParamStoreBackend::MySql:
+            return ParamBackend::MySql;
+        case ParamStoreBackend::PostgreSql:
+            return ParamBackend::PostgreSql;
+        case ParamStoreBackend::Sqlite:
+        default:
+            return ParamBackend::Sqlite;
+    }
+}
+
+ParamStoreConn ToLibConn(const ParamStoreConnection& c)
+{
+    ParamStoreConn o;
+    o.backend = ToLibBackend(c.backend);
+    o.sqlitePath = c.sqlitePath;
+    o.host = c.host;
+    o.user = c.user;
+    o.password = c.password;
+    o.database = c.database;
+    o.port = c.port;
+    return o;
+}
+
+}  // namespace
+
+ParamStorePipeline::ParamStorePipeline(ParamStoreConnection conn) : conn_(std::move(conn)) {}
+
+long long ParamStorePipeline::save(ParamStoreKind kind, const void* cfg, const std::string& key,
+                                   const std::string& table) const
+{
+    auto outcome = SavePipelineParams(ToLibConn(conn_), ToLibKind(kind), table, key, cfg);
+    if (!outcome.success)
+        throw SlicerError(outcome.error);
+    return outcome.paramId;
+}
+
+long long ParamStorePipeline::load(ParamStoreKind kind, const std::string& key, void* outCfg,
+                                   const std::string& table) const
+{
+    auto outcome = LoadPipelineParams(ToLibConn(conn_), ToLibKind(kind), table, key, outCfg);
+    if (!outcome.success)
+        throw SlicerError(outcome.error);
+    return outcome.paramId;
+}
+
+void ParamStorePipeline::freeLoaded(ParamStoreKind kind, void* cfg) const
+{
+    FreeLoadedConfigStrings(ToLibKind(kind), cfg);
 }
 
 // ===========================================================================

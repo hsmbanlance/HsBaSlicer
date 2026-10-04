@@ -1,3 +1,7 @@
+/** @file weldrobotpath.cpp
+ * @brief Implementation of welding robot program generation with weld-parameter directives.
+ * @author HsBa
+ */
 #include "weldrobotpath.hpp"
 
 #include <format>

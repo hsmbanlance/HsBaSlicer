@@ -1,4 +1,8 @@
-﻿#include "any_object.hpp"
+﻿/** @file any_object.cpp
+ * @brief Out-of-line definitions for the AnyObject type-erased wrapper (special members and dispatch).
+ * @author HsBa
+ */
+#include "any_object.hpp"
 
 namespace HsBa::Slicer::Utils
 {

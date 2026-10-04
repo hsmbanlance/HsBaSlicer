@@ -1,3 +1,7 @@
+/** @file SlaSupport.hpp
+ * @brief SLA sacrificial support generator for resin printing.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_SLA_SUPPORT_HPP
 #define HSBA_SLICER_SLA_SUPPORT_HPP
