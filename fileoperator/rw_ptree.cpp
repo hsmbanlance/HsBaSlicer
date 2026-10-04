@@ -1,4 +1,8 @@
-﻿#include "rw_ptree.hpp"
+﻿/**
+ * @file rw_ptree.cpp
+ * @brief Implements the boost::property_tree loading helpers declared in rw_ptree.hpp.
+ */
+#include "rw_ptree.hpp"
 
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/json_parser.hpp>

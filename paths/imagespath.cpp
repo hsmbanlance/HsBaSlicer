@@ -1,4 +1,8 @@
-﻿#include "imagespath.hpp"
+﻿/** @file imagespath.cpp
+ * @brief Implementation of image-package path output and its Lua-driven save/serialize.
+ * @author HsBa
+ */
+#include "imagespath.hpp"
 
 #include <format>
 #include <fstream>

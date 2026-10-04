@@ -1,4 +1,8 @@
-﻿#include "LuaAdapter.hpp"
+﻿/** @file LuaAdapter.cpp
+ * @brief Implementations of Lua <-> polygon stack conversion and registration of polygon operations.
+ * @author HsBa
+ */
+#include "LuaAdapter.hpp"
 
 #include <format>
 

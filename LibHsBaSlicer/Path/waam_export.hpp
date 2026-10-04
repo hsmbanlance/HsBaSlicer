@@ -1,3 +1,7 @@
+/** @file waam_export.hpp
+ * @brief WAAM robot-program export package types and robot path save API.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_LIB_WAAM_EXPORT_HPP
 #define HSBA_SLICER_LIB_WAAM_EXPORT_HPP

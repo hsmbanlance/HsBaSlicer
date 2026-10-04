@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file path_generator.hpp
+ * @brief FDM G-code path generation C++ API (per-layer paths, multi-firmware output and spiral/vase mode).
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_LIB_PATH_GENERATOR_HPP
 #define HSBA_SLICER_LIB_PATH_GENERATOR_HPP
 

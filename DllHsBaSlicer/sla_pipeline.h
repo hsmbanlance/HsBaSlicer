@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file sla_pipeline.h
+ * @brief C ABI for the SLA (stereolithography) slicing pipeline.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_SLA_PIPELINE_H
 #define HSBA_SLICER_SLA_PIPELINE_H
 

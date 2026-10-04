@@ -43,7 +43,7 @@ public:
     Eigen::Vector2d get_value(const std::string& str) override;
 };
 /**
- * @brief translate Eigen::Vector2d which used in boost::ptree
+ * @brief translate Eigen::Vector3f which used in boost::ptree
  */
 class EigenVector3fTranslator : public ITranslator<Eigen::Vector3f>
 {

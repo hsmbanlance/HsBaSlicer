@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file version_info.h
+ * @brief C ABI for querying library version information as JSON/XML and freeing the returned strings.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_VERSION_INFO_H
 #define HSBA_SLICER_VERSION_INFO_H
 

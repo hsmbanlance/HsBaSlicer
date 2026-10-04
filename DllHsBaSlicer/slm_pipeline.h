@@ -1,3 +1,7 @@
+/** @file slm_pipeline.h
+ * @brief C ABI for the SLM (selective laser melting) slicing pipeline.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_SLM_PIPELINE_H
 #define HSBA_SLICER_SLM_PIPELINE_H

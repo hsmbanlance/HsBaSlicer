@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file FloatPolygons.hpp
+ * @brief Double-precision polygon type aliases, boolean/offset/area operations, shape/text generators and int<->double conversion.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_FLOATPOLYGONS_HPP
 #define HSBA_SLICER_FLOATPOLYGONS_HPP
 

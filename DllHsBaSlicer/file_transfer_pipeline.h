@@ -1,3 +1,7 @@
+/** @file file_transfer_pipeline.h
+ * @brief C ABI for the file transfer pipeline: create config, run sync/async and free results.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_FILE_TRANSFER_PIPELINE_H
 #define HSBA_SLICER_FILE_TRANSFER_PIPELINE_H

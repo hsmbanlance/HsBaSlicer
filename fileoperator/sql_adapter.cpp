@@ -1,4 +1,8 @@
-﻿#include "sql_adapter.hpp"
+﻿/**
+ * @file sql_adapter.cpp
+ * @brief Implements the SQLite/MySQL/PostgreSQL adapters behind the ISQLAdapter interface.
+ */
+#include "sql_adapter.hpp"
 
 #include <format>
 #include <sstream>
@@ -1023,7 +1027,7 @@ void MySQLAdapter::Update(const std::string& table, const std::unordered_map<std
     for (const auto& [k, _] : where)
         whereKeys.emplace_back(k);
 
-    /* 2. 构造 SQL 语句 */
+    /* 2. Build the SQL statement */
     std::ostringstream sql;
     sql << "UPDATE " << table << " SET ";
     for (size_t i = 0; i < setKeys.size(); ++i)
@@ -1303,7 +1307,7 @@ MySQLAdapter::Rows MySQLAdapter::Select(const std::string& table, const std::vec
 
     std::vector<int64_t> intBuf(numFields);
     std::vector<double> doubleBuf(numFields);
-    std::vector<std::string> strBuf(numFields);  // 预设空串，后续 resize
+    std::vector<std::string> strBuf(numFields);  // Pre-size to empty strings; resized per row later
     std::vector<std::vector<unsigned char>> blobBuf(numFields);
 
     std::memset(bindOut.data(), 0, sizeof(MYSQL_BIND) * numFields);

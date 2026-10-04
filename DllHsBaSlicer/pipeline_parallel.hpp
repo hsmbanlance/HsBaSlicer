@@ -1,3 +1,7 @@
+/** @file pipeline_parallel.hpp
+ * @brief Header-only layer-parallel execution helper for the slicing and fill pipeline hot paths.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_PIPELINE_PARALLEL_HPP
 #define HSBA_SLICER_PIPELINE_PARALLEL_HPP

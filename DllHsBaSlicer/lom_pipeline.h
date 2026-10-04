@@ -1,3 +1,7 @@
+/** @file lom_pipeline.h
+ * @brief C ABI for the LOM (laminated object manufacturing) slicing pipeline.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_LOM_PIPELINE_H
 #define HSBA_SLICER_LOM_PIPELINE_H

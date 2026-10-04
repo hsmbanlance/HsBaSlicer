@@ -1,3 +1,7 @@
+/** @file gcodepath.hpp
+ * @brief Multi-firmware G-code path output (GCodePath) built on LayersPath, including continuous spiral walls.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_GCODE_PATH_HPP
 #define HSBA_SLICER_GCODE_PATH_HPP

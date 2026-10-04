@@ -1,3 +1,7 @@
+/** @file Msg2PipelineConfig.cpp
+ * @brief Implementations of protobuf-message-to-pipeline-config converters.
+ * @author HsBa
+ */
 #include "Msg2PipelineConfig.hpp"
 
 #include <cstdlib>

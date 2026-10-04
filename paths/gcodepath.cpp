@@ -1,3 +1,7 @@
+/** @file gcodepath.cpp
+ * @brief Implementation of multi-firmware G-code generation for GCodePath.
+ * @author HsBa
+ */
 #include "gcodepath.hpp"
 
 #include <cmath>

@@ -1,4 +1,8 @@
-﻿#include "model_preprocess.hpp"
+﻿/** @file model_preprocess.cpp
+ * @brief Implementation of model loading, transform, query and boolean/thick-solid preprocessing.
+ * @author HsBa
+ */
+#include "model_preprocess.hpp"
 
 #include <exception>
 #include <string>
@@ -10,7 +14,7 @@ namespace HsBa::Slicer
 {
 namespace
 {
-// 全局ModelLoader实例（线程局部存储）
+// Global ModelLoader instance (thread-local storage)
 ModelLoader& GetLoader()
 {
     thread_local ModelLoader loader;

@@ -1,4 +1,8 @@
-﻿#include "mesh_slice.hpp"
+﻿/** @file mesh_slice.cpp
+ * @brief Implementation of planar mesh slicing: safe/unsafe slice, Lua-driven slice and reusable topology slicing.
+ * @author HsBa
+ */
+#include "mesh_slice.hpp"
 
 #include <exception>
 #include <memory>

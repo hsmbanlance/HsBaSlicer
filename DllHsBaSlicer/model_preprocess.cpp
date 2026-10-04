@@ -1,3 +1,7 @@
+/** @file model_preprocess.cpp
+ * @brief Implementation of model loading, transform, query and boolean preprocessing C ABI.
+ * @author HsBa
+ */
 #include "model_preprocess.h"
 
 #include <exception>

@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/**
+ * @file properties_doc.hpp
+ * @brief Declares a JSON-backed properties document with typed, reflection-aware access helpers.
+ */
+#pragma once
 
 #ifndef HSBA_PROPERTIES_DOC_HPP
 #define HSBA_PROPERTIES_DOC_HPP

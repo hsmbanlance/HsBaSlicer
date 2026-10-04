@@ -1,3 +1,7 @@
+/** @file waam_pipeline.cpp
+ * @brief Implementation of the WAAM (wire arc additive manufacturing) slicing pipeline C ABI.
+ * @author HsBa
+ */
 #include "waam_pipeline.h"
 
 #include <chrono>

@@ -1,4 +1,8 @@
-﻿#include "IntPolygon.hpp"
+﻿/** @file IntPolygon.cpp
+ * @brief Implementations of integer-coordinate polygon boolean, offset, area and hashing operations via Clipper2.
+ * @author HsBa
+ */
+#include "IntPolygon.hpp"
 
 #include <algorithm>
 #include <boost/container_hash/hash.hpp>

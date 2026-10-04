@@ -1,3 +1,7 @@
+/** @file LuaSupport.cpp
+ * @brief Implementation of the Lua script-based custom support generator.
+ * @author HsBa
+ */
 #include "LuaSupport.hpp"
 
 #include <lua.hpp>

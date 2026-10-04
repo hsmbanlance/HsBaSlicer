@@ -516,7 +516,7 @@ inline void addEventCallback(const std::string& event_name, LuaRegFunc func);
 /// @brief Register a C++ event callback for zipper events.
 inline void addZipperEventCallback(ZipperEventCallbackFunc func);
 
-// @brief Register a C++ event callback for database events.
+/// @brief Register a C++ event callback for database events.
 inline void addDBEventCallback(DBEventCallbackFunc func);
 
 // ===========================================================================

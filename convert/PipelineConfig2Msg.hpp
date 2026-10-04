@@ -1,3 +1,7 @@
+/** @file PipelineConfig2Msg.hpp
+ * @brief Converters from native pipeline configuration structs to HsbaProto pipeline-config messages.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_PIPELINE_CONFIG2MSG_HPP
 #define HSBA_SLICER_PIPELINE_CONFIG2MSG_HPP

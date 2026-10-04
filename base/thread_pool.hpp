@@ -30,8 +30,8 @@ class ThreadPool
 {
 public:
     /** @brief Construct a ThreadPool with a specified number of worker threads.
-     * @param num_threads The number of worker threads to create in the pool. If set to 0, the number of threads will be
-     * equal to the hardware concurrency of the system.
+     * @param num_threads The number of worker threads to create in the pool. Defaults to the hardware concurrency of
+     * the system.
      * @throws InvalidArgumentError if num_threads is 0.
      */
     explicit ThreadPool(size_t num_threads = std::thread::hardware_concurrency()) : stop_(false), active_tasks_(0)

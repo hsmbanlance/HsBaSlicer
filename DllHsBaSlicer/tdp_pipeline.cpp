@@ -1,3 +1,7 @@
+/** @file tdp_pipeline.cpp
+ * @brief Implementation of the 3DP (three-dimensional printing) slicing pipeline C ABI.
+ * @author HsBa
+ */
 #include "tdp_pipeline.h"
 
 #include <chrono>

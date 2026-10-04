@@ -1,4 +1,8 @@
-﻿#include "unzipper.hpp"
+﻿/**
+ * @file unzipper.cpp
+ * @brief Implements the miniz-based ZIP extractor (@ref Unzipper).
+ */
+#include "unzipper.hpp"
 
 #include <filesystem>
 #include <format>
@@ -7,6 +11,12 @@
 
 namespace HsBa::Slicer
 {
+/**
+ * @brief Destroys the unzipper and releases every owned resource.
+ *
+ * Ends the miniz reader when an archive is still open and removes the temporary cache directory
+ * if one had been created for large entries.
+ */
 Unzipper::~Unzipper()
 {
     if (is_open_)
@@ -22,6 +32,18 @@ Unzipper::~Unzipper()
         }
     }
 }
+
+/**
+ * @brief Open the ZIP archive located at @p path so its entries can later be streamed.
+ * @param path Path to the archive file to open.
+ * @param reopen When true the archive is re-opened even if @p path is already open; when false and
+ *               the same path is already open the call returns immediately as a no-op.
+ *
+ * (Re-)opening clears the previous memory and cache-directory caches so stale entries are never
+ * served again.
+ *
+ * @throws IOError if miniz cannot open the archive file.
+ */
 void Unzipper::ReadFromFileImpl(std::string_view path, bool reopen)
 {
     if (is_open_)
@@ -51,6 +73,18 @@ void Unzipper::ReadFromFileImpl(std::string_view path, bool reopen)
     memory_cache_.clear();
 }
 
+/**
+ * @brief Obtain a readable stream for one entry inside the currently opened archive.
+ * @param part_file Path/name of the entry within the archive.
+ * @return Shared pointer to an UnzipperStream bound to this unzipper via shared_from_this().
+ *
+ * Raises the on-stream event, then serves the entry from @ref memory_cache_ when it was extracted
+ * before. Otherwise it locates the entry, treats an empty entry as an empty stream, and dispatches
+ * by uncompressed size: entries no larger than max_mem_size_ go through ReadFileTobuff, larger ones
+ * through ReadFileToFile.
+ *
+ * @throws IOError if the archive is not open, or the entry is not present in it.
+ */
 std::shared_ptr<UnzipperStream> Unzipper::GetStreamImpl(std::string_view part_file)
 {
     if (!is_open_)
@@ -58,7 +92,6 @@ std::shared_ptr<UnzipperStream> Unzipper::GetStreamImpl(std::string_view part_fi
         throw IOError(std::format("Zip file {} is not opened.", archiver_path_));
     }
     RaiseEvent(archiver_path_, part_file);
-    // 使用保存的已缓存
     if (memory_cache_.find(std::string{part_file}) != memory_cache_.end())
     {
         const auto& cache = memory_cache_.at(std::string{part_file});
@@ -87,6 +120,14 @@ std::shared_ptr<UnzipperStream> Unzipper::GetStreamImpl(std::string_view part_fi
     }
     return ReadFileToFile(file_index, std::string{part_file});
 }
+/**
+ * @brief Extract the entry at @p file_index into an in-memory buffer and cache it.
+ * @param file_index Index of the target entry within the archive.
+ * @param uncomp_size Uncompressed size of the entry in bytes.
+ * @param part_name Entry name used as the cache key.
+ * @return Shared pointer to a stream backed by the freshly extracted buffer.
+ * @throws IOError if miniz cannot extract the entry into the buffer.
+ */
 std::shared_ptr<UnzipperStream> Unzipper::ReadFileTobuff(int file_index, size_t uncomp_size,
                                                          const std::string& part_name)
 {
@@ -103,6 +144,14 @@ std::shared_ptr<UnzipperStream> Unzipper::ReadFileTobuff(int file_index, size_t 
     return stream;
 }
 
+/**
+ * @brief Create a deterministic temporary cache directory for large extracted entries.
+ *
+ * The directory lives under the current working path and is named from a UUID derived from the
+ * archive path, so the same archive always maps to the same cache folder (any pre-existing folder
+ * with that name is removed first). No-op when the archive is not open or a cache directory already
+ * exists.
+ */
 void Unzipper::CreateBuffDir()
 {
     if (!is_open_ || use_cache_dir_)
@@ -122,6 +171,16 @@ void Unzipper::CreateBuffDir()
     use_cache_dir_ = true;
 }
 
+/**
+ * @brief Extract the entry at @p file_index into the cache directory and cache its path.
+ * @param file_index Index of the target entry within the archive.
+ * @param part_name Entry name used as the cache key.
+ * @return Shared pointer to a stream backed by the extracted file.
+ *
+ * Creates the cache directory on demand and names the output file from a UUID derived from
+ * part_name, replacing any file already present at that location.
+ * @throws IOError if miniz cannot extract the entry to the file.
+ */
 std::shared_ptr<UnzipperStream> Unzipper::ReadFileToFile(int file_index, const std::string& part_name)
 {
     if (!use_cache_dir_)

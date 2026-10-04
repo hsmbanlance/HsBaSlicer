@@ -1,3 +1,7 @@
+/** @file tdp_pipeline.h
+ * @brief C ABI for the 3DP (three-dimensional printing) slicing pipeline.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_TDP_PIPELINE_H
 #define HSBA_SLICER_TDP_PIPELINE_H

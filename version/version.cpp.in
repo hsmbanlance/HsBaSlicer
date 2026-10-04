@@ -1,3 +1,7 @@
+/** @file version.cpp.in
+ * @brief CMake-configured template that defines GetVersionInfo for the generated version.cpp.
+ * @author HsBa
+ */
 #include "version.hpp"
 
 namespace HsBa::Slicer::Version
@@ -6,7 +10,7 @@ VersionInfo GetVersionInfo()
 {
     VersionInfo info;
     info.librariesName = "HsBaSlicer";
-    info.license = "GPL-3.0-or-later";  // 由 Generator_Version.ps1 动态判定：使用 GPL/LGPL 依赖为 GPL，否则为 MIT
+    info.license = "GPL-3.0-or-later";  // Decided dynamically by Generator_Version.ps1: GPL when GPL/LGPL dependencies are used, otherwise MIT
     info.version = "1.0.0";
     info.buildType = "@CMAKE_BUILD_TYPE@";
     info.buildPlatform = "@PLATFORM_NAME@";

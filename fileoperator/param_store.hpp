@@ -1,10 +1,11 @@
 /** @file param_store.hpp
- * @brief ParamStore：工艺参数保存流水线主类。
+ * @brief ParamStore: main class of the process-parameter persistence pipeline.
  *
- * 以 AnyObject::ForeachField 驱动字段遍历，按 PipelineConfig 类型分表（宽表）存储；
- * 提供 EnsureSchema / Save / Load / List / Update / Delete 全 CRUD，Save 走
- * Validate -> Reflect -> Coerce -> Upsert 分阶段流程；批量接口以事务包裹；
- * 错误不被吞没：内部记录 last_error 后原样抛出，供调用方（含 Lua）择路处理。
+ * Field traversal is driven by AnyObject::ForeachField; rows are stored in one wide table per
+ * PipelineConfig type. Provides full CRUD through EnsureSchema / Save / Load / List / Update /
+ * Delete; Save runs a staged Validate -> Reflect -> Coerce -> Upsert flow, batch APIs are wrapped
+ * in a transaction, and errors are never swallowed: last_error is recorded and the exception is
+ * rethrown so callers (including Lua) can decide how to handle it.
  */
 #pragma once
 #ifndef HSBA_SLICER_PARAM_STORE_HPP
@@ -27,65 +28,68 @@
 namespace HsBa::Slicer
 {
 /**
- * @brief 绑定单一 ISQLAdapter 的工艺参数存储。
+ * @brief Process-parameter store bound to a single ISQLAdapter.
  */
 class ParamStore
 {
 public:
-    /** @brief 进度回调：percent(0-100), stage 描述。 */
+    /** @brief Progress callback: percent (0-100), stage description. */
     using ProgressFn = std::function<void(int, const char*)>;
 
-    /** @brief 迁移钩子：给定后端/表/schema 版本时执行迁移；本期仅保留轻量指针。 */
+    /** @brief Migration hook: runs for the given backend/table/schema version; currently only a lightweight pointer is retained. */
     using MigrationFn = std::function<void(SQL::ISQLAdapter&, Backend, const std::string&, int64_t)>;
 
-    /** @brief backend 传 std::nullopt 时由 ParamSchema::DetectBackend 自动检测。 */
+    /** @brief When backend is std::nullopt it is auto-detected via ParamSchema::DetectBackend. */
     explicit ParamStore(SQL::ISQLAdapter& db, std::optional<Backend> backend = std::nullopt);
 
-    /** @brief 为所有已注册 Config 表建表（IF NOT EXISTS / 存在性检查）。 */
+    /** @brief Create tables for all registered Config types (IF NOT EXISTS / existence check). */
     void EnsureSchema();
 
-    /** @brief 为指定 tag 建表。 */
+    /** @brief Create the table for the given tag. */
     void EnsureTable(PipelineConfigTag tag);
 
     /**
-     * @brief 保存（upsert）一个 Config。
-     * @param table 目标表名；传空则由 cfg 的类型派生。
-     * @param key   业务唯一键。
-     * @param cfg   包裹某个已注册 PipelineConfig 结构体的 AnyObject（非拥有）。
-     * @return 落库行的 param_id。
+     * @brief Save (upsert) one Config.
+     * @param table Target table name; when empty it is derived from the cfg type.
+     * @param key   Business unique key.
+     * @param cfg   AnyObject wrapping a registered PipelineConfig struct (non-owning).
+     * @return param_id of the persisted row.
      */
     int64_t Save(std::string_view table, std::string_view key, Utils::AnyObject cfg);
 
-    /** @brief 批量保存，整批包在一个事务里；任一条失败回滚并抛出。返回各条 param_id。 */
+    /** @brief Batch save wrapped in a single transaction; any failure rolls back and throws. Returns each param_id. */
     std::vector<int64_t> SaveBatch(std::string_view table,
                                    const std::vector<std::pair<std::string, Utils::AnyObject>>& items);
 
     /**
-     * @brief 按 key 加载到 outCfg（包裹目标结构体的非拥有 AnyObject）。
-     * @param arena const char* 字段的字符串持有者，需比目标结构体活得更久。
-     * @return 命中返回 true；未命中返回 false。
+     * @brief Load by key into outCfg (a non-owning AnyObject wrapping the target struct).
+     * @param arena Backing storage for const char* fields; must outlive the target struct.
+     * @return true when a row is found, false otherwise.
      */
     bool Load(std::string_view table, std::string_view key, Utils::AnyObject outCfg, StringArena& arena);
 
-    /** @brief 列出满足 whereJson（对象，键为列名，值为标量）的行的 param_key 列表。 */
+    /** @brief List the param_key of rows matching whereJson (an object whose keys are column names and values are scalars). */
     std::vector<std::string> List(std::string_view table, const std::string& whereJson);
 
-    /** @brief 仅更新 changedFields 列出的字段；key 不存在返回 false。 */
+    /** @brief Update only the fields listed in changedFields; returns false when the key does not exist. */
     bool Update(std::string_view table, std::string_view key, Utils::AnyObject partial,
                 const std::vector<std::string>& changedFields);
 
-    /** @brief 按 key 删除；返回是否命中（以删除前后行数变化判定）。 */
+    /** @brief Delete by key; returns whether a row was hit (judged by the row count before and after deletion). */
     bool Delete(std::string_view table, std::string_view key);
 
+    /// @brief Install the progress callback.
     void SetProgressCallback(ProgressFn fn) { progress_ = std::move(fn); }
+    /// @brief Install the migration hook.
     void SetMigrationHook(MigrationFn fn) { migration_ = std::move(fn); }
 
-    /** @brief 最近一次失败的错误信息（不吞错误，异常仍会向外传播）。 */
+    /** @brief Message of the most recent failure (errors are not swallowed; the exception still propagates). */
     std::string GetLastError() const { return last_error_; }
 
+    /// @brief The backend this store targets.
     Backend backend() const noexcept { return backend_; }
 
-    /** @brief 解析表名：非空则原样返回，否则由 cfg 的类型派生默认表名。 */
+    /** @brief Resolve the table name: returned as-is when non-empty, otherwise a default name is derived from the cfg type. */
     static std::string ResolveTable(std::string_view table, Utils::AnyObject cfg);
 
 private:

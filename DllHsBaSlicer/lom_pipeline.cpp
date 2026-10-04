@@ -1,3 +1,7 @@
+/** @file lom_pipeline.cpp
+ * @brief Implementation of the LOM (laminated object manufacturing) slicing pipeline C ABI.
+ * @author HsBa
+ */
 #include "lom_pipeline.h"
 
 #include <chrono>

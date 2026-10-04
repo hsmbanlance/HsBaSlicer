@@ -1,3 +1,7 @@
+/** @file param_store_pipeline.cpp
+ * @brief Implementation of the parameter store pipeline C ABI (save/load pipeline config structs).
+ * @author HsBa
+ */
 #include "param_store_pipeline.h"
 
 #include <chrono>
@@ -12,8 +16,8 @@ namespace HsBa::Slicer::Pipeline
 namespace
 {
 
-// 把 std::string 复制成由 std::malloc 持有的堆字符串（空串返回 nullptr），
-// 交由调用方通过 HsBaFreeParamStoreResult 释放。镜像 file_transfer_pipeline.cpp 的 OwnedCString。
+// Copy a std::string into a heap string owned by std::malloc (returns nullptr for an empty string),
+// to be released by the caller via HsBaFreeParamStoreResult. Mirrors OwnedCString in file_transfer_pipeline.cpp.
 char* DupToHeap(std::string_view s)
 {
     if (s.empty())
@@ -31,7 +35,7 @@ std::string Safe(const char* p)
     return p ? std::string(p) : std::string();
 }
 
-// C enum -> Lib enum（显式 switch，不依赖底层整型顺序）。
+// C enum -> Lib enum (explicit switch, not relying on the underlying integer order).
 ParamPipelineKind ToLibKind(HsBaPipelineKind k)
 {
     switch (k)

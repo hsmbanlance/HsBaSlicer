@@ -774,7 +774,7 @@ private:
 
 #ifdef HSBA_COROUTINES_AVAILABLE
 
-// personal couroutine Generator
+// personal coroutine Generator
 // see it in https://zh.cppreference.com/w/cpp/coroutine/coroutine_handle
 
 /**
@@ -1041,6 +1041,14 @@ private:
     inline static std::function<void()> onCancel = []() {};
 };
 
+/** @brief Lazily maps callback over a container, yielding each result as a coroutine Generator.
+ * @tparam Arg The element type of the container.
+ * @tparam Container The source container template.
+ * @tparam Callback The invocable applied to each element.
+ * @param callback The function to apply to every element.
+ * @param arg The container to iterate.
+ * @return A Generator producing callback(i) for each element i, resumed on demand.
+ */
 template <typename Arg, template <typename> typename Container, typename Callback>
     requires std::invocable<Callback, Arg> &&
     (std::ranges::range<Container<Arg>> && !std::same_as<Container<Arg>, std::vector<bool>>)inline auto
@@ -1055,6 +1063,14 @@ template <typename Arg, template <typename> typename Container, typename Callbac
 #else
 // not coroutine, use std::list as returns for avioding std::vector<bool>
 
+/** @brief Eagerly maps callback over a container into a new container (non-coroutine fallback).
+ * @tparam Arg The element type of the container.
+ * @tparam Container The source/result container template.
+ * @tparam Callback The invocable applied to each element.
+ * @param callback The function to apply to every element.
+ * @param arg The container to iterate.
+ * @return A container holding callback(i) for each element i.
+ */
 template <typename Arg, template <typename> typename Container, typename Callback>
     requires std::invocable<Callback, Arg> &&
     (std::ranges::range<Container<Arg>> && !std::same_as<Container<Arg>, std::vector<bool>>)inline auto

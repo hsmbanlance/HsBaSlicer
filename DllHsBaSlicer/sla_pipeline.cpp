@@ -1,4 +1,8 @@
-﻿#include "sla_pipeline.h"
+﻿/** @file sla_pipeline.cpp
+ * @brief Implementation of the SLA (stereolithography) slicing pipeline C ABI.
+ * @author HsBa
+ */
+#include "sla_pipeline.h"
 
 #include <chrono>
 #include <cmath>
@@ -276,7 +280,7 @@ HsBaSlaPipelineResult_t ToCResult(const InternalSlaResult& ir)
 
 Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
 {
-    // 把常用自定义类型的 AnyObject/Lua 注册函数装入通用注册池，供各阶段 Lua 环境使用
+    // Load the AnyObject/Lua registration functions for common custom types into the generic registry pool for the per-stage Lua environments to use
     HsBa::Slicer::InstallCommonAnyObjectTypes();
 
     InternalSlaResult result;

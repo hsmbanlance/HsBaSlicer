@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file ModelLoader.hpp
+ * @brief Unified model loader that dispatches to format-specific kernels and manages a named model pool.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_MODEL_LOADER_HPP
 #define HSBA_SLICER_MODEL_LOADER_HPP
 
@@ -26,12 +30,18 @@ namespace HsBa::Slicer
 class ModelLoader
 {
 public:
+    /// @brief Construct an empty loader.
     ModelLoader() = default;
+    /// @brief Destroy the loader and release its pooled models.
     ~ModelLoader() = default;
 
+    /// @brief Copy construction is disabled (the loader owns a unique pool).
     ModelLoader(const ModelLoader&) = delete;
+    /// @brief Copy assignment is disabled.
     ModelLoader& operator=(const ModelLoader&) = delete;
+    /// @brief Move construction is disabled.
     ModelLoader(ModelLoader&&) = delete;
+    /// @brief Move assignment is disabled.
     ModelLoader& operator=(ModelLoader&&) = delete;
 
     /** @brief Load a model from file and store it in the pool.

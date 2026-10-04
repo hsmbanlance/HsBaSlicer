@@ -1,3 +1,7 @@
+/** @file FdmSupport.hpp
+ * @brief FDM support generators: plane, tree and honeycomb strategies.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_FDM_SUPPORT_HPP
 #define HSBA_SLICER_FDM_SUPPORT_HPP

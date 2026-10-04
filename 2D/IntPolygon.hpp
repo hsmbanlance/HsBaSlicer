@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file IntPolygon.hpp
+ * @brief Integer-coordinate polygon type aliases and Clipper2-based boolean/offset/area operations.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_INTPOLYGON_HPP
 #define HSBA_SLICER_INTPOLYGON_HPP
 

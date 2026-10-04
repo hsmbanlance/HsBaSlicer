@@ -481,8 +481,8 @@ void InstallCommonAnyObjectTypes()
     std::call_once(once,
                    []
                    {
-                       // 流水线启动即完成 PipelineConfig 反射注册（内部 call_once 幂等），
-                       // 使 ParamStore 与任意消费 GetFileFunctions() 的阶段都能立即遍历字段。
+                       // Complete PipelineConfig reflection registration at pipeline start (idempotent via an internal call_once),
+                       // so ParamStore and any stage consuming GetFileFunctions() can traverse the fields immediately.
                        RegisterPipelineConfigTypes();
                        // One LuaRegFunc per generic pool; the per-state guard above keeps stages that
                        // consume several pools from registering the same Lua state twice.

@@ -1,3 +1,7 @@
+/** @file OpenVdbModel.cpp
+ * @brief Implementation of the OpenVDB-backed point cloud model.
+ * @author HsBa
+ */
 #include "OpenVdbModel.hpp"
 #include "OpenVdbModel_internal.h"
 

@@ -1,4 +1,8 @@
-﻿#include "ModelLoader.hpp"
+﻿/** @file ModelLoader.cpp
+ * @brief Implementation of the unified model loader and its model-pool operations.
+ * @author HsBa
+ */
+#include "ModelLoader.hpp"
 
 #include <algorithm>
 #include <cctype>

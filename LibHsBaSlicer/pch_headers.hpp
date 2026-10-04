@@ -1,4 +1,8 @@
-﻿#ifdef _WIN32
+﻿/** @file pch_headers.hpp
+ * @brief Precompiled-header aggregation for LibHsBaSlicer translation units.
+ * @author HsBa
+ */
+#ifdef _WIN32
 #include <windows.h>  // full windows.h before bit7z (which defines WIN32_LEAN_AND_MEAN)
 #endif
 

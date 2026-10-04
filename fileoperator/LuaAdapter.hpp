@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/**
+ * @file LuaAdapter.hpp
+ * @brief Declares the Lua registration entry points for the file-operator layer.
+ */
+#pragma once
 #ifndef FILEOPERATOR_LUAADAPTER_HPP
 #define FILEOPERATOR_LUAADAPTER_HPP
 
@@ -58,7 +62,7 @@ void RegisterLuaBit7zZipper(lua_State* L);
 #endif  // HSBA_USE_BIT7Z
 
 /**
- * @brief Register the ParamStore工艺参数流水线 in Lua.
+ * @brief Register the ParamStore process-parameter pipeline in Lua.
  *
  * Exposes a `ParamStore` global table with PascalCase methods
  * `new/EnsureSchema/Save/Load/List/Update/Delete`. The first argument to `new` is any

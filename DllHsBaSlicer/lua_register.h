@@ -1,3 +1,7 @@
+/** @file lua_register.h
+ * @brief C ABI for registering external Lua functions and event callbacks into the pipeline runtime.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_LUA_REGISTER_H
 #define HSBA_SLICER_LUA_REGISTER_H

@@ -1,4 +1,8 @@
-﻿#ifndef HSBA_SLICER_GRAPH_HPP
+﻿/** @file Graph.hpp
+ * @brief Header-only graph library: typed directed/undirected graph wrappers over Boost.Graph plus shortest-path, MST, flow, connectivity and genetic-TSP algorithms.
+ * @author HsBa
+ */
+#ifndef HSBA_SLICER_GRAPH_HPP
 #define HSBA_SLICER_GRAPH_HPP
 
 #pragma once
@@ -49,6 +53,7 @@ namespace HsBa::Slicer
 namespace graph::concepts
 {
 
+/// @brief Concept: a weight type supporting addition, ordering and default construction.
 template <typename T>
 concept TSPWeight = requires(T a, T b)
 {
@@ -57,15 +62,19 @@ concept TSPWeight = requires(T a, T b)
     {T{}}->std::same_as<T>;
 };
 
+/// @brief Concept: an arithmetic (built-in numeric) weight type.
 template <typename T>
 concept ArithmeticWeight = std::is_arithmetic_v<T>;
 
+/// @brief Concept: a Boost directed or bidirectional graph tag.
 template <typename T>
 concept DirectedGraphTag = std::is_same_v<T, boost::directedS> || std::is_same_v<T, boost::bidirectionalS>;
 
+/// @brief Concept: a Boost undirected graph tag.
 template <typename T>
 concept UndirectedGraphTag = std::is_same_v<T, boost::undirectedS>;
 
+/// @brief Concept: a usable vertex identifier (hashable, comparable and copyable).
 template <typename T>
 concept VertexIdType = StdHash<T> && std::equality_comparable<T> && std::copyable<T>;
 
@@ -74,16 +83,19 @@ concept VertexIdType = StdHash<T> && std::equality_comparable<T> && std::copyabl
 namespace graph::detail
 {
 
+/// @brief Trait: whether T can be streamed to an std::ostream.
 template <typename T, typename = void>
 struct is_ostreamable : std::false_type
 {
 };
 
+/// @brief Specialization selected when T is streamable.
 template <typename T>
 struct is_ostreamable<T, std::void_t<decltype(std::declval<std::ostream&>() << std::declval<T>())>> : std::true_type
 {
 };
 
+/// @brief Convert a value to a string for diagnostics (falls back to "[vertex]").
 template <typename T>
 std::string toString(const T& t)
 {
@@ -99,6 +111,7 @@ std::string toString(const T& t)
     }
 }
 
+/// @brief Sparse per-id storage for optional vertex/area descriptions.
 template <typename Desc, typename VertexId>
 struct VertexDescStorage
 {
@@ -114,6 +127,7 @@ struct VertexDescStorage
     std::size_t size() const { return data.size(); }
 };
 
+/// @brief Empty specialization used when no description type is configured.
 template <typename VertexId>
 struct VertexDescStorage<void, VertexId>
 {
@@ -135,6 +149,16 @@ struct VertexDescStorage<void, VertexId>
 namespace graph
 {
 
+/**
+ * @class BaseGraph
+ * @brief Typed wrapper over a Boost adjacency_list mapping external id types to graph vertices and edges.
+ * @tparam IdType Vertex identifier type.
+ * @tparam VertexProperty Per-vertex property type.
+ * @tparam EdgeProperty Per-edge property type.
+ * @tparam Weight Edge weight type.
+ * @tparam DirectionTag Boost directedness tag.
+ * @tparam VertexDescription Optional per-vertex description payload.
+ */
 template <concepts::VertexIdType IdType, typename VertexProperty, typename EdgeProperty, typename Weight,
           typename DirectionTag, typename VertexDescription = void>
 class BaseGraph
@@ -155,6 +179,7 @@ public:
     using VertexDescriptor = typename boost::graph_traits<GraphType>::vertex_descriptor;
     using EdgeDescriptor = typename boost::graph_traits<GraphType>::edge_descriptor;
 
+    /// @brief Add a vertex with the given id and optional property.
     VertexDescriptor addVertex(const VertexId& id, const VertexProperty& prop = {})
     {
         if (idToVertex_.contains(id))
@@ -167,20 +192,24 @@ public:
         return v;
     }
 
+    /// @brief Whether a vertex with the given id exists.
     bool hasVertex(const VertexId& id) const { return idToVertex_.contains(id); }
 
+    /// @brief Get the mutable property of a vertex by id.
     VertexProperty& vertexProperty(const VertexId& id)
     {
         auto v = findVertex(id);
         return graph_[v];
     }
 
+    /// @brief Get the read-only property of a vertex by id.
     const VertexProperty& vertexProperty(const VertexId& id) const
     {
         auto v = findVertex(id);
         return graph_[v];
     }
 
+    /// @brief Attach a description payload to a vertex (enabled only when VertexDescription is set).
     template <typename VD = VertexDescription>
     requires(!std::is_same_v<VD, void>) void setVertexDescription(const VertexId& id, const VD& desc)
     {
@@ -189,6 +218,7 @@ public:
         vertexDescriptions_.set(id, desc);
     }
 
+    /// @brief Get the mutable description of a vertex.
     template <typename VD = VertexDescription>
     requires(!std::is_same_v<VD, void>) VD& vertexDescription(const VertexId& id)
     {
@@ -197,6 +227,7 @@ public:
         return vertexDescriptions_.get(id);
     }
 
+    /// @brief Get the read-only description of a vertex.
     template <typename VD = VertexDescription>
     requires(!std::is_same_v<VD, void>) const VD& vertexDescription(const VertexId& id) const
     {
@@ -205,24 +236,28 @@ public:
         return vertexDescriptions_.get(id);
     }
 
+    /// @brief Whether a vertex has an attached description.
     template <typename VD = VertexDescription>
     requires(!std::is_same_v<VD, void>) bool hasVertexDescription(const VertexId& id) const
     {
         return vertexDescriptions_.has(id);
     }
 
+    /// @brief Remove the description attached to a vertex.
     template <typename VD = VertexDescription>
     requires(!std::is_same_v<VD, void>) void removeVertexDescription(const VertexId& id)
     {
         vertexDescriptions_.erase(id);
     }
 
+    /// @brief Return the underlying id-to-description storage.
     template <typename VD = VertexDescription>
     requires(!std::is_same_v<VD, void>) const auto& vertexDescriptions() const
     {
         return vertexDescriptions_.data;
     }
 
+    /// @brief Add a weighted edge between two vertex ids with an optional edge property.
     std::pair<EdgeDescriptor, bool> addEdge(const VertexId& from, const VertexId& to, WeightType weight,
                                             const EdgeProperty& prop = {})
     {
@@ -238,6 +273,7 @@ public:
         return {e, ok};
     }
 
+    /// @brief Whether a directed edge from -> to exists.
     bool hasEdge(const VertexId& from, const VertexId& to) const
     {
         if (!hasVertex(from) || !hasVertex(to))
@@ -245,15 +281,17 @@ public:
         return boost::edge(findVertex(from), findVertex(to), graph_).second;
     }
 
+    /// @brief Get the mutable property of an edge (handles undirected reverse storage).
     EdgeProperty& edgeProperty(const VertexId& from, const VertexId& to)
     {
         findEdge(from, to);
-        // 无向图中边可能以相反方向存储
+        // In an undirected graph an edge may be stored in the opposite direction
         if (auto it = edgeProps_.find({from, to}); it != edgeProps_.end())
             return it->second;
         return edgeProps_.at({to, from});
     }
 
+    /// @brief Get the read-only property of an edge.
     const EdgeProperty& edgeProperty(const VertexId& from, const VertexId& to) const
     {
         findEdge(from, to);
@@ -262,20 +300,24 @@ public:
         return edgeProps_.at({to, from});
     }
 
+    /// @brief Get the weight of the edge between two vertex ids.
     WeightType weight(const VertexId& from, const VertexId& to) const
     {
         auto e = findEdge(from, to);
         return boost::get(boost::edge_weight, graph_)[e];
     }
 
+    /// @brief Get the weight of an edge by descriptor.
     WeightType weight(EdgeDescriptor e) const { return boost::get(boost::edge_weight, graph_)[e]; }
 
+    /// @brief Set the weight of the edge between two vertex ids.
     void setWeight(const VertexId& from, const VertexId& to, WeightType w)
     {
         auto e = findEdge(from, to);
         boost::get(boost::edge_weight, graph_)[e] = w;
     }
 
+    /// @brief Return the outgoing neighbors of a vertex.
     std::vector<VertexId> neighbors(const VertexId& id) const
     {
         std::vector<VertexId> result;
@@ -287,6 +329,7 @@ public:
         return result;
     }
 
+    /// @brief Return the incoming predecessors of a vertex (directed graphs only).
     std::vector<VertexId> predecessors(const VertexId& id) const requires concepts::DirectedGraphTag<DirectionTag>
     {
         std::vector<VertexId> result;
@@ -298,6 +341,7 @@ public:
         return result;
     }
 
+    /// @brief Return the ids of all vertices.
     std::vector<VertexId> allVertices() const
     {
         std::vector<VertexId> result;
@@ -308,6 +352,7 @@ public:
         return result;
     }
 
+    /// @brief Return all edges as (from, to) id pairs.
     std::vector<std::pair<VertexId, VertexId>> allEdges() const
     {
         std::vector<std::pair<VertexId, VertexId>> result;
@@ -320,12 +365,17 @@ public:
         return result;
     }
 
+    /// @brief Number of vertices.
     std::size_t vertexCount() const { return boost::num_vertices(graph_); }
+    /// @brief Number of edges.
     std::size_t edgeCount() const { return boost::num_edges(graph_); }
 
+    /// @brief Access the underlying Boost graph (read-only).
     const GraphType& internalGraph() const { return graph_; }
+    /// @brief Access the underlying Boost graph.
     GraphType& internalGraph() { return graph_; }
 
+    /// @brief Look up the Boost vertex descriptor for an id, throwing if absent.
     VertexDescriptor findVertex(const VertexId& id) const
     {
         auto it = idToVertex_.find(id);
@@ -336,9 +386,12 @@ public:
         return it->second;
     }
 
+    /// @brief Return the external id associated with a vertex descriptor.
     const VertexId& vertexId(VertexDescriptor v) const { return vertexToId_.at(v); }
 
+    /// @brief Access the id-to-descriptor map.
     const auto& idToVertexMap() const { return idToVertex_; }
+    /// @brief Access the descriptor-to-id map.
     const auto& vertexToIdMap() const { return vertexToId_; }
 
 protected:
@@ -360,6 +413,10 @@ protected:
     }
 };
 
+/**
+ * @class DirectedGraph
+ * @brief Bidirectional BaseGraph specialization with an added in-neighbors accessor.
+ */
 template <concepts::VertexIdType V, typename VP = boost::no_property, typename EP = boost::no_property,
           typename W = double, typename VD = void>
 class DirectedGraph : public BaseGraph<V, VP, EP, W, boost::bidirectionalS, VD>
@@ -367,9 +424,14 @@ class DirectedGraph : public BaseGraph<V, VP, EP, W, boost::bidirectionalS, VD>
 public:
     using Base = BaseGraph<V, VP, EP, W, boost::bidirectionalS, VD>;
     using Base::Base;
+    /// @brief Return the incoming neighbors of a vertex.
     std::vector<V> inNeighbors(const V& id) const { return Base::predecessors(id); }
 };
 
+/**
+ * @class UndirectedGraph
+ * @brief Undirected BaseGraph specialization.
+ */
 template <concepts::VertexIdType V, typename VP = boost::no_property, typename EP = boost::no_property,
           typename W = double, typename VD = void>
 class UndirectedGraph : public BaseGraph<V, VP, EP, W, boost::undirectedS, VD>
@@ -387,6 +449,7 @@ namespace graph::algorithm
 
 using namespace graph::concepts;
 
+/// @brief Multi-source Dijkstra over arbitrary TSPWeight graphs, returning distance and predecessor maps keyed by descriptor.
 template <typename Graph>
 requires TSPWeight<typename Graph::WeightType>
     std::pair<std::unordered_map<typename Graph::VertexDescriptor, typename Graph::WeightType>,
@@ -439,6 +502,7 @@ requires TSPWeight<typename Graph::WeightType>
     return {dist, pred};
 }
 
+/// @brief Reconstruct a shortest path from multi-source Dijkstra results between the given source and target sets.
 template <typename Graph>
 requires TSPWeight<typename Graph::WeightType> std::vector<typename Graph::VertexDescriptor>
 genericDijkstraPath(const Graph& g, const std::vector<typename Graph::VertexDescriptor>& sources,
@@ -481,6 +545,7 @@ genericDijkstraPath(const Graph& g, const std::vector<typename Graph::VertexDesc
 }
 
 // BFS
+/// @brief Breadth-first traversal from a start vertex, invoking onDiscover for each newly discovered id.
 template <typename Graph>
 std::vector<typename Graph::VertexId> bfs(const Graph& g, const typename Graph::VertexId& start,
                                           std::function<void(const typename Graph::VertexId&)> onDiscover = nullptr)
@@ -515,6 +580,7 @@ std::vector<typename Graph::VertexId> bfs(const Graph& g, const typename Graph::
 }
 
 // DFS
+/// @brief Depth-first traversal from a start vertex, invoking onDiscover for each newly discovered id.
 template <typename Graph>
 std::vector<typename Graph::VertexId> dfs(const Graph& g, const typename Graph::VertexId& start,
                                           std::function<void(const typename Graph::VertexId&)> onDiscover = nullptr)
@@ -548,6 +614,7 @@ std::vector<typename Graph::VertexId> dfs(const Graph& g, const typename Graph::
 }
 
 // Dijkstra (Boost, arithmetic only)
+/// @brief Single-source Dijkstra (arithmetic weights) returning distance and predecessor maps keyed by id.
 template <typename Graph>
 requires ArithmeticWeight<typename Graph::WeightType>
     std::pair<std::unordered_map<typename Graph::VertexId, typename Graph::WeightType>,
@@ -577,6 +644,7 @@ requires ArithmeticWeight<typename Graph::WeightType>
 }
 
 // Bellman-Ford
+/// @brief Bellman-Ford single-source shortest paths; returns nullopt when a negative cycle exists.
 template <typename Graph>
 requires ArithmeticWeight<typename Graph::WeightType>
     std::optional<std::unordered_map<typename Graph::VertexId, typename Graph::WeightType>>
@@ -601,10 +669,12 @@ requires ArithmeticWeight<typename Graph::WeightType>
 }
 
 // A* (Boost)
+/// @brief Thrown by the A* visitor when the goal vertex is reached.
 struct AStarFoundGoal : public std::exception
 {
 };
 
+/// @brief A* shortest path with a user heuristic; returns the vertex-id path from start to goal.
 template <typename Graph, typename HeuristicFunc>
 requires ArithmeticWeight<typename Graph::WeightType> std::vector<typename Graph::VertexId>
 astar(const Graph& g, const typename Graph::VertexId& start, const typename Graph::VertexId& goal, HeuristicFunc h)
@@ -662,6 +732,7 @@ astar(const Graph& g, const typename Graph::VertexId& start, const typename Grap
 }
 
 // Prim (undirected)
+/// @brief Prim minimum spanning tree (undirected), returning the selected MST edges as id pairs.
 template <typename Graph>
 requires ArithmeticWeight<typename Graph::WeightType>&& UndirectedGraphTag<typename Graph::DirectionTagType>
     std::vector<std::pair<typename Graph::VertexId, typename Graph::VertexId>>
@@ -682,6 +753,7 @@ requires ArithmeticWeight<typename Graph::WeightType>&& UndirectedGraphTag<typen
 }
 
 // Kruskal (undirected)
+/// @brief Kruskal minimum spanning tree (undirected), returning the selected MST edges as id pairs.
 template <typename Graph>
 requires ArithmeticWeight<typename Graph::WeightType>&& UndirectedGraphTag<typename Graph::DirectionTagType>
     std::vector<std::pair<typename Graph::VertexId, typename Graph::VertexId>> kruskal(const Graph& g)
@@ -698,6 +770,7 @@ requires ArithmeticWeight<typename Graph::WeightType>&& UndirectedGraphTag<typen
 }
 
 // Connected Components (undirected)
+/// @brief Label the connected components of an undirected graph, mapping each vertex id to its component index.
 template <typename Graph>
 requires UndirectedGraphTag<typename Graph::DirectionTagType> std::unordered_map<typename Graph::VertexId, int>
 connectedComponents(const Graph& g)
@@ -714,6 +787,7 @@ connectedComponents(const Graph& g)
 }
 
 // Strong Components (directed)
+/// @brief Label the strongly connected components of a directed graph, mapping each vertex id to its component index.
 template <typename Graph>
 requires DirectedGraphTag<typename Graph::DirectionTagType> std::unordered_map<typename Graph::VertexId, int>
 strongComponents(const Graph& g)
@@ -735,6 +809,7 @@ strongComponents(const Graph& g)
 }
 
 // Topological Sort (directed)
+/// @brief Topologically order a directed acyclic graph, returning vertex ids in dependency order.
 template <typename Graph>
 requires DirectedGraphTag<typename Graph::DirectionTagType> std::vector<typename Graph::VertexId>
 topologicalSort(const Graph& g)
@@ -750,6 +825,7 @@ topologicalSort(const Graph& g)
 }
 
 // Max Flow (directed)
+/// @brief Boykov-Kolmogorov maximum flow between a source and a sink on a directed capacity graph.
 template <typename Graph>
 requires DirectedGraphTag<typename Graph::DirectionTagType>&&
     ArithmeticWeight<typename Graph::WeightType> typename Graph::WeightType
@@ -781,9 +857,9 @@ requires DirectedGraphTag<typename Graph::DirectionTagType>&&
         boost::put(boost::edge_reverse, fg, e1, e2);
         boost::put(boost::edge_reverse, fg, e2, e1);
     }
-    // 顶点属性为 no_property，需显式提供前驱/颜色/距离映射；
-    // 前驱映射用空边描述符初始化（BK 通过内部 has_parent 标记守护前驱读取，
-    // 源/汇在树中总有父边，不会读到空值）
+    // Vertex property is no_property, so predecessor/color/distance maps must be supplied explicitly;
+    // the predecessor map is initialized with null edge descriptors (BK guards predecessor reads via
+    // an internal has_parent flag, and the source/sink always have a parent edge in the tree, so no null is read)
     auto n = boost::num_vertices(fg);
     std::vector<FEdge> pred(n, FEdge{});
     std::vector<boost::default_color_type> color(n);
@@ -797,6 +873,7 @@ requires DirectedGraphTag<typename Graph::DirectionTagType>&&
 }
 
 
+/// @brief Genetic-algorithm solver for an approximate symmetric/asymmetric TSP tour over a weighted graph.
 template <typename Graph>
 requires TSPWeight<typename Graph::WeightType> class GeneticTSP
 {
@@ -817,6 +894,7 @@ public:
     {
     }
 
+    /// @brief Solve the TSP for the given set of must-visit cities, returning the best tour, cost and generation count.
     Result solve(const std::vector<Id>& mustVisit)
     {
         if (mustVisit.size() < 2)

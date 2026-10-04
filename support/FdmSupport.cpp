@@ -1,3 +1,7 @@
+/** @file FdmSupport.cpp
+ * @brief Implementations of FDM plane, tree and honeycomb support generators.
+ * @author HsBa
+ */
 #include "FdmSupport.hpp"
 
 #include <algorithm>

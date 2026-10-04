@@ -1,3 +1,7 @@
+/** @file weldrobotpath.hpp
+ * @brief Welding robot path output (WeldRobotPath): robot program generation augmented with weld parameters.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_WELD_ROBOT_PATH_HPP
 #define HSBA_SLICER_WELD_ROBOT_PATH_HPP

@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file fdm_pipeline.h
+ * @brief C ABI for the FDM slicing pipeline: create config, run sync/async and free results.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_FDM_PIPELINE_H
 #define HSBA_SLICER_FDM_PIPELINE_H
 

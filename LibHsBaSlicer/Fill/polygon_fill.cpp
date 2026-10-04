@@ -1,3 +1,7 @@
+/** @file polygon_fill.cpp
+ * @brief Implementation of the Lib-side polygon fill C++ API over the 2D fill engine.
+ * @author HsBa
+ */
 #include "polygon_fill.hpp"
 
 #include "2D/PolygonFill.hpp"
@@ -24,8 +28,8 @@ HSBA_SLICER_LIB_API Polygons FillPolygon(const Polygons& poly, double spacing, F
 HSBA_SLICER_LIB_API Polygons FillWithBorder(const Polygons& poly, double spacing, int border_count, FillMode fill_mode,
                                             double angle_deg)
 {
-    // 使用CompositeOffsetFill：边框偏移 + 内部填充
-    // outwardCount=0 表示不向外偏移，inwardCount=border_count 向内偏移生成边框
+    // Use CompositeOffsetFill: border offset + interior fill
+    // outwardCount=0 means no outward offset; inwardCount=border_count offsets inward to form the border
     return CompositeOffsetFill(poly, spacing, spacing, 0, border_count, fill_mode, angle_deg);
 }
 

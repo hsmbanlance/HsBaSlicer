@@ -1,4 +1,8 @@
-﻿#include "fdm_pipeline.h"
+﻿/** @file fdm_pipeline.cpp
+ * @brief Implementation of the FDM slicing pipeline C ABI.
+ * @author HsBa
+ */
+#include "fdm_pipeline.h"
 
 #include <chrono>
 #include <cmath>
@@ -24,7 +28,7 @@
 namespace HsBa::Slicer::Pipeline
 {
 
-// 内部结果（命名空间可见，供lambda引用）
+// Internal result (namespace-visible, referenced by lambdas)
 struct InternalResult
 {
     bool success = false;
@@ -34,7 +38,7 @@ struct InternalResult
     double elapsed_seconds = 0.0;
 };
 
-// 内部配置
+// Internal configuration
 struct InternalConfig
 {
     std::string model_name;
@@ -66,7 +70,7 @@ struct InternalConfig
 namespace
 {
 
-// RAII守卫：确保malloc分配的C字符串在异常/提前返回时被释放
+// RAII guard: ensures malloc-allocated C strings are freed on exception/early return
 struct OwnedCString
 {
     char* data = nullptr;
@@ -98,7 +102,7 @@ struct OwnedCString
 
     ~OwnedCString() { std::free(data); }
 
-    // 释放所有权并返回裸指针（调用者负责释放）
+    // Release ownership and return the raw pointer (caller is responsible for freeing)
     char* release() { return std::exchange(data, nullptr); }
 };
 
@@ -201,13 +205,15 @@ HsBaFdmPipelineResult_t ToCResult(const InternalResult& ir)
     return cr;
 }
 
-// ModelLoader 已在文件顶部引入。
-// InternalConfig 不引用 ModelLoader，因此不受其不可复制的影响。
+// ModelLoader is already included at the top of this file.
+// InternalConfig does not reference ModelLoader, so it is unaffected by its non-copyability.
 
-// 协程核心实现
+/**
+ * @brief Core coroutine implementation of the FDM pipeline.
+ */
 Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
 {
-    // 把常用自定义类型的 AnyObject/Lua 注册函数装入通用注册池，供各阶段 Lua 环境使用
+    // Install the common custom types' AnyObject/Lua registration functions into the shared registry pool for use by each stage's Lua environment
     HsBa::Slicer::InstallCommonAnyObjectTypes();
 
     InternalResult result;
@@ -243,7 +249,7 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
         result.total_layers = total_layers;
         ReportProgress(cfg, 10, "Model loaded");
 
-        // ========== 阶段2: 切片 ==========
+        // ========== Stage 2: Slicing ==========
         ReportProgress(cfg, 15, "Slicing...");
         std::vector<PolygonsD> layer_outlines(total_layers);
         float z_offset = info.bbox_min.z();
@@ -265,7 +271,7 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             });
         ReportProgress(cfg, 40, "Slicing complete");
 
-        // ========== 阶段3: 支撑 ==========
+        // ========== Stage 3: Support ==========
         std::vector<PolygonsD> layer_supports(total_layers);
         if (cfg.spiral_mode)
         {
@@ -295,17 +301,17 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             ReportProgress(cfg, 60, "Support disabled");
         }
 
-        // ========== 阶段4: 填充 ==========
+        // ========== Stage 4: Infill ==========
         ReportProgress(cfg, 65, "Generating fills...");
         std::vector<PolygonsD> layer_fills(total_layers);
 
-        // 确定顶层/底层/中间层范围
-        const int bottom_end = cfg.bottom_layer_count;             // [0, bottom_end) 为底层
-        const int top_start = total_layers - cfg.top_layer_count;  // [top_start, total_layers) 为顶层
+        // Determine top/bottom/middle layer ranges
+        const int bottom_end = cfg.bottom_layer_count;             // [0, bottom_end) is bottom
+        const int top_start = total_layers - cfg.top_layer_count;  // [top_start, total_layers) is top
         const bool has_lua_infill = !cfg.infill_lua_script.empty();
         const std::string infill_func = cfg.infill_lua_func.empty() ? "generate_fill" : cfg.infill_lua_func;
 
-        // 中间层填充间距：密度越低间距越大
+        // Middle-layer fill spacing: lower density means larger spacing
         double middle_spacing = cfg.fill_spacing;
         if (cfg.infill_density > 0.0 && cfg.infill_density < 1.0)
         {
@@ -319,7 +325,7 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             if (layer_outlines[i].empty())
                 return;
             Polygons int_polys = Integerization(layer_outlines[i]);
-            bool is_solid = (i < bottom_end) || (i >= top_start);  // 顶层/底层实心填充
+            bool is_solid = (i < bottom_end) || (i >= top_start);  // solid fill for top/bottom layers
             double spacing = is_solid ? cfg.fill_spacing : middle_spacing;
             Polygons fill_result = FillWithBorder(int_polys, spacing, cfg.wall_count, cfg.fill_mode, cfg.fill_angle);
             layer_fills[i] = UnIntegerization(fill_result);
@@ -332,7 +338,7 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
         }
         else if (has_lua_infill)
         {
-            // 逐层串行：Lua 解释器状态不跨线程共享
+            // Serial per layer: Lua interpreter state is not shared across threads
             for (int i = 0; i < total_layers; ++i)
             {
                 if (!layer_outlines[i].empty())
@@ -365,7 +371,7 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
         }
         ReportProgress(cfg, 85, "Fill generation complete");
 
-        // ========== 阶段5: 路径生成 ==========
+        // ========== Stage 5: Path generation ==========
         ReportProgress(cfg, 90, "Generating G-code paths...");
 
         if (cfg.spiral_mode)
@@ -429,7 +435,7 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
 
 }  // namespace HsBa::Slicer::Pipeline
 
-// ========== C导出接口 ==========
+// ========== C export interface ==========
 
 HSBA_SLICER_API HsBaFdmPipelineConfig_t HsBaCreateDefaultConfig(void)
 {
@@ -449,7 +455,7 @@ HSBA_SLICER_API void HsBaRunFdmPipelineAsync(const HsBaFdmPipelineConfig_t* conf
                                              void* user_data, HsBaResultCallback result_callback,
                                              void* result_user_data)
 {
-    // 堆分配 config，确保协程执行期间生命周期安全
+    // Heap-allocate config to keep its lifetime safe during coroutine execution
     auto shared_cfg = std::make_shared<HsBa::Slicer::Pipeline::InternalConfig>(
         HsBa::Slicer::Pipeline::BuildConfig(config, callback, user_data));
     auto task = HsBa::Slicer::Pipeline::RunPipelineAsync(*shared_cfg);

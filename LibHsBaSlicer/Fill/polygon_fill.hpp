@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file polygon_fill.hpp
+ * @brief Lib-side polygon fill C++ API wrapping the 2D fill engine (line/zigzag/border/Lua custom fill).
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_LIB_POLYGON_FILL_HPP
 #define HSBA_SLICER_LIB_POLYGON_FILL_HPP
 

@@ -177,6 +177,11 @@ public:
      * @return The maximum number of elements that can be allocated.
      */
     size_type max_size() const noexcept { return PoolSize / sizeof(T); }
+    /** @brief Construct an element of type U.
+     * This function constructs an element of type U at the specified pointer p.
+     * @param p A pointer to the location where the element should be constructed.
+     * @param args The arguments for the constructor.
+     */
     template <typename U, typename... Args>
     void construct(U* p, Args&&... args)
     {
@@ -350,7 +355,7 @@ public:
     {
         return false;  // All instances are considered equal
     }
-    /* @brief Get the number of bytes currently allocated in the memory pool.
+    /** @brief Get the number of bytes currently allocated in the memory pool.
      * @return The number of bytes currently allocated in the memory pool.
      */
     size_t UsedCount() const

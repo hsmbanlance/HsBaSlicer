@@ -33,6 +33,10 @@
 #include <memory>
 namespace HsBa::Slicer::Utils
 {
+/** @brief Alias to the standard library's std::inplace_vector when it is available and constexpr-capable.
+ * @tparam T Element type.
+ * @tparam N Fixed capacity.
+ */
 template <typename T, std::size_t N>
 using InplaceVector = std::inplace_vector<T, N>;
 }
@@ -40,23 +44,41 @@ using InplaceVector = std::inplace_vector<T, N>;
 namespace HsBa::Slicer::Utils
 {
 
+/** @brief A fixed-capacity vector that stores elements inline without dynamic allocation.
+ *
+ * Drop-in replacement for std::vector when a compile-time capacity is sufficient and dynamic
+ * allocation is undesirable. Supports constexpr use, copy/move semantics and bounds-checked access.
+ * @tparam T Element type.
+ * @tparam N Fixed maximum number of elements.
+ */
 template <typename T, std::size_t N>
 class InplaceVector
 {
 public:
+    /** @brief The element type stored in the vector. */
     using value_type = T;
+    /** @brief Unsigned size type. */
     using size_type = std::size_t;
+    /** @brief Reference to an element. */
     using reference = value_type&;
+    /** @brief Const reference to an element. */
     using const_reference = const value_type&;
+    /** @brief Pointer to an element. */
     using pointer = value_type*;
+    /** @brief Const pointer to an element. */
     using const_pointer = const value_type*;
+    /** @brief Random-access iterator type (raw pointer). */
     using iterator = pointer;
+    /** @brief Const random-access iterator type (raw const pointer). */
     using const_iterator = const_pointer;
 
+    /** @brief Constructs an empty vector. */
     constexpr InplaceVector() noexcept : size_(0) {}
 
+    /** @brief Destroys all contained elements. */
     ~InplaceVector() noexcept { clear(); }
 
+    /** @brief Copy constructor: emplaces copies of all elements from other. */
     constexpr InplaceVector(const InplaceVector& other)
     {
         size_ = 0;
@@ -66,6 +88,7 @@ public:
         }
     }
 
+    /** @brief Move constructor: moves elements from other and clears it. */
     constexpr InplaceVector(InplaceVector&& other) noexcept(std::is_nothrow_move_constructible_v<T>)
     {
         size_ = 0;
@@ -76,6 +99,7 @@ public:
         other.clear();
     }
 
+    /** @brief Copy assignment: replaces contents with copies of other's elements. */
     constexpr InplaceVector& operator=(const InplaceVector& other)
     {
         if (this != &other)
@@ -87,6 +111,7 @@ public:
         return *this;
     }
 
+    /** @brief Move assignment: replaces contents by moving other's elements and clears it. */
     constexpr InplaceVector& operator=(InplaceVector&& other) noexcept(std::is_nothrow_move_assignable_v<T>)
     {
         if (this != &other)
@@ -99,13 +124,21 @@ public:
         return *this;
     }
 
+    /** @brief Returns the number of elements currently stored. */
     constexpr size_type size() const noexcept { return size_; }
+    /** @brief Returns the fixed capacity (N). */
     constexpr size_type capacity() const noexcept { return N; }
+    /** @brief Checks whether the vector is empty. */
     constexpr bool empty() const noexcept { return size_ == 0; }
 
+    /** @brief Accesses the element at the specified index without bounds checking. */
     constexpr reference operator[](size_type idx) noexcept { return *ptr_at(idx); }
+    /** @brief Accesses the element at the specified index without bounds checking (const). */
     constexpr const_reference operator[](size_type idx) const noexcept { return *ptr_at(idx); }
 
+    /** @brief Accesses the element at the specified index with bounds checking.
+     * @throws std::out_of_range if idx is not less than size().
+     */
     constexpr reference at(size_type idx)
     {
         if (idx >= size_)
@@ -113,6 +146,7 @@ public:
         return (*this)[idx];
     }
 
+    /** @brief Removes all elements, destroying each in reverse order. */
     constexpr void clear() noexcept
     {
         for (size_type i = size_; i > 0; --i)
@@ -122,6 +156,10 @@ public:
         size_ = 0;
     }
 
+    /** @brief Constructs an element in-place at the end of the vector.
+     * @throws std::length_error if the capacity would be exceeded.
+     * @return A reference to the newly added element.
+     */
     template <typename... Args>
     constexpr reference emplace_back(Args&&... args)
     {
@@ -133,9 +171,16 @@ public:
         return *obj;
     }
 
+    /** @brief Appends a copy of the given value to the end.
+     * @throws std::length_error if the capacity would be exceeded.
+     */
     constexpr void push_back(const T& v) { emplace_back(v); }
+    /** @brief Appends the given value to the end by moving it.
+     * @throws std::length_error if the capacity would be exceeded.
+     */
     constexpr void push_back(T&& v) { emplace_back(std::move(v)); }
 
+    /** @brief Removes the last element; does nothing if the vector is empty. */
     constexpr void pop_back() noexcept
     {
         if (size_ == 0)
@@ -144,12 +189,18 @@ public:
         --size_;
     }
 
+    /** @brief Returns an iterator to the first element. */
     constexpr iterator begin() noexcept { return data(); }
+    /** @brief Returns an iterator past the last element. */
     constexpr iterator end() noexcept { return data() + size_; }
+    /** @brief Returns a const iterator to the first element. */
     constexpr const_iterator begin() const noexcept { return data(); }
+    /** @brief Returns a const iterator past the last element. */
     constexpr const_iterator end() const noexcept { return data() + size_; }
 
+    /** @brief Returns a pointer to the underlying inline storage. */
     constexpr pointer data() noexcept { return reinterpret_cast<pointer>(storage_); }
+    /** @brief Returns a const pointer to the underlying inline storage. */
     constexpr const_pointer data() const noexcept { return reinterpret_cast<const_pointer>(storage_); }
 
 private:

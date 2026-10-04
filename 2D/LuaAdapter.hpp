@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file LuaAdapter.hpp
+ * @brief Lua <-> polygon conversion helpers and registration of polygon operations into a Lua state.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_LUAADAPTERS_HPP
 #define HSBA_SLICER_LUAADAPTERS_HPP
 

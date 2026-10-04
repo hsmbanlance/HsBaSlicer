@@ -1,4 +1,8 @@
-﻿#include "2Dhull.hpp"
+﻿/** @file 2Dhull.cpp
+ * @brief Implementations of convex and concave hull generation for polygons.
+ * @author HsBa
+ */
+#include "2Dhull.hpp"
 
 #include <algorithm>
 

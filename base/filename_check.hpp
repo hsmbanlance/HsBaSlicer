@@ -18,7 +18,7 @@ namespace HsBa::Slicer
 /**
  * @brief string with no ASCII characters
  * @param str string
- * @return rue if string with no ASCII characters
+ * @return true if string with no ASCII characters
  */
 bool StringWithNoASCII(const std::string& str);
 
@@ -35,11 +35,11 @@ bool StringEnableFileName(const std::string& str);
  * @return true if string can be used as filename with path
  */
 bool StringEnableFileNameWithPath(const std::string& str);
-/// <summary>
-/// string which can be used as filename and only ASCII characters
-/// </summary>
-/// <param name="str">string</param>
-/// <returns>true if string can be used as filename and only ASCII characters</returns>
+/**
+ * @brief string which can be used as filename and only ASCII characters
+ * @param str string
+ * @return true if string can be used as filename and only ASCII characters
+ */
 bool StringEnableFileNameAndOnlyASCII(const std::string& str);
 
 /**

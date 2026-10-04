@@ -1,3 +1,7 @@
+/** @file struct_xml.hpp
+ * @brief Generic reflection-driven serialization of aggregate/reflectable types to and from TinyXML2.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_STRUCT_XML_HPP
 #define HSBA_SLICER_STRUCT_XML_HPP
@@ -826,7 +830,7 @@ requires(!std::is_same_v<Range, std::string>) Range from_xml(const tinyxml2::XML
 
 
 /**
- * @brief Write a value to a YAML text stream.
+ * @brief Write a value to an XML text stream.
  *
  * @tparam T Type of value to serialize.
  * @param os Output stream.

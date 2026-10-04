@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file sls_export.hpp
+ * @brief SLS export package type and Lua-driven export save API.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_LIB_SLS_EXPORT_HPP
 #define HSBA_SLICER_LIB_SLS_EXPORT_HPP
 

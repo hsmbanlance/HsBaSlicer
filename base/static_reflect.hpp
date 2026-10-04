@@ -29,7 +29,7 @@ namespace HsBa::Slicer::Utils::StaticReflect
  * @brief field info
  * @tparam ClassT class type
  * @tparam FieldT field type
- * @tparam FieldName f	ield name
+ * @tparam FieldName field name
  * @tparam FieldPtr field ptr
  */
 template <typename ClassT, typename FieldT, TemplateString FieldName, FieldT ClassT::* FieldPtr>

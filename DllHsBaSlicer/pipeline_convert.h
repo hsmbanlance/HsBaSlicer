@@ -1,3 +1,7 @@
+/** @file pipeline_convert.h
+ * @brief C ABI converting serialized proto bytes to/from pipeline config/result structs and freeing converted strings.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_PIPELINE_CONVERT_H
 #define HSBA_SLICER_PIPELINE_CONVERT_H

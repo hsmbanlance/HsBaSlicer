@@ -1,3 +1,7 @@
+/** @file SlaSupport.cpp
+ * @brief Implementation of the SLA sacrificial support generator.
+ * @author HsBa
+ */
 #include "SlaSupport.hpp"
 
 #include <algorithm>

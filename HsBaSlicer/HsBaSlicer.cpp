@@ -1,8 +1,11 @@
-﻿// HsBaSlicer.cpp: 定义应用程序的入口点。
-//
-// 本文件同时作为桌面端可执行程序和 Android 共享库的入口，
-// 包含 FDM / SLA / SLS 三种工艺流水线的使用示例（非实际生产入口，仅供示例和测试）。
-//
+﻿/**
+ * @file HsBaSlicer.cpp
+ * @brief Application entry point.
+ *
+ * This file serves as both the desktop executable and the Android shared-library entry,
+ * containing usage examples of the FDM / SLA / SLS pipelines (not a real production entry,
+ * for examples and testing only).
+ */
 
 #include "HsBaSlicer.h"
 
@@ -21,16 +24,18 @@
 using HsBa::Slicer::Log::LoggerSingletone;
 
 // ---------------------------------------------------------------------------
-// 日志辅助
+// Logging helpers
 // ---------------------------------------------------------------------------
 namespace
 {
+/// @brief Write an informational message through the singleton logger.
 void LogMsg(std::string_view msg)
 {
     LoggerSingletone::LogInfo(msg);
 }
 
-// 进度回调（三种流水线共用）
+// Progress callback (shared by the three pipelines)
+/// @brief Log a pipeline progress update as an informational message.
 void OnProgress(int percent, const char* stage, void* /*user_data*/)
 {
     LoggerSingletone::LogInfo(std::format("[{}%] {}", percent, stage));
@@ -38,22 +43,23 @@ void OnProgress(int percent, const char* stage, void* /*user_data*/)
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// FDM 流水线示例
+// FDM pipeline example
 // ---------------------------------------------------------------------------
+/// @brief Run the FDM pipeline example and return a process exit code.
 static int RunFdmExample()
 {
     LogMsg("=== FDM 流水线示例 ===");
 
     std::filesystem::create_directories("output");
 
-    // 1. 获取默认配置
+    // 1. Get the default configuration
     HsBaFdmPipelineConfig_t cfg = HsBaCreateDefaultConfig();
 
-    // 2. 设置模型（必须）
+    // 2. Set the model (required)
     cfg.model_name = "stanford_bunny";
     cfg.model_path = "models/stanford_bunny.stl";
 
-    // 3. 可选：自定义工艺参数
+    // 3. Optional: customize process parameters
     cfg.layer_height = 0.2f;
     cfg.first_layer_height = 0.25f;
     cfg.wall_count = 3;
@@ -65,13 +71,13 @@ static int RunFdmExample()
     cfg.overhang_angle = 45.0f;
     cfg.support_pattern = HSBA_SUPPORT_PLANE;
 
-    // 4. 输出路径
+    // 4. Output path
     cfg.output_path = "output/fdm_example.gcode";
 
-    // 5. 同步运行流水线
+    // 5. Run the pipeline synchronously
     HsBaFdmPipelineResult_t result = HsBaRunFdmPipeline(&cfg, OnProgress, nullptr);
 
-    // 6. 处理结果
+    // 6. Handle the result
     if (result.success)
     {
         std::filesystem::path out_path = "output/fdm_example.gcode";
@@ -94,28 +100,29 @@ static int RunFdmExample()
         LogMsg(std::format("FDM 切片失败: {}", result.error_message ? result.error_message : "未知错误"));
     }
 
-    // 7. 释放内存（必须）
+    // 7. Free memory (required)
     HsBaFreePipelineResult(&result);
     return result.success;
 }
 
 // ---------------------------------------------------------------------------
-// SLA 流水线示例
+// SLA pipeline example
 // ---------------------------------------------------------------------------
+/// @brief Run the SLA pipeline example and return a process exit code.
 static int RunSlaExample()
 {
     LogMsg("=== SLA 流水线示例 ===");
 
     std::filesystem::create_directories("output");
 
-    // 1. 获取默认 SLA 配置
+    // 1. Get the default SLA configuration
     HsBaSlaPipelineConfig_t cfg = HsBaCreateDefaultSlaConfig();
 
-    // 2. 设置模型
+    // 2. Set the model
     cfg.model_name = "stanford_bunny";
     cfg.model_path = "models/stanford_bunny.stl";
 
-    // 3. 可选：自定义参数
+    // 3. Optional: customize parameters
     cfg.layer_height = 0.05f;
     cfg.first_layer_height = 0.1f;
     cfg.bottom_exposure_time = 60.0f;
@@ -126,13 +133,13 @@ static int RunSlaExample()
     cfg.overhang_angle = 45.0f;
     cfg.support_pattern = HSBA_SLA_SUPPORT_SACRIFICIAL;
 
-    // 4. 输出路径
+    // 4. Output path
     cfg.output_path = "output/sla_example.zip";
 
-    // 5. 同步运行
+    // 5. Run synchronously
     HsBaSlaPipelineResult_t result = HsBaRunSlaPipeline(&cfg, OnProgress, nullptr);
 
-    // 6. 处理结果
+    // 6. Handle the result
     if (result.success)
     {
         LogMsg(std::format("SLA 切片成功! 层数: {}, 导出: {}, 耗时: {:.2f}s", result.total_layers,
@@ -143,28 +150,29 @@ static int RunSlaExample()
         LogMsg(std::format("SLA 切片失败: {}", result.error_message ? result.error_message : "未知错误"));
     }
 
-    // 7. 释放内存
+    // 7. Free memory
     HsBaFreeSlaPipelineResult(&result);
     return result.success;
 }
 
 // ---------------------------------------------------------------------------
-// SLS 流水线示例
+// SLS pipeline example
 // ---------------------------------------------------------------------------
+/// @brief Run the SLS pipeline example and return a process exit code.
 static int RunSlsExample()
 {
     LogMsg("=== SLS 流水线示例 ===");
 
     std::filesystem::create_directories("output");
 
-    // 1. 获取默认 SLS 配置
+    // 1. Get the default SLS configuration
     HsBaSlsPipelineConfig_t cfg = HsBaCreateDefaultSlsConfig();
 
-    // 2. 设置模型
+    // 2. Set the model
     cfg.model_name = "stanford_bunny";
     cfg.model_path = "models/stanford_bunny.stl";
 
-    // 3. 可选：自定义激光参数
+    // 3. Optional: customize laser parameters
     cfg.layer_height = 0.1f;
     cfg.first_layer_height = 0.15f;
     cfg.laser_power = 30.0f;
@@ -173,17 +181,17 @@ static int RunSlsExample()
     cfg.hatch_rotation = 90.0f;
     cfg.bed_temperature = 180.0f;
 
-    // 4. Lua 导出脚本（SLS 必须指定，无标准输出格式）
+    // 4. Lua export script (required for SLS, which has no standard output format)
     cfg.export_lua_script = "scripts/my_sls_export.lua";
     cfg.export_lua_func = "export_sls";
 
-    // 5. 输出路径
+    // 5. Output path
     cfg.output_path = "output/sls_example.zip";
 
-    // 6. 同步运行
+    // 6. Run synchronously
     HsBaSlsPipelineResult_t result = HsBaRunSlsPipeline(&cfg, OnProgress, nullptr);
 
-    // 7. 处理结果
+    // 7. Handle the result
     if (result.success)
     {
         LogMsg(std::format("SLS 切片成功! 层数: {}, 导出: {}, 耗时: {:.2f}s", result.total_layers,
@@ -194,14 +202,15 @@ static int RunSlsExample()
         LogMsg(std::format("SLS 切片失败: {}", result.error_message ? result.error_message : "未知错误"));
     }
 
-    // 8. 释放内存
+    // 8. Free memory
     HsBaFreeSlsPipelineResult(&result);
     return result.success;
 }
 
 // ---------------------------------------------------------------------------
-// 运行全部示例（供桌面端 main 和 Android JNI 共用）
+// Run all examples (shared by the desktop main and the Android JNI entry)
 // ---------------------------------------------------------------------------
+/// @brief Execute the FDM, SLA and SLS pipeline examples in sequence.
 static void RunAllPipelineExamples()
 {
     LogMsg("================================================");
@@ -216,32 +225,35 @@ static void RunAllPipelineExamples()
 }
 
 // ---------------------------------------------------------------------------
-// 平台入口
+// Platform entry
 // ---------------------------------------------------------------------------
 #if defined(ANDROID)
-// Android：导出 JNI 函数，供 Java 直接调用
-// JNI 命名约定：Java_<包名>_<类名>_<方法名>（包名中的 '.' 替换为 '_'）
+// Android: export a JNI function for direct calls from Java
+// JNI naming convention: Java_<package>_<Class>_<method> (dots in the package replaced by '_')
+/// @brief JNI entry invoked from the Android example Activity to run the pipeline examples.
 extern "C" void Java_com_hsmbanlance_hsbaslicer_example_MainActivity_runPipelineExamples(void* /*env*/, void* /*thiz*/)
 {
     initialize();
 
-    // 运行流水线示例
+    // Run the pipeline examples
     RunAllPipelineExamples();
 }
 
 #elif defined(__APPLE__)
 #include <TargetConditionals.h>
 #if TARGET_OS_IPHONE
-// iOS：导出 C 函数，供 Swift / Objective-C 直接调用
+// iOS: export a C function for direct calls from Swift / Objective-C
+/// @brief C entry exported for Swift / Objective-C to initialize and run the pipeline examples.
 extern "C" void HsBaRunPipelineExamples()
 {
     initialize();
 
-    // 运行流水线示例
+    // Run the pipeline examples
     RunAllPipelineExamples();
 }
 #else
-// macOS：标准 main 入口
+// macOS: standard main entry
+/// @brief macOS application entry point: initialize logging and run the pipeline examples.
 int main()
 {
     auto log = HsBa::Slicer::Log::LoggerSingletone::GetInstance();
@@ -258,7 +270,7 @@ int main()
     initialize();
     "initialize completed"_log_info();
 
-    // 运行流水线示例
+    // Run the pipeline examples
     RunAllPipelineExamples();
 
     return 0;
@@ -266,7 +278,8 @@ int main()
 #endif  // TARGET_OS_IPHONE
 
 #else
-// 桌面端（Windows / Linux）：标准 main 入口
+// Desktop (Windows / Linux): standard main entry
+/// @brief Desktop application entry point: initialize logging and run the pipeline examples.
 int main()
 {
     auto log = HsBa::Slicer::Log::LoggerSingletone::GetInstance();
@@ -283,7 +296,7 @@ int main()
     initialize();
     "initialize completed"_log_info();
 
-    // 运行流水线示例
+    // Run the pipeline examples
     RunAllPipelineExamples();
 
     return 0;

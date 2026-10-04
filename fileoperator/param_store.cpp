@@ -1,5 +1,5 @@
 /** @file param_store.cpp
- * @brief 实现 ParamStore：分阶段 Save 流水线、CRUD、批量事务与迁移钩子。
+ * @brief Implements ParamStore: staged Save pipeline, CRUD, batch transactions and the migration hook.
  */
 #include "param_store.hpp"
 
@@ -18,12 +18,13 @@ namespace
 {
 constexpr int64_t kSchemaVersion = 1;
 
+// Return the current wall-clock time in whole seconds.
 int64_t NowSeconds()
 {
     return static_cast<int64_t>(std::time(nullptr));
 }
 
-// 把一个已注册的 Config AnyObject 反射成 {列名 -> 收敛后 std::any}。
+// Reflect a registered Config AnyObject into {column name -> converged std::any}.
 std::unordered_map<std::string, std::any> ReflectColumns(Utils::AnyObject cfg)
 {
     std::unordered_map<std::string, std::any> out;
@@ -32,7 +33,7 @@ std::unordered_map<std::string, std::any> ReflectColumns(Utils::AnyObject cfg)
     return out;
 }
 
-// 从 rapidjson 标量成员构造白名单 std::any。
+// Build a whitelist std::any from a rapidjson scalar member.
 std::any JsonValueToAny(const rapidjson::Value& v)
 {
     if (v.IsNull())
@@ -50,9 +51,9 @@ std::any JsonValueToAny(const rapidjson::Value& v)
     return std::any(std::string(v.GetString(), v.GetStringLength()));
 }
 
+// Derive a short table suffix from a full type name, e.g. "HsBaFdmPipelineConfig" -> "fdm".
 std::string TypeShortName(std::string_view full_name)
 {
-    // "HsBaFdmPipelineConfig" -> "fdm"
     if (full_name.rfind("HsBa", 0) == 0)
         full_name.remove_prefix(4);
     if (full_name.size() >= 13 && full_name.compare(full_name.size() - 13, 13, "PipelineConfig") == 0)
@@ -107,7 +108,7 @@ std::string ParamStore::ResolveTable(std::string_view table, Utils::AnyObject cf
     std::string_view derived = DefaultTableName(cfg.get_type_info());
     if (!derived.empty())
         return std::string(derived);
-    // 兜底：由类型名派生
+    // Fallback: derive a name from the type name
     return "hsba_param_" + TypeShortName(cfg.get_type_info() ? cfg.get_type_info()->Name : "");
 }
 
@@ -160,7 +161,7 @@ int64_t ParamStore::Save(std::string_view table, std::string_view key, Utils::An
             Raise(40, "reflect & coerce");
             auto data = ReflectColumns(cfg);
 
-            // FileTransfer 的 file_paths 以 JSON TEXT 列补充存储。
+            // FileTransfer's file_paths are stored additionally as a JSON TEXT column.
             if (TagOf(cfg.get_type_info()) == PipelineConfigTag::FileTransfer)
             {
                 auto* ft = static_cast<HsBaFileTransferPipelineConfig_t*>(cfg.get_data());
@@ -238,7 +239,7 @@ std::vector<int64_t> ParamStore::SaveBatch(std::string_view table,
                     }
                     catch (const SQL::SQLAdapterError&)
                     {
-                        // 回滚失败不覆盖原始异常
+                        // A rollback failure must not mask the original exception.
                     }
                 }
                 throw;
@@ -265,7 +266,7 @@ bool ParamStore::Load(std::string_view table, std::string_view key, Utils::AnyOb
                 {
                     auto it = row.find(std::string(name));
                     if (it == row.end())
-                        return;  // 列缺失则保持目标结构体原值
+                        return;  // Missing column: keep the target struct's original value
                     AnyToField(it->second, child.get_type_info(), child.get_data(), arena);
                 });
             Raise(100, "loaded");

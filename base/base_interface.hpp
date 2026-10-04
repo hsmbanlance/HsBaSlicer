@@ -1,5 +1,6 @@
 ﻿/**
  * @file base_interface.hpp
+ * @brief A header file containing the definition of base interfaces such as the ITranslator template.
  * @author HsBa
  * @date 2024-06-01
  */

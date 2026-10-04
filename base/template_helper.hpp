@@ -724,6 +724,10 @@ requires(std::move_constructible<T> && !std::copy_constructible<T>) constexpr au
 
 inline namespace TemplateStringLiterals
 {
+/** @brief User-defined literal that builds a compile-time TemplateString from a character-literal NTTP.
+ * @tparam s The TemplateString value deduced from the literal.
+ * @return The TemplateString denoted by the literal.
+ */
 template <TemplateString s>
 constexpr auto operator""_ts()
 {
@@ -736,6 +740,7 @@ constexpr auto operator""_ts()
 #include <iomanip>
 #include <sstream>
 
+/** @brief std::formatter specialization for TemplateString, supporting an optional '#' flag for quoting. */
 template <typename C, size_t N>
 struct std::formatter<HsBa::Slicer::Utils::TemplateString<C, N>, C>
 {

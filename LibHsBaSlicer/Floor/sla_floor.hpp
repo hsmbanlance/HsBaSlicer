@@ -1,3 +1,7 @@
+/** @file sla_floor.hpp
+ * @brief SLA floor/raft generation, image rendering and SLA package export C++ API.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_LIB_SLA_FLOOR_HPP
 #define HSBA_SLICER_LIB_SLA_FLOOR_HPP

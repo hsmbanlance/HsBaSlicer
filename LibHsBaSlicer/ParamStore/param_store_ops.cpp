@@ -1,5 +1,5 @@
 /** @file param_store_ops.cpp
- * @brief 实现 Lib 层 ParamStore 写入/读取封装，详见 param_store_ops.hpp。
+ * @brief Implements the Lib-layer ParamStore write/read wrappers; see param_store_ops.hpp.
  */
 #include "param_store_ops.hpp"
 
@@ -13,7 +13,7 @@ namespace HsBa::Slicer
 {
 namespace
 {
-// Lib kind -> fileoperator PipelineConfigTag（显式 switch，不依赖底层整型顺序）。
+// Lib kind -> fileoperator PipelineConfigTag (explicit switch, not relying on the underlying integer order).
 PipelineConfigTag ToTag(ParamPipelineKind kind)
 {
     switch (kind)
@@ -45,7 +45,7 @@ std::string ResolveTable(PipelineConfigTag tag, std::string_view table)
     return table.empty() ? std::string(DefaultTableName(tag)) : std::string(table);
 }
 
-// 已在具体后端连接好的 adapter 上执行 Save。异常在此收敛为 outcome，不向外抛出。
+// Run Save on an adapter already connected to a concrete backend; exceptions are converged into the outcome here and not rethrown.
 ParamStoreOutcome DoSave(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::string_view table, std::string_view key,
                          const void* cfg)
 {
@@ -77,7 +77,7 @@ ParamStoreOutcome DoSave(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::strin
     return o;
 }
 
-// 已在具体后端连接好的 adapter 上执行 Load；命中后把 arena 字符串转为 malloc 持有。
+// Run Load on an adapter already connected to a concrete backend; on a hit convert the arena strings to malloc ownership.
 ParamStoreOutcome DoLoad(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::string_view table, std::string_view key,
                          void* out_cfg)
 {
@@ -105,7 +105,7 @@ ParamStoreOutcome DoLoad(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::strin
             o.error = "not found: " + std::string(key);
             return o;
         }
-        // arena（new[]）随作用域析构；先把 const char* 换成 malloc 持有，供跨 C ABI 逐个 free。
+        // The arena (new[]) is destroyed with its scope; first swap the const char* to malloc ownership so each can be freed across the C ABI.
         ConfigStringsToOwning(ti, out_cfg);
         o.success = true;
     }

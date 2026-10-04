@@ -1,4 +1,9 @@
-﻿#include "LuaAdapter.hpp"
+﻿/**
+ * @file LuaAdapter.cpp
+ * @brief Lua bindings for the file-operator layer: zipper/unzipper, SQL adapters, and the
+ *        ParamStore process-parameter pipeline.
+ */
+#include "LuaAdapter.hpp"
 #include "param_reflect.hpp"
 #include "param_schema.hpp"
 #include "param_store.hpp"
@@ -1273,7 +1278,7 @@ namespace
 // ============= ParamStore Wrapper =============
 constexpr Utils::TemplateString ParamStoreTypeName = "ParamStore";
 
-// 解析表参数：接受短标签("fdm")或完整表名("hsba_param_fdm")，返回 tag。
+// Resolve a table argument: accepts a short label ("fdm") or a full table name ("hsba_param_fdm") and returns the tag.
 PipelineConfigTag ResolveTag(std::string_view name)
 {
     PipelineConfigTag tag = TagFromName(name);
@@ -1282,7 +1287,7 @@ PipelineConfigTag ResolveTag(std::string_view name)
     return tag;
 }
 
-// 归一化表名：短标签展开为默认表名；未知则原样返回。
+// Normalize a table name: expand a short label to its default table name; return unknown names unchanged.
 std::string ActualTable(std::string_view name)
 {
     PipelineConfigTag tag = ResolveTag(name);
@@ -1291,7 +1296,7 @@ std::string ActualTable(std::string_view name)
     return std::string(name);
 }
 
-// 按 tag 分配并默认初始化对应 Config 结构体，返回裸指针（调用方用 ti->destroy 释放）。
+// Allocate and default-initialize the Config struct for a tag, returning a raw pointer (caller frees via ti->destroy).
 void* CreateConfigByTag(PipelineConfigTag tag, Utils::TypeInfo** out_ti)
 {
     switch (tag)
@@ -1328,7 +1333,7 @@ void* CreateConfigByTag(PipelineConfigTag tag, Utils::TypeInfo** out_ti)
     }
 }
 
-// 读取 Lua 值（栈索引 idx）并按字段收敛类型产出白名单 std::any。
+// Read a Lua value (stack index idx) and produce a whitelist std::any converged by the field type.
 std::any LuaValueToAny(lua_State* L, int idx, Utils::TypeInfo* field_ti)
 {
     if (lua_isnoneornil(L, idx))
@@ -1349,7 +1354,7 @@ std::any LuaValueToAny(lua_State* L, int idx, Utils::TypeInfo* field_ti)
     }
 }
 
-// 遍历 config table（索引 tbl）填充 struct 反射字段。
+// Iterate a config table (index tbl) to fill the struct's reflected fields.
 void FillConfigFromLua(lua_State* L, int tbl, Utils::AnyObject cfg, StringArena& arena)
 {
     cfg.ForeachField(
@@ -1362,7 +1367,7 @@ void FillConfigFromLua(lua_State* L, int tbl, Utils::AnyObject cfg, StringArena&
         });
 }
 
-// 把 struct 反射字段导出为 Lua 表。
+// Export the struct's reflected fields into a Lua table.
 void PushConfigToLua(lua_State* L, Utils::AnyObject cfg)
 {
     lua_createtable(L, 0, 16);
@@ -1479,7 +1484,7 @@ int lua_paramstore_load(lua_State* L)
             lua_pushstring(L, "not found");
             return 2;
         }
-        // 成功契约：返回 (true, configTable)，与失败路径 (false, errString) 对称。
+        // Success contract: returns (true, configTable), symmetric with the failure path (false, errString).
         lua_pushboolean(L, 1);
         PushConfigToLua(L, cfg);
         ti->destroy(s);
@@ -1595,7 +1600,7 @@ int lua_paramstore_gc(lua_State* L)
 
 void RegisterLuaParamStore(lua_State* L)
 {
-    // 静态注册守卫：允许流水线在多个阶段消费同一 lua_State。
+    // Static registration guard: lets the pipeline consume the same lua_State across multiple stages.
     static constexpr const char kRegistryKey[] = "HsBa.ParamStoreRegistered";
     lua_getfield(L, LUA_REGISTRYINDEX, kRegistryKey);
     if (!lua_isnil(L, -1))
@@ -1605,10 +1610,10 @@ void RegisterLuaParamStore(lua_State* L)
     }
     lua_pop(L, 1);
 
-    // 幂等触发反射注册，保证 TypeInfo::fields 已填充。
+    // Idempotently trigger reflection registration so TypeInfo::fields is populated.
     RegisterPipelineConfigTypes();
 
-    // metatable：实例方法
+    // metatable: instance methods
     luaL_newmetatable(L, static_cast<const char*>(ParamStoreTypeName));
     lua_pushvalue(L, -1);
     lua_setfield(L, -2, "__index");
@@ -1628,7 +1633,7 @@ void RegisterLuaParamStore(lua_State* L)
     lua_setfield(L, -2, "Delete");
     lua_pop(L, 1);
 
-    // 全局表：ParamStore.new
+    // global table: ParamStore.new
     lua_newtable(L);
     lua_pushcfunction(L, lua_paramstore_new);
     lua_setfield(L, -2, "new");

@@ -1,4 +1,8 @@
-﻿#include "EventSourceFunction.hpp"
+﻿/** @file EventSourceFunction.cpp
+ * @brief Implementation of Zipper and database event-source callback registration.
+ * @author HsBa
+ */
+#include "EventSourceFunction.hpp"
 
 namespace HsBa::Slicer
 {

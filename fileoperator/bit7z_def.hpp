@@ -1,4 +1,11 @@
-﻿#pragma once
+﻿/**
+ * @file bit7z_def.hpp
+ * @brief Shared defaults and helpers for the bit7z-based archive backends.
+ *
+ * Declares the platform-dependent 7z library paths and the helpers used to detect and stage
+ * compressed tar archives (.tar.gz / .tgz / .tar.xz / .txz).
+ */
+#pragma once
 #ifndef HSBA_SLICER_BIT7Z_DEF_HPP
 
 #include <algorithm>

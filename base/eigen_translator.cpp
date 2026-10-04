@@ -1,4 +1,8 @@
-﻿#include "eigen_translator.hpp"
+﻿/** @file eigen_translator.cpp
+ * @brief Definitions of the Eigen vector translators between Eigen types and boost::ptree strings.
+ * @author HsBa
+ */
+#include "eigen_translator.hpp"
 
 #include <format>
 #include <regex>

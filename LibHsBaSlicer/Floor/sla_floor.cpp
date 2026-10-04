@@ -1,4 +1,8 @@
-﻿#include "sla_floor.hpp"
+﻿/** @file sla_floor.cpp
+ * @brief Implementation of SLA floor/raft generation, image rendering and SLA package export.
+ * @author HsBa
+ */
+#include "sla_floor.hpp"
 
 #include <algorithm>
 #include <filesystem>

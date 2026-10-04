@@ -1,12 +1,14 @@
 /** @file param_schema.hpp
- * @brief Schema 层：由 Config 结构体的 TypeInfo::fields 派生每张宽表的列定义，
- *        针对 SQLite / MySQL / PostgreSQL 三种后端产出方言 DDL 与列类型，并提供后端检测。
+ * @brief Schema layer: derives each wide-table's column definitions from a Config struct's
+ *        TypeInfo::fields, emits dialect DDL and column types for the SQLite / MySQL / PostgreSQL
+ *        backends, and provides backend detection.
  *
- * 每个 Config 表固定追加元数据列：param_id（自增主键）、param_key（业务唯一键）、
- * schema_version、created_at、updated_at。字段列类型按收敛后的 std::any 种类映射：
- *   Double(double/float)  ->  REAL / DOUBLE / DOUBLE PRECISION
- *   Int64 (int/enum/int64)->  BIGINT / BIGINT / BIGINT
- *   Text  (const char*)   ->  TEXT / TEXT / TEXT
+ * Every Config table appends fixed metadata columns: param_id (auto-increment primary key),
+ * param_key (business unique key), schema_version, created_at, updated_at. Field column types are
+ * mapped from the converged std::any kind:
+ *   Double(double/float)   -> REAL / DOUBLE / DOUBLE PRECISION
+ *   Int64 (int/enum/int64) -> BIGINT / BIGINT / BIGINT
+ *   Text  (const char*)    -> TEXT / TEXT / TEXT
  */
 #pragma once
 #ifndef HSBA_SLICER_PARAM_SCHEMA_HPP
@@ -22,7 +24,7 @@
 
 namespace HsBa::Slicer
 {
-/** @brief SQL 后端种类。移动端恒定使用 SQLite。 */
+/** @brief SQL backend kind. Mobile targets always use SQLite. */
 enum class Backend
 {
     SQLite,
@@ -30,7 +32,7 @@ enum class Backend
     PostgreSQL,
 };
 
-/** @brief 单个字段的收敛后种类。 */
+/** @brief Converged kind of a single field, used to pick a column type. */
 enum class ColumnKind
 {
     Double,
@@ -38,7 +40,7 @@ enum class ColumnKind
     Text,
 };
 
-/** @brief 列的元信息描述。 */
+/** @brief Metadata describing one table column. */
 struct ColumnDef
 {
     std::string name;
@@ -48,41 +50,43 @@ struct ColumnDef
 };
 
 /**
- * @brief 由某个 Config 结构体的反射字段派生的表 Schema。
+ * @brief Table schema derived from a Config struct's reflected fields.
  *
- * 实例通过 forConfig(TypeInfo*) 获取并按 TypeInfo* 缓存，构造即遍历 fields 计算列种类。
+ * Instances are obtained through forConfig(TypeInfo*) and cached per TypeInfo*; construction walks
+ * the reflected fields to compute each column kind.
  */
 class ParamSchema
 {
 public:
-    /** @brief 取得（并缓存）指定 Config 类型对应的 Schema。cfgType 必须是已注册的 PipelineConfig。 */
+    /** @brief Get (and cache) the Schema for the given Config type; cfgType must be a registered PipelineConfig. */
     static ParamSchema& forConfig(Utils::TypeInfo* cfgType);
 
-    /** @brief 依据目标后端产出「列名 -> 完整列定义」映射（含元数据列），可直接喂给 CreateTable。 */
+    /** @brief Build the "column name -> full column definition" map for the target backend (metadata columns included), ready for CreateTable. */
     std::unordered_map<std::string, std::string> BuildDdl(Backend backend) const;
 
-    /** @brief 产出完整 CREATE TABLE 语句；SQLite/MySQL 携带 IF NOT EXISTS，PG 交由 ExistenceCheck 前置判断。 */
+    /** @brief Emit the full CREATE TABLE statement; SQLite/MySQL carry IF NOT EXISTS, PG relies on a prior ExistenceCheck. */
     std::string CreateStatement(const std::string& table, Backend backend) const;
 
-    /** @brief 产出「若表存在则返回 >=1 行」的检测查询。 */
+    /** @brief Emit a probe query that returns at least one row when the table already exists. */
     std::string ExistenceCheck(const std::string& table, Backend backend) const;
 
-    /** @brief dynamic_cast 判定 ISQLAdapter 的实际后端；未知类型抛 SQLAdapterInvalidArgumentError。 */
+    /** @brief Detect the concrete ISQLAdapter backend via dynamic_cast; throws SQLAdapterInvalidArgumentError for unknown types. */
     static Backend DetectBackend(const SQL::ISQLAdapter& db);
 
-    /** @brief 返回一个字段收敛后种类。 */
+    /** @brief Return the converged column kind for a field type. */
     static ColumnKind KindOf(Utils::TypeInfo* field_ti);
 
-    /** @brief 该 Config 的反射字段名（不含元数据列），按 TypeInfo::fields 顺序。 */
+    /** @brief Reflected field names of this Config (excluding metadata columns), in TypeInfo::fields order. */
     const std::vector<std::string>& field_columns() const noexcept { return field_columns_; }
 
+    /// @brief Reflected type name of the Config this schema was derived from.
     const std::string& type_name() const noexcept { return type_name_; }
 
 private:
     explicit ParamSchema(Utils::TypeInfo* cfgType);
 
     std::string type_name_;
-    // 反射字段名 -> 列种类（按落库 std::any 种类）
+    // reflected field name -> column kind (by the std::any kind actually stored)
     std::vector<std::pair<std::string, ColumnKind>> columns_;
     std::vector<std::string> field_columns_;
 };

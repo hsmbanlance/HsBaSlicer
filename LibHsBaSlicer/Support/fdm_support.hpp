@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file fdm_support.hpp
+ * @brief Lib-side FDM/SLA/Lua support generation C++ API for single and all layers.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_LIB_FDM_SUPPORT_HPP
 #define HSBA_SLICER_LIB_FDM_SUPPORT_HPP
 

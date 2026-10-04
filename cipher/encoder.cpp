@@ -1,4 +1,8 @@
-﻿#include "encoder.hpp"
+﻿/** @file encoder.cpp
+ * @brief Implementation of Base64 and hexadecimal encoding/decoding.
+ * @author HsBa
+ */
+#include "encoder.hpp"
 
 #include <openssl/bio.h>
 #include <openssl/buffer.h>

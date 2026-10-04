@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/**
+ * @file IZipper.hpp
+ * @brief Declares the abstract archive-compression (zipper) interface shared by all zipper backends.
+ */
+#pragma once
 #ifndef HSBA_SLICER_IZIPPER_HPP
 #define HSBA_SLICER_IZIPPER_HPP
 

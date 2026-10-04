@@ -1,3 +1,7 @@
+/** @file EventSourceFunction.hpp
+ * @brief Lib-side Zipper and database event-source callback registration API.
+ * @author HsBa
+ */
 #pragma once
 
 #ifndef HSBA_SLICER_EVENTSOURCEFUNCTION_HPP

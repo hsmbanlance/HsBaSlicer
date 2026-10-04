@@ -1,4 +1,8 @@
-﻿#include "hasher.hpp"
+﻿/** @file hasher.cpp
+ * @brief Implementation of MD5/SHA1/SHA256 hex-digest hashing.
+ * @author HsBa
+ */
+#include "hasher.hpp"
 
 #include <openssl/evp.h>
 

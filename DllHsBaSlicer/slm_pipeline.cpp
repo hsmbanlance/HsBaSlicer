@@ -1,3 +1,7 @@
+/** @file slm_pipeline.cpp
+ * @brief Implementation of the SLM (selective laser melting) slicing pipeline C ABI.
+ * @author HsBa
+ */
 #include "slm_pipeline.h"
 
 #include <chrono>

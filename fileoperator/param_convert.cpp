@@ -1,5 +1,5 @@
 /** @file param_convert.cpp
- * @brief 实现 FieldToAny / AnyToField 双向类型收敛，详见 param_convert.hpp。
+ * @brief Implements the FieldToAny / AnyToField two-way type convergence; see param_convert.hpp.
  */
 #include "param_convert.hpp"
 
@@ -14,8 +14,9 @@ namespace HsBa::Slicer
 {
 namespace
 {
-// 所有受支持的 C 枚举类型的 TypeInfo* 集合。这些字段一律按 int64_t 落库、按 int 读回。
-// C-ABI 下这些枚举底层均为 int 兼容类型，值域 [0,4]，reinterpret 为 int 良定义。
+// TypeInfo* set of all supported C enum types; these fields are always stored as int64_t and read
+// back as int. Under the C ABI these enums are int-compatible with value range [0,4], so
+// reinterpreting them as int is well defined.
 const std::array<Utils::TypeInfo*, 14>& EnumTypeInfos()
 {
     static const std::array<Utils::TypeInfo*, 14> infos = {
@@ -30,6 +31,7 @@ const std::array<Utils::TypeInfo*, 14>& EnumTypeInfos()
     return infos;
 }
 
+// Throw a uniform "unsupported field type" error naming the field and the conversion direction.
 [[noreturn]] void ThrowUnsupported(std::string_view field_name, const char* dir)
 {
     throw SQL::SQLAdapterInvalidArgumentError(std::string("ParamStore: unsupported field type for ") + dir + ": " +
@@ -80,7 +82,7 @@ void AnyToField(const std::any& value, Utils::TypeInfo* field_ti, void* ptr, Str
     if (!field_ti || !ptr)
         ThrowUnsupported("<load>", "AnyToField");
 
-    // 聚合 NULL：空 any 或含 nullptr 的 any 统一视作 NULL。
+    // Aggregate NULL: an empty any or one holding nullptr is uniformly treated as NULL.
     const bool is_null = !value.has_value() || value.type() == typeid(std::nullptr_t);
 
     if (field_ti == Utils::GetTypeInfo<float>())

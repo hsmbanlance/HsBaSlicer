@@ -1,3 +1,7 @@
+/** @file SupportConfig.hpp
+ * @brief Support generation configuration structs shared by all support generators.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_SUPPORT_CONFIG_HPP
 #define HSBA_SLICER_SUPPORT_CONFIG_HPP

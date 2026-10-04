@@ -1,5 +1,10 @@
 ﻿#include "OcctModel.hpp"
 
+/**
+ * @file OcctModel.cpp
+ * @brief Implementation of the OpenCASCADE-based CAD model.
+ */
+
 #include <BRepBndLib.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
@@ -106,10 +111,10 @@ void OcctModel::ReadVRML(const std::string& path)
 {
     try
     {
-        // VRML读取需要使用VrmlData_Scene
+        // VRML reading requires VrmlData_Scene
         VrmlData_Scene scene;
 
-        // 使用operator<<从文件流读取VRML
+        // Use operator<< to read VRML from a file stream
         std::ifstream file(path, std::ios::in);
         if (!file.is_open())
         {
@@ -118,7 +123,7 @@ void OcctModel::ReadVRML(const std::string& path)
         scene << file;
         file.close();
 
-        // 直接将Scene转换为Shape（通过operator TopoDS_Shape()）
+        // Convert Scene directly to Shape (via operator TopoDS_Shape())
         shape_ = static_cast<TopoDS_Shape>(scene);
     }
     catch (const Standard_Failure& e)
@@ -542,7 +547,7 @@ OcctModel OcctModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& di
         throw InvalidArgumentError("Polygon must have at least 3 points");
     }
 
-    // 构建闭合 wire
+    // Build a closed wire
     BRepBuilderAPI_MakePolygon polygonMaker;
     for (const auto& pt : poly)
     {
@@ -557,14 +562,14 @@ OcctModel OcctModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& di
 
     TopoDS_Wire wire = polygonMaker.Wire();
 
-    // 构建 face
+    // Build a face
     BRepBuilderAPI_MakeFace faceMaker(wire);
     if (!faceMaker.IsDone())
     {
         throw RuntimeError("Failed to create face");
     }
 
-    // 拉伸
+    // Extrude
     gp_Vec vec(direction.x(), direction.y(), direction.z());
     BRepPrimAPI_MakePrism prism(faceMaker.Face(), vec);
     if (!prism.IsDone())
@@ -577,7 +582,7 @@ OcctModel OcctModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& di
     return model;
 }
 
-// ========== 多路径版本（外轮廓 + 洞） ==========
+// ========== Multi-path version (outer contour + holes) ==========
 OcctModel OcctModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& direction)
 {
     if (paths.empty())
@@ -585,14 +590,14 @@ OcctModel OcctModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
         throw InvalidArgumentError("Paths must not be empty");
     }
 
-    // 第一个路径是外轮廓，其余是洞
+    // The first path is the outer contour, the rest are holes
     const auto& outer = paths[0];
     if (outer.size() < 3)
     {
         throw InvalidArgumentError("Outer polygon must have at least 3 points");
     }
 
-    // 构建外轮廓 wire
+    // Build the outer-contour wire
     BRepBuilderAPI_MakePolygon outerMaker;
     for (const auto& pt : outer)
     {
@@ -607,14 +612,14 @@ OcctModel OcctModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
 
     TopoDS_Wire outerWire = outerMaker.Wire();
 
-    // 构建外轮廓 face
+    // Build the outer-contour face
     BRepBuilderAPI_MakeFace faceMaker(outerWire);
     if (!faceMaker.IsDone())
     {
         throw RuntimeError("Failed to create face from outer wire");
     }
 
-    // 添加洞
+    // Add holes
     for (size_t i = 1; i < paths.size(); ++i)
     {
         const auto& hole = paths[i];
@@ -630,7 +635,7 @@ OcctModel OcctModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
 
         if (!holeMaker.IsDone())
         {
-            continue;  // 跳过无效的洞
+            continue;  // skip invalid hole
         }
 
         TopoDS_Wire holeWire = holeMaker.Wire();
@@ -644,7 +649,7 @@ OcctModel OcctModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
 
     TopoDS_Face face = faceMaker.Face();
 
-    // 拉伸
+    // Extrude
     gp_Vec vec(direction.x(), direction.y(), direction.z());
     BRepPrimAPI_MakePrism prism(face, vec);
     if (!prism.IsDone())

@@ -1,4 +1,8 @@
-﻿#include "version_info.h"
+﻿/** @file version_info.cpp
+ * @brief Implementation of the library version-info query C ABI (JSON/XML).
+ * @author HsBa
+ */
+#include "version_info.h"
 
 #include <cstdlib>
 #include <cstring>

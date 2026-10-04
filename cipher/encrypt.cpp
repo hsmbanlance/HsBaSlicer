@@ -1,4 +1,8 @@
-﻿#include "encrypt.hpp"
+﻿/** @file encrypt.cpp
+ * @brief Implementation of AES/3DES/RSA encryption helpers over OpenSSL.
+ * @author HsBa
+ */
+#include "encrypt.hpp"
 
 #include <openssl/err.h>
 #include <openssl/evp.h>

@@ -1,3 +1,7 @@
+/** @file waam_export.cpp
+ * @brief Implementation of the WAAM robot-program export and robot path save API.
+ * @author HsBa
+ */
 #include "waam_export.hpp"
 
 #include <filesystem>

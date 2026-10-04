@@ -1,3 +1,7 @@
+/** @file spiral_path.cpp
+ * @brief Implementation of continuous helical (spiralized) outer-wall path generation.
+ * @author HsBa
+ */
 #include "spiral_path.hpp"
 
 #include <algorithm>

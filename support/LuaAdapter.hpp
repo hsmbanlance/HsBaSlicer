@@ -1,3 +1,7 @@
+/** @file LuaAdapter.hpp
+ * @brief Lua bindings that expose the support module to Lua scripts.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_SUPPORT_LUAADAPTER_HPP
 #define HSBA_SLICER_SUPPORT_LUAADAPTER_HPP

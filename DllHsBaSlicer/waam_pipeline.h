@@ -1,3 +1,7 @@
+/** @file waam_pipeline.h
+ * @brief C ABI for the WAAM (wire arc additive manufacturing) slicing pipeline.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_WAAM_PIPELINE_H
 #define HSBA_SLICER_WAAM_PIPELINE_H

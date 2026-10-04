@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file logger.hpp
+ * @brief Thread-safe cross-platform singleton logger with leveled output and user-defined literal helpers.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_LOGGER_HPP
 #define HSBA_SLICER_LOGGER_HPP
 

@@ -1,3 +1,7 @@
+/** @file model_preprocess.h
+ * @brief C ABI for model loading, transforms, queries and boolean/thick-solid preprocessing.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_MODEL_PREPROCESS_H
 #define HSBA_SLICER_MODEL_PREPROCESS_H

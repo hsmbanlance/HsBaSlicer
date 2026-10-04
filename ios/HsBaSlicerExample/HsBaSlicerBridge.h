@@ -1,11 +1,11 @@
 /**
  * @file HsBaSlicerBridge.h
- * @brief HsBaSlicer iOS 桥接头文件
+ * @brief HsBaSlicer iOS bridging header.
  *
- * 声明从 C++ 静态库导出的流水线示例入口函数，
- * 供 Swift 通过 Bridging Header 直接调用。
+ * Declares the pipeline-example entry function exported from the C++ static library,
+ * called directly from Swift via the Bridging Header.
  *
- * 注意：HsBaRunPipelineExamples() 为非生产入口，仅供示例和测试使用。
+ * Note: HsBaRunPipelineExamples() is not a production entry, for examples and testing only.
  */
 
 #ifndef HsBaSlicerBridge_h
@@ -17,10 +17,10 @@ extern "C"
 #endif
 
     /**
-     * @brief 运行 FDM / SLA / SLS 三种工艺流水线示例。
+     * @brief Run the FDM / SLA / SLS pipeline examples.
      *
-     * 内部调用 initialize() 后依次执行 FDM、SLA、SLS 流水线。
-     * 仅供示例演示和功能测试，非生产环境实际入口。
+     * Internally calls initialize() and then runs the FDM, SLA, and SLS pipelines in order.
+     * For example demonstration and functional testing only; not a real production entry.
      */
     void HsBaRunPipelineExamples(void);
 

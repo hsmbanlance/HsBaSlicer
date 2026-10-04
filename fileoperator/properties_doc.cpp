@@ -1,4 +1,8 @@
-﻿#include "properties_doc.hpp"
+﻿/**
+ * @file properties_doc.cpp
+ * @brief Implements the JSON-backed properties document declared in properties_doc.hpp.
+ */
+#include "properties_doc.hpp"
 
 #include <rapidjson/ostreamwrapper.h>
 

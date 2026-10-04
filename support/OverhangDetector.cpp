@@ -1,3 +1,7 @@
+/** @file OverhangDetector.cpp
+ * @brief Implementation of overhang region detection between adjacent layers.
+ * @author HsBa
+ */
 #include "OverhangDetector.hpp"
 
 #include <cmath>

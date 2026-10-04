@@ -1,4 +1,8 @@
-﻿#include "lua_pipeline.hpp"
+﻿/** @file lua_pipeline.cpp
+ * @brief Implementation of the fully Lua-driven custom pipeline environment and run entry points.
+ * @author HsBa
+ */
+#include "lua_pipeline.hpp"
 
 #include <cmath>
 #include <cstring>
@@ -917,7 +921,7 @@ HSBA_SLICER_LIB_API LuaPipelineOutput RunLuaPipeline(const LuaPipelineContext& c
     {
         SetupLuaPipelineEnvironment(L.get(), const_cast<LuaPipelineContext&>(ctx), &out, &run_state);
 
-        // 内联源码先执行，作为脚本文件的参数预置（prelude）；随后加载脚本文件。
+        // Execute the inline source first as a parameter prelude for the script file, then load the script file.
         if (!ctx.script.empty())
             RunLuaSource(L.get(), ctx.script, "=(custom pipeline prelude)");
 

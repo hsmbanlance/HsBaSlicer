@@ -1,15 +1,17 @@
 /** @file param_reflect.hpp
- * @brief AnyObject 反射注册：为 pipelinetypes/pipeline_types.h 中所有 PipelineConfig
- *        C 结构体填充 `TypeInfo::fields`，供 ParamStore 用 `ForeachField` 遍历落库。
+ * @brief AnyObject reflection registration: fills `TypeInfo::fields` for every PipelineConfig C
+ *        struct declared in pipelinetypes/pipeline_types.h so ParamStore can persist them via
+ *        `ForeachField`.
  *
- * 每个 C 结构体的字段偏移与字段类型必须一一对应，`Field = (child_type_info, byte_offset)`
- * 语义参见 base/any_object.cpp 的 `AnyObject::ForeachField`。所有 Config 结构体是标准布局
- * POD/enum/const char* 的集合，`offsetof` 与 `std::declval<S>().F` 均良定义。
+ * Field offsets and types must correspond one-to-one; `Field = (child_type_info, byte_offset)`
+ * semantics are defined by `AnyObject::ForeachField` in base/any_object.cpp. Every Config struct is
+ * a standard-layout aggregate of POD/enum/const char* members, so `offsetof` and
+ * `std::declval<S>().F` are both well defined.
  *
- * 本头文件的所有 `GetTypeInfo<T>()` 特化必须是 inline，且必须与调用它的每个翻译单元
- * 一起被 include，否则不同 TU 会各自创建 static TypeInfo 实例（memory 提醒：MockRegistry
- * 类头文件内联静态在跨 SHARED 库边界会分裂为多份，TypeInfo 同理）。因此所有下游使用者
- * （HsBaSlicerFileOperator / LibHsBaSlicer / DllHsBaSlicer）都必须显式 include 本头。
+ * Every `GetTypeInfo<T>()` specialization here must be inline and included by each translation unit
+ * that calls it; otherwise separate TUs create distinct static TypeInfo instances (an inline static
+ * splits into multiple copies across SHARED-library boundaries). All downstream users
+ * (HsBaSlicerFileOperator / LibHsBaSlicer / DllHsBaSlicer) must therefore include this header.
  */
 #pragma once
 #ifndef HSBA_SLICER_PARAM_REFLECT_HPP
@@ -23,14 +25,14 @@
 #include "base/any_object.hpp"
 #include "pipelinetypes/pipeline_types.h"
 
-// 内部宏：向父结构体 TypeInfo 的 fields 表追加一个字段。字段类型由 std::declval 推导，
-// 保证枚举/const char*/int/float/double 都能自动映射到对应的 GetTypeInfo<T>() 单例。
+// Internal macro: append one field to the parent struct's TypeInfo fields table. The field type is
+// deduced with std::declval so enums/const char*/int/float/double all map to their GetTypeInfo<T>() singleton.
 #define HSBA_PARAM_FIELD(Info, S, F)                                                                                   \
     (Info).fields.emplace(                                                                                             \
         #F, std::make_pair(Utils::GetTypeInfo<std::remove_cvref_t<decltype(std::declval<S>().F)>>(), offsetof(S, F)))
 
-// 内部宏：为某个 Config 结构体生成 inline GetTypeInfo 特化。Name 使用可读的短名，作为
-// 参数键；调用方通过 IsPipelineConfigType 判定。
+// Internal macro: generate an inline GetTypeInfo specialization for a Config struct. Name uses a
+// readable short name as the parameter key; callers check membership with IsPipelineConfigType.
 #define HSBA_PARAM_DEFINE_CONFIG_TYPEINFO(StructT, CleanName)                                                          \
     template <>                                                                                                        \
     inline Utils::TypeInfo* GetTypeInfo<StructT>()                                                                     \
@@ -345,8 +347,9 @@ inline TypeInfo* GetTypeInfo<HsBaCustomPipelineConfig_t>()
 
 // ---------------------------------------------------------------------------
 // File transfer
-// 注意：HsBaFileTransferPipelineConfig_t::file_paths 是 const char** 指针数组，
-// 无法映射为单列。此处不注册为 reflection 字段，由 ParamStore 特判以 JSON TEXT 列保存。
+// Note: HsBaFileTransferPipelineConfig_t::file_paths is a const char** pointer array that cannot map
+// to a single column, so it is not registered as a reflected field; ParamStore saves it specially as
+// a JSON TEXT column.
 // ---------------------------------------------------------------------------
 template <>
 inline TypeInfo* GetTypeInfo<HsBaFileTransferPipelineConfig_t>()
@@ -374,7 +377,7 @@ inline TypeInfo* GetTypeInfo<HsBaFileTransferPipelineConfig_t>()
 
 namespace HsBa::Slicer
 {
-/** @brief 9 个 Config 结构体的类型标签，Lua 侧与 ParamStore 用于选择目标表。 */
+/** @brief Type tags for the 9 Config structs; used by the Lua layer and ParamStore to pick a target table. */
 enum class PipelineConfigTag : int
 {
     Unknown = 0,
@@ -389,26 +392,26 @@ enum class PipelineConfigTag : int
     FileTransfer,
 };
 
-/** @brief 强制实例化所有 PipelineConfig 类型的 TypeInfo 静态对象，保证 fields 表已填充。
- *  线程安全：底层 GetTypeInfo<T>() 使用函数内静态，重复调用无副作用。 */
+/** @brief Force-instantiate the TypeInfo static object of every PipelineConfig type so its fields table is populated.
+ *  Thread-safe: the underlying GetTypeInfo<T>() uses a function-local static, so repeated calls have no side effects. */
 void RegisterPipelineConfigTypes();
 
-/** @brief 判断给定的 TypeInfo* 是否属于 9 个 PipelineConfig 结构体之一。 */
+/** @brief Whether the given TypeInfo* belongs to one of the 9 PipelineConfig structs. */
 bool IsPipelineConfigType(const Utils::TypeInfo* ti) noexcept;
 
-/** @brief 返回 TypeInfo* 对应的 PipelineConfigTag；未注册则返回 Unknown。 */
+/** @brief Return the PipelineConfigTag for a TypeInfo*; Unknown when unregistered. */
 PipelineConfigTag TagOf(const Utils::TypeInfo* ti) noexcept;
 
-/** @brief 返回 tag 对应的默认表名（形如 hsba_param_fdm）。 */
+/** @brief Return the default table name for a tag (of the form hsba_param_fdm). */
 std::string_view DefaultTableName(PipelineConfigTag tag) noexcept;
 
-/** @brief 由 TypeInfo* 反查默认表名；未注册返回空。 */
+/** @brief Look up the default table name from a TypeInfo*; empty when unregistered. */
 std::string_view DefaultTableName(const Utils::TypeInfo* ti) noexcept;
 
-/** @brief 由 Lua 传入的短标签（"fdm"/"sla"/...）解析为 PipelineConfigTag；未知返回 Unknown。 */
+/** @brief Parse a Lua-supplied short label ("fdm"/"sla"/...) into a PipelineConfigTag; Unknown when unknown. */
 PipelineConfigTag TagFromName(std::string_view name) noexcept;
 
-/** @brief 返回 tag 对应的 TypeInfo*；Unknown 返回 nullptr。 */
+/** @brief Return the TypeInfo* for a tag; nullptr for Unknown. */
 Utils::TypeInfo* TypeInfoOf(PipelineConfigTag tag) noexcept;
 }  // namespace HsBa::Slicer
 

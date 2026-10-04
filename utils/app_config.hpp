@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file app_config.hpp
+ * @brief Thread-safe application configuration singleton exposing shared settings such as external tool paths.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_APP_CONFIG_HPP
 #define HSBA_SLICER_APP_CONFIG_HPP
 

@@ -1,3 +1,7 @@
+/** @file PipelineConfig2Msg.cpp
+ * @brief Implementations of pipeline-config-to-protobuf-message converters.
+ * @author HsBa
+ */
 #include "PipelineConfig2Msg.hpp"
 
 namespace HsBa::Slicer

@@ -1,3 +1,7 @@
+/** @file OpenVdbModel.hpp
+ * @brief Point cloud model backed by an OpenVDB grid.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_OPENVDB_MODEL_HPP
 #define HSBA_SLICER_OPENVDB_MODEL_HPP
@@ -13,10 +17,20 @@
 
 namespace HsBa::Slicer
 {
+/**
+ * @class OpenVdbModel
+ * @brief Point cloud model backed by an OpenVDB voxel grid.
+ *
+ * Implements the IModel transform/bound interface and adds point-cloud specific
+ * operations: insertion, querying (KNN/radius), voxelization, downsampling and
+ * level-set mesh reconstruction.
+ */
 class OpenVdbModel : public IModel
 {
 public:
+    /// @brief Construct an empty point cloud.
     OpenVdbModel();
+    /// @brief Construct by loading points from a file.
     explicit OpenVdbModel(const std::string& file_path);
     /// @brief Construct from IGL-style vertices/faces pair (faces are ignored for point cloud).
     explicit OpenVdbModel(const std::pair<Eigen::MatrixXf, Eigen::MatrixXi>& mesh);
@@ -43,11 +57,17 @@ public:
     float Volume() const override;
     std::pair<Eigen::MatrixXf, Eigen::MatrixXi> TriangleMesh() const override;
 
+    /// @brief Add a single point to the cloud.
     void AddPoint(const Eigen::Vector3f& point);
+    /// @brief Add multiple points to the cloud.
     void AddPoints(const std::vector<Eigen::Vector3f>& points);
+    /// @brief Return all points as a vector.
     std::vector<Eigen::Vector3f> Points() const;
+    /// @brief Return the number of points.
     std::size_t PointCount() const;
+    /// @brief Whether the cloud contains no points.
     bool IsEmpty() const;
+    /// @brief Remove all points.
     void Clear();
 
     /// @brief Set points from an Nx3 vertex matrix (replaces current content).
@@ -62,12 +82,19 @@ public:
     /// @return IGL-style pair (vertices Nx3, faces Mx3 triangles).
     std::pair<Eigen::MatrixXf, Eigen::MatrixXi> GenerateMesh(float voxelSize = 0.0f, float particleRadius = 0.0f) const;
 
+    /// @brief Voxelize the point cloud at the given voxel size.
     void Voxelize(float voxelSize);
+    /// @brief Return the nearest neighbor of a query point.
     std::vector<Eigen::Vector3f> NearestNeighbor(const Eigen::Vector3f& query) const;
+    /// @brief Return the k nearest neighbors of a query point.
     std::vector<Eigen::Vector3f> KNN(const Eigen::Vector3f& query, std::size_t k) const;
+    /// @brief Return points satisfying a predicate.
     std::vector<Eigen::Vector3f> Filter(const std::function<bool(const Eigen::Vector3f&)>& predicate) const;
+    /// @brief Return points within a radius of a center.
     std::vector<Eigen::Vector3f> RadiusSearch(const Eigen::Vector3f& center, float radius) const;
+    /// @brief Downsample the cloud using voxel grid filtering.
     void Downsample(float voxelSize);
+    /// @brief Return the centers of occupied voxels at the given size.
     std::vector<Eigen::Vector3f> VoxelCenters(float voxelSize) const;
 
     /// @brief Compute the centroid (center of mass) of the point cloud.

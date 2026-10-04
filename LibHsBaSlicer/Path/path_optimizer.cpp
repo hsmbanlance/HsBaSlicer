@@ -1,5 +1,10 @@
 #include "path_optimizer.hpp"
 
+/**
+ * @file path_optimizer.cpp
+ * @brief Implementation of the region path optimizer and its Lua bindings.
+ */
+
 #include <lua.hpp>
 
 #include <algorithm>
@@ -19,7 +24,7 @@ namespace HsBa::Slicer
 {
 namespace
 {
-// 区域间不可达时的惩罚代价（远大于任何实际空走距离）
+// Penalty cost when regions are unreachable (far larger than any real air-move distance)
 constexpr double UNREACHABLE_COST = 1e30;
 
 double PointDist(const Point2D& a, const Point2D& b)
@@ -30,29 +35,29 @@ double PointDist(const Point2D& a, const Point2D& b)
 }  // namespace
 
 // =============================================================================
-// RegionPathOptimizer 实现：独立多边形区域 -> AreaGraph 面积顶点
-// 两种模式（不可混用）：
-// - 多边形模式（填充前）：门禁 = 多边形全部顶点，输出优化顺序的多边形集合；
-// - 填充结果模式（填充后，支持多点折线）：门禁 = 每条路径首/尾端点，输出完整填充路径。
+// RegionPathOptimizer implementation: independent polygon regions -> AreaGraph area vertices
+// Two modes (cannot be mixed):
+// - Polygon mode (before fill): gates = all polygon vertices, outputs the polygon set in optimized order;
+// - Fill-result mode (after fill, supports multi-point polylines): gates = head/tail endpoint of each path, outputs the complete fill paths.
 // =============================================================================
 struct RegionPathOptimizer::Impl
 {
-    // 区域建模：AreaGraph<int(区域), int(门禁), double(代价)>
+    // Region modeling: AreaGraph<int(region), int(gate), double(cost)>
     using RegionAreaGraph = graph::AreaGraph<int, int, double>;
 
     struct RegionData
     {
         int id = 0;
-        bool polygonMode = false;  // true：多边形本身（填充前）；false：填充结果（多点折线）
+        bool polygonMode = false;  // true: the polygon itself (before fill); false: fill result (multi-point polylines)
         PolygonsD paths;
-        std::vector<Point2D> gates;                                   // 门禁点缓存（按编号顺序）
-        std::vector<std::pair<std::size_t, std::size_t>> gateOwners;  // 多边形模式：门禁 -> (多边形下标, 顶点下标)
+        std::vector<Point2D> gates;                                   // gate point cache (in index order)
+        std::vector<std::pair<std::size_t, std::size_t>> gateOwners;  // polygon mode: gate -> (polygon index, vertex index)
     };
 
-    std::vector<RegionData> regions;  // 按添加顺序
+    std::vector<RegionData> regions;  // in insertion order
     std::unordered_map<std::pair<int, int>, double, boost::hash<std::pair<int, int>>> manualRoutes;
-    std::vector<int> tour;                    // optimizeOrder 结果
-    std::unordered_map<int, int> entryGates;  // 区域 id -> TSP 求得的入门禁
+    std::vector<int> tour;                    // optimizeOrder result
+    std::unordered_map<int, int> entryGates;  // region id -> entry gate solved by TSP
     bool optimized = false;
 
     void addRegion(int regionId, const PolygonsD& paths)
@@ -66,7 +71,7 @@ struct RegionPathOptimizer::Impl
         RegionData r;
         r.id = regionId;
         r.paths = paths;
-        // 门禁：第 i 条路径首点 = 2i，尾点 = 2i+1
+        // gates: path i's head point = 2i, tail point = 2i+1
         for (const auto& p : paths)
         {
             if (p.empty())
@@ -90,7 +95,7 @@ struct RegionPathOptimizer::Impl
         r.id = regionId;
         r.polygonMode = true;
         r.paths = polygons;
-        // 门禁：全部多边形顶点，按（多边形下标, 顶点下标）顺序编号
+        // gates: all polygon vertices, indexed in (polygon index, vertex index) order
         for (std::size_t pi = 0; pi < polygons.size(); ++pi)
         {
             for (std::size_t vi = 0; vi < polygons[pi].size(); ++vi)
@@ -135,7 +140,7 @@ struct RegionPathOptimizer::Impl
 
         if (n == 2)
         {
-            // 遗传算法对两个顶点无意义，直接比较两个方向
+            // Genetic algorithm is meaningless for two vertices, compare both directions directly
             auto ab = ag.shortestPath(mustVisit[0], mustVisit[1]);
             if (!ab.empty())
                 entryGates[mustVisit[1]] = ab.entryGates.back();
@@ -146,7 +151,7 @@ struct RegionPathOptimizer::Impl
         auto tsp = ag.solveTSP(mustVisit);
         if (tsp.tour.size() != n)
         {
-            // TSP 失败时保持添加顺序
+            // Keep insertion order when TSP fails
             optimized = true;
             return tour;
         }
@@ -199,7 +204,7 @@ struct RegionPathOptimizer::Impl
     }
 
 private:
-    bool modeSet = false;  // 是否已确定优化模式（首个区域决定）
+    bool modeSet = false;  // whether the optimization mode is set (decided by the first region)
     bool polygonMode = false;
 
     void checkDuplicate(int regionId) const
@@ -221,7 +226,7 @@ private:
             const int gateCount = static_cast<int>(r.gates.size());
             for (int g = 0; g < gateCount; ++g)
                 cfg.gates.push_back({g, true, true});
-            // 区域内部门禁间代价 = 门禁直线距离（区域内移动代价）
+            // intra-region gate-to-gate cost = straight-line gate distance (movement cost inside the region)
             for (int i = 0; i < gateCount; ++i)
                 for (int j = 0; j < gateCount; ++j)
                 {
@@ -232,7 +237,7 @@ private:
             ag.addArea(r.id, cfg);
         }
 
-        // 区域间路由：所有门禁对的直线距离（空走代价），手动指定的代价覆盖自动计算
+        // inter-region routing: straight-line distance of all gate pairs (air-move cost); manually specified costs override the auto-computed ones
         for (std::size_t i = 0; i < regions.size(); ++i)
         {
             for (std::size_t j = 0; j < regions.size(); ++j)
@@ -260,7 +265,7 @@ private:
         }
     }
 
-    // 填充结果模式：区域内贪心编排——从入门禁端点出发，每次选择最近的路径端点，必要时反转路径
+    // Fill-result mode: intra-region greedy arrangement - start from the entry-gate endpoint, each time pick the nearest path endpoint, reversing paths when needed
     PolygonsD arrangeRegionPaths(const RegionData& r) const
     {
         PolygonsD out;
@@ -315,8 +320,9 @@ private:
         return out;
     }
 
-    // 多边形模式：区域内贪心编排——从入门禁顶点出发，每次选择最近顶点的多边形，
-    // 将该多边形旋转起点至最近顶点（不反转，保持环绕方向）；闭环轮廓绕行一周后仍回到起点。
+    // Polygon mode: intra-region greedy arrangement - start from the entry-gate vertex, each time pick the polygon
+    // whose nearest vertex is closest, rotate that polygon's start to the nearest vertex (no reversal, preserving winding);
+    // a closed contour returns to its start after one loop.
     PolygonsD arrangeRegionPolygons(const RegionData& r) const
     {
         PolygonsD out;
@@ -361,7 +367,7 @@ private:
             PolygonD p = r.paths[best];
             if (bestVi > 0 && bestVi < p.size())
                 std::rotate(p.begin(), p.begin() + static_cast<std::ptrdiff_t>(bestVi), p.end());
-            // 闭环轮廓绕行一周后仍回到起点，作为下一多边形的当前位置
+            // a closed contour returns to its start, used as the current position for the next polygon
             current = p.front();
             out.push_back(std::move(p));
         }
@@ -405,7 +411,7 @@ PolygonsD RegionPathOptimizer::buildPolygons()
 }
 
 // =============================================================================
-// Lua 绑定：全局表 PathOptimize + RegionPathOptimizer userdata
+// Lua bindings: global table PathOptimize + RegionPathOptimizer userdata
 // =============================================================================
 namespace
 {
@@ -493,7 +499,7 @@ const luaL_Reg optimizerMethods[] = {{"addRegion", l_optimizer_addRegion},
                                      {"__gc", l_optimizer_gc},
                                      {NULL, nullptr}};
 
-// PathOptimize.optimizeRegions(regions)：填充结果模式一键优化，返回完整填充路径（支持多点折线）
+// PathOptimize.optimizeRegions(regions): one-shot fill-result-mode optimization, returns the complete fill paths (supports multi-point polylines)
 int l_optimizeRegions(lua_State* L)
 {
     luaL_checktype(L, 1, LUA_TTABLE);
@@ -520,7 +526,7 @@ int l_optimizeRegions(lua_State* L)
     return 1;
 }
 
-// PathOptimize.optimizePolygons(regions)：多边形模式一键优化（填充前执行），返回优化顺序的多边形集合
+// PathOptimize.optimizePolygons(regions): one-shot polygon-mode optimization (runs before filling), returns the polygon set in optimized order
 int l_optimizePolygons(lua_State* L)
 {
     luaL_checktype(L, 1, LUA_TTABLE);
@@ -552,7 +558,7 @@ const luaL_Reg pathOptimizeLib[] = {{"new", l_optimizer_new},
                                     {"optimizePolygons", l_optimizePolygons},
                                     {NULL, nullptr}};
 
-// 把区域集合推入 Lua 栈：区域数组 -> 折线数组 -> {x=..,y=..} 点数组
+// Push the region collection onto the Lua stack: region array -> polyline array -> {x=..,y=..} point array
 void PushRegionsToLua(lua_State* L, const std::vector<PolygonsD>& regions)
 {
     lua_newtable(L);
@@ -563,7 +569,7 @@ void PushRegionsToLua(lua_State* L, const std::vector<PolygonsD>& regions)
     }
 }
 
-// 创建 Lua 环境并注册多边形操作、填充与路径优化函数
+// Create a Lua environment and register polygon-operation, fill, and path-optimization functions
 UniqueLua MakeOptimizeLuaState(const std::function<void(lua_State*)>& lua_reg)
 {
     auto L = MakeUniqueLuaState();
@@ -578,7 +584,7 @@ UniqueLua MakeOptimizeLuaState(const std::function<void(lua_State*)>& lua_reg)
     return L;
 }
 
-// 调用脚本中的优化函数并取回完整填充路径
+// Call the optimization function in the script and retrieve the complete fill paths
 PolygonsD CallOptimizeFunction(lua_State* L, const std::vector<PolygonsD>& regions, const std::string& functionName)
 {
     lua_getglobal(L, functionName.c_str());
@@ -597,7 +603,7 @@ PolygonsD CallOptimizeFunction(lua_State* L, const std::vector<PolygonsD>& regio
     return LuaTableToPolygonsD(L, -1);
 }
 
-// 加载脚本（文件或内联字符串）并调用其中的优化函数，取回结果集合（路径或多边形）
+// Load the script (file or inline string) and call its optimization function, retrieving the result set (paths or polygons)
 PolygonsD LoadAndCallOptimize(lua_State* L, const char* source, bool isFile, const std::vector<PolygonsD>& regions,
                               const std::string& functionName)
 {

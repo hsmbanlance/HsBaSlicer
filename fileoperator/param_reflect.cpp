@@ -1,8 +1,9 @@
 /** @file param_reflect.cpp
- * @brief 实现 param_reflect.hpp 声明的辅助函数。
+ * @brief Implements the helper functions declared in param_reflect.hpp.
  *
- * TypeInfo 特化本体位于头文件中（必须 inline 保证 ODR），本 cpp 只提供跨 TU 唯一的
- * 注册/查询辅助逻辑。所有映射通过函数内静态数组集中维护，避免散落的 if/else。
+ * The TypeInfo specializations themselves live in the header (they must be inline for ODR); this
+ * translation unit only provides the cross-TU-unique registration/lookup logic. All mappings are
+ * maintained centrally in function-local static arrays to avoid scattered if/else chains.
  */
 #include "param_reflect.hpp"
 
@@ -13,8 +14,8 @@ namespace HsBa::Slicer
 {
 namespace
 {
-// 集中维护 9 个 Config 类型的 (tag, TypeInfo*, 短标签, 默认表名) 映射。
-// 通过 GetTypeInfo<T>() 拿到头文件中 inline 定义的单例指针。
+// Centrally maintain the (tag, TypeInfo*, short label, default table) mapping for the 9 Config types.
+// The singletons are obtained through GetTypeInfo<T>() defined inline in the header.
 struct ConfigEntry
 {
     PipelineConfigTag tag;
@@ -44,15 +45,16 @@ const std::array<ConfigEntry, 9>& Entries()
 
 void RegisterPipelineConfigTypes()
 {
-    // 强制触发头文件中每个 GetTypeInfo<T>() 函数内静态的初始化（填充 fields 表）。
-    // TypeInfo 特化本体是 inline，跨 TU 唯一；此处仅做一次性求值与哨兵登记。
+    // Force the function-local static initialization of every GetTypeInfo<T>() in the header (which
+    // populates the fields table). The TypeInfo specializations are inline and cross-TU unique; this
+    // only performs one-time evaluation and sentinel registration.
     static std::once_flag once;
     std::call_once(once,
                    []
                    {
                        for (const auto& e : Entries())
                        {
-                           // 触碰 fields 保证已完成填充；写入哨兵方法便于调试期识别。
+                           // Touch fields to guarantee it is populated; add a sentinel method for debug identification.
                            (void)e.info->fields.size();
                            e.info->methods.emplace("__param_registered",
                                                    [](void*, std::span<Utils::AnyObject>) -> Utils::AnyObject

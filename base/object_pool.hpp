@@ -23,15 +23,16 @@ template <typename T, std::size_t MaxSize>
 class NamedObjectPool
 {
 public:
-    /* @brief The type of objects managed by the pool. */
+    /** @brief The type of objects managed by the pool. */
     using ObjectType = T;
-    /* @brief A shared pointer to an object of type T. */
+    /** @brief A shared pointer to an object of type T. */
     using ObjectPtr = std::shared_ptr<T>;
-    /* @brief A weak pointer to an object of type T. */
+    /** @brief A weak pointer to an object of type T. */
     using WeakPtr = std::weak_ptr<T>;
-    /* @brief The maximum number of objects that can be stored in the pool. */
+    /** @brief The maximum number of objects that can be stored in the pool. */
     static constexpr std::size_t max_size = MaxSize;
 
+    /** @brief Internal holder pairing a strong and a weak reference to a pooled object. */
     struct PooledObject
     {
         ObjectPtr shared_ref;
@@ -171,6 +172,10 @@ public:
         return nullptr;
     }
 
+    /** @brief Get an object from the pool by name (const overload).
+     * @param name The name of the object to retrieve.
+     * @return A shared pointer to the object if found, or nullptr if not found.
+     */
     const ObjectPtr get(const std::string& name) const
     {
         std::shared_lock<std::shared_mutex> lock(mutex_);

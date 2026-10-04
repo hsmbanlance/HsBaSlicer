@@ -1,3 +1,7 @@
+/**
+ * @file zipper.cpp
+ * @brief Implements the miniz-based ZIP compressor (@ref Zipper) and the standalone extraction helpers.
+ */
 #include "zipper.hpp"
 
 #include <filesystem>
@@ -9,6 +13,11 @@
 
 namespace HsBa::Slicer
 {
+/**
+ * @brief Construct a Zipper selecting the miniz compression level.
+ * @param compression Compression level to map onto the miniz backend.
+ * @throws NotSupportedError if @p compression is Undefine or Unknown.
+ */
 Zipper::Zipper(MinizCompression compression)
 {
     if (compression == MinizCompression::Undefine || compression == MinizCompression::Unknown)
@@ -32,6 +41,12 @@ Zipper::Zipper(MinizCompression compression)
     }
 }
 
+/**
+ * @brief Stage an in-memory file for later compression under the given archive name.
+ * @param name Name of the file within the archive (UTF-8, converted to the local encoding).
+ * @param data File content.
+ * @throws InvalidArgumentError if @p name is already staged.
+ */
 void Zipper::AddByteFile(std::string_view name, const std::string& data)
 {
     std::string ansi_name = utf8_to_local(std::string{name});
@@ -41,6 +56,12 @@ void Zipper::AddByteFile(std::string_view name, const std::string& data)
         throw InvalidArgumentError("Duplicate name files");
     }
 }
+/**
+ * @brief Stage an on-disk file for later compression under the given archive name.
+ * @param name Name of the file within the archive (UTF-8, converted to the local encoding).
+ * @param path Path to the source file on disk.
+ * @throws InvalidArgumentError if @p name is already staged.
+ */
 void Zipper::AddFile(std::string_view name, std::string_view path)
 {
     std::string ansi_name = utf8_to_local(std::string{name});
@@ -51,6 +72,11 @@ void Zipper::AddFile(std::string_view name, std::string_view path)
     }
 }
 
+/**
+ * @brief Stage an in-memory file, appending "_duplicate" to the name when it collides with an entry.
+ * @param name Desired archive entry name (UTF-8, converted to the local encoding).
+ * @param data File content.
+ */
 void Zipper::AddByteFileIgnoreDuplicate(std::string_view name, const std::string& data)
 {
     std::string ansi_name = utf8_to_local(std::string{name});
@@ -63,6 +89,11 @@ void Zipper::AddByteFileIgnoreDuplicate(std::string_view name, const std::string
         byteFilesWaitCompress_.emplace(ansi_name, Bytes{data});
     }
 }
+/**
+ * @brief Stage an on-disk file, appending "_duplicate" to the name when it collides with an entry.
+ * @param name Desired archive entry name (UTF-8, converted to the local encoding).
+ * @param path Path to the source file on disk.
+ */
 void Zipper::AddFileIgnoreDuplicate(std::string_view name, std::string_view path)
 {
     std::string ansi_name = utf8_to_local(std::string{name});
@@ -75,6 +106,11 @@ void Zipper::AddFileIgnoreDuplicate(std::string_view name, std::string_view path
         byteFilesWaitCompress_.emplace(ansi_name, std::string(path));
     }
 }
+/**
+ * @brief Write all staged entries into a ZIP archive on disk and report progress per entry.
+ * @param filePath Output archive path (UTF-8, converted to the local encoding).
+ * @throws IOError if the archive cannot be finalized or no entries could be added.
+ */
 void Zipper::Save(std::string_view filePath)
 {
     std::string path = std::filesystem::path(filePath).make_preferred().string();
@@ -93,6 +129,11 @@ void Zipper::Save(std::string_view filePath)
 }
 
 
+/**
+ * @brief Add every staged entry to @p archiver, raising the progress event after each one.
+ * @param archiver Initialized miniz writer archive to append entries to.
+ * @return miniz status code (MZ_OK on success, otherwise the first failing status).
+ */
 mz_bool Zipper::AddAllToZip(mz_zip_archive& archiver)
 {
     mz_bool status = MZ_OK;
@@ -116,16 +157,28 @@ mz_bool Zipper::AddAllToZip(mz_zip_archive& archiver)
     return status;
 }
 
+/**
+ * @brief Add a single on-disk file referenced by @p path to @p archiver under the name @p name.
+ */
 mz_bool Zipper::ZipAddFile(mz_zip_archive& archiver, const std::string& name, const std::string& path) const
 {
     return mz_zip_writer_add_file(&archiver, name.c_str(), path.c_str(), NULL, 0, compression_);
 }
 
+/**
+ * @brief Add an in-memory byte buffer to @p archiver under the name @p name.
+ */
 mz_bool Zipper::ZipAddMember(mz_zip_archive& archiver, const std::string& name, const Bytes& bytes) const
 {
     return mz_zip_writer_add_mem(&archiver, name.c_str(), bytes.data.data(), bytes.data.size(), compression_);
 }
 
+/**
+ * @brief Extract every entry of a ZIP archive into the @p output_path directory.
+ * @param archive_path Path to the ZIP archive to read.
+ * @param output_path Destination directory (created together with parent folders as needed).
+ * @throws IOError if the archive cannot be opened, a file stat cannot be read, or extraction fails.
+ */
 void MiniZExtractFile(std::string_view archive_path, std::string_view output_path)
 {
     mz_zip_archive archiver{};
@@ -151,10 +204,8 @@ void MiniZExtractFile(std::string_view archive_path, std::string_view output_pat
         std::string full_output_path = (outputDir / file_stat.m_filename).string();
         std::filesystem::path full_output_path_obj(full_output_path);
 
-        // Check if the entry is a directory
         if (file_stat.m_is_directory)
         {
-            // Create the directory
             if (!std::filesystem::exists(full_output_path_obj))
             {
                 std::filesystem::create_directories(full_output_path_obj);
@@ -162,14 +213,12 @@ void MiniZExtractFile(std::string_view archive_path, std::string_view output_pat
         }
         else
         {
-            // Create the directory path if it doesn't exist
             std::filesystem::path output_dir = full_output_path_obj.parent_path();
             if (!std::filesystem::exists(output_dir))
             {
                 std::filesystem::create_directories(output_dir);
             }
 
-            // Extract the file
             if (!mz_zip_reader_extract_to_file(&archiver, i, full_output_path.c_str(), 0))
             {
                 mz_zip_reader_end(&archiver);
@@ -180,6 +229,12 @@ void MiniZExtractFile(std::string_view archive_path, std::string_view output_pat
     mz_zip_reader_end(&archiver);
 }
 
+/**
+ * @brief Extract every entry of a ZIP archive into memory as filename-to-content pairs.
+ * @param archive_path Path to the ZIP archive to read.
+ * @return Map from archive entry name to its uncompressed content.
+ * @throws IOError if the archive cannot be opened, a file stat cannot be read, or extraction fails.
+ */
 std::unordered_map<std::string, std::string> MiniZExtractFileToBuffer(std::string_view archive_path)
 {
     mz_zip_archive archiver{};

@@ -1,3 +1,7 @@
+/** @file file_transfer_pipeline.cpp
+ * @brief Implementation of the file transfer pipeline C ABI.
+ * @author HsBa
+ */
 #include "file_transfer_pipeline.h"
 
 #include <chrono>

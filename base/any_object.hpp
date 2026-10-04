@@ -63,10 +63,10 @@ struct TypeInfo
  */
 template <typename T>
 TypeInfo* GetTypeInfo();
-/** @brief Create an AnyObject instance of type T.
- * @tparam T The type of the instance to create.
- * @param value The value to initialize the instance with.
- * @return The created AnyObject instance.
+/** @brief A type-erased object wrapper backed by TypeInfo for reflection and method dispatch.
+ *
+ * Holds an opaque value pointer together with its TypeInfo, supporting copy/move, typed
+ * cast<T>(), reflective field traversal (ForeachField) and method invocation (Invoke).
  */
 class AnyObject
 {

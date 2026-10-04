@@ -1,3 +1,7 @@
+/** @file param_store_pipeline.h
+ * @brief C ABI for the parameter store pipeline: save/load pipeline config structs and free results.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_PARAM_STORE_PIPELINE_H
 #define HSBA_SLICER_PARAM_STORE_PIPELINE_H

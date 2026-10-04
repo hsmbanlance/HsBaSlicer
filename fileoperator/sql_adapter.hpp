@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/**
+ * @file sql_adapter.hpp
+ * @brief Declares the SQL adapter interface (SQLite/MySQL/PostgreSQL) and its concrete backends.
+ */
+#pragma once
 #ifndef HSBA_SQL_ADAPTER_HPP
 
 #define HSBA_SQL_ADAPTER_HPP

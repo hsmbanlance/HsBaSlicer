@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/**
+ * @file rw_ptree.hpp
+ * @brief Declares typed read/write helpers over boost::property_tree for INI/JSON/XML config files.
+ */
+#pragma once
 #ifndef HSBA_SLICER_RW_PRTREE_HPP
 #define HSBA_SLICER_RW_PRTREE_HPP
 

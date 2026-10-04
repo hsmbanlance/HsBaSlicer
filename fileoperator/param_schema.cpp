@@ -1,5 +1,5 @@
 /** @file param_schema.cpp
- * @brief 实现 ParamSchema：字段列派生、方言 DDL 生成、后端检测。
+ * @brief Implements ParamSchema: field column derivation, dialect DDL generation, backend detection.
  */
 #include "param_schema.hpp"
 
@@ -15,13 +15,14 @@ namespace HsBa::Slicer
 {
 namespace
 {
-// 元数据列名固定，供 ParamStore 与 Lua 层共用。
+// Metadata column names are fixed and shared by ParamStore and the Lua layer.
 constexpr const char* kColId = "param_id";
 constexpr const char* kColKey = "param_key";
 constexpr const char* kColVersion = "schema_version";
 constexpr const char* kColCreated = "created_at";
 constexpr const char* kColUpdated = "updated_at";
 
+// Map a converged column kind plus backend to its concrete SQL column type name.
 const char* TypeName(ColumnKind kind, Backend backend)
 {
     switch (kind)
@@ -36,12 +37,14 @@ const char* TypeName(ColumnKind kind, Backend backend)
     return "TEXT";
 }
 
+// Column type for the unique business key.
 std::string KeyColumnType(Backend backend)
 {
-    // MySQL 的 TEXT 不能直接 UNIQUE，需定长 VARCHAR。
+    // MySQL cannot declare TEXT as UNIQUE directly, so a fixed-length VARCHAR is required.
     return backend == Backend::MySQL ? "VARCHAR(512) NOT NULL UNIQUE" : "TEXT NOT NULL UNIQUE";
 }
 
+// Column type for the auto-increment primary key.
 std::string IdColumnType(Backend backend)
 {
     switch (backend)
@@ -65,7 +68,7 @@ ColumnKind ParamSchema::KindOf(Utils::TypeInfo* field_ti)
         return ColumnKind::Double;
     if (field_ti == Utils::GetTypeInfo<const char*>() || field_ti == Utils::GetTypeInfo<std::string>())
         return ColumnKind::Text;
-    // int / int64_t / 任意受支持枚举 -> Int64
+    // int / int64_t / any supported enum -> Int64
     return ColumnKind::Int64;
 }
 
@@ -130,13 +133,13 @@ std::string ParamSchema::CreateStatement(const std::string& table, Backend backe
 {
     std::ostringstream sql;
     sql << "CREATE TABLE ";
-    // PG 交由 ExistenceCheck 前置判断后不再携带 IF NOT EXISTS；SQLite/MySQL 直接携带。
+    // PG defers existence handling to a prior ExistenceCheck and so omits IF NOT EXISTS; SQLite/MySQL carry it inline.
     if (backend != Backend::PostgreSQL)
         sql << "IF NOT EXISTS ";
     sql << table << " (";
     auto ddl = BuildDdl(backend);
     bool first = true;
-    // 固定顺序输出，避免 unordered_map 哈希序在不同进程/版本间漂移。
+    // Emit in a fixed order so unordered_map hashing cannot drift column order across processes/versions.
     auto append = [&](const std::string& col)
     {
         auto it = ddl.find(col);

@@ -1,3 +1,7 @@
+/** @file pipeline_convert.cpp
+ * @brief Implementation of proto-bytes to/from C struct conversion helpers for pipeline configs and results.
+ * @author HsBa
+ */
 #include "pipeline_convert.h"
 
 #include <cstdlib>

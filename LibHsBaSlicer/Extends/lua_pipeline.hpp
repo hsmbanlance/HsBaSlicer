@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file lua_pipeline.hpp
+ * @brief Fully Lua-driven custom pipeline C++ API: context/output types and run entry points.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_SLICER_LIB_LUA_PIPELINE_HPP
 #define HSBA_SLICER_LIB_LUA_PIPELINE_HPP
 

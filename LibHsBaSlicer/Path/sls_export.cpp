@@ -1,4 +1,8 @@
-﻿#include "sls_export.hpp"
+﻿/** @file sls_export.cpp
+ * @brief Implementation of the Lua-driven SLS export save API.
+ * @author HsBa
+ */
+#include "sls_export.hpp"
 
 #include <filesystem>
 #include <fstream>

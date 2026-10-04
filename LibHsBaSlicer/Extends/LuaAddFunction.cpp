@@ -1,4 +1,8 @@
-﻿#include "LuaAddFunction.hpp"
+﻿/** @file LuaAddFunction.cpp
+ * @brief Implementation of external Lua function and event-callback registration by pipeline dimension.
+ * @author HsBa
+ */
+#include "LuaAddFunction.hpp"
 
 #include <map>
 

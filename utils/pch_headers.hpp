@@ -1,4 +1,8 @@
-﻿#include <algorithm>
+﻿/** @file pch_headers.hpp
+ * @brief Aggregated standard-library includes used as the precompiled header for the utils module.
+ * @author HsBa
+ */
+#include <algorithm>
 #include <any>
 #include <list>
 #include <map>

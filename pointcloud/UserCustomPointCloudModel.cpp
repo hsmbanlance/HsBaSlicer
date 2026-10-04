@@ -1,3 +1,7 @@
+/** @file UserCustomPointCloudModel.cpp
+ * @brief Implementation of the plugin-loaded custom point cloud model.
+ * @author HsBa
+ */
 #ifndef HSBA_NO_DLL_LOADER
 
 #include "UserCustomPointCloudModel.hpp"

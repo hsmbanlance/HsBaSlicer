@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/** @file LuaNewObject.hpp
+ * @brief Helpers to construct and garbage-collect C++ objects stored in Lua userdata and manage lua_State lifetime.
+ * @author HsBa
+ */
+#pragma once
 #ifndef HSBA_LUANEWOBJECT_HPP
 #define HSBA_LUANEWOBJECT_HPP
 

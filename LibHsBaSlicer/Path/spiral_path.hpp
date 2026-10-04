@@ -1,3 +1,7 @@
+/** @file spiral_path.hpp
+ * @brief Continuous helical (spiralized) outer-wall path generation API for extrusion-style deposition.
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_SPIRAL_PATH_HPP
 #define HSBA_SLICER_SPIRAL_PATH_HPP

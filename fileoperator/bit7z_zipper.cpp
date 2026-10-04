@@ -1,4 +1,11 @@
-﻿#include "bit7z_zipper.hpp"
+﻿/**
+ * @file bit7z_zipper.cpp
+ * @brief Implements the bit7z-based compressor (@ref Bit7zZipper) and standalone extraction helpers.
+ *
+ * Public member behavior is documented on their declarations in bit7z_zipper.hpp; this file only
+ * adds notes for the internal helpers used to transparently read compressed tar archives.
+ */
+#include "bit7z_zipper.hpp"
 
 #include <format>
 #include <fstream>
@@ -19,9 +26,17 @@ namespace HsBa::Slicer
 #ifdef HSBA_USE_BIT7Z
 namespace
 {
-// 7z sees only the compression layer of .tar.gz/.tar.xz (a single .tar entry): unpack the inner
-// tar into a temporary file and open it, so the real archive files are accessible in one step.
-// Returns nullptr when the archive is not a real compressed tar (temp file already removed).
+/**
+ * @brief Open the inner tar of a compressed tar archive as a standalone reader.
+ * @param lib bit7z library instance to read with.
+ * @param archive Path to the outer compressed tar (.tar.gz/.tar.xz).
+ * @param password Optional password.
+ * @param out_temp_tar Receives the temporary inner-tar path on success (empty on failure).
+ * @return Reader over the inner tar, or nullptr when @p archive is not a real compressed tar.
+ *
+ * 7z sees only the compression layer of .tar.gz/.tar.xz (a single .tar entry); this unpacks that
+ * entry into a temporary file and opens it so the real archive files are accessible in one step.
+ */
 std::unique_ptr<bit7z::BitArchiveReader> OpenInnerTarReader(const bit7z::Bit7zLibrary& lib, const std::string& archive,
                                                             const std::string& password,
                                                             /*out*/ std::string& out_temp_tar)

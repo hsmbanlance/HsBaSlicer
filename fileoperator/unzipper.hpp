@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿/**
+ * @file unzipper.hpp
+ * @brief Declares the miniz-based ZIP extractor (@ref Unzipper) implementing the IUnzipper interface.
+ */
+#pragma once
 #ifndef HSBA_SLICER_UNZIPPER_HPP
 #define HSBA_SLICER_UNZIPPER_HPP
 
@@ -36,6 +40,7 @@ public:
     inline static constexpr size_t MB_SIZE = 1024 * 1024;         ///< 1 MB in bytes
     inline static constexpr size_t GB_SIZE = 1024 * 1024 * 1024;  ///< 1 GB in bytes
 
+    /// @brief Destroy the unzipper, closing the archive and removing the temporary cache directory.
     ~Unzipper();
     friend class IUnzipper<Unzipper>;
 

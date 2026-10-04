@@ -1,4 +1,8 @@
-﻿#include "pointspath.hpp"
+﻿/** @file pointspath.cpp
+ * @brief Implementation of point-based G-code path serialization and its Lua-driven save/serialize.
+ * @author HsBa
+ */
+#include "pointspath.hpp"
 
 #include <filesystem>
 #include <format>

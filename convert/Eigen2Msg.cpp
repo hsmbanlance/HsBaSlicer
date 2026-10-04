@@ -1,4 +1,8 @@
-﻿#include "Eigen2Msg.hpp"
+﻿/** @file Eigen2Msg.cpp
+ * @brief Implementations of Eigen-to-protobuf converters.
+ * @author HsBa
+ */
+#include "Eigen2Msg.hpp"
 
 namespace HsBa::Slicer
 {

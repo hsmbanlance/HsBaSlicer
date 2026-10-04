@@ -1,3 +1,7 @@
+/** @file version_info.hpp
+ * @brief Lib-side library version-info query API (JSON/XML).
+ * @author HsBa
+ */
 #pragma once
 #ifndef HSBA_SLICER_LIB_VERSION_INFO_HPP
 #define HSBA_SLICER_LIB_VERSION_INFO_HPP
