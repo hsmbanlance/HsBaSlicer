@@ -40,34 +40,42 @@ auto GuardSlice(Fn&& fn) -> decltype(fn())
 
 HSBA_SLICER_LIB_API Polygons Slice(const IModel& model, const float height, double tolerance)
 {
-    return GuardSlice([&] {
-        auto topo_mesh = std::make_unique<FullTopoModel>(FullTopoModel(model));
-        return topo_mesh->Slice(height, tolerance);
-    });
+    return GuardSlice(
+        [&]
+        {
+            auto topo_mesh = std::make_unique<FullTopoModel>(FullTopoModel(model));
+            return topo_mesh->Slice(height, tolerance);
+        });
 }
 
 HSBA_SLICER_LIB_API UnSafePolygons UnSafeSlice(const IModel& model, const float height, double tolerance)
 {
-    return GuardSlice([&] {
-        auto topo_mesh = std::make_unique<FullTopoModel>(FullTopoModel(model));
-        return topo_mesh->UnSafeSlice(height, tolerance);
-    });
+    return GuardSlice(
+        [&]
+        {
+            auto topo_mesh = std::make_unique<FullTopoModel>(FullTopoModel(model));
+            return topo_mesh->UnSafeSlice(height, tolerance);
+        });
 }
 
 HSBA_SLICER_LIB_API Polygons SliceLua(const IModel& model, const std::string& script, const float height)
 {
-    return GuardSlice([&] {
-        auto topo_mesh = std::make_unique<FullTopoModel>(FullTopoModel(model));
-        return topo_mesh->SliceLua(script, height, Get3DFunctions());
-    });
+    return GuardSlice(
+        [&]
+        {
+            auto topo_mesh = std::make_unique<FullTopoModel>(FullTopoModel(model));
+            return topo_mesh->SliceLua(script, height, Get3DFunctions());
+        });
 }
 
 HSBA_SLICER_LIB_API UnSafePolygons UnSafeSliceLua(const IModel& model, const std::string& script, const float height)
 {
-    return GuardSlice([&] {
-        auto topo_mesh = std::make_unique<FullTopoModel>(FullTopoModel(model));
-        return topo_mesh->UnSafeSliceLua(script, height, Get3DFunctions());
-    });
+    return GuardSlice(
+        [&]
+        {
+            auto topo_mesh = std::make_unique<FullTopoModel>(FullTopoModel(model));
+            return topo_mesh->UnSafeSliceLua(script, height, Get3DFunctions());
+        });
 }
 
 HSBA_SLICER_LIB_API PolygonsD NormalizeUnSafePolygons(const UnSafePolygons& unsafe_polys)

@@ -842,8 +842,8 @@ CgalModel CgalModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
 
     // Clipper2 Triangulate 对三角形路径不产出三角形，追加原始三角形路径补全底面，避免盖面丢失；
     // 外轮廓三角形归一化为 CCW，孔洞三角形归一化为 CW（盖面贡献相消）
-    const size_t trianglePathCount = std::count_if(norm_paths.begin(), norm_paths.end(),
-                                                   [](const PolygonD& p) { return p.size() == 3; });
+    const size_t trianglePathCount =
+        std::count_if(norm_paths.begin(), norm_paths.end(), [](const PolygonD& p) { return p.size() == 3; });
     if (bottom_tris.size() < trianglePathCount)
     {
         for (size_t pi = 0; pi < norm_paths.size(); ++pi)
@@ -1028,15 +1028,35 @@ inline ShortestPath::Face_location MakeFaceLocation(const SurfaceMesh& sm, const
     bv = (std::max)(0.0, (std::min)(1.0, bv));
     bw = (std::max)(0.0, (std::min)(1.0, bw));
     double sum = bu + bv + bw;
-    if (sum > 0.0) { bu /= sum; bv /= sum; bw /= sum; }
+    if (sum > 0.0)
+    {
+        bu /= sum;
+        bv /= sum;
+        bw /= sum;
+    }
 
     // Face_location convention:
     // w0 = source(halfedge(f,sm),sm), w1 = target(halfedge(f,sm),sm), w2 = target(next(halfedge(f,sm),sm),sm)
     auto src0 = sm.source(h0);
     double w0 = 0, w1 = 0, w2 = 0;
-    if (src0 == va) { w0 = bu; w1 = bv; w2 = bw; }
-    else if (src0 == vb) { w0 = bv; w1 = bw; w2 = bu; }
-    else { w0 = bw; w1 = bu; w2 = bv; }
+    if (src0 == va)
+    {
+        w0 = bu;
+        w1 = bv;
+        w2 = bw;
+    }
+    else if (src0 == vb)
+    {
+        w0 = bv;
+        w1 = bw;
+        w2 = bu;
+    }
+    else
+    {
+        w0 = bw;
+        w1 = bu;
+        w2 = bv;
+    }
 
     ShortestPath::Barycentric_coordinates bary;
     bary[0] = w0;
@@ -1046,8 +1066,7 @@ inline ShortestPath::Face_location MakeFaceLocation(const SurfaceMesh& sm, const
 }
 }  // namespace detail
 
-std::vector<Eigen::Vector3f> CgalModel::GeodesicPath(const Eigen::Vector3f& source,
-                                                     const Eigen::Vector3f& target) const
+std::vector<Eigen::Vector3f> CgalModel::GeodesicPath(const Eigen::Vector3f& source, const Eigen::Vector3f& target) const
 {
     auto sm = detail::ToSurfaceMesh(mesh_);
     auto tree = detail::BuildAABBTree(sm);
@@ -1104,8 +1123,7 @@ Eigen::Vector3f CgalModel::ProjectPointOnSurface(const Eigen::Vector3f& point) c
 
 std::vector<Eigen::Vector3f> CgalModel::SurfaceSpiral(const Eigen::Vector3f& axisOrigin,
                                                       const Eigen::Vector3f& axisDirection, float turns,
-                                                      int samplesPerTurn, float startRadius,
-                                                      float endRadius) const
+                                                      int samplesPerTurn, float startRadius, float endRadius) const
 {
     if (turns <= 0.0f || samplesPerTurn < 3)
     {

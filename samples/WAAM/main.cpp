@@ -117,8 +117,9 @@ static int RunCustomWaamPipeline()
 
     if (result.success)
     {
-        LogMsg(std::format("WAAM custom slicing done! Layers: {}, Robot program: {}, Time: {:.2f}s", result.total_layers,
-                           result.output_path ? result.output_path : "N/A", result.elapsed_seconds));
+        LogMsg(std::format("WAAM custom slicing done! Layers: {}, Robot program: {}, Time: {:.2f}s",
+                           result.total_layers, result.output_path ? result.output_path : "N/A",
+                           result.elapsed_seconds));
     }
     else
     {
@@ -207,7 +208,8 @@ static int RunSpiralWaamPipeline()
     }
     else
     {
-        LogMsg(std::format("WAAM spiral slicing FAILED: {}", result.error_message ? result.error_message : "Unknown error"));
+        LogMsg(std::format("WAAM spiral slicing FAILED: {}",
+                           result.error_message ? result.error_message : "Unknown error"));
     }
 
     HsBaFreeWaamPipelineResult(&result);

@@ -59,60 +59,70 @@ HSBA_SLICER_LIB_API std::shared_ptr<IModel> GetModel(const std::string& name)
 
 HSBA_SLICER_LIB_API void TranslateModel(const std::string& name, const Eigen::Vector3f& translation)
 {
-    GuardModel([&] {
-        auto model = GetLoader().GetModel(name);
-        if (model)
+    GuardModel(
+        [&]
         {
-            model->Translate(translation);
-        }
-    });
+            auto model = GetLoader().GetModel(name);
+            if (model)
+            {
+                model->Translate(translation);
+            }
+        });
 }
 
 HSBA_SLICER_LIB_API void RotateModel(const std::string& name, const Eigen::Quaternionf& rotation)
 {
-    GuardModel([&] {
-        auto model = GetLoader().GetModel(name);
-        if (model)
+    GuardModel(
+        [&]
         {
-            model->Rotate(rotation);
-        }
-    });
+            auto model = GetLoader().GetModel(name);
+            if (model)
+            {
+                model->Rotate(rotation);
+            }
+        });
 }
 
 HSBA_SLICER_LIB_API void ScaleModel(const std::string& name, float scale)
 {
-    GuardModel([&] {
-        auto model = GetLoader().GetModel(name);
-        if (model)
+    GuardModel(
+        [&]
         {
-            model->Scale(scale);
-        }
-    });
+            auto model = GetLoader().GetModel(name);
+            if (model)
+            {
+                model->Scale(scale);
+            }
+        });
 }
 
 HSBA_SLICER_LIB_API void ScaleModel(const std::string& name, const Eigen::Vector3f& scale)
 {
-    GuardModel([&] {
-        auto model = GetLoader().GetModel(name);
-        if (model)
+    GuardModel(
+        [&]
         {
-            model->Scale(scale);
-        }
-    });
+            auto model = GetLoader().GetModel(name);
+            if (model)
+            {
+                model->Scale(scale);
+            }
+        });
 }
 
 HSBA_SLICER_LIB_API ModelInfo GetModelInfo(const std::string& name)
 {
-    return GuardModel([&] {
-        ModelInfo info;
-        auto model = GetLoader().GetModel(name);
-        if (model)
+    return GuardModel(
+        [&]
         {
-            model->BoundingBox(info.bbox_min, info.bbox_max);
-            info.volume = model->Volume();
-        }
-        return info;
-    });
+            ModelInfo info;
+            auto model = GetLoader().GetModel(name);
+            if (model)
+            {
+                model->BoundingBox(info.bbox_min, info.bbox_max);
+                info.volume = model->Volume();
+            }
+            return info;
+        });
 }
 
 HSBA_SLICER_LIB_API void RemoveModel(const std::string& name)
@@ -155,7 +165,7 @@ HSBA_SLICER_LIB_API std::shared_ptr<IModel> ThickSolidModel(const std::string& s
 
 HSBA_SLICER_LIB_API std::shared_ptr<IModel>
 ThickSolidModel(const std::string& sourceName, const std::string& resultName,
-                 const std::vector<std::vector<Eigen::Vector3f>>& closingFaces, float thickness)
+                const std::vector<std::vector<Eigen::Vector3f>>& closingFaces, float thickness)
 {
     return GuardModel([&] { return GetLoader().ThickSolidModel(sourceName, resultName, closingFaces, thickness); });
 }

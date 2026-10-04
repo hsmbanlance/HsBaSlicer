@@ -18,24 +18,24 @@ PipelineConfigTag ToTag(ParamPipelineKind kind)
 {
     switch (kind)
     {
-        case ParamPipelineKind::Fdm:
-            return PipelineConfigTag::Fdm;
-        case ParamPipelineKind::Sla:
-            return PipelineConfigTag::Sla;
-        case ParamPipelineKind::Sls:
-            return PipelineConfigTag::Sls;
-        case ParamPipelineKind::Slm:
-            return PipelineConfigTag::Slm;
-        case ParamPipelineKind::Lom:
-            return PipelineConfigTag::Lom;
-        case ParamPipelineKind::Tdp:
-            return PipelineConfigTag::Tdp;
-        case ParamPipelineKind::Waam:
-            return PipelineConfigTag::Waam;
-        case ParamPipelineKind::Custom:
-            return PipelineConfigTag::Custom;
-        case ParamPipelineKind::FileTransfer:
-            return PipelineConfigTag::FileTransfer;
+    case ParamPipelineKind::Fdm:
+        return PipelineConfigTag::Fdm;
+    case ParamPipelineKind::Sla:
+        return PipelineConfigTag::Sla;
+    case ParamPipelineKind::Sls:
+        return PipelineConfigTag::Sls;
+    case ParamPipelineKind::Slm:
+        return PipelineConfigTag::Slm;
+    case ParamPipelineKind::Lom:
+        return PipelineConfigTag::Lom;
+    case ParamPipelineKind::Tdp:
+        return PipelineConfigTag::Tdp;
+    case ParamPipelineKind::Waam:
+        return PipelineConfigTag::Waam;
+    case ParamPipelineKind::Custom:
+        return PipelineConfigTag::Custom;
+    case ParamPipelineKind::FileTransfer:
+        return PipelineConfigTag::FileTransfer;
     }
     return PipelineConfigTag::Unknown;
 }
@@ -141,64 +141,64 @@ ParamStoreOutcome SavePipelineParams(const ParamStoreConn& conn, ParamPipelineKi
 
     switch (conn.backend)
     {
-        case ParamBackend::Sqlite:
+    case ParamBackend::Sqlite:
+    {
+        SQL::SQLiteAdapter db;
+        try
         {
-            SQL::SQLiteAdapter db;
-            try
-            {
-                db.Connect(conn.sqlitePath);
-            }
-            catch (const SQL::SQLAdapterError& e)
-            {
-                ParamStoreOutcome o;
-                o.error = std::string("ParamStore: sqlite connect failed: ") + e.what();
-                return o;
-            }
-            return DoSave(db, tag, table, key, cfg);
+            db.Connect(conn.sqlitePath);
         }
-        case ParamBackend::MySql:
+        catch (const SQL::SQLAdapterError& e)
+        {
+            ParamStoreOutcome o;
+            o.error = std::string("ParamStore: sqlite connect failed: ") + e.what();
+            return o;
+        }
+        return DoSave(db, tag, table, key, cfg);
+    }
+    case ParamBackend::MySql:
 #ifdef HSBA_USE_MYSQL
+    {
+        SQL::MySQLAdapter db;
+        try
         {
-            SQL::MySQLAdapter db;
-            try
-            {
-                if (conn.port)
-                    db.Connect(conn.host, conn.user, conn.password, conn.database, conn.port);
-                else
-                    db.Connect(conn.host, conn.user, conn.password, conn.database);
-            }
-            catch (const SQL::SQLAdapterError& e)
-            {
-                ParamStoreOutcome o;
-                o.error = std::string("ParamStore: mysql connect failed: ") + e.what();
-                return o;
-            }
-            return DoSave(db, tag, table, key, cfg);
+            if (conn.port)
+                db.Connect(conn.host, conn.user, conn.password, conn.database, conn.port);
+            else
+                db.Connect(conn.host, conn.user, conn.password, conn.database);
         }
+        catch (const SQL::SQLAdapterError& e)
+        {
+            ParamStoreOutcome o;
+            o.error = std::string("ParamStore: mysql connect failed: ") + e.what();
+            return o;
+        }
+        return DoSave(db, tag, table, key, cfg);
+    }
 #else
-            return BackendUnavailable(conn.backend);
+        return BackendUnavailable(conn.backend);
 #endif
-        case ParamBackend::PostgreSql:
+    case ParamBackend::PostgreSql:
 #ifdef HSBA_USE_PGSQL
+    {
+        SQL::PostgreSQLAdapter db;
+        try
         {
-            SQL::PostgreSQLAdapter db;
-            try
-            {
-                if (conn.port)
-                    db.Connect(conn.host, conn.user, conn.password, conn.database, conn.port);
-                else
-                    db.Connect(conn.host, conn.user, conn.password, conn.database);
-            }
-            catch (const SQL::SQLAdapterError& e)
-            {
-                ParamStoreOutcome o;
-                o.error = std::string("ParamStore: postgresql connect failed: ") + e.what();
-                return o;
-            }
-            return DoSave(db, tag, table, key, cfg);
+            if (conn.port)
+                db.Connect(conn.host, conn.user, conn.password, conn.database, conn.port);
+            else
+                db.Connect(conn.host, conn.user, conn.password, conn.database);
         }
+        catch (const SQL::SQLAdapterError& e)
+        {
+            ParamStoreOutcome o;
+            o.error = std::string("ParamStore: postgresql connect failed: ") + e.what();
+            return o;
+        }
+        return DoSave(db, tag, table, key, cfg);
+    }
 #else
-            return BackendUnavailable(conn.backend);
+        return BackendUnavailable(conn.backend);
 #endif
     }
 
@@ -221,64 +221,64 @@ ParamStoreOutcome LoadPipelineParams(const ParamStoreConn& conn, ParamPipelineKi
 
     switch (conn.backend)
     {
-        case ParamBackend::Sqlite:
+    case ParamBackend::Sqlite:
+    {
+        SQL::SQLiteAdapter db;
+        try
         {
-            SQL::SQLiteAdapter db;
-            try
-            {
-                db.Connect(conn.sqlitePath);
-            }
-            catch (const SQL::SQLAdapterError& e)
-            {
-                ParamStoreOutcome o;
-                o.error = std::string("ParamStore: sqlite connect failed: ") + e.what();
-                return o;
-            }
-            return DoLoad(db, tag, table, key, outCfg);
+            db.Connect(conn.sqlitePath);
         }
-        case ParamBackend::MySql:
+        catch (const SQL::SQLAdapterError& e)
+        {
+            ParamStoreOutcome o;
+            o.error = std::string("ParamStore: sqlite connect failed: ") + e.what();
+            return o;
+        }
+        return DoLoad(db, tag, table, key, outCfg);
+    }
+    case ParamBackend::MySql:
 #ifdef HSBA_USE_MYSQL
+    {
+        SQL::MySQLAdapter db;
+        try
         {
-            SQL::MySQLAdapter db;
-            try
-            {
-                if (conn.port)
-                    db.Connect(conn.host, conn.user, conn.password, conn.database, conn.port);
-                else
-                    db.Connect(conn.host, conn.user, conn.password, conn.database);
-            }
-            catch (const SQL::SQLAdapterError& e)
-            {
-                ParamStoreOutcome o;
-                o.error = std::string("ParamStore: mysql connect failed: ") + e.what();
-                return o;
-            }
-            return DoLoad(db, tag, table, key, outCfg);
+            if (conn.port)
+                db.Connect(conn.host, conn.user, conn.password, conn.database, conn.port);
+            else
+                db.Connect(conn.host, conn.user, conn.password, conn.database);
         }
+        catch (const SQL::SQLAdapterError& e)
+        {
+            ParamStoreOutcome o;
+            o.error = std::string("ParamStore: mysql connect failed: ") + e.what();
+            return o;
+        }
+        return DoLoad(db, tag, table, key, outCfg);
+    }
 #else
-            return BackendUnavailable(conn.backend);
+        return BackendUnavailable(conn.backend);
 #endif
-        case ParamBackend::PostgreSql:
+    case ParamBackend::PostgreSql:
 #ifdef HSBA_USE_PGSQL
+    {
+        SQL::PostgreSQLAdapter db;
+        try
         {
-            SQL::PostgreSQLAdapter db;
-            try
-            {
-                if (conn.port)
-                    db.Connect(conn.host, conn.user, conn.password, conn.database, conn.port);
-                else
-                    db.Connect(conn.host, conn.user, conn.password, conn.database);
-            }
-            catch (const SQL::SQLAdapterError& e)
-            {
-                ParamStoreOutcome o;
-                o.error = std::string("ParamStore: postgresql connect failed: ") + e.what();
-                return o;
-            }
-            return DoLoad(db, tag, table, key, outCfg);
+            if (conn.port)
+                db.Connect(conn.host, conn.user, conn.password, conn.database, conn.port);
+            else
+                db.Connect(conn.host, conn.user, conn.password, conn.database);
         }
+        catch (const SQL::SQLAdapterError& e)
+        {
+            ParamStoreOutcome o;
+            o.error = std::string("ParamStore: postgresql connect failed: ") + e.what();
+            return o;
+        }
+        return DoLoad(db, tag, table, key, outCfg);
+    }
 #else
-            return BackendUnavailable(conn.backend);
+        return BackendUnavailable(conn.backend);
 #endif
     }
 

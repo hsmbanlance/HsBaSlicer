@@ -313,14 +313,8 @@ template <typename T, Utils::TemplateString Name, void (*Push)(lua_State*, const
 class TableAdapter final : public LuaAnyObjectNewCastBase
 {
 public:
-    LuaFuncPair GetNewFuncPair() const override
-    {
-        return {"new_" + std::string(Name.ToStringView()), &New};
-    }
-    LuaFuncPair GetCastFuncPair() const override
-    {
-        return {"cast_" + std::string(Name.ToStringView()), &Cast};
-    }
+    LuaFuncPair GetNewFuncPair() const override { return {"new_" + std::string(Name.ToStringView()), &New}; }
+    LuaFuncPair GetCastFuncPair() const override { return {"cast_" + std::string(Name.ToStringView()), &Cast}; }
 
 private:
     static int New(lua_State* L)
@@ -391,12 +385,10 @@ using MatXiAdapter =
     TableAdapter<Eigen::MatrixXi, "MatrixXi", &push_matrix<Eigen::MatrixXi>, &read_matrix<Eigen::MatrixXi>>;
 
 // Quaternion adapters
-using QuatfAdapter =
-    TableAdapter<Eigen::Quaternionf, "Quaternionf", &push_quaternion<Eigen::Quaternionf>,
-                 &read_quaternion<Eigen::Quaternionf>>;
-using QuatdAdapter =
-    TableAdapter<Eigen::Quaterniond, "Quaterniond", &push_quaternion<Eigen::Quaterniond>,
-                 &read_quaternion<Eigen::Quaterniond>>;
+using QuatfAdapter = TableAdapter<Eigen::Quaternionf, "Quaternionf", &push_quaternion<Eigen::Quaternionf>,
+                                  &read_quaternion<Eigen::Quaternionf>>;
+using QuatdAdapter = TableAdapter<Eigen::Quaterniond, "Quaterniond", &push_quaternion<Eigen::Quaterniond>,
+                                  &read_quaternion<Eigen::Quaterniond>>;
 
 // Clipper2 geometry adapters
 using Point2DAdapter = TableAdapter<Point2D, "Point2D", &push_point2d, &read_point2d>;
@@ -433,9 +425,8 @@ std::vector<LuaAnyObjectNewCastBase*> GetCommonAnyObjectTypes()
     static PolygonsAdapter polygons;
 
     return {
-        &vec2f,  &vec3f,  &vec4f,  &vec2d,   &vec3d,   &vec4d,   &vec2i,   &vec3i,   &vec4i,   &mat2d,
-        &mat3d,  &mat4d,  &matxf,  &matxi,   &quatf,   &quatd,   &point2d, &point2,  &polygon_d, &polygons_d,
-        &polygon, &polygons,
+        &vec2f, &vec3f, &vec4f, &vec2d, &vec3d, &vec4d,   &vec2i,  &vec3i,     &vec4i,      &mat2d,   &mat3d,
+        &mat4d, &matxf, &matxi, &quatf, &quatd, &point2d, &point2, &polygon_d, &polygons_d, &polygon, &polygons,
     };
 }
 
@@ -466,11 +457,17 @@ void RegisterCommonAnyObjectTypes(lua_State* L)
     static LuaCString cstring_type;
 
     std::vector<LuaAnyObjectNewCastBase*> types = GetCommonAnyObjectTypes();
-    types.insert(types.end(),
-                 {
-                     &int_type,     &long_type,     &longlong_type, &size_t_type,   &double_type,
-                     &float_type,   &bool_type,     &string_type,   &cstring_type,
-                 });
+    types.insert(types.end(), {
+                                  &int_type,
+                                  &long_type,
+                                  &longlong_type,
+                                  &size_t_type,
+                                  &double_type,
+                                  &float_type,
+                                  &bool_type,
+                                  &string_type,
+                                  &cstring_type,
+                              });
 
     RegisterAnyObject(L, types);
 
@@ -481,20 +478,19 @@ void RegisterCommonAnyObjectTypes(lua_State* L)
 void InstallCommonAnyObjectTypes()
 {
     static std::once_flag once;
-    std::call_once(
-        once,
-        []
-        {
-            // 流水线启动即完成 PipelineConfig 反射注册（内部 call_once 幂等），
-            // 使 ParamStore 与任意消费 GetFileFunctions() 的阶段都能立即遍历字段。
-            RegisterPipelineConfigTypes();
-            // One LuaRegFunc per generic pool; the per-state guard above keeps stages that
-            // consume several pools from registering the same Lua state twice.
-            const LuaRegFunc reg = [](lua_State* L) { RegisterCommonAnyObjectTypes(L); };
-            Add2DFunctions(reg);
-            Add3DFunctions(reg);
-            AddFileFunctions(reg);
-        });
+    std::call_once(once,
+                   []
+                   {
+                       // 流水线启动即完成 PipelineConfig 反射注册（内部 call_once 幂等），
+                       // 使 ParamStore 与任意消费 GetFileFunctions() 的阶段都能立即遍历字段。
+                       RegisterPipelineConfigTypes();
+                       // One LuaRegFunc per generic pool; the per-state guard above keeps stages that
+                       // consume several pools from registering the same Lua state twice.
+                       const LuaRegFunc reg = [](lua_State* L) { RegisterCommonAnyObjectTypes(L); };
+                       Add2DFunctions(reg);
+                       Add3DFunctions(reg);
+                       AddFileFunctions(reg);
+                   });
 }
 
 }  // namespace HsBa::Slicer

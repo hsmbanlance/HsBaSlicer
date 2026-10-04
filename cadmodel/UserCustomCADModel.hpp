@@ -77,8 +77,8 @@ public:
                           const std::string& operation);  // boolean operation with another model, operation can be
                                                           // "union", "intersection", "difference"
     void BoundingBox(Eigen::Vector3f& min,
-                     Eigen::Vector3f& max) const override;  // get the AA bounding box of the model
-    float Volume() const override;                                                    // get the volume of the model
+                     Eigen::Vector3f& max) const override;                      // get the AA bounding box of the model
+    float Volume() const override;                                              // get the volume of the model
     std::pair<Eigen::MatrixXf, Eigen::MatrixXi> TriangleMesh() const override;  // get igl style trianglemesh
 
 private:

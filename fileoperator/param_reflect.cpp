@@ -47,18 +47,18 @@ void RegisterPipelineConfigTypes()
     // 强制触发头文件中每个 GetTypeInfo<T>() 函数内静态的初始化（填充 fields 表）。
     // TypeInfo 特化本体是 inline，跨 TU 唯一；此处仅做一次性求值与哨兵登记。
     static std::once_flag once;
-    std::call_once(
-        once,
-        []
-        {
-            for (const auto& e : Entries())
-            {
-                // 触碰 fields 保证已完成填充；写入哨兵方法便于调试期识别。
-                (void)e.info->fields.size();
-                e.info->methods.emplace("__param_registered",
-                                        [](void*, std::span<Utils::AnyObject>) -> Utils::AnyObject { return {}; });
-            }
-        });
+    std::call_once(once,
+                   []
+                   {
+                       for (const auto& e : Entries())
+                       {
+                           // 触碰 fields 保证已完成填充；写入哨兵方法便于调试期识别。
+                           (void)e.info->fields.size();
+                           e.info->methods.emplace("__param_registered",
+                                                   [](void*, std::span<Utils::AnyObject>) -> Utils::AnyObject
+                                                   { return {}; });
+                       }
+                   });
 }
 
 bool IsPipelineConfigType(const Utils::TypeInfo* ti) noexcept

@@ -87,7 +87,8 @@ private:
  * @brief 注册 Lua 路径优化函数（全局表 PathOptimize）。
  *
  * 注册后 Lua 中可用：
- * - PathOptimize.new()                -> 优化器对象（addRegion/addPolygons/addRoute/optimizeOrder/buildPaths/buildPolygons）
+ * - PathOptimize.new()                ->
+ * 优化器对象（addRegion/addPolygons/addRoute/optimizeOrder/buildPaths/buildPolygons）
  * - PathOptimize.optimizeRegions(regions)  -> 填充结果模式一键优化，返回完整填充路径表（支持多点折线）
  * - PathOptimize.optimizePolygons(regions) -> 多边形模式一键优化，返回优化顺序的多边形表（填充前执行）
  * 其中 regions = 区域数组，每个区域 = 折线/多边形数组，每条折线/多边形 = {x=.., y=..} 点数组。

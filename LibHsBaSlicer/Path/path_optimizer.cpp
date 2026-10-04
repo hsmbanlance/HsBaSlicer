@@ -45,14 +45,14 @@ struct RegionPathOptimizer::Impl
         int id = 0;
         bool polygonMode = false;  // true：多边形本身（填充前）；false：填充结果（多点折线）
         PolygonsD paths;
-        std::vector<Point2D> gates;                             // 门禁点缓存（按编号顺序）
+        std::vector<Point2D> gates;                                   // 门禁点缓存（按编号顺序）
         std::vector<std::pair<std::size_t, std::size_t>> gateOwners;  // 多边形模式：门禁 -> (多边形下标, 顶点下标)
     };
 
     std::vector<RegionData> regions;  // 按添加顺序
     std::unordered_map<std::pair<int, int>, double, boost::hash<std::pair<int, int>>> manualRoutes;
-    std::vector<int> tour;                      // optimizeOrder 结果
-    std::unordered_map<int, int> entryGates;    // 区域 id -> TSP 求得的入门禁
+    std::vector<int> tour;                    // optimizeOrder 结果
+    std::unordered_map<int, int> entryGates;  // 区域 id -> TSP 求得的入门禁
     bool optimized = false;
 
     void addRegion(int regionId, const PolygonsD& paths)
@@ -199,7 +199,7 @@ struct RegionPathOptimizer::Impl
     }
 
 private:
-    bool modeSet = false;    // 是否已确定优化模式（首个区域决定）
+    bool modeSet = false;  // 是否已确定优化模式（首个区域决定）
     bool polygonMode = false;
 
     void checkDuplicate(int regionId) const
@@ -209,10 +209,7 @@ private:
             throw RuntimeError(std::format("Region already exists: {}", regionId));
     }
 
-    Point2D gatePoint(const RegionData& r, int gate) const
-    {
-        return r.gates.at(static_cast<std::size_t>(gate));
-    }
+    Point2D gatePoint(const RegionData& r, int gate) const { return r.gates.at(static_cast<std::size_t>(gate)); }
 
     void buildAreaGraph(RegionAreaGraph& ag) const
     {
@@ -272,8 +269,7 @@ private:
 
         Point2D current{};
         auto eit = entryGates.find(r.id);
-        if (eit != entryGates.end() && eit->second >= 0 &&
-            eit->second < static_cast<int>(r.gates.size()))
+        if (eit != entryGates.end() && eit->second >= 0 && eit->second < static_cast<int>(r.gates.size()))
         {
             current = gatePoint(r, eit->second);
         }
@@ -329,8 +325,7 @@ private:
 
         Point2D current{};
         auto eit = entryGates.find(r.id);
-        if (eit != entryGates.end() && eit->second >= 0 &&
-            eit->second < static_cast<int>(r.gates.size()))
+        if (eit != entryGates.end() && eit->second >= 0 && eit->second < static_cast<int>(r.gates.size()))
         {
             current = gatePoint(r, eit->second);
         }
@@ -374,7 +369,9 @@ private:
     }
 };
 
-RegionPathOptimizer::RegionPathOptimizer() : impl_(std::make_unique<Impl>()) {}
+RegionPathOptimizer::RegionPathOptimizer() : impl_(std::make_unique<Impl>())
+{
+}
 RegionPathOptimizer::~RegionPathOptimizer() = default;
 
 void RegionPathOptimizer::addRegion(int regionId, const PolygonsD& paths)
@@ -582,8 +579,7 @@ UniqueLua MakeOptimizeLuaState(const std::function<void(lua_State*)>& lua_reg)
 }
 
 // 调用脚本中的优化函数并取回完整填充路径
-PolygonsD CallOptimizeFunction(lua_State* L, const std::vector<PolygonsD>& regions,
-                               const std::string& functionName)
+PolygonsD CallOptimizeFunction(lua_State* L, const std::vector<PolygonsD>& regions, const std::string& functionName)
 {
     lua_getglobal(L, functionName.c_str());
     if (!lua_isfunction(L, -1))
@@ -602,8 +598,8 @@ PolygonsD CallOptimizeFunction(lua_State* L, const std::vector<PolygonsD>& regio
 }
 
 // 加载脚本（文件或内联字符串）并调用其中的优化函数，取回结果集合（路径或多边形）
-PolygonsD LoadAndCallOptimize(lua_State* L, const char* source, bool isFile,
-                              const std::vector<PolygonsD>& regions, const std::string& functionName)
+PolygonsD LoadAndCallOptimize(lua_State* L, const char* source, bool isFile, const std::vector<PolygonsD>& regions,
+                              const std::string& functionName)
 {
     const int loadResult = isFile ? luaL_loadfile(L, source) : luaL_loadstring(L, source);
     if (loadResult != LUA_OK || lua_pcall(L, 0, 0, 0) != LUA_OK)
@@ -636,8 +632,7 @@ PolygonsD LuaOptimizeRegionPaths(const std::vector<PolygonsD>& regions, const st
 }
 
 PolygonsD LuaOptimizeRegionPathsString(const std::vector<PolygonsD>& regions, const std::string& script,
-                                       const std::string& functionName,
-                                       const std::function<void(lua_State*)>& lua_reg)
+                                       const std::string& functionName, const std::function<void(lua_State*)>& lua_reg)
 {
     auto L = MakeOptimizeLuaState(lua_reg);
     return LoadAndCallOptimize(L.get(), script.c_str(), false, regions, functionName);

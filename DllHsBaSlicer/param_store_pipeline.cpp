@@ -36,25 +36,25 @@ ParamPipelineKind ToLibKind(HsBaPipelineKind k)
 {
     switch (k)
     {
-        case HSBA_PIPELINE_SLA:
-            return ParamPipelineKind::Sla;
-        case HSBA_PIPELINE_SLS:
-            return ParamPipelineKind::Sls;
-        case HSBA_PIPELINE_SLM:
-            return ParamPipelineKind::Slm;
-        case HSBA_PIPELINE_LOM:
-            return ParamPipelineKind::Lom;
-        case HSBA_PIPELINE_TDP:
-            return ParamPipelineKind::Tdp;
-        case HSBA_PIPELINE_WAAM:
-            return ParamPipelineKind::Waam;
-        case HSBA_PIPELINE_CUSTOM:
-            return ParamPipelineKind::Custom;
-        case HSBA_PIPELINE_FILETRANSFER:
-            return ParamPipelineKind::FileTransfer;
-        case HSBA_PIPELINE_FDM:
-        default:
-            return ParamPipelineKind::Fdm;
+    case HSBA_PIPELINE_SLA:
+        return ParamPipelineKind::Sla;
+    case HSBA_PIPELINE_SLS:
+        return ParamPipelineKind::Sls;
+    case HSBA_PIPELINE_SLM:
+        return ParamPipelineKind::Slm;
+    case HSBA_PIPELINE_LOM:
+        return ParamPipelineKind::Lom;
+    case HSBA_PIPELINE_TDP:
+        return ParamPipelineKind::Tdp;
+    case HSBA_PIPELINE_WAAM:
+        return ParamPipelineKind::Waam;
+    case HSBA_PIPELINE_CUSTOM:
+        return ParamPipelineKind::Custom;
+    case HSBA_PIPELINE_FILETRANSFER:
+        return ParamPipelineKind::FileTransfer;
+    case HSBA_PIPELINE_FDM:
+    default:
+        return ParamPipelineKind::Fdm;
     }
 }
 
@@ -62,13 +62,13 @@ ParamBackend ToLibBackend(HsBaParamStoreBackend b)
 {
     switch (b)
     {
-        case HSBA_PARAM_BACKEND_MYSQL:
-            return ParamBackend::MySql;
-        case HSBA_PARAM_BACKEND_POSTGRESQL:
-            return ParamBackend::PostgreSql;
-        case HSBA_PARAM_BACKEND_SQLITE:
-        default:
-            return ParamBackend::Sqlite;
+    case HSBA_PARAM_BACKEND_MYSQL:
+        return ParamBackend::MySql;
+    case HSBA_PARAM_BACKEND_POSTGRESQL:
+        return ParamBackend::PostgreSql;
+    case HSBA_PARAM_BACKEND_SQLITE:
+    default:
+        return ParamBackend::Sqlite;
     }
 }
 

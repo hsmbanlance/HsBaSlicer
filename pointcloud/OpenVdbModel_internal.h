@@ -31,8 +31,7 @@ inline std::string NormalizePath(std::string_view fileName)
 
 inline openvdb::Coord ToCoord(const Eigen::Vector3f& point)
 {
-    return openvdb::Coord{static_cast<int>(std::llround(point.x())),
-                          static_cast<int>(std::llround(point.y())),
+    return openvdb::Coord{static_cast<int>(std::llround(point.x())), static_cast<int>(std::llround(point.y())),
                           static_cast<int>(std::llround(point.z()))};
 }
 
@@ -43,7 +42,8 @@ inline Eigen::Vector3f ToEigen(const openvdb::Vec3f& value)
 
 inline openvdb::Vec3d ToVec3d(const Eigen::Vector3f& point)
 {
-    return openvdb::Vec3d{static_cast<double>(point.x()), static_cast<double>(point.y()), static_cast<double>(point.z())};
+    return openvdb::Vec3d{static_cast<double>(point.x()), static_cast<double>(point.y()),
+                          static_cast<double>(point.z())};
 }
 
 /// @brief Particle adapter for OpenVDB PointIndexGrid.

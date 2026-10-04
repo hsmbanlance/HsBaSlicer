@@ -15,10 +15,10 @@
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
-#include "pipeline_parallel.hpp"
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
 #include "base/coroutine.hpp"
 #include "base/error.hpp"
+#include "pipeline_parallel.hpp"
 
 namespace HsBa::Slicer::Pipeline
 {
@@ -386,9 +386,8 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
                     result.error_message = "Failed to read support Lua script: " + cfg.support_lua_script;
                     co_return result;
                 }
-                layer_supports =
-                    GenerateAllLuaSupport(layer_outlines, sla_support_cfg, std::string_view(script_content),
-                                          std::string_view(func));
+                layer_supports = GenerateAllLuaSupport(layer_outlines, sla_support_cfg,
+                                                       std::string_view(script_content), std::string_view(func));
             }
             else
             {

@@ -14,9 +14,9 @@
 #include "LibHsBaSlicer/Path/sls_export.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
-#include "pipeline_parallel.hpp"
 #include "base/coroutine.hpp"
 #include "base/error.hpp"
+#include "pipeline_parallel.hpp"
 
 namespace HsBa::Slicer::Pipeline
 {

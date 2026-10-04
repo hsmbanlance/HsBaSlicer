@@ -9,7 +9,6 @@
 
 #include <lua.hpp>
 
-#include "base/error.hpp"
 #include "2D/FloatPolygons.hpp"
 #include "2D/IntPolygon.hpp"
 #include "2D/LuaAdapter.hpp"
@@ -20,12 +19,13 @@
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"
 #include "LibHsBaSlicer/Path/path_generator.hpp"
 #include "LibHsBaSlicer/Path/path_optimizer.hpp"
-#include "LibHsBaSlicer/Path/spiral_path.hpp"
 #include "LibHsBaSlicer/Path/sls_export.hpp"
+#include "LibHsBaSlicer/Path/spiral_path.hpp"
 #include "LibHsBaSlicer/Path/waam_export.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
+#include "base/error.hpp"
 #include "cipher/LuaAdapter.hpp"
 #include "fileoperator/LuaAdapter.hpp"
 #include "paths/gcodepath.hpp"
@@ -620,8 +620,8 @@ int Lp_toGcode(lua_State* L)
         path_config.line_width = static_cast<float>(GetNumberField(L, 2, "lineWidth", path_config.line_width));
         path_config.print_speed = static_cast<float>(GetNumberField(L, 2, "printSpeed", path_config.print_speed));
         path_config.travel_speed = static_cast<float>(GetNumberField(L, 2, "travelSpeed", path_config.travel_speed));
-        path_config.extrusion_multiplier = static_cast<float>(
-            GetNumberField(L, 2, "extrusionMultiplier", path_config.extrusion_multiplier));
+        path_config.extrusion_multiplier =
+            static_cast<float>(GetNumberField(L, 2, "extrusionMultiplier", path_config.extrusion_multiplier));
         firmware = ParseFirmware(GetStringField(L, 2, "firmware"));
 
         printer_config.nozzle_diameter =
@@ -715,8 +715,7 @@ int Lp_saveWaamPackage(lua_State* L)
     {
         pkg.weld.current = static_cast<float>(GetNumberField(L, -1, "current", pkg.weld.current));
         pkg.weld.voltage = static_cast<float>(GetNumberField(L, -1, "voltage", pkg.weld.voltage));
-        pkg.weld.wire_feed_speed =
-            static_cast<float>(GetNumberField(L, -1, "wireFeedSpeed", pkg.weld.wire_feed_speed));
+        pkg.weld.wire_feed_speed = static_cast<float>(GetNumberField(L, -1, "wireFeedSpeed", pkg.weld.wire_feed_speed));
         pkg.weld.gas_flow_rate = static_cast<float>(GetNumberField(L, -1, "gasFlowRate", pkg.weld.gas_flow_rate));
         pkg.weld.travel_speed = static_cast<float>(GetNumberField(L, -1, "travelSpeed", pkg.weld.travel_speed));
         pkg.weld.process = GetIntField(L, -1, "process", pkg.weld.process);

@@ -15,14 +15,14 @@
 
 #include <lua.hpp>
 
+#include "DllHsBaSlicer/param_store_pipeline.h"
+#include "LibHsBaSlicer/ParamStore/param_store_ops.hpp"
 #include "fileoperator/LuaAdapter.hpp"
 #include "fileoperator/param_convert.hpp"
 #include "fileoperator/param_reflect.hpp"
 #include "fileoperator/param_schema.hpp"
 #include "fileoperator/param_store.hpp"
 #include "fileoperator/sql_adapter.hpp"
-#include "LibHsBaSlicer/ParamStore/param_store_ops.hpp"
-#include "DllHsBaSlicer/param_store_pipeline.h"
 
 using namespace HsBa::Slicer;
 using Utils::AnyObject;
@@ -35,9 +35,8 @@ namespace
 std::unordered_map<std::string, std::any> ReflectAnyObject(AnyObject obj)
 {
     std::unordered_map<std::string, std::any> m;
-    obj.ForeachField(
-        [&m](std::string_view name, AnyObject child)
-        { m[std::string(name)] = FieldToAny(name, child.get_type_info(), child.get_data()); });
+    obj.ForeachField([&m](std::string_view name, AnyObject child)
+                     { m[std::string(name)] = FieldToAny(name, child.get_type_info(), child.get_data()); });
     return m;
 }
 
@@ -244,9 +243,8 @@ BOOST_AUTO_TEST_CASE(lua_smoke)
     // 使用正斜杠避免 Windows 反斜杠在 Lua 字符串字面量中被当作非法转义序列。
     const std::string chunk = R"lua(
         local ldb = SQLiteAdapter.new()
-        ldb:Connect(")lua" +
-                        path.generic_string() +
-                        R"lua(")
+        ldb:Connect(")lua" + path.generic_string() +
+                              R"lua(")
         local store = ParamStore.new(ldb)
         store:EnsureSchema()
         local id = store:Save("fdm", "luacfg1", {

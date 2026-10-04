@@ -4,8 +4,8 @@
 #include <memory>
 #include <string>
 
-#include "base/error.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
+#include "base/error.hpp"
 
 // Helper: convert shared_ptr<IModel> to opaque handle (adds a reference)
 static void* ToHandle(std::shared_ptr<HsBa::Slicer::IModel> model)

@@ -71,8 +71,7 @@ struct ParamStoreOutcome
  * @return 落库结果，成功时 paramId 为该行 id。
  */
 HSBA_SLICER_LIB_API ParamStoreOutcome SavePipelineParams(const ParamStoreConn& conn, ParamPipelineKind kind,
-                                                         std::string_view table, std::string_view key,
-                                                         const void* cfg);
+                                                         std::string_view table, std::string_view key, const void* cfg);
 
 /**
  * @brief 按 key 读取一个 PipelineConfig，回填到调用方提供的 outCfg 结构体。

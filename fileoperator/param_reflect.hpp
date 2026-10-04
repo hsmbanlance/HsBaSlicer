@@ -25,26 +25,24 @@
 
 // 内部宏：向父结构体 TypeInfo 的 fields 表追加一个字段。字段类型由 std::declval 推导，
 // 保证枚举/const char*/int/float/double 都能自动映射到对应的 GetTypeInfo<T>() 单例。
-#define HSBA_PARAM_FIELD(Info, S, F)                                                                                  \
-    (Info).fields.emplace(#F,                                                                                         \
-                          std::make_pair(Utils::GetTypeInfo<std::remove_cvref_t<decltype(std::declval<S>().F)>>(),     \
-                                         offsetof(S, F)))
+#define HSBA_PARAM_FIELD(Info, S, F)                                                                                   \
+    (Info).fields.emplace(                                                                                             \
+        #F, std::make_pair(Utils::GetTypeInfo<std::remove_cvref_t<decltype(std::declval<S>().F)>>(), offsetof(S, F)))
 
 // 内部宏：为某个 Config 结构体生成 inline GetTypeInfo 特化。Name 使用可读的短名，作为
 // 参数键；调用方通过 IsPipelineConfigType 判定。
-#define HSBA_PARAM_DEFINE_CONFIG_TYPEINFO(StructT, CleanName)                                                         \
-    template <>                                                                                                       \
-    inline Utils::TypeInfo* GetTypeInfo<StructT>()                                                                    \
-    {                                                                                                                 \
-        static Utils::TypeInfo info;                                                                                  \
-        info.Name = CleanName;                                                                                        \
-        info.destroy = [](void* p)                                                                                    \
-        { delete static_cast<StructT*>(p); };                                                                         \
-        info.copy = [](const void* p) -> void* { return new StructT(*static_cast<const StructT*>(p)); };              \
-        info.move = [](void* p) -> void* { return new StructT(std::move(*static_cast<StructT*>(p))); };               \
-        info.fields.clear();                                                                                          \
-        info.methods.clear();                                                                                         \
-        return &info;                                                                                                 \
+#define HSBA_PARAM_DEFINE_CONFIG_TYPEINFO(StructT, CleanName)                                                          \
+    template <>                                                                                                        \
+    inline Utils::TypeInfo* GetTypeInfo<StructT>()                                                                     \
+    {                                                                                                                  \
+        static Utils::TypeInfo info;                                                                                   \
+        info.Name = CleanName;                                                                                         \
+        info.destroy = [](void* p) { delete static_cast<StructT*>(p); };                                               \
+        info.copy = [](const void* p) -> void* { return new StructT(*static_cast<const StructT*>(p)); };               \
+        info.move = [](void* p) -> void* { return new StructT(std::move(*static_cast<StructT*>(p))); };                \
+        info.fields.clear();                                                                                           \
+        info.methods.clear();                                                                                          \
+        return &info;                                                                                                  \
     }
 
 namespace HsBa::Slicer::Utils
@@ -58,8 +56,10 @@ inline TypeInfo* GetTypeInfo<HsBaFdmPipelineConfig_t>()
     static TypeInfo info;
     info.Name = "HsBaFdmPipelineConfig";
     info.destroy = [](void* p) { delete static_cast<HsBaFdmPipelineConfig_t*>(p); };
-    info.copy = [](const void* p) -> void* { return new HsBaFdmPipelineConfig_t(*static_cast<const HsBaFdmPipelineConfig_t*>(p)); };
-    info.move = [](void* p) -> void* { return new HsBaFdmPipelineConfig_t(std::move(*static_cast<HsBaFdmPipelineConfig_t*>(p))); };
+    info.copy = [](const void* p) -> void*
+    { return new HsBaFdmPipelineConfig_t(*static_cast<const HsBaFdmPipelineConfig_t*>(p)); };
+    info.move = [](void* p) -> void*
+    { return new HsBaFdmPipelineConfig_t(std::move(*static_cast<HsBaFdmPipelineConfig_t*>(p))); };
     info.fields.clear();
     info.methods.clear();
     HSBA_PARAM_FIELD(info, HsBaFdmPipelineConfig_t, model_name);
@@ -111,8 +111,10 @@ inline TypeInfo* GetTypeInfo<HsBaSlaPipelineConfig_t>()
     static TypeInfo info;
     info.Name = "HsBaSlaPipelineConfig";
     info.destroy = [](void* p) { delete static_cast<HsBaSlaPipelineConfig_t*>(p); };
-    info.copy = [](const void* p) -> void* { return new HsBaSlaPipelineConfig_t(*static_cast<const HsBaSlaPipelineConfig_t*>(p)); };
-    info.move = [](void* p) -> void* { return new HsBaSlaPipelineConfig_t(std::move(*static_cast<HsBaSlaPipelineConfig_t*>(p))); };
+    info.copy = [](const void* p) -> void*
+    { return new HsBaSlaPipelineConfig_t(*static_cast<const HsBaSlaPipelineConfig_t*>(p)); };
+    info.move = [](void* p) -> void*
+    { return new HsBaSlaPipelineConfig_t(std::move(*static_cast<HsBaSlaPipelineConfig_t*>(p))); };
     info.fields.clear();
     info.methods.clear();
     HSBA_PARAM_FIELD(info, HsBaSlaPipelineConfig_t, model_name);
@@ -159,8 +161,10 @@ inline TypeInfo* GetTypeInfo<HsBaSlsPipelineConfig_t>()
     static TypeInfo info;
     info.Name = "HsBaSlsPipelineConfig";
     info.destroy = [](void* p) { delete static_cast<HsBaSlsPipelineConfig_t*>(p); };
-    info.copy = [](const void* p) -> void* { return new HsBaSlsPipelineConfig_t(*static_cast<const HsBaSlsPipelineConfig_t*>(p)); };
-    info.move = [](void* p) -> void* { return new HsBaSlsPipelineConfig_t(std::move(*static_cast<HsBaSlsPipelineConfig_t*>(p))); };
+    info.copy = [](const void* p) -> void*
+    { return new HsBaSlsPipelineConfig_t(*static_cast<const HsBaSlsPipelineConfig_t*>(p)); };
+    info.move = [](void* p) -> void*
+    { return new HsBaSlsPipelineConfig_t(std::move(*static_cast<HsBaSlsPipelineConfig_t*>(p))); };
     info.fields.clear();
     info.methods.clear();
     HSBA_PARAM_FIELD(info, HsBaSlsPipelineConfig_t, model_name);
@@ -187,8 +191,10 @@ inline TypeInfo* GetTypeInfo<HsBaSlmPipelineConfig_t>()
     static TypeInfo info;
     info.Name = "HsBaSlmPipelineConfig";
     info.destroy = [](void* p) { delete static_cast<HsBaSlmPipelineConfig_t*>(p); };
-    info.copy = [](const void* p) -> void* { return new HsBaSlmPipelineConfig_t(*static_cast<const HsBaSlmPipelineConfig_t*>(p)); };
-    info.move = [](void* p) -> void* { return new HsBaSlmPipelineConfig_t(std::move(*static_cast<HsBaSlmPipelineConfig_t*>(p))); };
+    info.copy = [](const void* p) -> void*
+    { return new HsBaSlmPipelineConfig_t(*static_cast<const HsBaSlmPipelineConfig_t*>(p)); };
+    info.move = [](void* p) -> void*
+    { return new HsBaSlmPipelineConfig_t(std::move(*static_cast<HsBaSlmPipelineConfig_t*>(p))); };
     info.fields.clear();
     info.methods.clear();
     HSBA_PARAM_FIELD(info, HsBaSlmPipelineConfig_t, model_name);
@@ -218,8 +224,10 @@ inline TypeInfo* GetTypeInfo<HsBaLomPipelineConfig_t>()
     static TypeInfo info;
     info.Name = "HsBaLomPipelineConfig";
     info.destroy = [](void* p) { delete static_cast<HsBaLomPipelineConfig_t*>(p); };
-    info.copy = [](const void* p) -> void* { return new HsBaLomPipelineConfig_t(*static_cast<const HsBaLomPipelineConfig_t*>(p)); };
-    info.move = [](void* p) -> void* { return new HsBaLomPipelineConfig_t(std::move(*static_cast<HsBaLomPipelineConfig_t*>(p))); };
+    info.copy = [](const void* p) -> void*
+    { return new HsBaLomPipelineConfig_t(*static_cast<const HsBaLomPipelineConfig_t*>(p)); };
+    info.move = [](void* p) -> void*
+    { return new HsBaLomPipelineConfig_t(std::move(*static_cast<HsBaLomPipelineConfig_t*>(p))); };
     info.fields.clear();
     info.methods.clear();
     HSBA_PARAM_FIELD(info, HsBaLomPipelineConfig_t, model_name);
@@ -249,8 +257,10 @@ inline TypeInfo* GetTypeInfo<HsBaTdpPipelineConfig_t>()
     static TypeInfo info;
     info.Name = "HsBaTdpPipelineConfig";
     info.destroy = [](void* p) { delete static_cast<HsBaTdpPipelineConfig_t*>(p); };
-    info.copy = [](const void* p) -> void* { return new HsBaTdpPipelineConfig_t(*static_cast<const HsBaTdpPipelineConfig_t*>(p)); };
-    info.move = [](void* p) -> void* { return new HsBaTdpPipelineConfig_t(std::move(*static_cast<HsBaTdpPipelineConfig_t*>(p))); };
+    info.copy = [](const void* p) -> void*
+    { return new HsBaTdpPipelineConfig_t(*static_cast<const HsBaTdpPipelineConfig_t*>(p)); };
+    info.move = [](void* p) -> void*
+    { return new HsBaTdpPipelineConfig_t(std::move(*static_cast<HsBaTdpPipelineConfig_t*>(p))); };
     info.fields.clear();
     info.methods.clear();
     HSBA_PARAM_FIELD(info, HsBaTdpPipelineConfig_t, model_name);
@@ -279,8 +289,10 @@ inline TypeInfo* GetTypeInfo<HsBaWaamPipelineConfig_t>()
     static TypeInfo info;
     info.Name = "HsBaWaamPipelineConfig";
     info.destroy = [](void* p) { delete static_cast<HsBaWaamPipelineConfig_t*>(p); };
-    info.copy = [](const void* p) -> void* { return new HsBaWaamPipelineConfig_t(*static_cast<const HsBaWaamPipelineConfig_t*>(p)); };
-    info.move = [](void* p) -> void* { return new HsBaWaamPipelineConfig_t(std::move(*static_cast<HsBaWaamPipelineConfig_t*>(p))); };
+    info.copy = [](const void* p) -> void*
+    { return new HsBaWaamPipelineConfig_t(*static_cast<const HsBaWaamPipelineConfig_t*>(p)); };
+    info.move = [](void* p) -> void*
+    { return new HsBaWaamPipelineConfig_t(std::move(*static_cast<HsBaWaamPipelineConfig_t*>(p))); };
     info.fields.clear();
     info.methods.clear();
     HSBA_PARAM_FIELD(info, HsBaWaamPipelineConfig_t, model_name);
@@ -315,8 +327,10 @@ inline TypeInfo* GetTypeInfo<HsBaCustomPipelineConfig_t>()
     static TypeInfo info;
     info.Name = "HsBaCustomPipelineConfig";
     info.destroy = [](void* p) { delete static_cast<HsBaCustomPipelineConfig_t*>(p); };
-    info.copy = [](const void* p) -> void* { return new HsBaCustomPipelineConfig_t(*static_cast<const HsBaCustomPipelineConfig_t*>(p)); };
-    info.move = [](void* p) -> void* { return new HsBaCustomPipelineConfig_t(std::move(*static_cast<HsBaCustomPipelineConfig_t*>(p))); };
+    info.copy = [](const void* p) -> void*
+    { return new HsBaCustomPipelineConfig_t(*static_cast<const HsBaCustomPipelineConfig_t*>(p)); };
+    info.move = [](void* p) -> void*
+    { return new HsBaCustomPipelineConfig_t(std::move(*static_cast<HsBaCustomPipelineConfig_t*>(p))); };
     info.fields.clear();
     info.methods.clear();
     HSBA_PARAM_FIELD(info, HsBaCustomPipelineConfig_t, pipeline_lua_script);

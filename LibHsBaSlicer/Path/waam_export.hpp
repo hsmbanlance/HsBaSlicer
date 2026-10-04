@@ -18,12 +18,12 @@ namespace HsBa::Slicer
  */
 struct WaamWeldParams
 {
-    float current = 180.0f;          ///< Welding current [A]
-    float voltage = 22.0f;           ///< Arc voltage [V]
-    float wire_feed_speed = 5.0f;    ///< Wire feed speed [m/min]
-    float gas_flow_rate = 15.0f;     ///< Shielding gas flow rate [L/min]
-    float travel_speed = 8.0f;       ///< Torch travel speed [mm/s]
-    int process = 0;                 ///< 0 = arc (MIG/MAG), 1 = laser
+    float current = 180.0f;        ///< Welding current [A]
+    float voltage = 22.0f;         ///< Arc voltage [V]
+    float wire_feed_speed = 5.0f;  ///< Wire feed speed [m/min]
+    float gas_flow_rate = 15.0f;   ///< Shielding gas flow rate [L/min]
+    float travel_speed = 8.0f;     ///< Torch travel speed [mm/s]
+    int process = 0;               ///< 0 = arc (MIG/MAG), 1 = laser
 };
 
 /**
@@ -63,7 +63,8 @@ struct WaamRobotPackage
  * @return true if export succeeded, false otherwise.
  */
 HSBA_SLICER_LIB_API bool SaveWaamRobotPath(const WaamRobotPackage& pkg, const std::string& output_path,
-                                           const std::string& lua_script = "", const std::string& lua_func = "export_waam",
+                                           const std::string& lua_script = "",
+                                           const std::string& lua_func = "export_waam",
                                            std::string* error_out = nullptr);
 
 }  // namespace HsBa::Slicer

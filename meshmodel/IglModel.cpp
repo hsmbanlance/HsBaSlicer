@@ -18,8 +18,8 @@
 #include <igl/volume.h>
 
 #ifdef USE_CGAL
-#include <igl/copyleft/cgal/mesh_boolean.h>
 #include "CgalModel.hpp"
+#include <igl/copyleft/cgal/mesh_boolean.h>
 #endif
 
 #include "base/ModelFormat.hpp"
@@ -281,8 +281,7 @@ IglModel Union(const IglModel& left, const IglModel& right)
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
     }
 
-    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_UNION, v,
-                       f);
+    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_UNION, v, f);
 
     if (v.rows() == 0 || f.rows() == 0)
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
@@ -314,8 +313,8 @@ IglModel Intersection(const IglModel& left, const IglModel& right)
     if (!is_valid_mesh(left.vertices_, left.faces_) || !is_valid_mesh(right.vertices_, right.faces_))
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
 
-    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_INTERSECT,
-                       v, f);
+    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_INTERSECT, v,
+                       f);
 
     if (v.rows() == 0 || f.rows() == 0)
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
@@ -347,8 +346,7 @@ IglModel Difference(const IglModel& left, const IglModel& right)
     if (!is_valid_mesh(left.vertices_, left.faces_) || !is_valid_mesh(right.vertices_, right.faces_))
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
 
-    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_MINUS, v,
-                       f);
+    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_MINUS, v, f);
 
     if (v.rows() == 0 || f.rows() == 0)
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
@@ -380,8 +378,7 @@ IglModel Xor(const IglModel& left, const IglModel& right)
     if (!is_valid_mesh(left.vertices_, left.faces_) || !is_valid_mesh(right.vertices_, right.faces_))
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
 
-    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_XOR, v,
-                       f);
+    IglMeshBooleanImpl(left.vertices_, left.faces_, right.vertices_, right.faces_, igl::MESH_BOOLEAN_TYPE_XOR, v, f);
 
     if (v.rows() == 0 || f.rows() == 0)
         return IglModel(Eigen::MatrixXf(), Eigen::MatrixXi());
@@ -832,8 +829,8 @@ IglModel IglModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& di
 
     // Clipper2 Triangulate 对三角形路径不产出三角形，追加原始三角形路径补全底面，避免盖面丢失；
     // 外轮廓三角形归一化为 CCW，孔洞三角形归一化为 CW（盖面贡献相消）
-    const size_t trianglePathCount = std::count_if(paths.begin(), paths.end(),
-                                                   [](const PolygonD& p) { return p.size() == 3; });
+    const size_t trianglePathCount =
+        std::count_if(paths.begin(), paths.end(), [](const PolygonD& p) { return p.size() == 3; });
     if (bottom_tris.size() < trianglePathCount)
     {
         for (size_t pi = 0; pi < paths.size(); ++pi)

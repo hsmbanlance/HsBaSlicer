@@ -3,10 +3,10 @@
 #pragma once
 
 #include "Graph.hpp"
+#include <boost/container_hash/hash.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/graph_traits.hpp>
 #include <boost/property_map/property_map.hpp>
-#include <boost/container_hash/hash.hpp>
 
 #include <algorithm>
 #include <map>
@@ -30,7 +30,7 @@ struct GateInfo
 {
     GateId id;
     bool canEnter = true;
-    bool canExit = true; 
+    bool canExit = true;
 };
 
 template <typename GateId, typename Weight>
@@ -554,5 +554,5 @@ private:
 };
 
 }  // namespace graph
-} // namespace HsBa::Slicer
-#endif // !HSBA_SLICER_AREAGRAPH_HPP
+}  // namespace HsBa::Slicer
+#endif  // !HSBA_SLICER_AREAGRAPH_HPP

@@ -48,8 +48,7 @@ extern "C"
      */
     HSBA_SLICER_API void HsBaRunCustomPipelineAsync(const HsBaCustomPipelineConfig_t* config,
                                                     HsBaCustomProgressCallback callback, void* user_data,
-                                                    HsBaCustomResultCallback result_callback,
-                                                    void* result_user_data);
+                                                    HsBaCustomResultCallback result_callback, void* result_user_data);
 
     /**
      * @brief Free memory allocated in custom pipeline result.

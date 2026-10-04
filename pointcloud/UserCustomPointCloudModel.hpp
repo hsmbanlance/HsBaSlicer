@@ -75,9 +75,9 @@ class UserCustomPointCloudModel : public IModel
 public:
     UserCustomPointCloudModel() = default;
     ~UserCustomPointCloudModel() override;
-    void LoadDll(std::string_view dllPath, std::string_view addedFunName);  // load the dll
-    void UnloadDll();                                                       // unload the dll
-    bool Load(std::string_view fileName) override;                          // load the model from a file
+    void LoadDll(std::string_view dllPath, std::string_view addedFunName);          // load the dll
+    void UnloadDll();                                                               // unload the dll
+    bool Load(std::string_view fileName) override;                                  // load the model from a file
     bool Save(std::string_view fileName, const ModelFormat format) const override;  // save the model to a file
 
     void Translate(const Eigen::Vector3f& translation) override;  // translate the model
@@ -88,8 +88,8 @@ public:
     void Transform(const Eigen::Matrix4f& transform) override;                            // transform the model
     void Transform(const Eigen::Transform<float, 3, Eigen::Affine>& transform) override;  // transform the model
     void BoundingBox(Eigen::Vector3f& min,
-                     Eigen::Vector3f& max) const override;  // get the AA bounding box of the model
-    float Volume() const override;                          // get the volume of the model
+                     Eigen::Vector3f& max) const override;                      // get the AA bounding box of the model
+    float Volume() const override;                                              // get the volume of the model
     std::pair<Eigen::MatrixXf, Eigen::MatrixXi> TriangleMesh() const override;  // get igl style trianglemesh
 
     // point cloud exits consistent with OpenVdbModel

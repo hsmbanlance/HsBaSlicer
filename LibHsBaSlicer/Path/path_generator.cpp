@@ -112,8 +112,8 @@ HSBA_SLICER_LIB_API std::unique_ptr<GCodePath> GenerateGCodePathV2(const std::ve
 }
 
 HSBA_SLICER_LIB_API std::unique_ptr<GCodePath> GenerateGCodePathSpiral(const std::vector<PolygonsD>& layer_outlines,
-                                                                      const std::vector<double>& layer_zs,
-                                                                      const GCodePrinterConfig& printer_config)
+                                                                       const std::vector<double>& layer_zs,
+                                                                       const GCodePrinterConfig& printer_config)
 {
     auto path = std::make_unique<GCodePath>(printer_config);
 

@@ -47,8 +47,7 @@ constexpr Utils::TemplateString HSBA_7ZA_DLL = "";
 inline bool IsCompressedTarPath(std::string_view path)
 {
     std::string lower{path};
-    std::ranges::transform(lower, lower.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    std::ranges::transform(lower, lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return lower.ends_with(".tar.gz") || lower.ends_with(".tgz") || lower.ends_with(".tar.xz") ||
            lower.ends_with(".txz");
 }

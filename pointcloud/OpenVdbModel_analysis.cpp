@@ -21,9 +21,9 @@
 namespace HsBa::Slicer
 {
 
+using vdb_internal::PointArrayAdapter;
 using vdb_internal::ToEigen;
 using vdb_internal::ToVec3d;
-using vdb_internal::PointArrayAdapter;
 
 std::vector<Eigen::Vector3f> OpenVdbModel::RadiusSearch(const Eigen::Vector3f& center, float radius) const
 {
@@ -45,7 +45,8 @@ std::vector<Eigen::Vector3f> OpenVdbModel::RadiusSearch(const Eigen::Vector3f& c
     std::vector<Eigen::Vector3f> result;
     openvdb::tree::ValueAccessor<const openvdb::tools::PointIndexTree> acc(indexGrid->tree());
     openvdb::tools::PointIndexIterator<> iter;
-    iter.worldSpaceSearchAndUpdate(ToVec3d(center), static_cast<double>(radius), acc, adapter, indexGrid->transform(), true);
+    iter.worldSpaceSearchAndUpdate(ToVec3d(center), static_cast<double>(radius), acc, adapter, indexGrid->transform(),
+                                   true);
 
     while (iter.test())
     {
@@ -79,7 +80,8 @@ void OpenVdbModel::Downsample(float voxelSize)
     std::vector<Eigen::Vector3f> uniquePoints;
     std::set<std::string> visited;
     PointArrayAdapter adapter(points);
-    auto indexGrid = openvdb::tools::createPointIndexGrid<openvdb::tools::PointIndexGrid>(adapter, static_cast<double>(voxelSize));
+    auto indexGrid =
+        openvdb::tools::createPointIndexGrid<openvdb::tools::PointIndexGrid>(adapter, static_cast<double>(voxelSize));
     for (const auto& point : points)
     {
         const openvdb::Coord coord = indexGrid->transform().worldToIndexCellCentered(ToVec3d(point));

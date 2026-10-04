@@ -9,9 +9,9 @@
 #include <utility>
 #include <vector>
 
+#include <openvdb/tools/LevelSetFilter.h>
 #include <openvdb/tools/ParticlesToLevelSet.h>
 #include <openvdb/tools/VolumeToMesh.h>
-#include <openvdb/tools/LevelSetFilter.h>
 
 #include "base/error.hpp"
 

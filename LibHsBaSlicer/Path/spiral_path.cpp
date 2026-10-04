@@ -72,8 +72,7 @@ size_t CanonicalSeam(const PolygonD& loop)
     size_t best = 0;
     for (size_t i = 1; i < loop.size(); ++i)
     {
-        if (loop[i].y < loop[best].y ||
-            (std::abs(loop[i].y - loop[best].y) < 1e-12 && loop[i].x < loop[best].x))
+        if (loop[i].y < loop[best].y || (std::abs(loop[i].y - loop[best].y) < 1e-12 && loop[i].x < loop[best].x))
         {
             best = i;
         }
@@ -123,7 +122,7 @@ std::vector<SpiralPoint> SpiralizeOuterWall(const std::vector<PolygonsD>& layer_
         {
             continue;
         }
-        loops.push_back(LayerLoop{ std::move(loop), layer_zs[i] });
+        loops.push_back(LayerLoop{std::move(loop), layer_zs[i]});
     }
     if (loops.empty())
     {
@@ -150,7 +149,7 @@ std::vector<SpiralPoint> SpiralizeOuterWall(const std::vector<PolygonsD>& layer_
         {
             const Point2D& pt = loop[(start + k) % m];
             const double frac = static_cast<double>(k) / static_cast<double>(m);
-            path.push_back(SpiralPoint{ pt.x, pt.y, z_start + (z_end - z_start) * frac });
+            path.push_back(SpiralPoint{pt.x, pt.y, z_start + (z_end - z_start) * frac});
         }
 
         seam_x = loop[start].x;

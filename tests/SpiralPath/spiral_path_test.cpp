@@ -159,7 +159,7 @@ BOOST_AUTO_TEST_CASE(skips_layers_without_closed_contour)
     auto path = SpiralizeOuterWall(layers, zs);
 
     BOOST_REQUIRE_EQUAL(path.size(), 2u * 5u);
-    BOOST_CHECK_CLOSE(path.front().z, 0.0, 1e-9);          // layer 0 start
-    BOOST_CHECK_CLOSE(path[5].z, 0.8, 1e-6);               // layer 2 start = zs[2]
-    BOOST_CHECK_CLOSE(path.back().z, 0.8, 1e-6);           // last loop flat at 0.8
+    BOOST_CHECK_CLOSE(path.front().z, 0.0, 1e-9);  // layer 0 start
+    BOOST_CHECK_CLOSE(path[5].z, 0.8, 1e-6);       // layer 2 start = zs[2]
+    BOOST_CHECK_CLOSE(path.back().z, 0.8, 1e-6);   // last loop flat at 0.8
 }

@@ -431,11 +431,11 @@ extern "C"
         const char* model_path;
         float layer_height;
         float first_layer_height;
-        int head_count;            /* print head nozzle count */
-        float drop_spacing;        /* binder drop spacing (mm) */
-        float binder_saturation;   /* binder saturation [0,1] */
-        float ink_curing_time;     /* per-layer curing time (s) */
-        float bed_temperature;     /* powder bed temperature (C) */
+        int head_count;          /* print head nozzle count */
+        float drop_spacing;      /* binder drop spacing (mm) */
+        float binder_saturation; /* binder saturation [0,1] */
+        float ink_curing_time;   /* per-layer curing time (s) */
+        float bed_temperature;   /* powder bed temperature (C) */
         HsBaTdpBinderMode_t binder_mode;
         const char* export_lua_script; /* required */
         const char* export_lua_func;
@@ -497,14 +497,14 @@ extern "C"
     {
         const char* model_name;
         const char* model_path;
-        float layer_height;          /* bead/layer height (mm) */
-        float first_layer_height;    /* first layer height (mm) */
-        float bead_width;            /* deposited bead width (mm) */
-        float travel_speed;          /* torch travel speed (mm/s) */
-        float wire_feed_speed;       /* wire feed speed (m/min) */
-        float arc_current;           /* welding current (A) */
-        float arc_voltage;           /* arc voltage (V) */
-        float gas_flow_rate;         /* shielding gas flow (L/min) */
+        float layer_height;       /* bead/layer height (mm) */
+        float first_layer_height; /* first layer height (mm) */
+        float bead_width;         /* deposited bead width (mm) */
+        float travel_speed;       /* torch travel speed (mm/s) */
+        float wire_feed_speed;    /* wire feed speed (m/min) */
+        float arc_current;        /* welding current (A) */
+        float arc_voltage;        /* arc voltage (V) */
+        float gas_flow_rate;      /* shielding gas flow (L/min) */
         HsBaWaamMaterial_t material;
         HsBaWaamWeldProcess_t welding_process;
         HsBaWaamProtection_t protection;
@@ -925,13 +925,13 @@ extern "C"
      */
     typedef struct HsBaParamStoreConn
     {
-        HsBaParamStoreBackend backend; ///< Backend selector
-        const char* sqlite_path;       ///< SQLite database file path (NULL if unused)
-        const char* host;              ///< MySQL/PostgreSQL host (NULL if unused)
-        const char* user;              ///< MySQL/PostgreSQL user
-        const char* password;          ///< MySQL/PostgreSQL password
-        const char* database;          ///< MySQL/PostgreSQL database name
-        unsigned int port;             ///< MySQL/PostgreSQL port (0 = adapter default)
+        HsBaParamStoreBackend backend;  ///< Backend selector
+        const char* sqlite_path;        ///< SQLite database file path (NULL if unused)
+        const char* host;               ///< MySQL/PostgreSQL host (NULL if unused)
+        const char* user;               ///< MySQL/PostgreSQL user
+        const char* password;           ///< MySQL/PostgreSQL password
+        const char* database;           ///< MySQL/PostgreSQL database name
+        unsigned int port;              ///< MySQL/PostgreSQL port (0 = adapter default)
     } HsBaParamStoreConn_t;
 
     /**
@@ -940,10 +940,10 @@ extern "C"
      */
     typedef struct HsBaParamStoreResult
     {
-        int success;           ///< Success flag (0=false, 1=true)
-        long long param_id;    ///< Save: persisted row id; Load: matched row id
-        char* error_message;   ///< Error message (UTF-8, caller must free via HsBaFreeParamStoreResult)
-        double elapsed_seconds;///< Elapsed time (seconds)
+        int success;             ///< Success flag (0=false, 1=true)
+        long long param_id;      ///< Save: persisted row id; Load: matched row id
+        char* error_message;     ///< Error message (UTF-8, caller must free via HsBaFreeParamStoreResult)
+        double elapsed_seconds;  ///< Elapsed time (seconds)
     } HsBaParamStoreResult_t;
 
 #ifdef __cplusplus

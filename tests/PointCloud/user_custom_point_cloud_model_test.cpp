@@ -89,8 +89,8 @@ BOOST_AUTO_TEST_CASE(centroid)
 {
     UserCustomPointCloudModel model;
     model.LoadDll(kMockDllPath, kMockFunName);
-    model.AddPoints({Eigen::Vector3f{0.0f, 0.0f, 0.0f}, Eigen::Vector3f{2.0f, 0.0f, 0.0f},
-                     Eigen::Vector3f{0.0f, 4.0f, 0.0f}});
+    model.AddPoints(
+        {Eigen::Vector3f{0.0f, 0.0f, 0.0f}, Eigen::Vector3f{2.0f, 0.0f, 0.0f}, Eigen::Vector3f{0.0f, 4.0f, 0.0f}});
 
     const auto centroid = model.Centroid();
     BOOST_CHECK_CLOSE(centroid.x(), 2.0f / 3.0f, 1e-4);
@@ -120,8 +120,8 @@ BOOST_AUTO_TEST_CASE(downsample_and_voxelize)
     UserCustomPointCloudModel model;
     model.LoadDll(kMockDllPath, kMockFunName);
     // 前两点落在同一体素，第三点位于另一体素
-    model.AddPoints({Eigen::Vector3f{0.1f, 0.1f, 0.1f}, Eigen::Vector3f{0.2f, 0.2f, 0.2f},
-                     Eigen::Vector3f{1.5f, 0.0f, 0.0f}});
+    model.AddPoints(
+        {Eigen::Vector3f{0.1f, 0.1f, 0.1f}, Eigen::Vector3f{0.2f, 0.2f, 0.2f}, Eigen::Vector3f{1.5f, 0.0f, 0.0f}});
 
     model.Downsample(1.0f);
     BOOST_CHECK_EQUAL(model.PointCount(), 2u);

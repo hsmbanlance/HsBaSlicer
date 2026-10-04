@@ -277,8 +277,7 @@ std::string GCodePath::GenerateContinuousWall() const
     // Z rises continuously. No travel/retraction between points keeps the wall
     // extrusion-continuous (the essence of spiralize / vase mode).
     const auto& p0 = continuous_wall_[0];
-    ss << std::format("G0 X{:.3f} Y{:.3f} Z{:.3f} F{:.0f}\n", p0.x, p0.y, p0.z,
-                      cfg.travel_speed * kSpeedFactor);
+    ss << std::format("G0 X{:.3f} Y{:.3f} Z{:.3f} F{:.0f}\n", p0.x, p0.y, p0.z, cfg.travel_speed * kSpeedFactor);
 
     double cumulative_e = 0.0;
     for (size_t i = 1; i < continuous_wall_.size(); ++i)

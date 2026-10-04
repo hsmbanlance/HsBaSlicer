@@ -18,8 +18,8 @@
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
 #include "base/coroutine.hpp"
 #include "base/error.hpp"
-#include "pipeline_parallel.hpp"
 #include "paths/gcodepath.hpp"
+#include "pipeline_parallel.hpp"
 
 namespace HsBa::Slicer::Pipeline
 {
@@ -321,8 +321,7 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             Polygons int_polys = Integerization(layer_outlines[i]);
             bool is_solid = (i < bottom_end) || (i >= top_start);  // 顶层/底层实心填充
             double spacing = is_solid ? cfg.fill_spacing : middle_spacing;
-            Polygons fill_result =
-                FillWithBorder(int_polys, spacing, cfg.wall_count, cfg.fill_mode, cfg.fill_angle);
+            Polygons fill_result = FillWithBorder(int_polys, spacing, cfg.wall_count, cfg.fill_mode, cfg.fill_angle);
             layer_fills[i] = UnIntegerization(fill_result);
         };
 

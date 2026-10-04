@@ -27,9 +27,8 @@ int64_t NowSeconds()
 std::unordered_map<std::string, std::any> ReflectColumns(Utils::AnyObject cfg)
 {
     std::unordered_map<std::string, std::any> out;
-    cfg.ForeachField(
-        [&out](std::string_view name, Utils::AnyObject child)
-        { out[std::string(name)] = FieldToAny(name, child.get_type_info(), child.get_data()); });
+    cfg.ForeachField([&out](std::string_view name, Utils::AnyObject child)
+                     { out[std::string(name)] = FieldToAny(name, child.get_type_info(), child.get_data()); });
     return out;
 }
 
@@ -137,8 +136,8 @@ void ParamStore::EnsureSchema()
         [this]
         {
             RegisterPipelineConfigTypes();
-            for (int tag = static_cast<int>(PipelineConfigTag::Fdm); tag <= static_cast<int>(PipelineConfigTag::FileTransfer);
-                 ++tag)
+            for (int tag = static_cast<int>(PipelineConfigTag::Fdm);
+                 tag <= static_cast<int>(PipelineConfigTag::FileTransfer); ++tag)
             {
                 EnsureTable(static_cast<PipelineConfigTag>(tag));
             }
@@ -186,8 +185,7 @@ int64_t ParamStore::Save(std::string_view table, std::string_view key, Utils::An
 
             // Stage 4: Upsert
             Raise(70, "upsert");
-            auto existing =
-                db_->Select(tbl, {"param_id"}, {{"param_key", std::string(key)}}, std::nullopt, 1, 0);
+            auto existing = db_->Select(tbl, {"param_id"}, {{"param_key", std::string(key)}}, std::nullopt, 1, 0);
             if (!existing.empty())
             {
                 auto set = data;
@@ -207,8 +205,8 @@ int64_t ParamStore::Save(std::string_view table, std::string_view key, Utils::An
         });
 }
 
-std::vector<int64_t> ParamStore::SaveBatch(
-    std::string_view table, const std::vector<std::pair<std::string, Utils::AnyObject>>& items)
+std::vector<int64_t> ParamStore::SaveBatch(std::string_view table,
+                                           const std::vector<std::pair<std::string, Utils::AnyObject>>& items)
 {
     return Guard(
         [this, table, &items]() -> std::vector<int64_t>

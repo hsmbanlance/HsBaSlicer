@@ -56,18 +56,15 @@ void Bit7ZUnzipper::ReadFromFileImpl(std::string_view path, bool reopen)
             std::ofstream ofs(inner_tar_path_, std::ios_base::out | std::ios_base::binary);
             outer.extractTo(ofs, 0u);
             ofs.close();
-            archiver_ =
-                std::make_unique<bit7z::BitArchiveReader>(lib, inner_tar_path_.string(),
-                                                          bit7z::ArchiveStartOffset::FileStart, bit7z::BitFormat::Tar,
-                                                          password_);
+            archiver_ = std::make_unique<bit7z::BitArchiveReader>(
+                lib, inner_tar_path_.string(), bit7z::ArchiveStartOffset::FileStart, bit7z::BitFormat::Tar, password_);
         }
         catch (const bit7z::BitException&)
         {
             // Not a real compressed tar: read the archive itself instead.
             ClearInnerTarTempFile();
-            archiver_ = std::make_unique<bit7z::BitArchiveReader>(lib, archive_path,
-                                                                  bit7z::ArchiveStartOffset::FileStart,
-                                                                  bit7z::BitFormat::Auto, password_);
+            archiver_ = std::make_unique<bit7z::BitArchiveReader>(
+                lib, archive_path, bit7z::ArchiveStartOffset::FileStart, bit7z::BitFormat::Auto, password_);
         }
     }
     else

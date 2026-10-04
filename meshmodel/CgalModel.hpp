@@ -76,8 +76,7 @@ public:
      * @param target The ending point on the surface.
      * @return A sequence of 3D points forming the geodesic path on the surface.
      */
-    std::vector<Eigen::Vector3f> GeodesicPath(const Eigen::Vector3f& source,
-                                              const Eigen::Vector3f& target) const;
+    std::vector<Eigen::Vector3f> GeodesicPath(const Eigen::Vector3f& source, const Eigen::Vector3f& target) const;
 
     /** @brief Compute geodesic distances from a source point to all mesh vertices.
      * @param source The source point on the surface.
@@ -100,9 +99,8 @@ public:
      * @param endRadius Ending radius from the axis.
      * @return A sequence of 3D points forming the spiral on the surface.
      */
-    std::vector<Eigen::Vector3f> SurfaceSpiral(const Eigen::Vector3f& axisOrigin,
-                                               const Eigen::Vector3f& axisDirection, float turns,
-                                               int samplesPerTurn = 64, float startRadius = 0.0f,
+    std::vector<Eigen::Vector3f> SurfaceSpiral(const Eigen::Vector3f& axisOrigin, const Eigen::Vector3f& axisDirection,
+                                               float turns, int samplesPerTurn = 64, float startRadius = 0.0f,
                                                float endRadius = -1.0f) const;
 
     /** @brief Generate a helix path on the mesh surface around a given axis.
@@ -114,9 +112,8 @@ public:
      * @param samplesPerTurn Number of sample points per full turn.
      * @return A sequence of 3D points forming the helix on the surface.
      */
-    std::vector<Eigen::Vector3f> SurfaceHelix(const Eigen::Vector3f& axisOrigin,
-                                              const Eigen::Vector3f& axisDirection, float turns, float pitch,
-                                              float radius, int samplesPerTurn = 64) const;
+    std::vector<Eigen::Vector3f> SurfaceHelix(const Eigen::Vector3f& axisOrigin, const Eigen::Vector3f& axisDirection,
+                                              float turns, float pitch, float radius, int samplesPerTurn = 64) const;
 
 private:
     CGAL::Polyhedron_3<EpicKernel> mesh_;

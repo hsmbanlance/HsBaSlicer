@@ -66,7 +66,8 @@ inline void fill_basic_typeinfo(TypeInfo& info, std::string_view name)
 template <typename T>
 inline TypeInfo::Method make_self_cast()
 {
-    return +[](void* obj, std::span<AnyObject>) -> AnyObject { return AnyObject(GetTypeInfo<T>(), static_cast<T*>(obj)); };
+    return +[](void* obj, std::span<AnyObject>) -> AnyObject
+    { return AnyObject(GetTypeInfo<T>(), static_cast<T*>(obj)); };
 }
 }  // namespace hsba_detail
 
@@ -80,30 +81,30 @@ inline TypeInfo::Method make_self_cast()
 // The `LuaName` argument must match the name used by the Lua table adapter in the .cpp so the
 // reflected method and the `new_` / `cast_` globals stay in sync.
 // ---------------------------------------------------------------------------
-#define HSBA_DEFINE_REFLECTED_TYPEINFO(CleanName, LuaName, Type, Scalar, N)                                           \
-    template <>                                                                                                       \
-    inline TypeInfo* GetTypeInfo<Type>()                                                                              \
-    {                                                                                                                 \
-        static TypeInfo info;                                                                                         \
-        hsba_detail::fill_basic_typeinfo<Type>(info, CleanName);                                                      \
-        info.fields.emplace("x", std::make_pair(GetTypeInfo<Scalar>(), 0 * sizeof(Scalar)));                          \
-        info.fields.emplace("y", std::make_pair(GetTypeInfo<Scalar>(), 1 * sizeof(Scalar)));                          \
-        if constexpr ((N) >= 3)                                                                                       \
-            info.fields.emplace("z", std::make_pair(GetTypeInfo<Scalar>(), 2 * sizeof(Scalar)));                      \
-        if constexpr ((N) >= 4)                                                                                       \
-            info.fields.emplace("w", std::make_pair(GetTypeInfo<Scalar>(), 3 * sizeof(Scalar)));                      \
-        info.methods.emplace("cast_" LuaName, hsba_detail::make_self_cast<Type>());                                   \
-        return &info;                                                                                                 \
+#define HSBA_DEFINE_REFLECTED_TYPEINFO(CleanName, LuaName, Type, Scalar, N)                                            \
+    template <>                                                                                                        \
+    inline TypeInfo* GetTypeInfo<Type>()                                                                               \
+    {                                                                                                                  \
+        static TypeInfo info;                                                                                          \
+        hsba_detail::fill_basic_typeinfo<Type>(info, CleanName);                                                       \
+        info.fields.emplace("x", std::make_pair(GetTypeInfo<Scalar>(), 0 * sizeof(Scalar)));                           \
+        info.fields.emplace("y", std::make_pair(GetTypeInfo<Scalar>(), 1 * sizeof(Scalar)));                           \
+        if constexpr ((N) >= 3)                                                                                        \
+            info.fields.emplace("z", std::make_pair(GetTypeInfo<Scalar>(), 2 * sizeof(Scalar)));                       \
+        if constexpr ((N) >= 4)                                                                                        \
+            info.fields.emplace("w", std::make_pair(GetTypeInfo<Scalar>(), 3 * sizeof(Scalar)));                       \
+        info.methods.emplace("cast_" LuaName, hsba_detail::make_self_cast<Type>());                                    \
+        return &info;                                                                                                  \
     }
 
-#define HSBA_DEFINE_OPAQUE_TYPEINFO(CleanName, LuaName, Type)                                                         \
-    template <>                                                                                                       \
-    inline TypeInfo* GetTypeInfo<Type>()                                                                              \
-    {                                                                                                                 \
-        static TypeInfo info;                                                                                         \
-        hsba_detail::fill_basic_typeinfo<Type>(info, CleanName);                                                      \
-        info.methods.emplace("cast_" LuaName, hsba_detail::make_self_cast<Type>());                                   \
-        return &info;                                                                                                 \
+#define HSBA_DEFINE_OPAQUE_TYPEINFO(CleanName, LuaName, Type)                                                          \
+    template <>                                                                                                        \
+    inline TypeInfo* GetTypeInfo<Type>()                                                                               \
+    {                                                                                                                  \
+        static TypeInfo info;                                                                                          \
+        hsba_detail::fill_basic_typeinfo<Type>(info, CleanName);                                                       \
+        info.methods.emplace("cast_" LuaName, hsba_detail::make_self_cast<Type>());                                    \
+        return &info;                                                                                                  \
     }
 
 // Eigen fixed vectors (float / double / int): coefficients are contiguous.

@@ -57,7 +57,8 @@ public:
     int64_t Save(std::string_view table, std::string_view key, Utils::AnyObject cfg);
 
     /** @brief 批量保存，整批包在一个事务里；任一条失败回滚并抛出。返回各条 param_id。 */
-    std::vector<int64_t> SaveBatch(std::string_view table, const std::vector<std::pair<std::string, Utils::AnyObject>>& items);
+    std::vector<int64_t> SaveBatch(std::string_view table,
+                                   const std::vector<std::pair<std::string, Utils::AnyObject>>& items);
 
     /**
      * @brief 按 key 加载到 outCfg（包裹目标结构体的非拥有 AnyObject）。

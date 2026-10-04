@@ -196,7 +196,8 @@ static int RunSpiralTdpPipeline()
     }
     else
     {
-        LogMsg(std::format("3DP spiral slicing FAILED: {}", result.error_message ? result.error_message : "Unknown error"));
+        LogMsg(std::format("3DP spiral slicing FAILED: {}",
+                           result.error_message ? result.error_message : "Unknown error"));
     }
 
     HsBaFreeTdpPipelineResult(&result);

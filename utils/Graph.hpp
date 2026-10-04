@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <concepts>
+#include <format>
 #include <functional>
 #include <iostream>
 #include <iterator>
@@ -22,8 +23,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <format>
 
+#include <boost/container_hash/hash.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/astar_search.hpp>
 #include <boost/graph/bellman_ford_shortest_paths.hpp>
@@ -38,7 +39,6 @@
 #include <boost/graph/properties.hpp>
 #include <boost/graph/strong_components.hpp>
 #include <boost/graph/topological_sort.hpp>
-#include <boost/container_hash/hash.hpp>
 #include <boost/property_map/property_map.hpp>
 
 #include "base/concepts.hpp"
@@ -135,7 +135,8 @@ struct VertexDescStorage<void, VertexId>
 namespace graph
 {
 
-template <concepts::VertexIdType IdType, typename VertexProperty, typename EdgeProperty, typename Weight, typename DirectionTag, typename VertexDescription = void>
+template <concepts::VertexIdType IdType, typename VertexProperty, typename EdgeProperty, typename Weight,
+          typename DirectionTag, typename VertexDescription = void>
 class BaseGraph
 {
 public:
@@ -949,9 +950,8 @@ private:
         }
         return best;
     }
-    std::pair<std::vector<std::size_t>, std::vector<std::size_t>> crossover(const std::vector<std::size_t>& p1,
-                                                                            const std::vector<std::size_t>& p2,
-                                                                            std::mt19937& gen)
+    std::pair<std::vector<std::size_t>, std::vector<std::size_t>>
+    crossover(const std::vector<std::size_t>& p1, const std::vector<std::size_t>& p2, std::mt19937& gen)
     {
         std::uniform_real_distribution<double> prob(0.0, 1.0);
         if (prob(gen) > cxRate_)

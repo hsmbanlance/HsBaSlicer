@@ -24,14 +24,14 @@ namespace HsBa::Slicer
  */
 struct LuaPipelineContext
 {
-    std::string script;                    ///< Inline Lua source, executed first as a prelude (may be empty)
-    std::string script_file;               ///< Path to the Lua script file (may be empty)
-    std::string entry_func = "run_pipeline"; ///< Name of the Lua entry function to call
-    std::string config_json;               ///< Free-form JSON string exposed as `pipeline_config`
-    std::string output_path;               ///< Default output path exposed as `output_path`
-    std::string model_name;                ///< Model name exposed as `model_name`
-    std::string model_path;                ///< Model file path exposed as `model_path`
-    std::function<void(int, std::string_view)> progress_cb; ///< Progress reporting hook
+    std::string script;                       ///< Inline Lua source, executed first as a prelude (may be empty)
+    std::string script_file;                  ///< Path to the Lua script file (may be empty)
+    std::string entry_func = "run_pipeline";  ///< Name of the Lua entry function to call
+    std::string config_json;                  ///< Free-form JSON string exposed as `pipeline_config`
+    std::string output_path;                  ///< Default output path exposed as `output_path`
+    std::string model_name;                   ///< Model name exposed as `model_name`
+    std::string model_path;                   ///< Model file path exposed as `model_path`
+    std::function<void(int, std::string_view)> progress_cb;  ///< Progress reporting hook
 };
 
 /**
