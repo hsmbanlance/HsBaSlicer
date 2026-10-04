@@ -69,7 +69,7 @@ ParamStoreOutcome DoSave(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::strin
         o.paramId = static_cast<long long>(store.Save(ResolveTable(tag, table), key, obj));
         o.success = true;
     }
-    catch (const std::exception& e)
+    catch (const SQL::SQLAdapterError& e)
     {
         o.success = false;
         o.error = e.what();
@@ -109,7 +109,7 @@ ParamStoreOutcome DoLoad(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::strin
         ConfigStringsToOwning(ti, out_cfg);
         o.success = true;
     }
-    catch (const std::exception& e)
+    catch (const SQL::SQLAdapterError& e)
     {
         o.success = false;
         o.error = e.what();
@@ -148,7 +148,7 @@ ParamStoreOutcome SavePipelineParams(const ParamStoreConn& conn, ParamPipelineKi
             {
                 db.Connect(conn.sqlitePath);
             }
-            catch (const std::exception& e)
+            catch (const SQL::SQLAdapterError& e)
             {
                 ParamStoreOutcome o;
                 o.error = std::string("ParamStore: sqlite connect failed: ") + e.what();
@@ -167,7 +167,7 @@ ParamStoreOutcome SavePipelineParams(const ParamStoreConn& conn, ParamPipelineKi
                 else
                     db.Connect(conn.host, conn.user, conn.password, conn.database);
             }
-            catch (const std::exception& e)
+            catch (const SQL::SQLAdapterError& e)
             {
                 ParamStoreOutcome o;
                 o.error = std::string("ParamStore: mysql connect failed: ") + e.what();
@@ -189,7 +189,7 @@ ParamStoreOutcome SavePipelineParams(const ParamStoreConn& conn, ParamPipelineKi
                 else
                     db.Connect(conn.host, conn.user, conn.password, conn.database);
             }
-            catch (const std::exception& e)
+            catch (const SQL::SQLAdapterError& e)
             {
                 ParamStoreOutcome o;
                 o.error = std::string("ParamStore: postgresql connect failed: ") + e.what();
@@ -228,7 +228,7 @@ ParamStoreOutcome LoadPipelineParams(const ParamStoreConn& conn, ParamPipelineKi
             {
                 db.Connect(conn.sqlitePath);
             }
-            catch (const std::exception& e)
+            catch (const SQL::SQLAdapterError& e)
             {
                 ParamStoreOutcome o;
                 o.error = std::string("ParamStore: sqlite connect failed: ") + e.what();
@@ -247,7 +247,7 @@ ParamStoreOutcome LoadPipelineParams(const ParamStoreConn& conn, ParamPipelineKi
                 else
                     db.Connect(conn.host, conn.user, conn.password, conn.database);
             }
-            catch (const std::exception& e)
+            catch (const SQL::SQLAdapterError& e)
             {
                 ParamStoreOutcome o;
                 o.error = std::string("ParamStore: mysql connect failed: ") + e.what();
@@ -269,7 +269,7 @@ ParamStoreOutcome LoadPipelineParams(const ParamStoreConn& conn, ParamPipelineKi
                 else
                     db.Connect(conn.host, conn.user, conn.password, conn.database);
             }
-            catch (const std::exception& e)
+            catch (const SQL::SQLAdapterError& e)
             {
                 ParamStoreOutcome o;
                 o.error = std::string("ParamStore: postgresql connect failed: ") + e.what();

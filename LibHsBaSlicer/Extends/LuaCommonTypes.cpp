@@ -17,6 +17,7 @@
 
 #include "LuaAddFunction.hpp"
 
+#include "base/error.hpp"
 #include "fileoperator/param_reflect.hpp"
 
 namespace HsBa::Slicer
@@ -349,7 +350,7 @@ private:
             Push(L, value);
             return 1;
         }
-        catch (const std::exception& e)
+        catch (const RuntimeError& e)
         {
             lua_pushstring(L, e.what());
             return lua_error(L);

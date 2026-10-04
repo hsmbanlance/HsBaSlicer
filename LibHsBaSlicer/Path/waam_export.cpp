@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "base/error.hpp"
 #include "paths/weldrobotpath.hpp"
 #include "spiral_path.hpp"
 
@@ -162,16 +163,10 @@ HSBA_SLICER_LIB_API bool SaveWaamRobotPath(const WaamRobotPackage& pkg, const st
         }
         return true;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         if (error_out)
             *error_out = e.what();
-        return false;
-    }
-    catch (...)
-    {
-        if (error_out)
-            *error_out = "unknown error in SaveWaamRobotPath";
         return false;
     }
 }

@@ -16,6 +16,7 @@
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
 #include "pipeline_parallel.hpp"
 #include "base/coroutine.hpp"
+#include "base/error.hpp"
 
 namespace HsBa::Slicer::Pipeline
 {
@@ -202,9 +203,9 @@ Utils::Task<InternalLomResult> RunLomPipelineAsync(const InternalLomConfig& cfg)
             co_return result;
         }
 
-        ModelInfo info;
-        model->BoundingBox(info.bbox_min, info.bbox_max);
-        info.volume = model->Volume();
+        // Fetch bbox/volume through the Lib model funnel so any third-party
+        // geometry exception is translated into the project's RuntimeError family.
+        ModelInfo info = GetModelInfo(cfg.model_name);
         int total_layers = CalculateLayerCount(info, cfg.layer_height, cfg.first_layer_height);
         if (total_layers <= 0)
         {
@@ -281,7 +282,7 @@ Utils::Task<InternalLomResult> RunLomPipelineAsync(const InternalLomConfig& cfg)
 
         ReportProgress(cfg, 100, "Pipeline complete");
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         result.success = false;
         result.error_message = std::string("Pipeline error: ") + e.what();

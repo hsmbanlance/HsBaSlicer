@@ -11,6 +11,7 @@
 
 #include "LibHsBaSlicer/Transfer/file_transfer.hpp"
 #include "base/coroutine.hpp"
+#include "base/error.hpp"
 
 namespace HsBa::Slicer::Pipeline
 {
@@ -131,7 +132,7 @@ Utils::Task<InternalFileTransferResult> RunFileTransferPipelineAsync(const Inter
         result.total_files = lib_result.total_files;
         result.error_message = lib_result.error_message;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         result.success = false;
         result.error_message = std::string("File transfer error: ") + e.what();

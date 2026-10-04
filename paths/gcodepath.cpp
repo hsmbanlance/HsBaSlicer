@@ -4,6 +4,7 @@
 #include <format>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
 
 #include <lua.hpp>
 
@@ -27,7 +28,10 @@ float ParseLayerZ(const std::string& config)
         {
             return std::stof(config.substr(2));
         }
-        catch (...)
+        catch (const std::invalid_argument&)
+        {
+        }
+        catch (const std::out_of_range&)
         {
         }
     }

@@ -9,6 +9,7 @@
 
 #include <lua.hpp>
 
+#include "base/error.hpp"
 #include "2D/FloatPolygons.hpp"
 #include "2D/IntPolygon.hpp"
 #include "2D/LuaAdapter.hpp"
@@ -843,7 +844,7 @@ bool RunLuaSource(lua_State* L, std::string_view source, std::string_view chunk_
         const char* err = lua_tostring(L, -1);
         std::string message = std::string("Lua error in ") + std::string(chunk_name) + ": " + (err ? err : "unknown");
         lua_pop(L, 1);
-        throw std::runtime_error(message);
+        throw RuntimeError(message);
     }
     return true;
 }
@@ -968,7 +969,7 @@ HSBA_SLICER_LIB_API LuaPipelineOutput RunLuaPipeline(const LuaPipelineContext& c
         if (!truthy && out.result_string.empty())
             out.error_message = "Lua pipeline reported failure (entry function returned false/nil)";
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         out.success = false;
         out.error_message = std::string("Pipeline error: ") + e.what();

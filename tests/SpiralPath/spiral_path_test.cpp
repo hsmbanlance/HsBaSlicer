@@ -1,5 +1,5 @@
 #define BOOST_TEST_MODULE spiral_path_test
-#include <boost/test/unit_test.hpp>
+#include <boost/test/included/unit_test.hpp>
 
 #include <algorithm>
 #include <cmath>

@@ -401,7 +401,7 @@ HSBA_SLICER_LIB_API bool SaveSlaPackage(const SlaPackage& pkg, const std::string
         images_path.Save(output_zip);
         return true;
     }
-    catch (const std::exception&)
+    catch (const RuntimeError&)
     {
         return false;
     }
@@ -466,7 +466,7 @@ HSBA_SLICER_LIB_API bool SaveSlaPackageLua(const SlaPackage& pkg, const std::str
                          sla_reg);
         return true;
     }
-    catch (...)
+    catch (const RuntimeError&)
     {
         return false;
     }

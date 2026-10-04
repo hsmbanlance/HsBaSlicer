@@ -7,6 +7,7 @@
 
 
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
+#include "base/error.hpp"
 #include "fileoperator/LuaAdapter.hpp"
 #include "paths/imagespath.hpp"
 #include "spiral_path.hpp"
@@ -116,16 +117,10 @@ HSBA_SLICER_LIB_API bool SaveSlsPackageLua(const SlsPackage& pkg, const std::str
                          std::string_view(lua_func), sql_reg);
         return true;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         if (error_out)
             *error_out = e.what();
-        return false;
-    }
-    catch (...)
-    {
-        if (error_out)
-            *error_out = "unknown error in SaveSlsPackageLua";
         return false;
     }
 }
