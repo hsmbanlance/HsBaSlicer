@@ -83,7 +83,7 @@ auto ParamStore::Guard(Fn&& fn) -> decltype(fn())
             fn();
         }
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         last_error_ = e.what();
         throw;
@@ -230,7 +230,7 @@ std::vector<int64_t> ParamStore::SaveBatch(
                 if (use_txn)
                     db_->Execute(commit);
             }
-            catch (...)
+            catch (const SQL::SQLAdapterError&)
             {
                 if (use_txn)
                 {
@@ -238,7 +238,7 @@ std::vector<int64_t> ParamStore::SaveBatch(
                     {
                         db_->Execute(rollback);
                     }
-                    catch (...)
+                    catch (const SQL::SQLAdapterError&)
                     {
                         // 回滚失败不覆盖原始异常
                     }

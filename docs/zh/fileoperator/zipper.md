@@ -57,3 +57,28 @@ zipper.Subscribe([](double progress, std::string_view filename) {
 - 处理大文件时应注意内存使用情况
 - 使用完毕后应及时释放资源，避免内存泄漏
 - 在多线程环境中使用时需要注意线程安全性
+
+## Bit7zZipper（基于 7-Zip 的压缩类，可选）
+
+编译启用 `HSBA_USE_BIT7Z` 后，`Bit7zZipper` 类（头文件 `fileoperator/bit7z_zipper.hpp`）基于 bit7z（7-Zip）库提供多格式压缩，格式由 `ZipperFormat` 定义：
+
+| 格式 | 输出 | 说明 |
+|------|------|------|
+| `Zip` / `SevenZip` | `.zip` / `.7z` | 支持密码保护 |
+| `XZ` / `BZIP2` / `GZIP` / `TAR` | `.xz` / `.bz2` / `.gz` / `.tar` | 单层格式 |
+| `TarGz` | `.tar.gz` / `.tgz` | 直接两段式压缩：内存中先打包为 tar，再经 gzip 压缩，一次 `Save` 即生成 `.tar.gz` |
+| `TarXz` | `.tar.xz` / `.txz` | 直接两段式压缩：内存中先打包为 tar，再经 xz 压缩，一次 `Save` 即生成 `.tar.xz` |
+
+```cpp
+#include "fileoperator/bit7z_zipper.hpp"
+
+using namespace HsBa::Slicer;
+
+// 直接创建 .tar.gz 压缩包（ZipperFormat::TarXz 用法相同）
+Bit7zZipper zipper{HSBA_7Z_DLL, ZipperFormat::TarGz, ""};
+zipper.AddFile("document.txt", "/path/to/document.txt");
+zipper.AddByteFile("config.json", R"({"setting": "value"})");
+zipper.Save("archive.tar.gz");
+```
+
+在 Lua 脚本中，可通过 `Bit7zZipper.new("TarGz", dll_path)` 使用同样的格式（参见 Lua 流水线 API 文档）。

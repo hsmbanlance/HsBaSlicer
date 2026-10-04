@@ -188,7 +188,7 @@ HsBaSlicer 中的 Lua 脚本按用途分为两类：
 | `z:AddFile(name, path)` | 添加磁盘文件 |
 | `z:AddByteFile(name, data)` | 添加内存字节内容 |
 | `z:Save(path)` | 写出压缩包 |
-| `Bit7zZipper.new(format, dll_path)` | 7z 格式压缩，`format` ∈ `Zip`/`SevenZip`/`XZ`/`BZIP2`/`GZIP`/`TAR`（需编译启用 `HSBA_USE_BIT7Z`） |
+| `Bit7zZipper.new(format, dll_path)` | 7z 格式压缩，`format` ∈ `Zip`/`SevenZip`/`XZ`/`BZIP2`/`GZIP`/`TAR`/`TarGz`/`TarXz`（需编译启用 `HSBA_USE_BIT7Z`）；`TarGz`/`TarXz` 可在一次 `Save` 调用中直接生成 `.tar.gz`/`.tar.xz` 压缩包 |
 
 ### B.7 数据库适配器（`SQLiteAdapter` / `MySQLAdapter` / `PostgreSQLAdapter`）
 

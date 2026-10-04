@@ -163,6 +163,7 @@ The project includes several utility modules:
 
 - **Zipper** - ZIP compression functionality based on miniz
 - **Unzipper** - ZIP decompression functionality based on miniz
+- **Bit7zZipper / Bit7ZUnzipper** - 7-Zip based (bit7z) multi-format compression/decompression, with direct `.tar.gz` / `.tar.xz` support (requires `HSBA_USE_BIT7Z`)
 - **SQL Adapter** - SQLite database operation functionality
 
 ## Logger Module

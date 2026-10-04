@@ -100,7 +100,11 @@ public:
                 switch (sqlite3_column_type(stmt, i))
                 {
                 case SQLITE_INTEGER:
-                    row[columnName] = sqlite3_column_int64(stmt, i);
+                    // Normalize to the project's canonical std::any integer type (int64_t).
+                    // sqlite3_column_int64 returns long long, which is a distinct typeid from
+                    // int64_t on LP64 Linux (int64_t == long), causing std::bad_any_cast in
+                    // consumers that any_cast<int64_t>. Mirror the write path's int64_t visit.
+                    row[columnName] = static_cast<int64_t>(sqlite3_column_int64(stmt, i));
                     break;
                 case SQLITE_FLOAT:
                     row[columnName] = sqlite3_column_double(stmt, i);
@@ -541,7 +545,9 @@ SQLiteAdapter::Rows SQLiteAdapter::Select(const std::string& table, const std::v
                 row.emplace(colName, std::any(nullptr));
                 break;
             case SQLITE_INTEGER:
-                row.emplace(colName, std::any(sqlite3_column_int64(stmt, i)));
+                // Normalize to canonical int64_t (see Query()): sqlite3_column_int64 is
+                // long long, whose typeid differs from int64_t on LP64 Linux.
+                row.emplace(colName, std::any(static_cast<int64_t>(sqlite3_column_int64(stmt, i))));
                 break;
             case SQLITE_FLOAT:
                 row.emplace(colName, std::any(sqlite3_column_double(stmt, i)));
@@ -708,7 +714,7 @@ public:
                     switch (mysql_fetch_field_direct(result, i)->type)
                     {
                     case MYSQL_TYPE_LONG:
-                        rowData[fieldName] = std::stoll(row[i]);
+                        rowData[fieldName] = static_cast<int64_t>(std::stoll(row[i]));
                         break;
                     case MYSQL_TYPE_FLOAT:
                     case MYSQL_TYPE_DOUBLE:
@@ -1504,7 +1510,7 @@ public:
                     case PG_TYPE_INT8:  // INT8
                     case PG_TYPE_INT2:  // INT2
                     case PG_TYPE_INT4:  // INT4
-                        rowData[fieldName] = std::stoll(PQgetvalue(result, i, j));
+                        rowData[fieldName] = static_cast<int64_t>(std::stoll(PQgetvalue(result, i, j)));
                         break;
                     case PG_TYPE_FLOAT4:  // FLOAT4
                     case PG_TYPE_FLOAT8:  // FLOAT8
@@ -1839,17 +1845,20 @@ PostgreSQLAdapter::Rows PostgreSQLAdapter::Select(const std::string& table, cons
 
             switch (oid)
             {
+            // Normalize to the project's canonical std::any whitelist
+            // {nullptr_t, int64_t, double, string, vector<unsigned char>} so consumers
+            // any_cast<int64_t>/any_cast<double> uniformly across platforms and backends.
             case PG_TYPE_INT8:
-                row.emplace(colName, std::stoll(val));
+                row.emplace(colName, static_cast<int64_t>(std::stoll(val)));
                 break;  // int8 / bigint
             case PG_TYPE_INT2:
-                row.emplace(colName, static_cast<int16_t>(std::stoi(val)));
+                row.emplace(colName, static_cast<int64_t>(std::stoi(val)));
                 break;  // int2
             case PG_TYPE_INT4:
-                row.emplace(colName, std::stoi(val));
+                row.emplace(colName, static_cast<int64_t>(std::stoi(val)));
                 break;  // int4
             case PG_TYPE_FLOAT4:
-                row.emplace(colName, std::stof(val));
+                row.emplace(colName, static_cast<double>(std::stof(val)));
                 break;  // float4
             case PG_TYPE_FLOAT8:
                 row.emplace(colName, std::stod(val));

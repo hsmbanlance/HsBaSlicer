@@ -18,7 +18,19 @@ Bit7ZUnzipper::~Bit7ZUnzipper()
             std::filesystem::remove_all(cache_dir_);
         }
     }
+    ClearInnerTarTempFile();
 }
+
+void Bit7ZUnzipper::ClearInnerTarTempFile()
+{
+    if (!inner_tar_path_.empty())
+    {
+        archiver_.reset();  // release the file handle before deleting on Windows
+        std::filesystem::remove(inner_tar_path_);
+        inner_tar_path_.clear();
+    }
+}
+
 void Bit7ZUnzipper::ReadFromFileImpl(std::string_view path, bool reopen)
 {
     if (is_open_)
@@ -30,9 +42,40 @@ void Bit7ZUnzipper::ReadFromFileImpl(std::string_view path, bool reopen)
         is_open_ = false;
     }
     bit7z::Bit7zLibrary lib{dll_path_};
-    archiver_ = std::make_unique<bit7z::BitArchiveReader>(lib, archiver_path_, bit7z::ArchiveStartOffset::FileStart,
-                                                          bit7z::BitFormat::Auto, password_);
-    archiver_path_ = path;
+    archiver_.reset();
+    ClearInnerTarTempFile();
+    std::string archive_path = std::string{path};
+    if (IsCompressedTarPath(archive_path))
+    {
+        // 7z sees only the compression layer of .tar.gz/.tar.xz (a single .tar entry): unpack the
+        // inner tar to a temporary file and read it, so the real archive files are available directly.
+        try
+        {
+            inner_tar_path_ = MakeInnerTarTempPath(archive_path);
+            bit7z::BitArchiveReader outer{lib, archive_path, bit7z::BitFormat::Auto, password_};
+            std::ofstream ofs(inner_tar_path_, std::ios_base::out | std::ios_base::binary);
+            outer.extractTo(ofs, 0u);
+            ofs.close();
+            archiver_ =
+                std::make_unique<bit7z::BitArchiveReader>(lib, inner_tar_path_.string(),
+                                                          bit7z::ArchiveStartOffset::FileStart, bit7z::BitFormat::Tar,
+                                                          password_);
+        }
+        catch (const bit7z::BitException&)
+        {
+            // Not a real compressed tar: read the archive itself instead.
+            ClearInnerTarTempFile();
+            archiver_ = std::make_unique<bit7z::BitArchiveReader>(lib, archive_path,
+                                                                  bit7z::ArchiveStartOffset::FileStart,
+                                                                  bit7z::BitFormat::Auto, password_);
+        }
+    }
+    else
+    {
+        archiver_ = std::make_unique<bit7z::BitArchiveReader>(lib, archive_path, bit7z::ArchiveStartOffset::FileStart,
+                                                              bit7z::BitFormat::Auto, password_);
+    }
+    archiver_path_ = archive_path;
     is_open_ = true;
     if (use_cache_dir_)
     {

@@ -188,7 +188,7 @@ The following global libraries are callable from **both the custom pipeline and 
 | `z:AddFile(name, path)` | Add an on-disk file |
 | `z:AddByteFile(name, data)` | Add in-memory byte content |
 | `z:Save(path)` | Write out the archive |
-| `Bit7zZipper.new(format, dll_path)` | 7z compression, `format` ∈ `Zip`/`SevenZip`/`XZ`/`BZIP2`/`GZIP`/`TAR` (requires `HSBA_USE_BIT7Z`) |
+| `Bit7zZipper.new(format, dll_path)` | 7z compression, `format` ∈ `Zip`/`SevenZip`/`XZ`/`BZIP2`/`GZIP`/`TAR`/`TarGz`/`TarXz` (requires `HSBA_USE_BIT7Z`); `TarGz`/`TarXz` produce `.tar.gz`/`.tar.xz` archives directly in one `Save` call |
 
 ### B.7 Database adapters (`SQLiteAdapter` / `MySQLAdapter` / `PostgreSQLAdapter`)
 

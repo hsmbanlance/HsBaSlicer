@@ -68,7 +68,7 @@ int lua_zipper_add_file(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -91,7 +91,7 @@ int lua_zipper_add_byte_file(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -113,7 +113,7 @@ int lua_zipper_save(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -152,6 +152,10 @@ int lua_bit7z_zipper_new(lua_State* L)
         zipper_format = ZipperFormat::GZIP;
     else if (format_str == "TAR")
         zipper_format = ZipperFormat::TAR;
+    else if (format_str == "TarGz")
+        zipper_format = ZipperFormat::TarGz;
+    else if (format_str == "TarXz")
+        zipper_format = ZipperFormat::TarXz;
     else
     {
         lua_pushstring(L, "Unsupported Bit7z Zipper format");
@@ -189,7 +193,7 @@ int lua_bit7z_zipper_add_file(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -213,7 +217,7 @@ int lua_bit7z_zipper_add_byte_file(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -235,7 +239,7 @@ int lua_bit7z_zipper_save(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -280,7 +284,7 @@ int lua_sqlite_connect(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -302,7 +306,7 @@ int lua_sqlite_execute(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -334,7 +338,7 @@ int lua_sqlite_query(lua_State* L)
         }
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -372,7 +376,7 @@ int lua_sqlite_insert(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -415,7 +419,7 @@ int lua_sqlite_update(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -451,7 +455,7 @@ int lua_sqlite_delete(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -483,7 +487,7 @@ int lua_sqlite_create_table(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -542,7 +546,7 @@ int lua_mysql_connect(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -564,7 +568,7 @@ int lua_mysql_execute(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -595,7 +599,7 @@ int lua_mysql_query(lua_State* L)
         }
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -632,7 +636,7 @@ int lua_mysql_insert(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -674,7 +678,7 @@ int lua_mysql_update(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -709,7 +713,7 @@ int lua_mysql_delete(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -740,7 +744,7 @@ int lua_mysql_create_table(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -798,7 +802,7 @@ int lua_pgsql_connect(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -820,7 +824,7 @@ int lua_pgsql_execute(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -851,7 +855,7 @@ int lua_pgsql_query(lua_State* L)
         }
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -888,7 +892,7 @@ int lua_pgsql_insert(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -930,7 +934,7 @@ int lua_pgsql_update(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -965,7 +969,7 @@ int lua_pgsql_delete(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -996,7 +1000,7 @@ int lua_pgsql_create_table(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -1389,7 +1393,7 @@ int lua_paramstore_new(lua_State* L)
         NewLuaObject<ParamStore, ParamStoreTypeName>(L, *adapter);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -1410,7 +1414,7 @@ int lua_paramstore_ensure_schema(lua_State* L)
         lua_pushboolean(L, 1);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -1442,7 +1446,7 @@ int lua_paramstore_save(lua_State* L)
         lua_pushinteger(L, static_cast<lua_Integer>(id));
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -1481,7 +1485,7 @@ int lua_paramstore_load(lua_State* L)
         ti->destroy(s);
         return 2;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -1510,7 +1514,7 @@ int lua_paramstore_list(lua_State* L)
         }
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -1552,7 +1556,7 @@ int lua_paramstore_update(lua_State* L)
         lua_pushboolean(L, ok ? 1 : 0);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);
@@ -1575,7 +1579,7 @@ int lua_paramstore_delete(lua_State* L)
         lua_pushboolean(L, ok ? 1 : 0);
         return 1;
     }
-    catch (const std::exception& e)
+    catch (const RuntimeError& e)
     {
         lua_pushstring(L, e.what());
         return lua_error(L);

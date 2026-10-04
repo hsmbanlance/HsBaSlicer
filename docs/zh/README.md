@@ -163,6 +163,7 @@ HsBaSlicer 是一款用于增材制造的3D切片软件，提供了处理3D模�
 
 - **Zipper** - 基于miniz的ZIP压缩功能
 - **Unzipper** - 基于miniz的ZIP解压缩功能
+- **Bit7zZipper / Bit7ZUnzipper** - 基于7-Zip（bit7z）的多格式压缩/解压，直接支持 `.tar.gz` / `.tar.xz`（需启用 `HSBA_USE_BIT7Z`）
 - **SQL Adapter** - SQLite数据库操作功能
 
 ## Logger 模块

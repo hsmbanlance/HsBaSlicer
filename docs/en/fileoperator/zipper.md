@@ -57,3 +57,28 @@ zipper.Subscribe([](double progress, std::string_view filename) {
 - Pay attention to memory usage when processing large files
 - Release resources promptly after use to avoid memory leaks
 - Pay attention to thread safety when using in multithreaded environments
+
+## Bit7zZipper (7-Zip based compressor, optional)
+
+When the project is compiled with `HSBA_USE_BIT7Z`, the `Bit7zZipper` class (header `fileoperator/bit7z_zipper.hpp`) provides multi-format compression based on the bit7z (7-Zip) library, with formats defined in `ZipperFormat`:
+
+| Format | Output | Description |
+|--------|--------|-------------|
+| `Zip` / `SevenZip` | `.zip` / `.7z` | Password support |
+| `XZ` / `BZIP2` / `GZIP` / `TAR` | `.xz` / `.bz2` / `.gz` / `.tar` | Single-layer formats |
+| `TarGz` | `.tar.gz` / `.tgz` | Direct two-stage compression: items are packed into a tar in memory, then gzip-compressed in one `Save` call |
+| `TarXz` | `.tar.xz` / `.txz` | Direct two-stage compression: items are packed into a tar in memory, then xz-compressed in one `Save` call |
+
+```cpp
+#include "fileoperator/bit7z_zipper.hpp"
+
+using namespace HsBa::Slicer;
+
+// Create a .tar.gz archive directly (same applies to ZipperFormat::TarXz)
+Bit7zZipper zipper{HSBA_7Z_DLL, ZipperFormat::TarGz, ""};
+zipper.AddFile("document.txt", "/path/to/document.txt");
+zipper.AddByteFile("config.json", R"({"setting": "value"})");
+zipper.Save("archive.tar.gz");
+```
+
+In Lua scripts, the same formats are available via `Bit7zZipper.new("TarGz", dll_path)` (see the Lua Pipeline API documentation).

@@ -36,6 +36,8 @@ enum class ZipperFormat
     BZIP2,
     GZIP,
     TAR,
+    TarGz,  // tar archive compressed with gzip (.tar.gz / .tgz)
+    TarXz,  // tar archive compressed with xz (.tar.xz / .txz)
     // only support extract
     RAR,
     ISO,
@@ -69,7 +71,12 @@ private:
     std::string dll_path_;
     ZipperFormat format_;
     std::string password_;
-    void SaveAllFile(/*ref*/ bit7z::BitArchiveWriter& compress, const std::string& path);
+    void AddAllWaitFiles(bit7z::BitArchiveWriter& compress);
+    void SaveAllFile(bit7z::BitArchiveWriter& compress, const std::string& path);
+    void SaveAllFile(bit7z::BitArchiveWriter& compress, bit7z::buffer_t& out_buffer);
+    // Two-stage packaging: items -> tar (memory) -> gzip/xz (file), producing .tar.gz/.tar.xz directly.
+    void SaveCompressedTar(const bit7z::Bit7zLibrary& lib, const bit7z::BitInOutFormat& compress_format,
+                           const std::string& path);
 };
 #endif  // HSBA_USE_BIT7Z
 }  // namespace HsBa::Slicer
