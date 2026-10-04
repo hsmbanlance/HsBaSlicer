@@ -8,6 +8,9 @@
 - [DllHsBaSlicer/CMakeLists.txt](file://DllHsBaSlicer/CMakeLists.txt)
 - [fdm_pipeline.h](file://DllHsBaSlicer/fdm_pipeline.h)
 - [fdm_pipeline.cpp](file://DllHsBaSlicer/fdm_pipeline.cpp)
+- [pipeline_parallel.hpp](file://DllHsBaSlicer/pipeline_parallel.hpp)
+- [thread_pool.hpp](file://base/thread_pool.hpp)
+- [error.hpp](file://base/error.hpp)
 - [model_preprocess.hpp](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp)
 - [model_preprocess.cpp](file://LibHsBaSlicer/Preprocess/model_preprocess.cpp)
 - [ModelLoader.hpp](file://preprocess/ModelLoader.hpp)
@@ -34,11 +37,12 @@
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive documentation for the new GCodePath class with multi-firmware support (Marlin, RepRap, Klipper)
-- Updated path generation section to document the new GenerateGCodePathV2 function and printer configuration parameters
-- Enhanced architecture overview to show the integration between the old PointsPath system and new GCodePath system
-- Added detailed documentation for firmware-specific GCode output generation and Lua post-processing capabilities
-- Updated pipeline orchestration to reflect the new GCode firmware selection mechanism
+- Added comprehensive documentation for the new ParallelForLayers helper function enabling layer-wise parallel processing
+- Updated thread pool architecture section to document the ThreadPool class and its integration with coroutines
+- Enhanced error handling section to cover the comprehensive exception hierarchy and pipeline-level error propagation
+- Added environment variable configuration for controlling parallel execution (HSBA_PIPELINE_THREADS)
+- Updated performance considerations to reflect the new parallel processing capabilities
+- Enhanced troubleshooting guide with parallel processing-specific issues and solutions
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -46,31 +50,34 @@
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Dependency Analysis](#dependency-analysis)
-7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
+6. [Parallel Processing Architecture](#parallel-processing-architecture)
+7. [Error Handling System](#error-handling-system)
+8. [Dependency Analysis](#dependency-analysis)
+9. [Performance Considerations](#performance-considerations)
+10. [Troubleshooting Guide](#troubleshooting-guide)
+11. [Conclusion](#conclusion)
 
 ## Introduction
-This document describes the FDM (Fused Deposition Modeling) pipeline system implemented in HsBaSlicer. The system provides a complete end-to-end workflow: model preprocessing, slicing, support generation, infill, and G-code path generation. It exposes both C++ APIs in LibHsBaSlicer and a C-compatible API in DllHsBaSlicer. Internally, it leverages C++20 coroutines for asynchronous execution and progress reporting.
+This document describes the FDM (Fused Deposition Modeling) pipeline system implemented in HsBaSlicer. The system provides a complete end-to-end workflow: model preprocessing, slicing, support generation, infill, and G-code path generation. It exposes both C++ APIs in LibHsBaSlicer and a C-compatible API in DllHsBaSlicer. Internally, it leverages C++20 coroutines for asynchronous execution and **enhanced parallel processing capabilities** for improved performance.
 
 The design emphasizes:
 - Clear separation between low-level modules (preprocess, slice, support, fill, paths) and high-level orchestration (pipeline).
 - A C-compatible interface for cross-language integration.
 - Coroutine-based Task abstraction to simplify async composition and error handling.
 - Independent model management per pipeline instance to avoid conflicts during concurrent execution.
-- **Updated** Multi-firmware GCode output support with Marlin, RepRap, and Klipper compatibility.
-- **Updated** Enhanced printer configuration system with nozzle, filament, temperature, and retraction parameters.
-- **Updated** Dual path generation system supporting both legacy PointsPath and advanced GCodePath approaches.
+- **Enhanced** Multi-firmware GCode output support with Marlin, RepRap, and Klipper compatibility.
+- **Enhanced** Thread-safe parallel processing for independent layer operations.
+- **Enhanced** Comprehensive error handling with custom exception hierarchy.
+- **Enhanced** Environment-based configuration for parallel execution control.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
 ## Project Structure
 At a high level:
-- base: Core types, interfaces (e.g., IModel), coroutine utilities.
+- base: Core types, interfaces (e.g., IModel), coroutine utilities, **thread pool**, and **error handling**.
 - 2D, paths, preprocess, support, meshmodel, cadmodel: Domain-specific modules.
 - LibHsBaSlicer: Public C++ library exposing preprocessing, slicing, support, fill, and path generation.
-- DllHsBaSlicer: Dynamic library exporting a C-compatible API that orchestrates the full FDM pipeline using coroutines.
+- DllHsBaSlicer: Dynamic library exporting a C-compatible API that orchestrates the full FDM pipeline using coroutines and **parallel processing**.
 - Top-level CMakeLists.txt configures features, dependencies, and subprojects.
 
 ```mermaid
@@ -79,12 +86,13 @@ A["Top-level CMakeLists.txt"] --> B["LibHsBaSlicer/CMakeLists.txt"]
 A --> C["DllHsBaSlicer/CMakeLists.txt"]
 B --> D["LibHsBaSlicer/* (Preprocess, Slice, Support, Fill, Path)"]
 C --> E["DllHsBaSlicer/fdm_pipeline.*"]
-D --> F["base/* (IModel, coroutine)"]
-D --> G["paths/* (PointsPath, GCodePath)"]
-D --> H["support/* (SupportConfig)"]
-E --> I["LibHsBaSlicer Public API"]
-I --> J["LibHsBaSlicer Internal Modules"]
-J --> K["preprocess/ModelLoader.*"]
+C --> F["DllHsBaSlicer/pipeline_parallel.hpp"]
+D --> G["base/* (IModel, coroutine, thread_pool, error)"]
+D --> H["paths/* (PointsPath, GCodePath)"]
+D --> I["support/* (SupportConfig)"]
+E --> J["LibHsBaSlicer Public API"]
+J --> K["LibHsBaSlicer Internal Modules"]
+K --> L["preprocess/ModelLoader.*"]
 ```
 
 **Diagram sources**
@@ -101,8 +109,8 @@ J --> K["preprocess/ModelLoader.*"]
 - Slicing: Convert 3D models into 2D polygons at specified Z heights.
 - Support: Generate layer-wise supports based on overhang detection and configuration.
 - Infill: Fill polygonal layers with various patterns and borders.
-- **Updated** Path Generation: Convert outlines, fills, and supports into G-code point sequences with multi-firmware support.
-- Pipeline Orchestration: Compose steps into a single task with progress callbacks and error handling.
+- **Enhanced** Path Generation: Convert outlines, fills, and supports into G-code point sequences with multi-firmware support and **parallel processing optimization**.
+- Pipeline Orchestration: Compose steps into a single task with progress callbacks and error handling, **now utilizing parallel execution for independent stages**.
 
 Key public headers:
 - Preprocess: [model_preprocess.hpp:1-88](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L1-L88)
@@ -119,60 +127,37 @@ Key public headers:
 - [mesh_slice.hpp:1-28](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L1-L28)
 
 ## Architecture Overview
-The FDM pipeline composes multiple stages into a single Task. The C API exposes synchronous and asynchronous entry points. Internally, a coroutine-based function executes each stage sequentially while emitting progress updates.
+The FDM pipeline composes multiple stages into a single Task. The C API exposes synchronous and asynchronous entry points. Internally, a coroutine-based function executes each stage sequentially while emitting progress updates, **with parallel execution for independent layer operations**.
 
-**Updated** The architecture now includes a dual path generation system: the legacy PointsPath for basic G-code output and the new GCodePath for firmware-specific output with advanced printer configuration.
+**Enhanced** The architecture now includes parallel processing capabilities through the ParallelForLayers helper, which distributes independent layer operations across multiple threads while maintaining thread safety and proper progress reporting.
 
 ```mermaid
 sequenceDiagram
 participant Caller as "Caller"
 participant CAPI as "DllHsBaSlicer (C API)"
 participant Pipeline as "RunPipelineAsync (Task)"
-participant LibAPI as "LibHsBaSlicer Public API"
-participant ModelLoader as "ModelLoader (per-instance)"
-participant Pre as "Preprocess"
-participant Slice as "Slice"
-participant Sup as "Support"
-participant Fill as "Fill"
-participant PathGen as "Path Gen (V2)"
-participant GCodePath as "GCodePath"
+participant Parallel as "ParallelForLayers"
+participant ThreadPool as "ThreadPool"
+participant Stage as "Stage Workers"
 Caller->>CAPI : HsBaRunFdmPipeline(config, callback, user_data)
 CAPI->>Pipeline : BuildConfig + RunPipelineAsync()
-Pipeline->>LibAPI : GetModel/LoadModel (Public API)
-LibAPI->>ModelLoader : Internal model management
-ModelLoader-->>LibAPI : Model handle
-LibAPI-->>Pipeline : Model handle
-Pipeline->>LibAPI : UnSafeSlice (Public API)
-LibAPI->>Slice : Internal slicing
-Slice-->>LibAPI : PolygonsD outlines
-LibAPI-->>Pipeline : PolygonsD outlines
-alt Enable support
-Pipeline->>LibAPI : GenerateAllFdmSupport (Public API)
-LibAPI->>Sup : Internal support generation
-Sup-->>LibAPI : PolygonsD supports
-LibAPI-->>Pipeline : PolygonsD supports
-else Disable support
-Pipeline-->>Pipeline : No supports
+Pipeline->>Parallel : ParallelForLayers(total_layers, work, on_progress)
+Parallel->>ThreadPool : Create pool(nthreads)
+loop For each block of layers
+Parallel->>ThreadPool : Submit tasks(work(i))
+ThreadPool->>Stage : Execute work(i) concurrently
+Stage-->>ThreadPool : Complete work(i)
+ThreadPool-->>Parallel : All tasks complete
+Parallel->>on_progress : Report completed blocks
 end
-Pipeline->>LibAPI : FillWithBorder (Public API)
-LibAPI->>Fill : Internal filling
-Fill-->>LibAPI : PolygonsD fills
-LibAPI-->>Pipeline : PolygonsD fills
-Pipeline->>PathGen : GenerateGCodePathV2(layer_data, config, printer_config)
-PathGen->>GCodePath : Create GCodePath with printer_config
-GCodePath-->>PathGen : GCodePath object
-PathGen-->>Pipeline : GCodePath
-Pipeline->>GCodePath : ToGCode(firmware)
-GCodePath-->>Pipeline : Firmware-specific GCode string
 Pipeline-->>CAPI : InternalResult
 CAPI-->>Caller : HsBaFdmPipelineResult_t
 ```
 
 **Diagram sources**
 - [fdm_pipeline.cpp:182-292](file://DllHsBaSlicer/fdm_pipeline.cpp#L182-L292)
-- [fdm_pipeline.h:100-140](file://DllHsBaSlicer/fdm_pipeline.h#L100-L140)
-- [path_generator.cpp:89-110](file://LibHsBaSlicer/Path/path_generator.cpp#L89-L110)
-- [gcodepath.cpp:267-279](file://paths/gcodepath.cpp#L267-L279)
+- [pipeline_parallel.hpp:41-117](file://DllHsBaSlicer/pipeline_parallel.hpp#L41-L117)
+- [thread_pool.hpp:67-90](file://base/thread_pool.hpp#L67-L90)
 
 ## Detailed Component Analysis
 
@@ -257,7 +242,7 @@ CAPI --> HsBaFdmPipelineResult : "produces"
 - [pipeline_types.h:92-100](file://pipelinetypes/pipeline_types.h#L92-L100)
 
 ### Enhanced GCode Path Generation System
-**New Section** The path generation system has been significantly enhanced with a new GCodePath class that provides firmware-specific G-code output and advanced printer configuration.
+**Updated** The path generation system has been significantly enhanced with a new GCodePath class that provides firmware-specific G-code output and advanced printer configuration.
 
 #### GCodePath Class Architecture
 The new GCodePath class inherits from LayersPath and adds firmware-specific G-code generation capabilities:
@@ -347,8 +332,9 @@ Implementation highlights:
 - Converts unsafe slices to safe float polygons where needed.
 - Produces a final GCodePath and serializes to firmware-specific string.
 - Creates independent ModelLoader instance per pipeline execution to avoid model name conflicts.
+- **Enhanced** Utilizes ParallelForLayers for independent layer operations to improve performance.
 
-Enhanced fill algorithm with configurable top/bottom layer counts and adjustable infill density for middle layers. **Updated** Now uses GenerateGCodePathV2 with printer configuration for firmware-specific output.
+Enhanced fill algorithm with configurable top/bottom layer counts and adjustable infill density for middle layers. **Enhanced** Now uses GenerateGCodePathV2 with printer configuration for firmware-specific output and parallel processing for independent stages.
 
 ```mermaid
 flowchart TD
@@ -357,16 +343,16 @@ BuildCfg --> CreateModelLoader["Create local ModelLoader instance"]
 CreateModelLoader --> LoadModel["Load model and get info"]
 LoadModel --> CalcLayers{"Valid height?"}
 CalcLayers --> |No| ErrInvalid["Set error and return"]
-CalcLayers --> |Yes| SliceLoop["For each layer: UnSafeSlice(z)"]
-SliceLoop --> Supports{"Enable support?"}
+CalcLayers --> |Yes| ParallelSlice["ParallelForLayers: Slice all layers"]
+ParallelSlice --> Supports{"Enable support?"}
 Supports --> |Yes| GenSupports["GenerateAllFdmSupport(outlines)"]
 Supports --> |No| SkipSupports["Skip supports"]
-GenSupports --> FillLoop["For each layer: FillWithBorder(outlines)"]
-SkipSupports --> FillLoop
-FillLoop --> LayerType{"Layer type?"}
+GenSupports --> ParallelFill["ParallelForLayers: Fill all layers"]
+SkipSupports --> ParallelFill
+ParallelFill --> LayerType{"Layer type?"}
 LayerType --> |Top/Bottom| SolidFill["Solid fill with wall_count"]
 LayerType --> |Middle| DensityFill["Density-adjusted fill spacing"]
-SolidFill --> GenPaths["GenerateGCodePathV2(layer_data, path_config, printer_config)"]
+SolidFill --> GenPaths["GenerateGCodePathV2(layer_data, config, printer_config)"]
 DensityFill --> GenPaths
 GenPaths --> FirmwareSelect{"Select firmware"}
 FirmwareSelect --> Marlin["Marlin firmware"]
@@ -620,13 +606,140 @@ Optimized with const reference parameter passing for improved performance in cor
 - [coroutine.hpp:1-200](file://base/coroutine.hpp#L1-L200)
 - [coroutine.hpp:200-400](file://base/coroutine.hpp#L200-L400)
 
+## Parallel Processing Architecture
+
+### ParallelForLayers Helper Function
+**New Section** The ParallelForLayers function provides a thread-safe way to execute independent layer operations in parallel, optimizing performance for slicing and filling stages.
+
+Key features:
+- **Thread Pool Integration**: Uses ThreadPool to distribute work across available CPU cores
+- **Environment Configuration**: HSBA_PIPELINE_THREADS environment variable controls worker count
+- **Block Processing**: Processes layers in blocks to minimize progress callback overhead
+- **Exception Safety**: Properly propagates exceptions from worker threads to caller
+- **Fallback Behavior**: Automatically falls back to serial execution on constrained platforms
+
+```mermaid
+flowchart TD
+Start(["ParallelForLayers"]) --> CheckEnv["Check HSBA_PIPELINE_THREADS env var"]
+CheckEnv --> CalcThreads["Calculate nthreads = min(hw_concurrency, total_layers)"]
+CalcThreads --> SerialCheck{"nthreads <= 1 || total_layers <= 1?"}
+SerialCheck --> |Yes| SerialLoop["Serial loop with progress callbacks"]
+SerialCheck --> |No| CreatePool["Create ThreadPool(nthreads)"]
+CreatePool --> BlockCalc["Calculate block_size = ceil(total_layers / (nthreads * 4))"]
+BlockCalc --> ProcessBlocks["Process blocks of layers"]
+ProcessBlocks --> SubmitTasks["Submit tasks to ThreadPool"]
+SubmitTasks --> WaitComplete["Wait for all tasks in block"]
+WaitComplete --> ProgressCallback["Call on_progress(completed_layers)"]
+ProgressCallback --> MoreBlocks{"More blocks?"}
+MoreBlocks --> |Yes| ProcessBlocks
+MoreBlocks --> |No| Complete(["Complete"])
+```
+
+**Diagram sources**
+- [pipeline_parallel.hpp:41-117](file://DllHsBaSlicer/pipeline_parallel.hpp#L41-L117)
+
+### ThreadPool Implementation
+**New Section** The ThreadPool class provides a robust foundation for concurrent task execution with proper synchronization and resource management.
+
+Key capabilities:
+- **Task Queue Management**: Thread-safe queue with mutex protection
+- **Worker Thread Lifecycle**: Automatic thread creation and cleanup
+- **Future Integration**: Returns std::future objects for result retrieval
+- **Exception Handling**: Proper exception propagation from worker threads
+- **Resource Monitoring**: PendingTasks() and ActiveTasks() methods for monitoring
+
+```mermaid
+classDiagram
+class ThreadPool {
++submit(F&& f, Args&&... args) future
++PendingTasks() size_t
++ActiveTasks() size_t
++WaitAll() void
+~ThreadPool()
+-WorkerLoop() void
+-queue_mutex_ mutex
+-conditions condition_variable
+-workers_ vector<thread>
+-tasks_ queue<function>
+-active_tasks_ atomic<size_t>
+-stop_ atomic<bool>
+}
+class Future {
++get() ReturnType
++then(callback) Future
+}
+ThreadPool --> Future : "returns"
+```
+
+**Diagram sources**
+- [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
+
+**Section sources**
+- [pipeline_parallel.hpp:1-122](file://DllHsBaSlicer/pipeline_parallel.hpp#L1-L122)
+- [thread_pool.hpp:1-214](file://base/thread_pool.hpp#L1-L214)
+
+## Error Handling System
+
+### Custom Exception Hierarchy
+**New Section** The error handling system provides a comprehensive hierarchy of custom exceptions that inherit from std::runtime_error, offering detailed error categorization throughout the pipeline.
+
+Exception types:
+- **RuntimeError**: Base exception for runtime errors
+- **OutOfRangeError**: Invalid index or range access
+- **InvalidArgumentError**: Invalid function arguments
+- **IOError**: File I/O operations failures
+- **NotImplementedError**: Feature not yet implemented
+- **NullValueError**: Null pointer dereference attempts
+- **NotSupportedError**: Unsupported operation or platform
+- **NotFoundError**: Resource not found
+- **AlreadyExistsError**: Duplicate resource creation
+- **PermissionDeniedError**: Access permission violations
+- **TimeoutError**: Operation timeout
+- **InterruptedError**: Operation interruption
+- **CancelledError**: Operation cancellation
+- **OutOfMemoryError**: Memory allocation failures
+
+### Pipeline-Level Error Propagation
+**New Section** The FDM pipeline implements comprehensive error handling with proper exception propagation and recovery mechanisms.
+
+Key features:
+- **Try-Catch Wrapping**: Entire pipeline wrapped in try-catch for RuntimeError
+- **Graceful Degradation**: Partial results preserved when possible
+- **Detailed Error Messages**: Contextual error information included in results
+- **Consistent Error Format**: All errors formatted as "Pipeline error: <details>"
+- **Timing Preservation**: Elapsed time calculated even on error conditions
+
+```mermaid
+flowchart TD
+Start(["Pipeline Execution"]) --> TryBlock["try { ... }"]
+TryBlock --> Stage1["Stage 1: Model Loading"]
+Stage1 --> Stage2["Stage 2: Slicing (Parallel)"]
+Stage2 --> Stage3["Stage 3: Support Generation"]
+Stage3 --> Stage4["Stage 4: Filling (Parallel)"]
+Stage4 --> Stage5["Stage 5: Path Generation"]
+Stage5 --> Success["Success: Return result"]
+TryBlock --> CatchError["catch (const RuntimeError& e)"]
+CatchError --> SetError["Set result.success = false"]
+SetError --> FormatError["Format error message"]
+FormatError --> RecordTime["Record elapsed time"]
+RecordTime --> ReturnError["Return error result"]
+```
+
+**Diagram sources**
+- [fdm_pipeline.cpp:222-434](file://DllHsBaSlicer/fdm_pipeline.cpp#L222-L434)
+
+**Section sources**
+- [error.hpp:1-147](file://base/error.hpp#L1-L147)
+- [fdm_pipeline.cpp:424-434](file://DllHsBaSlicer/fdm_pipeline.cpp#L424-L434)
+
 ## Dependency Analysis
 High-level dependency relationships:
 - DllHsBaSlicer depends on LibHsBaSlicer and several domain libraries.
 - LibHsBaSlicer composes preprocess, slice, support, fill, and path modules.
 - All modules depend on base types (IModel, coroutines) and shared geometry/path types.
-- **Updated** Pipeline now strictly uses LibHsBaSlicer public API, maintaining clear architectural boundaries.
-- **Updated** GCodePath system integrates with existing path infrastructure while providing enhanced functionality.
+- **Enhanced** Pipeline now strictly uses LibHsBaSlicer public API, maintaining clear architectural boundaries.
+- **Enhanced** GCodePath system integrates with existing path infrastructure while providing enhanced functionality.
+- **Enhanced** Parallel processing relies on ThreadPool and proper synchronization primitives.
 
 ```mermaid
 graph LR
@@ -636,13 +749,15 @@ Lib --> Slc["Slice"]
 Lib --> Sup["Support"]
 Lib --> Fil["Fill"]
 Lib --> Pth["Paths"]
-Lib --> Base["base (IModel, coroutine)"]
+Lib --> Base["base (IModel, coroutine, thread_pool, error)"]
 Pth --> PP["paths/pointspath.hpp"]
 Pth --> GP["paths/gcodepath.hpp"]
 Pth --> LP["paths/layerspath.hpp"]
 Sup --> SC["support/SupportConfig.hpp"]
 Lib --> VI["version_info.hpp"]
 VI --> VS["version.hpp"]
+Dll --> PAR["pipeline_parallel.hpp"]
+PAR --> TP["thread_pool.hpp"]
 ```
 
 **Diagram sources**
@@ -666,9 +781,13 @@ VI --> VS["version.hpp"]
 - Independent ModelLoader instances prevent global state contention but increase memory usage per pipeline.
 - Const reference parameter passing reduces unnecessary copies in coroutine-based operations.
 - Density-based infill spacing calculation optimizes material usage while maintaining structural integrity.
-- **Updated** GCodePath generation is optimized for large models with efficient layer processing and minimal string concatenation.
-- **Updated** Firmware-specific optimizations reduce unnecessary commands and improve G-code efficiency.
-- **Updated** Centralized version information module reduces redundant version data lookups across the application.
+- **Enhanced** GCodePath generation is optimized for large models with efficient layer processing and minimal string concatenation.
+- **Enhanced** Firmware-specific optimizations reduce unnecessary commands and improve G-code efficiency.
+- **Enhanced** Centralized version information module reduces redundant version data lookups across the application.
+- **Enhanced** ParallelForLayers enables multi-core utilization for independent layer operations, potentially providing significant speedup on multi-core systems.
+- **Enhanced** ThreadPool provides efficient task distribution with minimal overhead through proper synchronization.
+- **Enhanced** Environment-based configuration (HSBA_PIPELINE_THREADS) allows fine-tuning of parallel execution for different hardware configurations.
+- **Enhanced** Block processing in parallel execution reduces progress callback overhead while maintaining responsive progress reporting.
 
 ## Troubleshooting Guide
 Common issues and remedies:
@@ -679,19 +798,38 @@ Common issues and remedies:
 - Memory leaks: Always call HsBaFreePipelineResult after use; avoid holding raw char* beyond scope.
 - Model loading conflicts: Each pipeline now uses independent ModelLoader instances, eliminating global model name conflicts.
 - Infill quality issues: Adjust top_layer_count, bottom_layer_count, and infill_density parameters for optimal results.
-- **Updated** GCode firmware compatibility: Ensure selected firmware matches your printer's firmware type (Marlin, RepRap, Klipper).
-- **Updated** Printer configuration validation: Verify nozzle diameter, filament diameter, and temperature settings match your hardware.
-- **Updated** Lua post-processing errors: Check Lua script syntax and available variables when using custom G-code modification.
-- **Updated** Version information access: Use centralized version_info module APIs instead of direct internal access.
+- **Enhanced** GCode firmware compatibility: Ensure selected firmware matches your printer's firmware type (Marlin, RepRap, Klipper).
+- **Enhanced** Printer configuration validation: Verify nozzle diameter, filament diameter, and temperature settings match your hardware.
+- **Enhanced** Lua post-processing errors: Check Lua script syntax and available variables when using custom G-code modification.
+- **Enhanced** Version information access: Use centralized version_info module APIs instead of direct internal access.
+- **Enhanced** Parallel processing issues: 
+  - Set HSBA_PIPELINE_THREADS=1 to force serial execution for debugging
+  - Monitor system CPU usage to verify parallel execution is working
+  - Check for thread-safety issues in custom Lua scripts used during parallel stages
+  - Validate that layer operations are truly independent before enabling parallel processing
+- **Enhanced** ThreadPool-related problems:
+  - Ensure sufficient system resources for thread creation
+  - Monitor active task counts to detect potential deadlocks
+  - Verify proper cleanup of ThreadPool instances to prevent resource leaks
+- **Enhanced** Error handling improvements:
+  - Check detailed error messages for specific failure points in the pipeline
+  - Use the comprehensive exception hierarchy to identify error categories
+  - Verify that error propagation maintains context information for debugging
 
 **Section sources**
 - [fdm_pipeline.cpp:203-367](file://DllHsBaSlicer/fdm_pipeline.cpp#L203-L367)
 - [fdm_pipeline.h:132-140](file://DllHsBaSlicer/fdm_pipeline.h#L132-L140)
 - [gcodepath.cpp:292-374](file://paths/gcodepath.cpp#L292-L374)
+- [pipeline_parallel.hpp:49-61](file://DllHsBaSlicer/pipeline_parallel.hpp#L49-L61)
+- [thread_pool.hpp:94-103](file://base/thread_pool.hpp#L94-L103)
 
 ## Conclusion
 The FDM pipeline system integrates preprocessing, slicing, support generation, infill, and path generation into a cohesive, coroutine-driven workflow. It offers a clean C-compatible API for broad integration while leveraging modern C++ features internally for performance and clarity. The modular design enables targeted improvements and testing per stage, and the progress/callback mechanism facilitates responsive applications.
 
 Recent enhancements include strict adherence to LibHsBaSlicer public API boundaries, preventing direct access to internal implementations and improving maintainability. The centralized version information module provides consistent version data access across the application. Independent model management per pipeline instance prevents conflicts during concurrent execution, and advanced configuration options provide precise control over print quality and material usage. The optimized coroutine-based architecture with const reference parameter passing ensures efficient resource utilization and improved performance.
 
-**Updated** The most significant enhancement is the introduction of the GCodePath system, which provides firmware-specific G-code output with comprehensive printer configuration support. This system maintains backward compatibility with the existing PointsPath approach while offering advanced features like multi-firmware support, Lua post-processing, and optimized command generation for different 3D printer firmware types. The dual-path architecture ensures smooth migration while enabling cutting-edge functionality for modern 3D printing workflows.
+**Enhanced** The most significant enhancement is the introduction of comprehensive parallel processing capabilities through the ParallelForLayers helper and ThreadPool implementation. This system enables multi-core utilization for independent layer operations like slicing and filling, potentially providing substantial performance improvements on multi-core systems. The parallel processing is designed with proper thread safety, exception handling, and progress reporting to maintain reliability while maximizing throughput.
+
+The enhanced error handling system provides detailed exception categorization and robust error propagation throughout the pipeline, ensuring reliable failure handling and informative error reporting. Environment-based configuration allows fine-tuning of parallel execution behavior for different hardware configurations and debugging scenarios.
+
+The dual-path architecture ensures smooth migration while enabling cutting-edge functionality for modern 3D printing workflows, combining the proven stability of the existing PointsPath approach with the advanced capabilities of the new GCodePath system. The combination of parallel processing, comprehensive error handling, and flexible configuration makes the FDM pipeline system highly performant, reliable, and adaptable to diverse printing requirements.

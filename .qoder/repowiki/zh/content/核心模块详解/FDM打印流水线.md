@@ -23,6 +23,9 @@
 - [polygon_fill.hpp](file://LibHsBaSlicer/Fill/polygon_fill.hpp)
 - [path_generator.hpp](file://LibHsBaSlicer/Path/path_generator.hpp)
 - [path_generator.cpp](file://LibHsBaSlicer/Path/path_generator.cpp)
+- [spiral_path.hpp](file://LibHsBaSlicer/Path/spiral_path.hpp)
+- [spiral_path.cpp](file://LibHsBaSlicer/Path/spiral_path.cpp)
+- [pipeline_parallel.hpp](file://DllHsBaSlicer/pipeline_parallel.hpp)
 - [LuaSupport.hpp](file://support/LuaSupport.hpp)
 - [LuaSupport.cpp](file://support/LuaSupport.cpp)
 - [my_infill.lua](file://samples/FDM/scripts/my_infill.lua)
@@ -37,14 +40,19 @@
 - [PipelineConfig2Msg.cpp](file://convert/PipelineConfig2Msg.cpp)
 - [Msg2PipelineConfig.hpp](file://convert/Msg2PipelineConfig.hpp)
 - [Msg2PipelineConfig.cpp](file://convert/Msg2PipelineConfig.cpp)
+- [spiral_path_test.cpp](file://tests/SpiralPath/spiral_path_test.cpp)
+- [error.hpp](file://base/error.hpp)
+- [thread_pool.hpp](file://base/thread_pool.hpp)
 </cite>
 
 ## 更新摘要
 **所做更改**
-- 新增GCodePath类替代PointsPath，支持多固件目标输出（Marlin、RepRap、Klipper）
-- 增强打印机配置系统，包含喷嘴直径、耗材直径、温度控制、回抽参数和速度设置
-- 更新路径生成逻辑，使用GenerateGCodePathV2函数替代原有的GenerateGCodePath
-- 完善C API和模块接口以支持新的固件类型和打印机配置
+- 增强并行处理能力，通过`ParallelForLayers`函数实现切片和填充阶段的线程池并行执行
+- 集成螺旋路径生成系统，支持Vase模式的连续螺旋外壁路径生成
+- 改进错误处理机制，统一使用`RuntimeError`异常类型
+- 完善路径生成逻辑，新增`GenerateGCodePathSpiral`函数替代原有的`GenerateGCodePath`
+- 优化性能配置，支持环境变量`HSBA_PIPELINE_THREADS`控制并行线程数
+- 增强FDM流水线配置，新增`spiral_mode`选项控制螺旋模式
 
 ## 目录
 1. [简介](#简介)
@@ -61,7 +69,7 @@
 ## 简介
 本项目为面向FDM（熔融沉积成型）的切片与路径生成系统，提供从模型预处理、切片、支撑、填充到G-code路径生成的完整流水线。上层通过C兼容API暴露同步与异步接口，内部基于C++20协程实现分步执行与进度回调，便于集成到桌面或移动端应用。
 
-**更新** 系统现已支持通过Protobuf进行配置和结果的跨语言序列化交换，新增完整的C API转换函数，支持多种编程语言的数据格式互操作。每个Pipeline实例拥有独立的模型池，避免多次运行时的模型名冲突问题，并增强了Lua脚本自定义算法的支持能力。**最新改进**：路径生成系统已升级为GCodePath类，支持多固件目标输出和增强的打印机配置管理。
+**更新** 系统现已支持通过Protobuf进行配置和结果的跨语言序列化交换，新增完整的C API转换函数，支持多种编程语言的数据格式互操作。每个Pipeline实例拥有独立的模型池，避免多次运行时的模型名冲突问题，并增强了Lua脚本自定义算法的支持能力。**最新改进**：路径生成系统已升级为GCodePath类，支持多固件目标输出；**新增并行处理能力**，通过线程池并行执行切片和填充阶段；**新增螺旋路径生成**，支持Vase模式的连续螺旋外壁路径生成；**改进错误处理**，统一使用`RuntimeError`异常类型确保一致的错误处理机制。
 
 ## 项目结构
 整体采用分层模块化设计：
@@ -86,8 +94,10 @@ subgraph "底层模块"
 PRE["preprocess<br/>ModelLoader"]
 SUP["support<br/>FdmSupport + LuaSupport"]
 FIL["2D<br/>PolygonFill + LuaCustomFill"]
-PATH["paths<br/>GCodePath + PointsPath"]
+PATH["paths<br/>GCodePath + PointsPath + SpiralPath"]
 SLI["Slice<br/>mesh_slice"]
+PAR["parallel<br/>ParallelForLayers"]
+ERR["error<br/>RuntimeError体系"]
 end
 DLL --> LIB
 DLL --> CONVERT
@@ -97,6 +107,8 @@ LIB --> SUP
 LIB --> FIL
 LIB --> PATH
 LIB --> SLI
+DLL --> PAR
+DLL --> ERR
 ```
 
 **图表来源**
@@ -115,6 +127,9 @@ LIB --> SLI
 - 支撑生成：柱状/树状/蜂窝三种模式，支持Lua自定义算法
 - 填充生成：线型/锯齿/高级锯齿及带边框复合填充，支持Lua自定义算法
 - **更新** 路径生成：GCodePath类支持多固件目标输出，PointsPath保持向后兼容
+- **新增** 并行处理：ParallelForLayers函数支持线程池并行执行切片和填充阶段
+- **新增** 螺旋路径：SpiralizeOuterWall函数支持Vase模式的连续螺旋外壁路径生成
+- **新增** 错误处理：统一的`RuntimeError`异常体系，提供丰富的异常类型
 - **新增** Protobuf转换层：提供C结构体与Protobuf消息的双向转换，支持跨语言数据交换
 
 **章节来源**
@@ -123,12 +138,15 @@ LIB --> SLI
 - [mesh_slice.hpp:1-28](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L1-L28)
 - [fdm_support.hpp:1-36](file://LibHsBaSlicer/Support/fdm_support.hpp#L1-L36)
 - [polygon_fill.hpp:1-36](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L1-L36)
-- [path_generator.hpp:1-74](file://LibHsBaSlicer/Path/path_generator.hpp#L1-L74)
+- [path_generator.hpp:1-96](file://LibHsBaSlicer/Path/path_generator.hpp#L1-L96)
 - [gcodepath.hpp:1-83](file://paths/gcodepath.hpp#L1-L83)
+- [spiral_path.hpp:1-63](file://LibHsBaSlicer/Path/spiral_path.hpp#L1-L63)
+- [pipeline_parallel.hpp:1-122](file://DllHsBaSlicer/pipeline_parallel.hpp#L1-L122)
 - [pipeline_convert.h:1-124](file://DllHsBaSlicer/pipeline_convert.h#L1-L124)
+- [error.hpp:1-147](file://base/error.hpp#L1-L147)
 
 ## 架构总览
-下图展示了C API到内部协程流水线的调用链，以及新增的GCodePath类和Protobuf转换层在跨语言集成中的作用。
+下图展示了C API到内部协程流水线的调用链，以及新增的并行处理和螺旋路径功能在FDM流水线中的作用。
 
 ```mermaid
 sequenceDiagram
@@ -142,6 +160,9 @@ participant Slice as "切片<br/>UnSafeSlice"
 participant Sup as "支撑<br/>GenerateAllFdmSupport/LuaSupport"
 participant Fill as "填充<br/>FillWithBorder/LuaCustomFill"
 participant Path as "路径生成<br/>GenerateGCodePathV2/GCodePath"
+participant Spiral as "螺旋路径<br/>SpiralizeOuterWall"
+participant Parallel as "并行处理<br/>ParallelForLayers"
+participant Error as "错误处理<br/>RuntimeError"
 Note over App,Proto : 跨语言数据交换
 App->>Proto : 构造Protobuf配置
 App->>CAPI : HsBaFdmConfigFromProtoBytes()
@@ -152,11 +173,19 @@ Pipe->>Pre : 创建独立ModelLoader实例
 Pre-->>Pipe : IModel + ModelInfo(直接计算)
 Pipe->>Slice : 逐层切片(UnSafeSlice)
 Slice-->>Pipe : PolygonsD(每层)
+Pipe->>Parallel : ParallelForLayers(并行切片)
+Parallel-->>Pipe : 并行完成的切片结果
 Pipe->>Sup : 可选支撑生成(Lua或内置)
 Sup-->>Pipe : 每层支撑PolygonsD
 Pipe->>Fill : 逐层填充(Lua或内置)
 Fill-->>Pipe : 每层填充PolygonsD
+alt spiral_mode启用
+Pipe->>Spiral : SpiralizeOuterWall(螺旋路径)
+Spiral-->>Pipe : 连续螺旋路径
+Pipe->>Path : GenerateGCodePathSpiral
+else 常规模式
 Pipe->>Path : GenerateGCodePathV2 -> GCodePath
+end
 Path-->>Pipe : GCodePath对象
 Pipe->>Path : ToGCode(firmware)
 Path-->>Pipe : 标准GCode字符串
@@ -165,16 +194,209 @@ CAPI->>Convert : FdmResultToMsg()
 Convert-->>CAPI : Protobuf结果
 CAPI-->>App : HsBaFdmResultToProtoBytes()
 App->>Proto : 解析结果消息
+Note over Pipe,Error : 统一错误处理
 ```
 
 **图表来源**
 - [fdm_pipeline.h:94-141](file://DllHsBaSlicer/fdm_pipeline.h#L94-L141)
 - [pipeline_convert.h:21-59](file://DllHsBaSlicer/pipeline_convert.h#L21-L59)
 - [pipeline_convert.cpp:23-99](file://DllHsBaSlicer/pipeline_convert.cpp#L23-L99)
-- [Msg2PipelineConfig.hpp:14-22](file://convert/Msg2PipelineConfig.hpp#L14-22)
-- [PipelineConfig2Msg.hpp:14-24](file://convert/PipelineConfig2Msg.hpp#L14-24)
+- [spiral_path.cpp:88-164](file://LibHsBaSlicer/Path/spiral_path.cpp#L88-L164)
+- [pipeline_parallel.hpp:41-117](file://DllHsBaSlicer/pipeline_parallel.hpp#L41-L117)
+- [fdm_pipeline.cpp:424-428](file://DllHsBaSlicer/fdm_pipeline.cpp#L424-L428)
 
 ## 详细组件分析
+
+### 并行处理能力（增强）
+
+**增强功能** 系统新增了强大的并行处理能力，通过`ParallelForLayers`函数实现切片和填充阶段的线程池并行执行，显著提升大规模模型的切片和填充性能。
+
+#### ParallelForLayers函数
+- **线程池管理**：基于ThreadPool实现，自动检测硬件并发数
+- **环境变量控制**：支持`HSBA_PIPELINE_THREADS`环境变量控制线程数量
+- **块级并行**：将层索引分组为块，减少进度回调开销
+- **异常安全**：工作函数中的异常会被重新抛出到调用者
+- **回退机制**：单核或单层时自动回退到串行执行
+
+```mermaid
+flowchart TD
+A["输入: total_layers, work函数, on_progress回调"] --> B{"检查环境变量<br/>HSBA_PIPELINE_THREADS"}
+B --> C["计算线程数:<br/>min(hw_concurrency, total_layers)"]
+C --> D{"nthreads <= 1<br/>或total_layers <= 1?"}
+D -- 是 --> E["串行执行循环"]
+D -- 否 --> F["创建ThreadPool(nthreads)"]
+F --> G["计算block_size = ceil(total_layers / (nthreads * 4))"]
+G --> H["for start in blocks"]
+H --> I["提交work(i)到线程池"]
+I --> J["等待所有future完成"]
+J --> K["调用on_progress(end)"]
+K --> L["返回"]
+E --> L
+```
+
+**图表来源**
+- [pipeline_parallel.hpp:41-117](file://DllHsBaSlicer/pipeline_parallel.hpp#L41-L117)
+
+#### 在FDM流水线中的应用
+- **切片阶段并行化**：使用`ParallelForLayers`并行执行`SliceLayer`操作
+- **填充阶段并行化**：对非Lua填充算法使用并行执行
+- **进度回调优化**：每个并行块完成后调用一次进度回调，减少UI更新频率
+
+**章节来源**
+- [pipeline_parallel.hpp:1-122](file://DllHsBaSlicer/pipeline_parallel.hpp#L1-L122)
+- [fdm_pipeline.cpp:260-271](file://DllHsBaSlicer/fdm_pipeline.cpp#L260-L271)
+- [fdm_pipeline.cpp:365-370](file://DllHsBaSlicer/fdm_pipeline.cpp#L365-L370)
+
+### 螺旋路径生成（新增）
+
+**新功能** 系统新增了完整的螺旋路径生成能力，支持Vase模式的连续螺旋外壁路径生成，适用于需要无接缝外壁的3D打印场景。
+
+#### SpiralizeOuterWall函数
+- **连续螺旋路径**：生成一条不间断的3D路径，Z坐标随路径推进而线性增加
+- **外轮廓选择**：自动选择每层面积最大的闭合轮廓作为外壁
+- **接缝对齐**：确保相邻层的接缝位置在XY平面上保持一致
+- **方向归一化**：自动处理顺时针/逆时针轮廓方向
+- **空层跳过**：自动跳过没有有效闭合轮廓的层
+
+```mermaid
+flowchart TD
+A["输入: layer_sections, layer_zs"] --> B["遍历每层，选择最大面积的闭合轮廓"]
+B --> C["NormalizeOuterLoop: 去除重复顶点，确保CCW方向"]
+C --> D["CanonicalSeam: 确定起始接缝点"]
+D --> E["NearestToXY: 找到与上一层接缝最近的点"]
+E --> F["生成螺旋路径: 每层一圈，Z线性递增"]
+F --> G["连接相邻层: 终点=下一层起点"]
+G --> H["输出: 连续SpiralPoint序列"]
+```
+
+**图表来源**
+- [spiral_path.cpp:88-164](file://LibHsBaSlicer/Path/spiral_path.cpp#L88-L164)
+
+#### Vase模式集成
+- **配置选项**：`InternalConfig.spiral_mode`控制是否启用Vase模式
+- **路径生成**：使用`GenerateGCodePathSpiral`替代常规的`GenerateGCodePathV2`
+- **行为差异**：Vase模式下禁用支撑和填充，仅生成连续外壁
+- **GCode输出**：生成无回抽、无层间移动的连续挤出路径
+
+```mermaid
+classDiagram
+class SpiralPoint {
++double x
++double y
++double z
+}
+class SpiralizeOuterWall {
++layer_sections : vector~PolygonsD~
++layer_zs : vector~double~
+}
+class GenerateGCodePathSpiral {
++layer_outlines : vector~PolygonsD~
++layer_zs : vector~double~
++printer_config : GCodePrinterConfig
+}
+class GCodePath {
++setContinuousWall(wall) void
++ToGCode(firmware) string
+}
+SpiralizeOuterWall --> SpiralPoint : 生成
+GenerateGCodePathSpiral --> SpiralizeOuterWall : 调用
+GenerateGCodePathSpiral --> GCodePath : 返回
+```
+
+**图表来源**
+- [spiral_path.hpp:24-58](file://LibHsBaSlicer/Path/spiral_path.hpp#L24-L58)
+- [path_generator.hpp:78-80](file://LibHsBaSlicer/Path/path_generator.hpp#L78-L80)
+- [path_generator.cpp:120-136](file://LibHsBaSlicer/Path/path_generator.cpp#L120-L136)
+
+**章节来源**
+- [spiral_path.hpp:1-63](file://LibHsBaSlicer/Path/spiral_path.hpp#L1-L63)
+- [spiral_path.cpp:1-167](file://LibHsBaSlicer/Path/spiral_path.cpp#L1-L167)
+- [path_generator.hpp:64-80](file://LibHsBaSlicer/Path/path_generator.hpp#L64-L80)
+- [path_generator.cpp:120-136](file://LibHsBaSlicer/Path/path_generator.cpp#L120-L136)
+- [spiral_path_test.cpp:43-166](file://tests/SpiralPath/spiral_path_test.cpp#L43-L166)
+
+### 错误处理机制（改进）
+
+**改进功能** 系统引入了统一的`RuntimeError`异常体系，提供一致的错误处理机制和丰富的异常类型。
+
+#### RuntimeError异常体系
+- **基类设计**：`RuntimeError`继承自`std::runtime_error`，提供统一的异常接口
+- **丰富异常类型**：包含`OutOfRangeError`、`InvalidArgumentError`、`IOError`等多种专用异常
+- **跨模块一致性**：所有模块统一使用此异常体系，便于错误捕获和处理
+- **详细信息支持**：支持字符串和字符指针构造函数，提供详细的错误信息
+
+```mermaid
+classDiagram
+class RuntimeError {
+<<base class>>
++what() string
++RuntimeError(msg)
+}
+class OutOfRangeError {
++OutOfRangeError(msg)
+}
+class InvalidArgumentError {
++InvalidArgumentError(msg)
+}
+class IOError {
++IOError(msg)
+}
+class NotImplementedError {
++NotImplementedError(msg)
+}
+class NullValueError {
++NullValueError(msg)
+}
+class NotSupportedError {
++NotSupportedError(msg)
+}
+class NotFoundError {
++NotFoundError(msg)
+}
+class AlreadyExistsError {
++AlreadyExistsError(msg)
+}
+class PermissionDeniedError {
++PermissionDeniedError(msg)
+}
+class TimeoutError {
++TimeoutError(msg)
+}
+class InterruptedError {
++InterruptedError(msg)
+}
+class CancelledError {
++CancelledError(msg)
+}
+class OutOfMemoryError {
++OutOfMemoryError(msg)
+}
+RuntimeError <|-- OutOfRangeError
+RuntimeError <|-- InvalidArgumentError
+RuntimeError <|-- IOError
+RuntimeError <|-- NotImplementedError
+RuntimeError <|-- NullValueError
+RuntimeError <|-- NotSupportedError
+RuntimeError <|-- NotFoundError
+RuntimeError <|-- AlreadyExistsError
+RuntimeError <|-- PermissionDeniedError
+RuntimeError <|-- TimeoutError
+RuntimeError <|-- InterruptedError
+RuntimeError <|-- CancelledError
+RuntimeError <|-- OutOfMemoryError
+```
+
+**图表来源**
+- [error.hpp:20-144](file://base/error.hpp#L20-L144)
+
+#### 在FDM流水线中的应用
+- **统一异常捕获**：整个流水线被包裹在try-catch块中，捕获所有`RuntimeError`异常
+- **错误信息标准化**：所有异常都被转换为统一的错误消息格式
+- **优雅降级**：发生异常时设置`result.success = false`并提供详细的错误信息
+
+**章节来源**
+- [error.hpp:1-147](file://base/error.hpp#L1-L147)
+- [fdm_pipeline.cpp:424-428](file://DllHsBaSlicer/fdm_pipeline.cpp#L424-L428)
 
 ### 协程基础设施（Task/Generator/Executor）
 - Task<T>：封装异步任务结果与异常传播，支持then/catching/finally回调链
@@ -211,7 +433,7 @@ Task~T, Executor~ ..> IExecutor : "使用"
 **图表来源**
 - [coroutine.hpp:42-66](file://base/coroutine.hpp#L42-66)
 - [coroutine.hpp:200-377](file://base/coroutine.hpp#L200-377)
-- [coroutine.hpp:779-800](file://base/coroutine.hpp#L779-800)
+- [coroutine.hpp:779-800](file://base/coroutine.hpp#L779-L800)
 
 **章节来源**
 - [coroutine.hpp:1-120](file://base/coroutine.hpp#L1-L120)
@@ -372,7 +594,7 @@ O --> R["输出填充多边形"]
 
 ### 路径生成（LibHsBaSlicer::Path）
 
-**重大更新** 路径生成系统已全面升级，新增GCodePath类替代传统的PointsPath，支持多固件目标输出。
+**重大更新** 路径生成系统已全面升级，新增GCodePath类替代传统的PointsPath，支持多固件目标输出和螺旋路径生成。
 
 #### GCodePath类（新增）
 - **继承LayersPath**：保留层数据存储和Lua扩展能力
@@ -411,6 +633,12 @@ struct GCodePrinterConfig {
 - 返回GCodePath对象而非PointsPath
 - 保持向后兼容性，原函数仍可使用
 
+#### GenerateGCodePathSpiral函数（新增）
+- 专门用于Vase模式的螺旋路径生成
+- 调用SpiralizeOuterWall生成连续螺旋路径
+- 设置GCodePath的连续墙模式
+- 输出无回抽、无层间移动的连续挤出路径
+
 ```mermaid
 classDiagram
 class GCodePath {
@@ -418,6 +646,7 @@ class GCodePath {
 +SaveGCode(path, firmware) void
 +ToGCode(firmware, script) string
 +printerConfig() GCodePrinterConfig
++setContinuousWall(wall) void
 -private :
 +GenerateHeader(firmware) string
 +GenerateFooter(firmware) string
@@ -450,9 +679,15 @@ class GCodePrinterConfig {
 +relative_extrusion : bool
 +enable_retraction : bool
 }
+class SpiralPoint {
++x : double
++y : double
++z : double
+}
 GCodePath --|> LayersPath
 GCodePath --> GCodePrinterConfig
 PointsPath --> FdmPathConfig
+SpiralPoint --> GCodePath : 连续墙
 ```
 
 **图表来源**
@@ -460,20 +695,22 @@ PointsPath --> FdmPathConfig
 - [layerspath.hpp:1-50](file://paths/layerspath.hpp#L1-L50)
 - [pointspath.hpp:46-72](file://paths/pointspath.hpp#L46-L72)
 - [gcodepath.hpp:27-43](file://paths/gcodepath.hpp#L27-L43)
+- [spiral_path.hpp:24-29](file://LibHsBaSlicer/Path/spiral_path.hpp#L24-L29)
 
 **章节来源**
-- [path_generator.hpp:1-74](file://LibHsBaSlicer/Path/path_generator.hpp#L1-L74)
-- [path_generator.cpp:1-113](file://LibHsBaSlicer/Path/path_generator.cpp#L1-L113)
+- [path_generator.hpp:1-96](file://LibHsBaSlicer/Path/path_generator.hpp#L1-L96)
+- [path_generator.cpp:1-139](file://LibHsBaSlicer/Path/path_generator.cpp#L1-L139)
 - [gcodepath.hpp:1-83](file://paths/gcodepath.hpp#L1-L83)
 - [gcodepath.cpp:1-377](file://paths/gcodepath.cpp#L1-L377)
 - [pointspath.hpp:1-77](file://paths/pointspath.hpp#L1-L77)
+- [spiral_path.hpp:1-63](file://LibHsBaSlicer/Path/spiral_path.hpp#L1-L63)
 
 ### 全流程协程流水线（DllHsBaSlicer）
 - C API：HsBaCreateDefaultConfig/HsBaRunFdmPipeline/HsBaRunFdmPipelineAsync/HsBaFreePipelineResult
 - 协程核心：RunPipelineAsync，分阶段推进并报告进度
 - 内存管理：OwnedCString RAII守卫确保C字符串正确释放
 
-**更新** 流水线现在在每个协程中创建独立的ModelLoader实例，并使用GenerateGCodePathV2和GCodePath进行路径生成。
+**更新** 流水线现在在每个协程中创建独立的ModelLoader实例，并使用GenerateGCodePathV2和GCodePath进行路径生成。**新增并行处理**：切片和填充阶段使用ParallelForLayers进行并行执行。**新增螺旋模式**：支持spiral_mode选项生成连续螺旋路径。**改进错误处理**：统一捕获RuntimeError异常并提供详细的错误信息。
 
 ```mermaid
 sequenceDiagram
@@ -486,27 +723,43 @@ participant U as "支撑(Lua/内置)"
 participant F as "填充(Lua/内置)"
 participant G as "路径生成V2"
 participant GP as "GCodePath"
+participant SP as "螺旋路径"
+participant PL as "并行处理"
+participant E as "错误处理"
 C->>P : 构建配置并启动协程
 P->>ML : 创建独立实例
 P->>M : GetModel/LoadModel
 P->>M : BoundingBox()/Volume()
-P->>S : UnSafeSlice(z)
+P->>PL : ParallelForLayers(并行切片)
+PL->>S : SliceLayer(并行)
+S-->>PL : PolygonsD(每层)
+PL-->>P : 并行完成的切片结果
+alt spiral_mode启用
+P->>SP : SpiralizeOuterWall(螺旋路径)
+SP-->>P : 连续螺旋路径
+P->>G : GenerateGCodePathSpiral
+else 常规模式
 P->>U : GenerateAllFdmSupport(可选)
 P->>F : FillWithBorder(逐层)
 P->>G : GenerateGCodePathV2(合并)
+end
 G-->>P : GCodePath对象
 P->>GP : ToGCode(firmware)
 GP-->>P : 标准GCode字符串
 P-->>C : InternalResult(含gcode_content/elapsed_seconds)
+Note over P,E : 统一异常捕获
 ```
 
 **图表来源**
 - [fdm_pipeline.h:94-141](file://DllHsBaSlicer/fdm_pipeline.h#L94-L141)
 - [fdm_pipeline.cpp:200-410](file://DllHsBaSlicer/fdm_pipeline.cpp#L200-L410)
+- [pipeline_parallel.hpp:41-117](file://DllHsBaSlicer/pipeline_parallel.hpp#L41-L117)
+- [spiral_path.cpp:88-164](file://LibHsBaSlicer/Path/spiral_path.cpp#L88-L164)
+- [fdm_pipeline.cpp:424-428](file://DllHsBaSlicer/fdm_pipeline.cpp#L424-L428)
 
 **章节来源**
 - [fdm_pipeline.h:1-147](file://DllHsBaSlicer/fdm_pipeline.h#L1-L147)
-- [fdm_pipeline.cpp:1-410](file://DllHsBaSlicer/fdm_pipeline.cpp#L1-L410)
+- [fdm_pipeline.cpp:1-480](file://DllHsBaSlicer/fdm_pipeline.cpp#L1-L480)
 
 ### Lua自定义算法支持
 
@@ -548,11 +801,11 @@ Result --> NextLayer["下一层处理"]
 
 ### C API和模块接口更新
 
-**更新** C API和模块接口已适配新的GCodePath系统和固件类型支持。
+**更新** C API和模块接口已适配新的GCodePath系统和固件类型支持，以及新增的并行处理和螺旋路径功能。
 
 #### C API更新
 - `HsBaGCodeFirmware_t`枚举：新增HSBA_GCODE_MARLIN、HSBA_GCODE_REPRAP、HSBA_GCODE_KLIPPER
-- `HsBaFdmPipelineConfig_t`结构体：新增打印机配置字段
+- `HsBaFdmPipelineConfig_t`结构体：新增打印机配置字段和`spiral_mode`选项
 - `HsBaFdmConfigDefault()`：初始化新字段默认值
 
 #### 模块接口更新
@@ -573,8 +826,10 @@ Result --> NextLayer["下一层处理"]
 - DllHsBaSlicer依赖：
   - LibHsBaSlicer所有封装模块
   - base/coroutine.hpp（协程基础设施）
+  - **新增** parallel处理模块（pipeline_parallel.hpp）
   - **新增** protobuf转换层（convert/*）
   - **新增** protobuf定义文件（proto/*.proto）
+  - **新增** error.hpp（统一错误处理）
 
 ```mermaid
 graph LR
@@ -584,10 +839,12 @@ Mesh["HsBaSlicerMesh"] --> Lib
 TwoD["HsBaSlicer2D"] --> Lib
 Pre["HsBaPreprocess"] --> Lib
 Sup["HsBaSupport"] --> Lib
-Paths["HsBaPaths<br/>+GCodePath"] --> Lib
+Paths["HsBaPaths<br/>+GCodePath + SpiralPath"] --> Lib
 CAD["HsBaSlicerCADModel(可选)"] --> Lib
-Convert["convert<br/>Protobuf转换"] --> Dll["DllHsBaSlicer"]
+Parallel["pipeline_parallel<br/>并行处理"] --> Dll["DllHsBaSlicer"]
+Convert["convert<br/>Protobuf转换"] --> Dll
 Proto["proto<br/>Protobuf定义"] --> Convert
+Error["error<br/>RuntimeError体系"] --> Dll
 Lib --> Dll
 ```
 
@@ -605,12 +862,16 @@ Lib --> Dll
 
 ## 性能考虑
 - 协程分步执行：避免阻塞主线程，便于UI更新与取消
+- **新增** 并行处理：ParallelForLayers函数支持线程池并行执行切片和填充阶段，显著提升性能
+- **新增** 环境变量控制：通过`HSBA_PIPELINE_THREADS`环境变量精确控制并行线程数
 - 逐层并行潜力：当前实现为顺序推进，未来可将支撑/填充改为基于Generator的并发处理
 - 内存分配：OwnedCString RAII减少泄漏风险；建议对大模型启用对象池复用
 - 数值精度：整数化/反整数化在填充前后进行，注意累积误差
 - **更新** 独立模型池减少了跨Pipeline的内存竞争，提高了并发安全性
 - **新增** Protobuf序列化优化：使用ByteSizeLong预分配缓冲区，避免重复内存分配
 - **新增** GCodePath优化：按需生成固件特定GCode，避免不必要的字符串拼接
+- **新增** 螺旋路径优化：SpiralizeOuterWall算法避免不必要的几何计算，跳过无效层
+- **新增** 错误处理优化：统一的异常体系减少错误处理的开销
 
 [本节为通用指导，无需源码引用]
 
@@ -620,30 +881,39 @@ Lib --> Dll
 - 支撑未生成：确认enable_support开关与overhang_angle阈值
 - 填充为空：检查输入多边形是否为空或仅含开放轮廓
 - **更新** G-code生成失败：检查LayerPathData中各层数据完整性与单位设置；确认GCodePath配置正确
+- **新增** 并行处理问题：检查`HSBA_PIPELINE_THREADS`环境变量设置；确认线程池配置合理
+- **新增** 螺旋路径问题：检查`spiral_mode`配置是否正确；确认每层都有有效的闭合轮廓
 - **新增** 固件类型错误：检查GCodeFirmware枚举值是否正确映射
 - **新增** 打印机配置问题：验证喷嘴直径、耗材直径等参数合理性
 - **新增** Protobuf转换失败：检查消息字段映射是否正确；确认版本兼容性
 - **新增** 跨语言集成问题：验证Protobuf定义文件版本；检查字节序和编码格式
 - **新增** Lua脚本错误：检查脚本语法和函数名称；确认全局变量是否正确传递
+- **新增** 运行时错误：检查RuntimeError异常的具体类型和错误信息；确认异常处理逻辑正确
 
 **章节来源**
 - [fdm_pipeline.cpp:91-131](file://DllHsBaSlicer/fdm_pipeline.cpp#L91-L131)
 - [fdm_pipeline.cpp:200-410](file://DllHsBaSlicer/fdm_pipeline.cpp#L200-L410)
+- [pipeline_parallel.hpp:41-117](file://DllHsBaSlicer/pipeline_parallel.hpp#L41-L117)
+- [spiral_path.cpp:88-164](file://LibHsBaSlicer/Path/spiral_path.cpp#L88-L164)
 - [pipeline_convert.cpp:23-99](file://DllHsBaSlicer/pipeline_convert.cpp#L23-L99)
+- [error.hpp:1-147](file://base/error.hpp#L1-L147)
 
 ## 结论
-本方案以协程为核心，将FDM流水线拆分为清晰阶段，并通过C API提供跨语言集成能力。LibHsBaSlicer作为统一封装层屏蔽底层差异，DllHsBaSlicer负责对外暴露稳定接口。最新改进包括Pipeline独立模型池以避免并发冲突，Lua脚本支持的灵活扩展机制，完整的Protobuf转换层实现跨语言数据交换，以及**全新的GCodePath系统支持多固件目标输出**。后续可在支撑/填充阶段引入逐层并行以提升吞吐，同时完善错误码与诊断日志。
+本方案以协程为核心，将FDM流水线拆分为清晰阶段，并通过C API提供跨语言集成能力。LibHsBaSlicer作为统一封装层屏蔽底层差异，DllHsBaSlicer负责对外暴露稳定接口。最新改进包括Pipeline独立模型池以避免并发冲突，Lua脚本支持的灵活扩展机制，完整的Protobuf转换层实现跨语言数据交换，**全新的GCodePath系统支持多固件目标输出**，**新增的并行处理能力显著提升大规模模型的处理效率**，**螺旋路径生成系统支持Vase模式的连续外壁打印**，以及**统一的RuntimeError异常体系确保一致的错误处理**。后续可在支撑/填充阶段引入逐层并行以提升吞吐，同时完善错误码与诊断日志。
 
 [本节为总结，无需源码引用]
 
 ## 附录
 - 构建与依赖：参考顶层CMakeLists与README中的平台说明
 - 单元测试：tests目录下包含多项功能验证用例
+- **新增** 并行处理测试：通过环境变量`HSBA_PIPELINE_THREADS`进行性能对比测试
+- **新增** 螺旋路径测试：tests/SpiralPath/spiral_path_test.cpp包含完整的螺旋路径功能测试
 - **新增** Protobuf多语言支持：支持C++、Java、Python、PHP等多种语言的代码生成
 - **新增** Lua脚本示例：samples/FDM/scripts/目录下提供填充和支撑的Lua脚本示例
 - **新增** 跨语言集成示例：通过C API转换函数实现不同编程语言间的配置和结果交换
 - **新增** GCodePath固件支持：Marlin、RepRap/RRF、Klipper三种主流固件的标准GCode输出
 - **新增** 打印机配置模板：完整的喷嘴、耗材、温度、回抽等参数配置示例
+- **新增** 错误处理示例：RuntimeError异常体系的完整使用示例
 
 **章节来源**
 - [README.md:41-194](file://README.md#L41-L194)
@@ -653,3 +923,6 @@ Lib --> Dll
 - [my_support.lua:1-83](file://samples/FDM/scripts/my_support.lua#L1-L83)
 - [gcodepath.hpp:1-83](file://paths/gcodepath.hpp#L1-L83)
 - [gcodepath.cpp:1-377](file://paths/gcodepath.cpp#L1-L377)
+- [spiral_path_test.cpp:1-166](file://tests/SpiralPath/spiral_path_test.cpp#L1-L166)
+- [pipeline_parallel.hpp:1-122](file://DllHsBaSlicer/pipeline_parallel.hpp#L1-L122)
+- [error.hpp:1-147](file://base/error.hpp#L1-L147)
