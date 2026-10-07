@@ -42,19 +42,25 @@ static bool CmpFromAngleDistanceD(const Point2D& left, const Point2D& right)
 
 Polygon ConcaveHullSimulation(const Polygon& polygon, int numAdditionalPoints)
 {
-
-    auto convexHullPoints = ConvexHull(polygon);
-
-    auto& concaveHullPoints = convexHullPoints;
-
-    for (size_t i = 0; i != convexHullPoints.size(); ++i)
+    const auto convexHullPoints = ConvexHull(polygon);
+    Polygon concaveHullPoints;
+    const size_t size = convexHullPoints.size();
+    if (size == 0)
     {
-        size_t j = (i + 1) % convexHullPoints.size();
+        return concaveHullPoints;
+    }
 
-        double length = std::sqrt(std::pow(convexHullPoints[j].x - convexHullPoints[i].x, 2) +
-                                  std::pow(convexHullPoints[j].y - convexHullPoints[i].y, 2));
-
-        for (int k = 1; k <= numAdditionalPoints; ++k)
+    // Each hull edge contributes its start vertex plus 'numAdditionalPoints'
+    // interpolated points, so the result holds size * (numAdditionalPoints + 1)
+    // vertices. The output is a separate vector: the previous implementation
+    // aliased it to convexHullPoints and pushed into it while iterating, which
+    // kept growing the loop bound and never terminated for numAdditionalPoints
+    // >= 1.
+    concaveHullPoints.reserve(size * (static_cast<size_t>(numAdditionalPoints) + 1));
+    for (size_t i = 0; i != size; ++i)
+    {
+        size_t j = (i + 1) % size;
+        for (int k = 0; k <= numAdditionalPoints; ++k)
         {
             double t = static_cast<double>(k) / (numAdditionalPoints + 1);
             Point2 newPoint(convexHullPoints[i].x + t * (convexHullPoints[j].x - convexHullPoints[i].x),
@@ -123,23 +129,26 @@ Polygon ConvexHull(const Polygons& polygons)
 
 PolygonD ConcaveHullSimulation(const PolygonD& polygon, int numAdditionalPoints)
 {
-    auto convexHullPoints = ConvexHull(polygon);
-
-    auto& concaveHullPoints = convexHullPoints;
-
-    for (size_t i = 0; i != convexHullPoints.size(); ++i)
+    const auto convexHullPoints = ConvexHull(polygon);
+    PolygonD concaveHullPoints;
+    const size_t size = convexHullPoints.size();
+    if (size == 0)
     {
-        size_t j = (i + 1) % convexHullPoints.size();
+        return concaveHullPoints;
+    }
 
-        double length = std::sqrt(std::pow(convexHullPoints[j].x - convexHullPoints[i].x, 2) +
-                                  std::pow(convexHullPoints[j].y - convexHullPoints[i].y, 2));
-
-        for (int k = 1; k <= numAdditionalPoints; ++k)
+    // See the integer overload: the output must be a separate vector so the
+    // interpolation loop is bounded by the fixed convex-hull size.
+    concaveHullPoints.reserve(size * (static_cast<size_t>(numAdditionalPoints) + 1));
+    for (size_t i = 0; i != size; ++i)
+    {
+        size_t j = (i + 1) % size;
+        for (int k = 0; k <= numAdditionalPoints; ++k)
         {
             double t = static_cast<double>(k) / (numAdditionalPoints + 1);
             Point2D newPoint(convexHullPoints[i].x + t * (convexHullPoints[j].x - convexHullPoints[i].x),
                              convexHullPoints[i].y + t * (convexHullPoints[j].y - convexHullPoints[i].y));
-            concaveHullPoints.emplace_back(newPoint);
+            concaveHullPoints.push_back(newPoint);
         }
     }
 

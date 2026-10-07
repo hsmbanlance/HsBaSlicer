@@ -2,6 +2,7 @@
 #include <boost/test/included/unit_test.hpp>
 
 #include "../../2D/ImageToPolygons.hpp"
+#include "../../base/error.hpp"
 #ifdef HAS_OPENCV
 #include <opencv2/opencv.hpp>
 #endif
@@ -149,4 +150,142 @@ end
 
     // cleanup
     std::filesystem::remove(outPath, ec);
+}
+
+namespace
+{
+PolygonsD OneSquare()
+{
+    PolygonsD poly;
+    PolygonD p;
+    p.emplace_back(Point2D{10.0, 10.0});
+    p.emplace_back(Point2D{30.0, 10.0});
+    p.emplace_back(Point2D{30.0, 30.0});
+    p.emplace_back(Point2D{10.0, 30.0});
+    poly.push_back(p);
+    return poly;
+}
+}  // namespace
+
+// A missing image path makes LoadImageGray fail, so FromImage / FromImageMulti
+// return empty layers instead of throwing.
+BOOST_AUTO_TEST_CASE(fromimage_missing_input)
+{
+    BOOST_CHECK(FromImage("hsbaslicer_no_such_image.png", 128, 1.0).empty());
+    BOOST_CHECK(FromImageMulti("hsbaslicer_no_such_image.png", {128, 200}, 1.0).empty());
+}
+
+// ToImage rejects non-positive dimensions, an empty polygon set (no bounds) and an
+// unwritable output directory (the SVG stream cannot be opened).
+BOOST_AUTO_TEST_CASE(toimage_input_guards)
+{
+    const PolygonsD poly = OneSquare();
+    BOOST_CHECK(!ToImage(poly, 0, 100, 1.0, "hsbaslicer_zero.png"));
+    BOOST_CHECK(!ToImage(poly, 100, -5, 1.0, "hsbaslicer_neg.png"));
+
+    PolygonsD none;
+    BOOST_CHECK(!ToImage(none, 100, 100, 1.0, "hsbaslicer_empty.png"));
+
+    BOOST_CHECK(!ToImage(poly, 100, 100, 1.0, "hsbaslicer_no_such_dir/out.svg"));
+}
+
+// An empty ring mixed into the set is skipped in both the SVG and raster paths
+// while the valid ring still produces a file.
+BOOST_AUTO_TEST_CASE(toimage_skips_empty_polygons)
+{
+    PolygonsD poly;
+    poly.push_back(PolygonD{}); // empty -> skipped
+    poly.push_back(OneSquare()[0]);
+
+    auto outSvg = std::filesystem::temp_directory_path() / "hsbaslicer_skip.svg";
+    BOOST_CHECK(ToImage(poly, 100, 100, 1.0, outSvg.string()));
+    std::error_code ec;
+    std::filesystem::remove(outSvg, ec);
+
+#ifdef HAS_OPENCV
+    auto outPng = std::filesystem::temp_directory_path() / "hsbaslicer_skip.png";
+    BOOST_CHECK(ToImage(poly, 100, 100, 1.0, outPng.string()));
+    std::filesystem::remove(outPng, ec);
+#endif
+}
+
+#ifdef HAS_OPENCV
+// A multi-channel (BGR) image exercises the cvtColor conversion, and a block that
+// touches the image border drives the out-of-range neighbour guard in the BFS.
+BOOST_AUTO_TEST_CASE(fromimage_color_and_border_component)
+{
+    int w = 60, h = 60;
+    cv::Mat bgr(h, w, CV_8UC3, cv::Scalar(0, 0, 0));
+    cv::rectangle(bgr, cv::Rect(0, 5, 15, 15), cv::Scalar(255, 255, 255), cv::FILLED);
+
+    auto path = std::filesystem::temp_directory_path() / "hsbaslicer_color.png";
+    cv::imwrite(path.string(), bgr);
+
+    PolygonsD polys = FromImage(path.string(), 128, 1.0);
+    BOOST_CHECK(!polys.empty());
+
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+}
+#endif
+
+// Every failure branch of the Lua-driven renderers must surface as a RuntimeError,
+// while the registration callback is invoked and an empty output path short-circuits.
+BOOST_AUTO_TEST_CASE(lua_to_image_error_and_callback_paths)
+{
+    const PolygonsD poly = OneSquare();
+
+    // LuaToImage: nonexistent script file.
+    BOOST_CHECK_THROW(LuaToImage(poly, "hsbaslicer_missing_script.lua", "hsbaslicer_out.png"), RuntimeError);
+    // LuaToImage: script loads but the requested function is absent.
+    std::filesystem::path script = std::filesystem::path(__FILE__).parent_path() / "image_from_polygons.lua";
+    BOOST_CHECK_THROW(LuaToImage(poly, script.string(), "hsbaslicer_out.png", "no_such_function"), RuntimeError);
+    // LuaToImage: valid function but empty output path -> false, no throw.
+    BOOST_CHECK(!LuaToImage(poly, script.string(), "", "generate_image"));
+    // LuaToImage: registration callback is invoked on the happy path.
+    auto outImg = std::filesystem::temp_directory_path() / "hsbaslicer_lua_reg.png";
+    bool regCalled = false;
+    BOOST_CHECK(LuaToImage(poly, script.string(), outImg.string(), "generate_image",
+                           [&regCalled](lua_State*) { regCalled = true; }));
+    BOOST_CHECK(regCalled);
+    std::error_code ec;
+    std::filesystem::remove(outImg, ec);
+
+    // LuaToImageString failure modes.
+    BOOST_CHECK_THROW(LuaToImageString(poly, "not valid lua @@#", "o.png", "f"), RuntimeError);        // load fail
+    BOOST_CHECK_THROW(LuaToImageString(poly, "error('boom')", "o.png", "f"), RuntimeError);            // chunk exec fail
+    BOOST_CHECK_THROW(LuaToImageString(poly, "function g() end", "o.png", "f"), RuntimeError);         // function absent
+    BOOST_CHECK_THROW(LuaToImageString(poly, "function f(p) error('x') end", "o.png", "f"), RuntimeError); // call error
+    BOOST_CHECK_THROW(LuaToImageString(poly, "function f(p) return 42 end", "o.png", "f"), RuntimeError);   // non-table
+    BOOST_CHECK_THROW(LuaToImageString(poly, "function f(p) return {1, 'x'} end", "o.png", "f"),
+                      RuntimeError); // non-integer element
+    BOOST_CHECK(!LuaToImageString(poly, "function f(p) return {0, 255} end", "", "f", [&regCalled](lua_State*) { regCalled = true; })); // empty out path
+    BOOST_CHECK(regCalled); // LuaToImageString registration callback runs before the empty-path short-circuit
+}
+
+// The file-based LuaToImage mirrors LuaToImageString's error handling over a script
+// loaded from disk: drive its call-error, non-table and non-integer failure branches.
+BOOST_AUTO_TEST_CASE(lua_to_image_script_file_error_paths)
+{
+    const PolygonsD poly = OneSquare();
+    auto tmp = std::filesystem::temp_directory_path();
+    auto write = [&](const std::string& name, const std::string& body) -> std::string
+    {
+        std::ofstream(tmp / name).write(body.data(), static_cast<std::streamsize>(body.size()));
+        return (tmp / name).string();
+    };
+
+    const std::string callErr = write("hsba_call_err.lua", "function generate_image(p) error('boom') end");
+    const std::string nonTable = write("hsba_nontable.lua", "function generate_image(p) return 5 end");
+    const std::string nonInt = write("hsba_nonint.lua", "function generate_image(p) return {1, 'x'} end");
+
+    BOOST_CHECK_THROW(LuaToImage(poly, callErr, "hsba_out.png", "generate_image"), RuntimeError);
+    BOOST_CHECK_THROW(LuaToImage(poly, nonTable, "hsba_out.png", "generate_image"), RuntimeError);
+    BOOST_CHECK_THROW(LuaToImage(poly, nonInt, "hsba_out.png", "generate_image"), RuntimeError);
+
+    std::error_code ec;
+    std::filesystem::remove(callErr, ec);
+    std::filesystem::remove(nonTable, ec);
+    std::filesystem::remove(nonInt, ec);
+    std::filesystem::remove("hsba_out.png", ec);
 }

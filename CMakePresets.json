@@ -1,5 +1,5 @@
 ﻿{
-    "version": 3,
+    "version": 6,
   "configurePresets": [
     {
       "name": "windows-base",
@@ -68,6 +68,35 @@
       "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "vendor": {
+        "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
+          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}"
+        }
+      }
+    },
+    {
+      "name": "linux-coverage",
+      "displayName": "Linux Coverage (gcov + gcovr)",
+      "description": "Instrumented Debug build for WSL/CI coverage gating: core modules 45%, other modules 25% (anti-regression baselines)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "installDir": "${sourceDir}/out/install/${presetName}",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "HSBA_COVERAGE": "ON",
+        "HSBA_COVERAGE_THRESHOLD_CORE": "45",
+        "HSBA_COVERAGE_THRESHOLD_OTHER": "25",
+        "HSBA_SLICER_BUILD_SAMPLES": "OFF",
+        "HSBA_SLICER_BUILD_DOCS": "OFF",
+        "HSBA_SLICER_USE_STATIC_TESTS": "OFF",
+        "HSBA_SLICER_RUN_TESTS_AFTER_BUILD": "OFF"
       },
       "condition": {
         "type": "equals",
@@ -172,6 +201,34 @@
         "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
           "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}"
         }
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-coverage",
+      "displayName": "Build coverage instrumented binaries",
+      "configurePreset": "linux-coverage"
+    },
+    {
+      "name": "linux-coverage-report",
+      "displayName": "Run gcovr coverage gates (after tests)",
+      "configurePreset": "linux-coverage",
+      "targets": [
+        "coverage"
+      ]
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "linux-coverage",
+      "displayName": "Run unit tests producing gcov data",
+      "configurePreset": "linux-coverage",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "stopOnFailure": false
       }
     }
   ]

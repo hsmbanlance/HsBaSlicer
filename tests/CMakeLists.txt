@@ -38,6 +38,32 @@ if(HSBA_RUN_TESTS_AFTER_BUILD)
   )
 endif()
 
+# app_config_test
+add_executable(app_config_test AppConfig/app_config_test.cpp)
+
+target_link_libraries(app_config_test
+	HsBaSlicerBase
+    HsBaSlicerUtils
+	Boost::unit_test_framework
+)
+
+target_compile_definitions(app_config_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME app_config_test
+  COMMAND $<TARGET_FILE:app_config_test>
+  )
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET app_config_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R app_config_test
+  )
+endif()
+
 #any_visit_test
 add_executable(anyvisit_test AnyVisit/anyvisit_test.cpp)
 
@@ -206,6 +232,31 @@ add_test(
   COMMAND $<TARGET_FILE:filename_check_test>
   )
 
+# encoding_convert_test
+add_executable(encoding_convert_test EncodingConvert/encoding_convert_test.cpp)
+
+target_link_libraries(encoding_convert_test
+	HsBaSlicerBase
+	Boost::unit_test_framework
+)
+
+target_compile_definitions(encoding_convert_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME encoding_convert_test
+  COMMAND $<TARGET_FILE:encoding_convert_test>
+  )
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET encoding_convert_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R encoding_convert_test
+  )
+endif()
+
 #ConfigMap
 #test for configmap used std::variant
 add_executable(configmap_test ConfigMap/configmap_test.cpp)
@@ -309,6 +360,7 @@ set(ALL_TEST_TARGETS
   thread_pool_test
   object_pool_test
   filename_check_test
+  encoding_convert_test
   configmap_test
   boost_std_convert_test
   enum_simple_convert_test
@@ -316,6 +368,7 @@ set(ALL_TEST_TARGETS
   zipper_test
   json_convert_test
   cipher_test
+  cipher_lua_adapter_test
   string_utils_test
   points_path_test
   layers_path_test
@@ -331,6 +384,14 @@ set(ALL_TEST_TARGETS
   openvdb_model_test
   lua_common_types_test
   param_store_test
+  hull_2d_test
+  gcode_path_test
+  weld_robot_path_test
+  float_polygons_test
+  fdm_support_lib_test
+  robot_path_test
+  path_generator_test
+  int_polygon_test
 )
 
 if(TARGET HsBaSlicerCADModel)
@@ -561,6 +622,33 @@ add_test(
 if(HSBA_RUN_TESTS_AFTER_BUILD)
   add_custom_command(TARGET cipher_test POST_BUILD
     COMMAND ${CMAKE_CTEST_COMMAND} -V -R cipher_test
+  )
+endif()
+
+# cipher Lua adapter tests (cipher/LuaAdapter.cpp)
+add_executable(cipher_lua_adapter_test
+    Cipher/cipher_lua_adapter_test.cpp
+)
+
+target_link_libraries(cipher_lua_adapter_test
+    HsBaCipher
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(cipher_lua_adapter_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+  )
+
+enable_testing()
+add_test(
+  NAME cipher_lua_adapter_test
+  COMMAND $<TARGET_FILE:cipher_lua_adapter_test>
+  )
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET cipher_lua_adapter_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R cipher_lua_adapter_test
   )
 endif()
 
@@ -1046,6 +1134,246 @@ if(HSBA_RUN_TESTS_AFTER_BUILD)
   )
 endif()
 
+## Hull (2D convex/concave) tests
+add_executable(hull_2d_test
+    "Hull/2dhull_test.cpp"
+)
+
+target_link_libraries(hull_2d_test
+    HsBaSlicer2D
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(hull_2d_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME hull_2d_test
+  COMMAND $<TARGET_FILE:hull_2d_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET hull_2d_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R hull_2d_test
+  )
+endif()
+
+## GCodePath (multi-firmware g-code) tests
+add_executable(gcode_path_test
+    "PathsOut/gcode_path_test.cpp"
+)
+
+target_link_libraries(gcode_path_test
+    HsBaSlicerBase
+    HsBaPaths
+    Boost::unit_test_framework
+    ${LUA_LIBRARIES}
+)
+
+target_include_directories(gcode_path_test PRIVATE ${LUA_INCLUDE_DIR})
+
+target_compile_definitions(gcode_path_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME gcode_path_test
+  COMMAND $<TARGET_FILE:gcode_path_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET gcode_path_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R gcode_path_test
+  )
+endif()
+
+## WeldRobotPath (welding robot program) tests
+add_executable(weld_robot_path_test
+    "PathsOut/weld_robot_path_test.cpp"
+)
+
+target_link_libraries(weld_robot_path_test
+    HsBaSlicerBase
+    HsBaPaths
+    Boost::unit_test_framework
+    ${LUA_LIBRARIES}
+)
+
+target_include_directories(weld_robot_path_test PRIVATE ${LUA_INCLUDE_DIR})
+
+target_compile_definitions(weld_robot_path_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME weld_robot_path_test
+  COMMAND $<TARGET_FILE:weld_robot_path_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET weld_robot_path_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R weld_robot_path_test
+  )
+endif()
+
+## FloatPolygons (double-precision polygon ops) tests
+add_executable(float_polygons_test
+    "PolygonFill/float_polygons_test.cpp"
+)
+
+target_link_libraries(float_polygons_test
+    HsBaSlicer2D
+    HsBaSlicerBase
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(float_polygons_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME float_polygons_test
+  COMMAND $<TARGET_FILE:float_polygons_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET float_polygons_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R float_polygons_test
+  )
+endif()
+
+## IntPolygon (integer-coordinate geometry primitives) tests
+add_executable(int_polygon_test
+    "IntPolygon/int_polygon_test.cpp"
+)
+
+target_link_libraries(int_polygon_test
+    HsBaSlicer2D
+    Boost::unit_test_framework
+)
+
+target_compile_definitions(int_polygon_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME int_polygon_test
+  COMMAND $<TARGET_FILE:int_polygon_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET int_polygon_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R int_polygon_test
+  )
+endif()
+
+## FdmSupport (LibHsBaSlicer support wrapper) tests
+add_executable(fdm_support_lib_test
+    "Support/fdm_support_lib_test.cpp"
+)
+
+target_link_libraries(fdm_support_lib_test
+    LibHsBaSlicer
+    HsBaSlicer2D
+    HsBaSlicerBase
+    Boost::unit_test_framework
+    ${LUA_LIBRARIES}
+)
+
+target_include_directories(fdm_support_lib_test PRIVATE ${LUA_INCLUDE_DIR})
+
+target_compile_definitions(fdm_support_lib_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME fdm_support_lib_test
+  COMMAND $<TARGET_FILE:fdm_support_lib_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET fdm_support_lib_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R fdm_support_lib_test
+  )
+endif()
+
+## RobotPath (ABB/KUKA/FANUC robot program) tests
+add_executable(robot_path_test
+    "PathsOut/robot_path_test.cpp"
+)
+
+target_link_libraries(robot_path_test
+    HsBaSlicerBase
+    HsBaPaths
+    Boost::unit_test_framework
+    ${LUA_LIBRARIES}
+)
+
+target_include_directories(robot_path_test PRIVATE ${LUA_INCLUDE_DIR})
+
+target_compile_definitions(robot_path_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME robot_path_test
+  COMMAND $<TARGET_FILE:robot_path_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET robot_path_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R robot_path_test
+  )
+endif()
+
+## PathGenerator (Lib-layer FDM g-code path generation) tests
+add_executable(path_generator_test
+    "PathsOut/path_generator_test.cpp"
+)
+
+target_link_libraries(path_generator_test
+    LibHsBaSlicer
+    HsBaPaths
+    HsBaSlicer2D
+    HsBaSlicerBase
+    Boost::unit_test_framework
+    ${LUA_LIBRARIES}
+)
+
+target_include_directories(path_generator_test PRIVATE ${LUA_INCLUDE_DIR} ${CMAKE_SOURCE_DIR})
+
+target_compile_definitions(path_generator_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME path_generator_test
+  COMMAND $<TARGET_FILE:path_generator_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET path_generator_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R path_generator_test
+  )
+endif()
+
 ## UserCustomPointCloudModel (mock dll) tests
 if(TARGET HsBaSlicerPointCloud AND HSBA_USE_DLL_LOADER)
   # mock point cloud dll loaded at runtime by the test, exports "mockpc_" prefixed functions
@@ -1132,6 +1460,49 @@ if(TARGET HsBaSlicerCADModel AND HSBA_USE_DLL_LOADER)
   if(HSBA_RUN_TESTS_AFTER_BUILD)
     add_custom_command(TARGET user_custom_cad_model_test POST_BUILD
       COMMAND ${CMAKE_CTEST_COMMAND} -V -R user_custom_cad_model_test
+    )
+  endif()
+endif()
+
+## Lua DllLoader binding tests (utils/LuaDllLoader.cpp)
+if(HSBA_USE_DLL_LOADER)
+  # mock library loaded at runtime by the DllLoader binding; plain C functions only,
+  # so it links nothing. Debug postfix cleared so the test path is config-independent.
+  add_library(mock_dll_loader_dll SHARED
+      "DllLoader/mock_dll_loader_dll.cpp"
+  )
+  set_target_properties(mock_dll_loader_dll PROPERTIES DEBUG_POSTFIX "")
+
+  add_executable(dll_loader_test
+      "DllLoader/dll_loader_test.cpp"
+  )
+
+  # the mock dll must exist before the test runs right after build
+  add_dependencies(dll_loader_test mock_dll_loader_dll)
+
+  target_link_libraries(dll_loader_test
+      PRIVATE
+      HsBaSlicerUtils
+      HsBaSlicerBase
+      ${CMAKE_DL_LIBS}
+  )
+
+  # locate the mock dll by absolute path; inject the directory as a macro
+  target_compile_definitions(dll_loader_test
+      PRIVATE
+      MOCK_DL_LOADER_DLL_DIR="$<TARGET_FILE_DIR:mock_dll_loader_dll>"
+  )
+
+  enable_testing()
+  add_test(
+    NAME dll_loader_test
+    COMMAND $<TARGET_FILE:dll_loader_test>
+    WORKING_DIRECTORY $<TARGET_FILE_DIR:dll_loader_test>
+  )
+
+  if(HSBA_RUN_TESTS_AFTER_BUILD)
+    add_custom_command(TARGET dll_loader_test POST_BUILD
+      COMMAND ${CMAKE_CTEST_COMMAND} -V -R dll_loader_test
     )
   endif()
 endif()

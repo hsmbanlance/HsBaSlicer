@@ -103,6 +103,14 @@ if(HAS_C_C23_CONSTEXPR)
   add_compile_definitions(HSBA_HAS_C23_CONSTEXPR)
 endif()
 
+# Code coverage (gcov/gcovr): instruments all targets with --coverage and adds
+# a "coverage" target that gates line coverage (core 80% / other 60% by
+# default, see cmake/coverage.cmake). Intended for GCC/Clang (Linux/WSL/CI).
+option(HSBA_COVERAGE "Build with gcov coverage instrumentation and add 'coverage' target" OFF)
+if(HSBA_COVERAGE)
+  include(${CMAKE_SOURCE_DIR}/cmake/coverage.cmake)
+endif()
+
 #Todo:add defined for gamer console
 
 # C++20 modules support (optional)
@@ -659,6 +667,9 @@ install(FILES
 #test (the HSBA_SLICER_USE_TESTS / HSBA_SLICER_RUN_TESTS_AFTER_BUILD options are
 # declared above the subdirectory section, see the note there)
 if(HSBA_SLICER_USE_TESTS)
+	# enable_testing must be called at the top level, otherwise ctest run from the
+	# root build directory cannot see the add_test entries of the tests subdirectory.
+	enable_testing()
 	add_subdirectory("tests")
 endif()
 

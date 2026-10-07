@@ -159,6 +159,9 @@ void ImagesPath::Save(const std::filesystem::path& path, std::string_view script
     // push path and funcName
     lua_pushstring(L.get(), path.string().c_str());
     lua_setglobal(L.get(), "output_path");
+    // expose funcName as a global, mirroring ToString(script, funcName, lua_reg)
+    lua_pushlstring(L.get(), funcName.data(), funcName.size());
+    lua_setglobal(L.get(), "funcName");
 
     int loadStatus = luaL_loadbuffer(L.get(), script_copy.data(), script_copy.size(), "ImagesPathSaveScriptWithFunc");
     if (loadStatus != LUA_OK)

@@ -73,6 +73,11 @@ BOOST_AUTO_TEST_CASE(common_types_round_trip)
         -- scalar adapters remain available
         local s = AnyObject.new_string("Hello")
         _G.ok_str = (AnyObject.invoke(s, "size"):cast_size_t() == 5)
+
+        -- long long adapter is exposed through the common registration path
+        -- (regression guard for the LuaLongLong CRTP base)
+        local ll = AnyObject.new_longlong(1234567890123)
+        _G.ok_llong = (ll:cast_longlong() == 1234567890123)
     )";
 
     if (luaL_dostring(L, script) != LUA_OK)
@@ -91,6 +96,7 @@ BOOST_AUTO_TEST_CASE(common_types_round_trip)
     BOOST_CHECK(GetBoolGlobal(L, "ok_poly"));
     BOOST_CHECK(GetBoolGlobal(L, "ok_polys"));
     BOOST_CHECK(GetBoolGlobal(L, "ok_str"));
+    BOOST_CHECK(GetBoolGlobal(L, "ok_llong"));
 
     lua_close(L);
 }
@@ -211,6 +217,72 @@ BOOST_AUTO_TEST_CASE(new_non_table_argument_errors)
     const char* err = lua_tostring(L, -1);
     BOOST_CHECK(err != nullptr);
 
+    lua_close(L);
+}
+
+// Round-trips every remaining registered custom type so each TableAdapter instantiation
+// (new_/cast_ plus the push/read helpers) is executed. Lua assert() aborts the script on any
+// mismatch, so a clean dostring plus the all_ok flag means every type converted correctly.
+BOOST_AUTO_TEST_CASE(all_registered_types_round_trip)
+{
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+    HsBa::Slicer::RegisterCommonAnyObjectTypes(L);
+
+    const char* script = R"lua(
+        -- Eigen named vectors not exercised by the other cases
+        local v2f = AnyObject.new_Vector2f({x=1.5, y=2.5}):cast_Vector2f()
+        assert(v2f.x == 1.5 and v2f.y == 2.5)
+        local v3f = AnyObject.new_Vector3f({1, 2, 3}):cast_Vector3f()  -- plain sequence input
+        assert(v3f.x == 1 and v3f.y == 2 and v3f.z == 3)
+        local v4f = AnyObject.new_Vector4f({x=1, y=2, z=3, w=4}):cast_Vector4f()
+        assert(v4f.x == 1 and v4f.w == 4)
+        local v2d = AnyObject.new_Vector2d({x=3.25, y=4.5}):cast_Vector2d()
+        assert(v2d.x == 3.25 and v2d.y == 4.5)
+        local v4d = AnyObject.new_Vector4d({x=1, y=2, z=3, w=4}):cast_Vector4d()
+        assert(v4d.z == 3 and v4d.w == 4)
+        local v2i = AnyObject.new_Vector2i({x=7, y=8}):cast_Vector2i()
+        assert(v2i.x == 7 and v2i.y == 8)
+        local v4i = AnyObject.new_Vector4i({x=1, y=2, z=3, w=4}):cast_Vector4i()
+        assert(v4i.x == 1 and v4i.w == 4)
+
+        -- double quaternion (x, y, z, w named)
+        local qd = AnyObject.new_Quaterniond({x=0.1, y=0.2, z=0.3, w=1.0}):cast_Quaterniond()
+        assert(qd.w == 1.0 and qd.x == 0.1)
+
+        -- Clipper2 integer point rounds to int64
+        local pt2 = AnyObject.new_Point2({x=11, y=-13}):cast_Point2()
+        assert(pt2.x == 11 and pt2.y == -13)
+
+        -- fixed matrices as nested row sequences
+        local m3 = AnyObject.new_Matrix3d({{1,0,0},{0,1,0},{0,0,1}}):cast_Matrix3d()
+        assert(m3[1][1] == 1 and m3[2][2] == 1 and m3[3][3] == 1 and m3[1][2] == 0)
+        local m4 = AnyObject.new_Matrix4d({{2,0,0,0},{0,2,0,0},{0,0,2,0},{0,0,0,2}}):cast_Matrix4d()
+        assert(m4[1][1] == 2 and m4[4][4] == 2)
+
+        -- dynamic integer matrix keeps its 3x2 shape
+        local mxi = AnyObject.new_MatrixXi({{1,2},{3,4},{5,6}}):cast_MatrixXi()
+        assert(#mxi == 3 and #mxi[1] == 2 and mxi[3][2] == 6)
+
+        -- double polygon set and single integer polygon
+        local pd = AnyObject.new_PolygonsD({ { {x=0,y=0},{x=1,y=0},{x=0,y=1} } }):cast_PolygonsD()
+        assert(#pd == 1 and #pd[1] == 3 and pd[1][3].y == 1)
+        local pg = AnyObject.new_Polygon({ {x=2,y=2},{x=4,y=2},{x=2,y=4} }):cast_Polygon()
+        assert(#pg == 3 and pg[1].x == 2 and pg[3].y == 4)
+
+        -- field reflection over a double vector visits x/y as doubles
+        local s, n = 0, 0
+        AnyObject.new_Vector2d({x=1.5, y=2.5}):foreach_field(function(name, value) s = s + value:cast_double(); n = n + 1 end)
+        assert(s == 4.0 and n == 2)
+
+        _G.all_ok = true
+    )lua";
+
+    if (luaL_dostring(L, script) != LUA_OK)
+    {
+        BOOST_FAIL("Lua script error: " << lua_tostring(L, -1));
+    }
+    BOOST_CHECK(GetBoolGlobal(L, "all_ok"));
     lua_close(L);
 }
 

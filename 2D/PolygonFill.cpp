@@ -1006,7 +1006,9 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
                 Point2D aa, bb;
                 if (!clamp_segment(a, b, aa, bb))
                 {
-                    dump_segment(aa, bb);
+                    // no valid interior span; emit the real scan segment (a, b) rather
+                    // than the uninitialised, origin-defaulted aa/bb.
+                    dump_segment(a, b);
                     continue;
                 }
 
@@ -1087,7 +1089,8 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
                 Point2D aa, bb;
                 if (!clamp_segment(b, a, aa, bb))
                 {
-                    dump_segment(aa, bb);
+                    // see the forward-row branch: emit the real segment, not unset aa/bb
+                    dump_segment(a, b);
                     continue;
                 }
 

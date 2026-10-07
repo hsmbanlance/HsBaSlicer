@@ -8,17 +8,17 @@
 
 namespace HsBa::Slicer
 {
-bool StringWithNoASCII(const std::string& str)
+bool StringIsOnlyASCII(const std::string& str)
 {
     std::regex pattern("[^\\x00-\\x7F]");
     return !std::regex_search(str, pattern);
 }
-bool StringEnableFileName(const std::string& str)
+bool StringIsValidFileName(const std::string& str)
 {
     std::regex pattern(R"([\\/:*?\"<>|])");
     return !std::regex_search(str, pattern) && !str.empty();
 }
-bool StringEnableFileNameWithPath(const std::string& str)
+bool StringIsValidPath(const std::string& str)
 {
     std::regex pattern(R"([:*?\"<>|])");
     if (std::regex_search(str, pattern))
@@ -47,26 +47,26 @@ bool StringEnableFileNameWithPath(const std::string& str)
         return !str.substr(pos + 1).empty();
     }
 }
-bool StringEnableFileNameAndOnlyASCII(const std::string& str)
+bool StringIsValidFileNameWithNonASCII(const std::string& str)
 {
-    return !StringWithNoASCII(str) && StringEnableFileName(str);
+    return !StringIsOnlyASCII(str) && StringIsValidFileName(str);
 }
-bool StringEnableFileNameAndOnlyASCIIWithPath(const std::string& str)
+bool StringIsValidPathWithNonASCII(const std::string& str)
 {
-    return !StringWithNoASCII(str) && StringEnableFileNameWithPath(str);
+    return !StringIsOnlyASCII(str) && StringIsValidPath(str);
 }
 
-bool StringWithNoASCII(const std::wstring& str)
+bool StringIsOnlyASCII(const std::wstring& str)
 {
     std::wregex pattern(L"[^\\x00-\\x7F]");
     return !std::regex_search(str, pattern);
 }
-bool StringEnableFileName(const std::wstring& str)
+bool StringIsValidFileName(const std::wstring& str)
 {
     std::wregex pattern(LR"([\\/:*?\"<>|])");
     return !std::regex_search(str, pattern) && !str.empty();
 }
-bool StringEnableFileNameWithPath(const std::wstring& str)
+bool StringIsValidPath(const std::wstring& str)
 {
     std::wregex pattern(LR"([:*?\"<>|])");
     if (std::regex_search(str, pattern))
@@ -94,12 +94,12 @@ bool StringEnableFileNameWithPath(const std::wstring& str)
         return !str.substr(pos + 1).empty();
     }
 }
-bool StringEnableFileNameAndOnlyASCII(const std::wstring& str)
+bool StringIsValidFileNameWithNonASCII(const std::wstring& str)
 {
-    return !StringWithNoASCII(str) && StringEnableFileName(str);
+    return !StringIsOnlyASCII(str) && StringIsValidFileName(str);
 }
-bool StringEnableFileNameAndOnlyASCIIWithPath(const std::wstring& str)
+bool StringIsValidPathWithNonASCII(const std::wstring& str)
 {
-    return !StringWithNoASCII(str) && StringEnableFileNameWithPath(str);
+    return !StringIsOnlyASCII(str) && StringIsValidPath(str);
 }
 }  // namespace HsBa::Slicer

@@ -37,6 +37,11 @@ unsigned char hex_val(char c)
 
 std::string Encoder::base64_encode(const std::vector<unsigned char>& data)
 {
+    // An empty input is valid and encodes to ""; BIO_write returns 0 for a 0-length
+    // write, which the <=0 failure check below would otherwise misread as an error.
+    if (data.empty())
+        return std::string();
+
     BIO* bio = BIO_new(BIO_s_mem());
     BIO* b64 = BIO_new(BIO_f_base64());
     if (!bio || !b64)

@@ -9,6 +9,7 @@
 #include "2D/PolygonFill.hpp"
 #include "LibHsBaSlicer/Fill/polygon_fill.hpp"
 #include "LibHsBaSlicer/Path/path_optimizer.hpp"
+#include "base/error.hpp"
 
 using namespace HsBa::Slicer;
 
@@ -171,6 +172,89 @@ end
     BOOST_CHECK_EQUAL(luares[1].front().y, 9000 * integerization);
     BOOST_CHECK_EQUAL(luares[1].back().x, 9000 * integerization);
     BOOST_CHECK_EQUAL(luares[1].back().y, 1000 * integerization);
+}
+
+// OffsetFill (public C++ API) nests closed rings inward until the polygon vanishes;
+// a non-positive spacing short-circuits to an empty result.
+BOOST_AUTO_TEST_CASE(offset_fill_public_and_edge_cases)
+{
+    PolygonD polyd;
+    polyd.emplace_back(Point2{0, 0});
+    polyd.emplace_back(Point2{10000, 0});
+    polyd.emplace_back(Point2{10000, 10000});
+    polyd.emplace_back(Point2{0, 10000});
+    auto poly = Polygons{Integerization(polyd)};
+
+    auto rings = OffsetFill(poly, 1000.0);
+    BOOST_REQUIRE(!rings.empty());
+    for (const auto& r : rings)
+    {
+        BOOST_CHECK_GE(r.size(), 3u);
+        // OffsetFill closes every ring so the first and last vertex coincide
+        BOOST_CHECK(r.front() == r.back());
+    }
+
+    // spacing <= 0 returns empty (both the zero and the negative branch)
+    BOOST_CHECK(OffsetFill(poly, 0.0).empty());
+    BOOST_CHECK(OffsetFill(poly, -5.0).empty());
+}
+
+// Exercise every registered PolygonFill.* Lua binding (offsetFill/lineFill/
+// simpleZigzagFill/zigzagFill/compositeOffsetFill/hybridFill/offsetOnly) plus all
+// four join_type strings and the FillMode dispatch, through one custom-fill script.
+BOOST_AUTO_TEST_CASE(lua_polygon_fill_bindings_via_script)
+{
+    PolygonD polyd;
+    polyd.emplace_back(Point2{0, 0});
+    polyd.emplace_back(Point2{10000, 0});
+    polyd.emplace_back(Point2{10000, 10000});
+    polyd.emplace_back(Point2{0, 10000});
+    auto poly = Polygons{Integerization(polyd)};
+
+    const char* script = R"lua(
+function gen(poly)
+    local function add(dst, src)
+        if type(src) == 'table' then
+            for i = 1, #src do dst[#dst + 1] = src[i] end
+        end
+        return dst
+    end
+    local out = {}
+    out = add(out, PolygonFill.offsetFill(poly, 2000, { join_type = "Miter" }))
+    out = add(out, PolygonFill.lineFill(poly, 1500, 0, 300))
+    out = add(out, PolygonFill.lineFill(poly, 1500, 45, 300))
+    out = add(out, PolygonFill.simpleZigzagFill(poly, 2000, 0, 300))
+    out = add(out, PolygonFill.zigzagFill(poly, 2000, 90, 300))
+    out = add(out, PolygonFill.compositeOffsetFill(poly, 2000, 500, 1, 1, "Line", 0, 300, { join_type = "Bevel" }))
+    out = add(out,
+        PolygonFill.compositeOffsetFill(poly, 2000, 500, 1, 1, "SimpleZigzag", 45, 300, { join_type = "Square" }))
+    out = add(out, PolygonFill.hybridFill(poly, 2000, 500, 1, 2, "Zigzag", 0, 300, { join_type = "Round" }))
+    out = add(out, PolygonFill.offsetOnly(poly, 500, 1, 1, { join_type = "Square" }))
+    -- sweep the remaining join_type / FillMode dispatch branches per binding
+    out = add(out, PolygonFill.offsetFill(poly, 2000, { join_type = "Square" }))
+    out = add(out, PolygonFill.offsetFill(poly, 2000, { join_type = "Bevel" }))
+    out = add(out, PolygonFill.offsetFill(poly, 2000, { join_type = "Round" }))
+    out = add(out, PolygonFill.compositeOffsetFill(poly, 2000, 500, 1, 1, "Zigzag", 0, 300, { join_type = "Round" }))
+    out = add(out, PolygonFill.compositeOffsetFill(poly, 2000, 500, 1, 1, "Line", 0, 300, { join_type = "Miter" }))
+    out = add(out, PolygonFill.hybridFill(poly, 2000, 500, 1, 1, "Line", 0, 300, { join_type = "Square" }))
+    out = add(out,
+        PolygonFill.hybridFill(poly, 2000, 500, 1, 1, "SimpleZigzag", 45, 300, { join_type = "Bevel" }))
+    out = add(out, PolygonFill.hybridFill(poly, 2000, 500, 1, 1, "Zigzag", 0, 300, { join_type = "Miter" }))
+    out = add(out, PolygonFill.offsetOnly(poly, 500, 1, 1, { join_type = "Bevel" }))
+    out = add(out, PolygonFill.offsetOnly(poly, 500, 1, 1, { join_type = "Round" }))
+    out = add(out, PolygonFill.offsetOnly(poly, 500, 1, 1, { join_type = "Miter" }))
+    return out
+end
+)lua";
+
+    auto res = LuaCustomFillString(poly, script, "gen", 300.0);
+    BOOST_REQUIRE(!res.empty());
+    for (const auto& p : res)
+        BOOST_CHECK_GE(p.size(), 2u);
+
+    // a script that returns a non-table, and an unknown function name, both raise
+    BOOST_CHECK_THROW(LuaCustomFillString(poly, "function bad() return 42 end", "bad", 300.0), RuntimeError);
+    BOOST_CHECK_THROW(LuaCustomFillString(poly, "function other() return {} end", "missing", 300.0), RuntimeError);
 }
 
 // ---------------------------------------------------------------------------
@@ -453,6 +537,154 @@ BOOST_AUTO_TEST_CASE(fill_stage_lua_exposes_path_optimize)
     auto res = LuaCustomFillByFile(poly, script_path.string(), "generate_fill", 0.5);
     BOOST_CHECK(res.empty());
     std::filesystem::remove(script_path);
+}
+
+// A concave U-shaped polygon forces the zigzag bridging logic: horizontal scan rows
+// in the upper band yield two disjoint arms (separate connected components) while the
+// base is a single span, so adjacent rows change component and ZigzagFill must build
+// bridges that route around the open notch instead of cutting straight across it.
+BOOST_AUTO_TEST_CASE(zigzag_fill_concave_u_shape_drives_bridge)
+{
+    PolygonD u;
+    u.emplace_back(Point2D{0.0, 0.0});
+    u.emplace_back(Point2D{10000.0, 0.0});
+    u.emplace_back(Point2D{10000.0, 10000.0});
+    u.emplace_back(Point2D{7000.0, 10000.0});
+    u.emplace_back(Point2D{7000.0, 3000.0});
+    u.emplace_back(Point2D{3000.0, 3000.0});
+    u.emplace_back(Point2D{3000.0, 10000.0});
+    u.emplace_back(Point2D{0.0, 10000.0});
+    Polygons poly{Integerization(u)};
+
+    auto zig = ZigzagFill(poly, 1000.0, 0.0, 200.0);
+    BOOST_REQUIRE(!zig.empty());
+    // Every emitted vertex must remain inside or on the boundary of the U shape.
+    for (const auto& pz : zig)
+    {
+        BOOST_REQUIRE(pz.size() >= 2u);
+        for (const auto& pt : pz)
+        {
+            auto r = PointInPolygons(Clipper2Lib::Point64{pt.x, pt.y}, poly);
+            BOOST_CHECK(r != Clipper2Lib::PointInPolygonResult::IsOutside);
+        }
+    }
+}
+
+namespace
+{
+    // Axis-aligned bounding box covering every vertex of a set of integer polygons.
+    struct Box
+    {
+        int64_t xmin, ymin, xmax, ymax;
+    };
+
+    Box BoundingBox(const Polygons& polys)
+    {
+        Box b{INT64_MAX, INT64_MAX, INT64_MIN, INT64_MIN};
+        for (const auto& pz : polys)
+        {
+            for (const auto& pt : pz)
+            {
+                b.xmin = std::min(b.xmin, pt.x);
+                b.ymin = std::min(b.ymin, pt.y);
+                b.xmax = std::max(b.xmax, pt.x);
+                b.ymax = std::max(b.ymax, pt.y);
+            }
+        }
+        return b;
+    }
+
+    // True when any emitted vertex lies inside or on the given single contour.
+    bool ContourReached(const Polygons& single, const Polygons& zig)
+    {
+        for (const auto& pz : zig)
+        {
+            for (const auto& pt : pz)
+            {
+                auto r = PointInPolygons(Clipper2Lib::Point64{pt.x, pt.y}, single);
+                if (r != Clipper2Lib::PointInPolygonResult::IsOutside)
+                    return true;
+            }
+        }
+        return false;
+    }
+}  // namespace
+
+// Two squares stacked vertically leave a band of empty scan rows between them. Because
+// several disjoint contours make LineFilling emit spans that straddle the islands, the
+// serpentine reaches the clamp_segment fallback for part of the fill; before the fix
+// that fallback emitted an uninitialised (0, 0) pseudo-vertex. We lift the whole shape
+// well above the origin and assert every vertex stays within the overall bounding box,
+// so the old (0, 0) regression would be caught, and that both squares still get filled.
+BOOST_AUTO_TEST_CASE(zigzag_fill_stacked_islands_stay_in_bounds)
+{
+    PolygonD low;
+    low.emplace_back(Point2D{0.0, 10000.0});
+    low.emplace_back(Point2D{10000.0, 10000.0});
+    low.emplace_back(Point2D{10000.0, 20000.0});
+    low.emplace_back(Point2D{0.0, 20000.0});
+    PolygonD high;
+    high.emplace_back(Point2D{0.0, 40000.0});
+    high.emplace_back(Point2D{10000.0, 40000.0});
+    high.emplace_back(Point2D{10000.0, 50000.0});
+    high.emplace_back(Point2D{0.0, 50000.0});
+
+    Polygons poly{Integerization(low), Integerization(high)};
+    auto zig = ZigzagFill(poly, 1000.0, 0.0, 200.0);
+    BOOST_REQUIRE(!zig.empty());
+    auto box = BoundingBox(poly);
+    for (const auto& pz : zig)
+    {
+        BOOST_REQUIRE(pz.size() >= 2u);
+        for (const auto& pt : pz)
+        {
+            BOOST_CHECK(pt.x >= box.xmin && pt.x <= box.xmax);
+            BOOST_CHECK(pt.y >= box.ymin && pt.y <= box.ymax);
+        }
+    }
+    BOOST_CHECK(ContourReached(Polygons{Integerization(low)}, zig));
+    BOOST_CHECK(ContourReached(Polygons{Integerization(high)}, zig));
+}
+
+// Two islands with non-overlapping x-intervals form two connected components, the left
+// one born part-way up. Multi-contour LineFilling emits spans that straddle the gap, so
+// the serpentine hits the clamp_segment fallback for part of the fill; before the fix
+// that fallback emitted an uninitialised (0, 0) pseudo-vertex. Placing every vertex with
+// x >= 1000 and y >= 1000 makes the origin strictly outside the bounding box, so the
+// bounding-box assertions below would fail on the old behaviour and both islands still
+// have to be filled. (build_bridge itself is not reachable through these public inputs:
+// LineFilling collapses each row so no adjacent-row component change ever triggers it.)
+BOOST_AUTO_TEST_CASE(zigzag_fill_staggered_islands_stay_in_bounds)
+{
+    PolygonD right;
+    right.emplace_back(Point2D{6000.0, 1000.0});
+    right.emplace_back(Point2D{8000.0, 1000.0});
+    right.emplace_back(Point2D{8000.0, 10000.0});
+    right.emplace_back(Point2D{6000.0, 10000.0});
+    PolygonD left;
+    left.emplace_back(Point2D{1000.0, 3500.0});
+    left.emplace_back(Point2D{3000.0, 3500.0});
+    left.emplace_back(Point2D{3000.0, 10000.0});
+    left.emplace_back(Point2D{1000.0, 10000.0});
+
+    Polygons poly{Integerization(right), Integerization(left)};
+    auto zig = ZigzagFill(poly, 1000.0, 0.0, 200.0);
+    BOOST_REQUIRE(!zig.empty());
+    auto box = BoundingBox(poly);
+    // Origin sits strictly outside this bounding box - a leaked (0, 0) pseudo-vertex
+    // would violate the per-vertex range checks below.
+    BOOST_REQUIRE(box.xmin > 0 && box.ymin > 0);
+    for (const auto& pz : zig)
+    {
+        BOOST_REQUIRE(pz.size() >= 2u);
+        for (const auto& pt : pz)
+        {
+            BOOST_CHECK(pt.x >= box.xmin && pt.x <= box.xmax);
+            BOOST_CHECK(pt.y >= box.ymin && pt.y <= box.ymax);
+        }
+    }
+    BOOST_CHECK(ContourReached(Polygons{Integerization(right)}, zig));
+    BOOST_CHECK(ContourReached(Polygons{Integerization(left)}, zig));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -453,6 +453,7 @@ target_link_libraries(my_app PRIVATE DllHsBaSlicer)        # C ABI 版
 | `HSBA_SLICER_MODULE` | `ON` | 构建 ModuleHsBaSlicer C++20 模块包装层 |
 | `HSBA_SLICER_BUILD_SAMPLES` | `ON` | 构建示例程序 |
 | `HSBA_SLICER_USE_TESTS` | `ON` | 构建测试 |
+| `HSBA_COVERAGE` | `OFF` | GCC/Clang gcov 覆盖率插桩并提供 `coverage` 门禁目标（核心 45% / 其他 25% 行覆盖率，为防回归基线；static_tests 仅编译期检查且不计入），配合 `linux-coverage` 预设使用 |
 | `HSBA_PROTOBUF_OUT` | `ON` | 输出 Proto 多语言生成文件 |
 
 ---

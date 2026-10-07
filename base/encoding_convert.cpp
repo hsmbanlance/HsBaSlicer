@@ -93,7 +93,11 @@ namespace HsBa::Slicer
 		{
 			return str;
 		}
-		return boost::locale::conv::between(str, from, to);
+		// boost::locale::conv::between takes the destination encoding first, then the
+		// source encoding. The contract here is "convert str from `from` to `to`", so
+		// the arguments must be (to, from); passing (from, to) silently reverses the
+		// direction (and disagrees with the iconv branch used on Android/iOS below).
+		return boost::locale::conv::between(str, to, from);
 #else // Android and iOS do not support boost.locale, use iconv instead
 		constexpr size_t kMinBufferSize = 64; // Minimum buffer size for output
 		constexpr size_t kInitialExpansionFactor = 2;

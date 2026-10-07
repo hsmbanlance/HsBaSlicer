@@ -2,6 +2,8 @@
 #include <boost/test/included/unit_test.hpp>
 
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 
 #include "support/FdmSupport.hpp"
 #include "support/LuaAdapter.hpp"
@@ -331,6 +333,138 @@ BOOST_AUTO_TEST_CASE(generate_all_layers)
     BOOST_CHECK(!results[1].empty());
     // Third layer: smaller than second -> no overhang -> no support
     BOOST_CHECK(results[2].empty());
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+// ============================================================================
+// Support Lua bindings (support/LuaAdapter.cpp) tests
+// ============================================================================
+namespace
+{
+bool LuaBoolGlobal(lua_State* L, const char* name)
+{
+    lua_getglobal(L, name);
+    bool v = lua_toboolean(L, -1) != 0;
+    lua_pop(L, 1);
+    return v;
+}
+
+void MustRunLua(lua_State* L, const char* script)
+{
+    if (luaL_dostring(L, script) != LUA_OK)
+        BOOST_FAIL("lua dostring failed: " << lua_tostring(L, -1));
+}
+}  // namespace
+
+BOOST_AUTO_TEST_SUITE(support_lua_bindings)
+
+// Register the Support table and drive every factory / generate / detect binding.
+BOOST_AUTO_TEST_CASE(register_and_drive_support_bindings)
+{
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+    HsBa::Slicer::Support::RegisterLuaSupport(L);
+
+    const char* script = R"lua(
+        local cur  = { { {x=0,y=0}, {x=20,y=0}, {x=20,y=20}, {x=0,y=20} } }
+        local prev = { { {x=5,y=5}, {x=15,y=5}, {x=15,y=15}, {x=5,y=15} } }
+        local cfg  = { overhang_angle_threshold=45, layer_height=0.2, support_gap=0,
+                       support_diameter=2, support_density=0.2, tree_branch_angle=45,
+                       tree_max_branch_radius=5, honeycomb_cell_size=5 }
+
+        local c = Support.default_config()
+        _G.ok_cfg = (type(c) == 'table' and c.layer_height ~= nil and c.support_pattern ~= nil)
+
+        _G.ok_plane = (type(Support.generate(Support.new_plane(), cur, prev, 0.2, cfg)) == 'table')
+        _G.ok_tree  = (type(Support.generate(Support.new_tree(), cur, prev, 0.2, cfg)) == 'table')
+        _G.ok_hc    = (type(Support.generate(Support.new_honeycomb(), cur, prev, 0.2, cfg)) == 'table')
+        _G.ok_sla   = (type(Support.generate(Support.new_sla(), cur, prev, 0.2, cfg)) == 'table')
+
+        _G.ok_overhang = (type(Support.detect_overhang(cur, prev, 0.2, 45.0)) == 'table')
+
+        -- inline lua support with an explicit function name
+        local s1 = Support.new_lua(
+            'function generate_support() return { { {x=0,y=0},{x=5,y=0},{x=5,y=5},{x=0,y=5} } } end',
+            'generate_support')
+        local r1 = Support.generate(s1, cur, prev, 0.2, cfg)
+        _G.ok_lua_fn = (type(r1) == 'table' and #r1 >= 1)
+
+        -- single-argument form exercises the default funcName and the support_polys fallback
+        local s2 = Support.new_lua('support_polys = { { {x=0,y=0},{x=2,y=0},{x=2,y=2} } }')
+        _G.ok_lua_default = (type(Support.generate(s2, cur, prev, 0.2, cfg)) == 'table')
+
+        -- an empty config table drives the "field is not a number" defaults
+        _G.ok_empty_cfg = (type(Support.generate(Support.new_plane(), cur, prev, 0.2, {})) == 'table')
+
+        -- a non-table config argument drives ReadConfigFromTable's early default return
+        _G.ok_nonintable_cfg = (type(Support.generate(Support.new_plane(), cur, prev, 0.2, 5)) == 'table')
+    )lua";
+
+    MustRunLua(L, script);
+    BOOST_CHECK(LuaBoolGlobal(L, "ok_cfg"));
+    BOOST_CHECK(LuaBoolGlobal(L, "ok_plane"));
+    BOOST_CHECK(LuaBoolGlobal(L, "ok_tree"));
+    BOOST_CHECK(LuaBoolGlobal(L, "ok_hc"));
+    BOOST_CHECK(LuaBoolGlobal(L, "ok_sla"));
+    BOOST_CHECK(LuaBoolGlobal(L, "ok_overhang"));
+    BOOST_CHECK(LuaBoolGlobal(L, "ok_lua_fn"));
+    BOOST_CHECK(LuaBoolGlobal(L, "ok_lua_default"));
+    BOOST_CHECK(LuaBoolGlobal(L, "ok_empty_cfg"));
+    BOOST_CHECK(LuaBoolGlobal(L, "ok_nonintable_cfg"));
+
+    lua_close(L);
+}
+
+// Argument-validation error branches across the bindings.
+BOOST_AUTO_TEST_CASE(support_lua_error_branches)
+{
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+    HsBa::Slicer::Support::RegisterLuaSupport(L);
+
+    const char* script = R"lua(
+        _G.err_gen    = not pcall(function() return Support.generate(42, {}, {}, 0.2, {}) end)
+        _G.err_newlua = not pcall(function() return Support.new_lua() end)
+        _G.err_newfile = not pcall(function() return Support.new_lua_file(1) end)
+    )lua";
+
+    MustRunLua(L, script);
+    BOOST_CHECK(LuaBoolGlobal(L, "err_gen"));
+    BOOST_CHECK(LuaBoolGlobal(L, "err_newlua"));
+    BOOST_CHECK(LuaBoolGlobal(L, "err_newfile"));
+
+    lua_close(L);
+}
+
+// Support.new_lua_file(path, funcName) driven from a real temporary lua file.
+BOOST_AUTO_TEST_CASE(support_lua_file_binding)
+{
+    const auto path = std::filesystem::temp_directory_path() / "hsba_support_gen.lua";
+    {
+        std::ofstream f(path);
+        f << "function gen()\n return { { {x=0,y=0},{x=3,y=0},{x=3,y=3},{x=0,y=3} } }\n end\n";
+    }
+
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+    HsBa::Slicer::Support::RegisterLuaSupport(L);
+    lua_pushstring(L, path.string().c_str());
+    lua_setglobal(L, "support_file");
+
+    const char* script = R"lua(
+        local obj  = Support.new_lua_file(support_file, 'gen')
+        local cur  = { { {x=0,y=0}, {x=20,y=0}, {x=20,y=20}, {x=0,y=20} } }
+        local prev = { { {x=5,y=5}, {x=15,y=5}, {x=15,y=15}, {x=5,y=15} } }
+        local r = Support.generate(obj, cur, prev, 0.2, { support_diameter=2, support_gap=0 })
+        _G.ok_file = (type(r) == 'table')
+    )lua";
+
+    MustRunLua(L, script);
+    BOOST_CHECK(LuaBoolGlobal(L, "ok_file"));
+
+    lua_close(L);
+    std::filesystem::remove(path);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

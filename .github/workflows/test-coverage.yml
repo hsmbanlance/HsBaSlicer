@@ -1,0 +1,127 @@
+name: Test Coverage
+
+# Runs the full unit-test suite in a gcov-instrumented Linux build (same
+# toolchain layout as WSL: preset "linux-coverage") and gates line coverage:
+#   * core modules  (base/ 2D/ utils/ cipher/ meshmodel/ paths/ preprocess/
+#                    support/ LibHsBaSlicer/)  -> >= 45%
+#   * other modules (everything else)          -> >= 25%
+# These are anti-regression baselines measured on the current suite (gcov on
+# Linux): core ~53%, other ~29%. Raise them as tests are added.
+# static_tests are compile-time-only template checks (boost-test is unavailable
+# off desktop platforms); the preset disables them and they are excluded from
+# the coverage computation and the gates.
+# The result table is written to the job summary and the HTML/XML reports are
+# uploaded as artifacts. The job fails when a threshold is not met.
+
+on:
+  push:
+    branches: ["master", "dev"]
+  pull_request:
+    branches: ["master", "dev"]
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Maximize build disk space
+        if: runner.os == 'Linux'
+        uses: easimon/maximize-build-space@v10
+        with:
+          root-reserve-mb: 512
+          swap-size-mb: 1024
+          overprovision-lvm: true
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
+
+      - uses: actions/checkout@v6
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git curl zip unzip tar at libxt-dev gperf libxaw7-dev cifs-utils build-essential g++ gfortran libx11-dev libxkbcommon-x11-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev mesa-common-dev libxinerama-dev libxxf86vm-dev libxcursor-dev yasm libnuma1 libnuma-dev libtool-bin libltdl-dev flex bison libbison-dev autoconf libudev-dev libncurses5-dev libtool libxrandr-dev xutils-dev dh-autoreconf autoconf-archive libgles2-mesa-dev ruby-full pkg-config meson nasm cmake ninja-build libxext-dev libxfixes-dev libxrender-dev libxcb1-dev libx11-xcb-dev libxcb-dri3-dev libxcb-present-dev libxcb-glx0-dev libxcb-util0-dev libxkbcommon-dev libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev libxcb-icccm4-dev libxcb-sync-dev libxcb-xfixes0-dev libxcb-shape0-dev libxcb-randr0-dev libxcb-render-util0-dev libxcb-xinerama0-dev libxcb-xkb-dev libxcb-xinput-dev libxcb-cursor-dev libkrb5-dev libxcb-res0-dev libxcb-keysyms1-dev libxcb-xkb-dev libxcb-record0-dev python3-setuptools python3-mako python3-pip python3-venv python3-jinja2 nodejs libwayland-dev python-is-python3 guile-2.2-dev libxdamage-dev libdbus-1-dev libxtst-dev haskell-stack golang-go wayland-protocols libbluetooth-dev autoconf-archive
+          sudo apt-get install -y libncurses-dev libtirpc-dev libfontconfig1-dev bison flex libxrender-dev libxtst-dev libxrandr-dev ninja-build
+          # gcovr: aggregate gcov data and enforce coverage thresholds
+          sudo apt-get install -y gcovr
+          gcovr --version
+          # Install PowerShell for version generation script
+          sudo apt-get install -y wget apt-transport-https software-properties-common
+          wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb
+          sudo dpkg -i packages-microsoft-prod.deb
+          sudo apt-get update
+          sudo apt-get install -y powershell
+
+      - name: Clone vcpkg and bootstrap
+        shell: bash
+        run: |
+          if [ ! -d "vcpkg" ]; then
+            git clone https://github.com/microsoft/vcpkg.git
+            ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+            ./vcpkg/vcpkg integrate install
+          fi
+          echo "VCPKG_ROOT=$GITHUB_WORKSPACE/vcpkg" >> $GITHUB_ENV
+
+      - name: Set up vcpkg binary cache backend
+        shell: bash
+        run: |
+          echo "VCPKG_BINARY_SOURCES=clear;x-gha,readwrite" >> $GITHUB_ENV
+
+      - name: Cache vcpkg downloads cache
+        uses: actions/cache@v5
+        with:
+          path: ${env.VCPKG_ROOT}/downloads
+          key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}
+
+      - name: Configure CMake (linux-coverage preset)
+        shell: bash
+        run: cmake --preset linux-coverage
+
+      - name: Build (coverage instrumented)
+        shell: bash
+        run: cmake --build --preset linux-coverage
+
+      - name: Run tests (produces gcov data)
+        shell: bash
+        run: ctest --preset linux-coverage
+
+      - name: Run coverage gates (core >= 45%, other >= 25%)
+        shell: bash
+        run: cmake --build --preset linux-coverage-report
+
+      - name: Write coverage summary to job summary
+        if: always()
+        shell: bash
+        run: |
+          COV_DIR=out/build/linux-coverage/coverage
+          {
+            echo "## Coverage Report"
+            echo
+            if [ -f "$COV_DIR/core_summary.txt" ]; then
+              echo "### Core modules (threshold 45%)"
+              echo '```'
+              cat "$COV_DIR/core_summary.txt"
+              echo '```'
+            fi
+            if [ -f "$COV_DIR/other_summary.txt" ]; then
+              echo "### Other modules (threshold 25%)"
+              echo '```'
+              cat "$COV_DIR/other_summary.txt"
+              echo '```'
+            fi
+            if [ ! -f "$COV_DIR/core_summary.txt" ] && [ ! -f "$COV_DIR/other_summary.txt" ]; then
+              echo "_Coverage reports were not generated (build, tests or gcovr failed)._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: out/build/linux-coverage/coverage/
+          if-no-files-found: warn
