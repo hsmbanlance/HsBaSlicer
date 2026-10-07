@@ -104,7 +104,7 @@ if(HAS_C_C23_CONSTEXPR)
 endif()
 
 # Code coverage (gcov/gcovr): instruments all targets with --coverage and adds
-# a "coverage" target that gates line coverage (core 80% / other 60% by
+# a "coverage" target that gates line coverage (core 45% / other 25% by
 # default, see cmake/coverage.cmake). Intended for GCC/Clang (Linux/WSL/CI).
 option(HSBA_COVERAGE "Build with gcov coverage instrumentation and add 'coverage' target" OFF)
 if(HSBA_COVERAGE)
