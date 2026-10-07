@@ -14,8 +14,6 @@ name: Test Coverage
 # uploaded as artifacts. The job fails when a threshold is not met.
 
 on:
-  push:
-    branches: ["master", "dev"]
   pull_request:
     branches: ["master", "dev"]
   workflow_dispatch:
@@ -24,13 +22,23 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
 
+    env:
+      # Cap parallel compilation for every build step (Ninja project build and
+      # vcpkg dependency builds). gcov-instrumented Debug TUs of the CAD-heavy
+      # modules (OCCT/CGAL/VTK) can each take several GB of RAM; at the runner's
+      # full core count this exhausts memory and the hosted runner "loses
+      # communication" (OOM). Two workers stay well within RAM even on the
+      # worst translation units.
+      CMAKE_BUILD_PARALLEL_LEVEL: "2"
+      VCPKG_MAX_CONCURRENCY: "2"
+
     steps:
       - name: Maximize build disk space
         if: runner.os == 'Linux'
         uses: easimon/maximize-build-space@v10
         with:
           root-reserve-mb: 512
-          swap-size-mb: 1024
+          swap-size-mb: 8192
           overprovision-lvm: true
           remove-dotnet: 'true'
           remove-android: 'true'
@@ -79,7 +87,7 @@ jobs:
 
       - name: Configure CMake (linux-coverage preset)
         shell: bash
-        run: cmake --preset linux-coverage
+        run: cmake --preset linux-coverage -DHSBA_COVERAGE_JOBS=2
 
       - name: Build (coverage instrumented)
         shell: bash

@@ -30,6 +30,11 @@ add_link_options(--coverage)
 set(HSBA_COVERAGE_THRESHOLD_CORE 45 CACHE STRING "Required line coverage (percent) for core modules")
 set(HSBA_COVERAGE_THRESHOLD_OTHER 25 CACHE STRING "Required line coverage (percent) for non-core modules")
 
+# Max concurrent gcov workers for the 'coverage' report. 0 = auto (CPU count).
+# Cap this on memory-constrained CI runners (gcov parses run many processes in
+# parallel and can starve the host); set e.g. -DHSBA_COVERAGE_JOBS=2 there.
+set(HSBA_COVERAGE_JOBS 0 CACHE STRING "Parallel gcov workers for the coverage report (0 = auto-detect)")
+
 # Directories treated as "core"; anything else inside the source tree falls
 # into the "other" bucket. gcovr >= 7 matches --filter/--exclude regexes
 # against absolute paths, so the entries below are plain directory names that
@@ -65,14 +70,19 @@ if(NOT GCOVR_EXECUTABLE)
     set(GCOVR_EXECUTABLE "gcovr-not-found")
 endif()
 
-# gcov parsing is per-file and dominates runtime on slow filesystems
-# (WSL /mnt drives); parallelize with several workers when supported.
+# gcov parsing is per-file and dominates runtime on slow filesystems (WSL /mnt
+# drives), so gcovr supports a parallel worker count (-j). Cap it via
+# HSBA_COVERAGE_JOBS on memory-constrained CI runners; when unset (0) fall back
+# to the CPU count, but only if this gcovr actually advertises the option (the
+# short flag shows as "-j, --jobs" in gcovr 7 and "-j [GCOV_PARALLEL]" in 8).
 set(_hsba_cov_jobs "")
 execute_process(
     COMMAND "${GCOVR_EXECUTABLE}" --help
     OUTPUT_VARIABLE _hsba_gcovr_help
     ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
-if(_hsba_gcovr_help MATCHES "-j, --jobs")
+if(HSBA_COVERAGE_JOBS GREATER 0)
+    set(_hsba_cov_jobs "-j" "${HSBA_COVERAGE_JOBS}")
+elseif(_hsba_gcovr_help MATCHES "-j[ ,]")
     include(ProcessorCount)
     ProcessorCount(_hsba_cov_ncpu)
     if(_hsba_cov_ncpu GREATER 1)
