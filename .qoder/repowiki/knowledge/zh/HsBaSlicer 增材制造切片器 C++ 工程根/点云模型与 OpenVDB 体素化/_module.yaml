@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: pointcloud
+title: 点云模型与 OpenVDB 体素化
+scope:
+    - pointcloud/
+source_files: []
+depends_on: []
+related_to:
+    - path: preprocess

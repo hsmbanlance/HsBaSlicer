@@ -1,0 +1,1 @@
+C++ with coroutines (`Utils::Task<T>` from `base/coroutine.hpp`) for async pipelines; stdlib `std::chrono::steady_clock` for elapsed timing; depends on `LibHsBaSlicer` sub-libraries for WAAM export, file transfer, and param store backends (MySQL/PostgreSQL/SQLite).

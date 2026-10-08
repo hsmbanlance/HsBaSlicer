@@ -1,0 +1,1 @@
+C++ with OpenSSL (AES-256-CBC/ECB, 3DES-EDE3, RSA-OAEP via PEM) and Lua C API bindings; built as a static library via CMake (`find_package(Lua REQUIRED)`).

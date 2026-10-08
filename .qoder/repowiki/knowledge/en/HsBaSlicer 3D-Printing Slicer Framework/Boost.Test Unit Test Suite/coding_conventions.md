@@ -1,0 +1,6 @@
+- Every test file begins with `#define BOOST_TEST_MODULE <name>` followed by `#include <boost/test/included/unit_test.hpp>` and groups cases inside `BOOST_AUTO_TEST_SUITE(<suite_name>)` / `BOOST_AUTO_TEST_SUITE_END()`.
+- Assertions use the `BOOST_CHECK_*` family (`BOOST_CHECK_EQUAL`, `BOOST_CHECK_THROW`, `BOOST_REQUIRE_EQUAL`, `BOOST_FAIL`) rather than raw `assert` or exceptions.
+- Lua-driven tests create a fresh `lua_State*` per case, call `luaL_openlibs`, execute inline scripts via `luaL_dostring`, read results back with `lua_getglobal` + typed getters, and close the state explicitly at the end of the test.
+- Mocking of `AnyObject`-exposed methods goes through `Mock::MockRegistry::ScopedStubs` (or manual `Mock::MockRegistry::instance().enable()/disable()`) so stubs and rule state are scoped and restored automatically.
+- Custom type registration for `AnyObject` is done by specializing `GetTypeInfo<T>()` in the `HsBa::Slicer::Utils` namespace, setting `Name`, `destroy`, `copy`, `move`, `fields`, and `methods`.
+- Optional-feature tests are gated behind preprocessor checks matching their CMake conditions (`#ifdef HSBA_ANY_OBJECT_ENABLE_MOCK`, `#if defined(_MSC_VER) || defined(__GNUC__) || defined(__clang__)` for compiler-specific behavior).

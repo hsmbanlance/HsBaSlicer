@@ -1,0 +1,1 @@
+C-ABI entry points that orchestrate the three powder-bed additive-manufacturing slicing pipelines — SLS, SLM, and 3DP binder-jet — from model load through parallel layer slicing to Lua-driven export.

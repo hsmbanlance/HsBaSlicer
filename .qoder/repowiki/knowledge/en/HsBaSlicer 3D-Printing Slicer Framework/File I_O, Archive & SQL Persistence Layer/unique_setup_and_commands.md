@@ -1,0 +1,1 @@
+Build is driven by `fileoperator/CMakeLists.txt`; optional features are toggled via CMake variables `HSBA_HSBA_USE_BIT7Z`, `HSBA_USE_MYSQL`, `HSBA_USE_PGSQL`, and platform macros `ANDROID` / `IOS` / `HSBA_GAME_CONSOLE` which gate both linking and `#ifdef` blocks.

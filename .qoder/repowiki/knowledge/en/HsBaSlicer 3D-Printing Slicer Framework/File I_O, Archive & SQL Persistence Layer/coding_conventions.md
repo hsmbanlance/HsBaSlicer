@@ -1,0 +1,6 @@
+- Concrete archive backends derive from `IZipper` (for compression) or the CRTP `IUnzipper<Derived>` (for extraction), keeping the public API stable across miniz and bit7z implementations.
+- Classes expose a private nested `struct Private` tag and a `static Create()` factory returning `std::make_shared<T>(Private{})`, making construction controlled and preventing direct instantiation.
+- Heavy implementation details are hidden behind a private `class Impl; std::unique_ptr<Impl> impl_;` PIMPL member, as seen in `SQLiteAdapter`, `MySQLAdapter`, `PostgreSQLAdapter`, and `RemoteExecutorConnection`.
+- Optional third-party backends (MySQL, PostgreSQL, Bit7z) are compiled out via `#ifdef HSBA_USE_MYSQL` / `HSBA_USE_PGSQL` / `HSBA_USE_BIT7Z` guards around both declarations and registration functions.
+- Database operations use a fluent pipe-operator DSL: `operator|` overloads accept `SQLSelect` / `SQLInsert` / `SQLUpdate` / `SQLDelete` / `SQLCreateTable` / `SQLRemoveTable` structs chained off an `ISQLAdapter&`.
+- Long-running operations report progress through `Utils::EventSource<Derived, void, double|string_view, string_view>` (or a `ProgressFn` callback in `ParamStore`) rather than returning status codes.

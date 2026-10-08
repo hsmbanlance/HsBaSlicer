@@ -1,0 +1,4 @@
+- CMake helper files expose functionality through `function(...)` wrappers around `check_cxx_source_compiles`/`check_c_source_compiles` that set a result variable in `PARENT_SCOPE` rather than returning values.
+- Python tooling under `static_check/` and `scripts/` follows a uniform CLI pattern: `argparse.ArgumentParser` with typed options, a `main()` entry point guarded by `if __name__ == '__main__': main()`, and non-zero exit codes for errors.
+- File discovery across both Python analyzers respects `.gitignore` via `pathspec.PathSpec.from_lines("gitwildmatch", ...)` combined with a built-in default ignore list for build artifacts, third-party trees, and generated output.
+- Coverage configuration centralizes directory membership as CMake `CACHE STRING` lists (`HSBA_COVERAGE_CORE_FILTERS`, `HSBA_COVERAGE_EXCLUDES`) that are iterated to build gcovr `--filter`/`--exclude` arguments.

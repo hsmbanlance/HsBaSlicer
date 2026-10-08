@@ -1,0 +1,1 @@
+C++ with Eigen3 for vector/matrix math; CGAL (via `USE_CGAL`) for thick-solid and boolean mesh operations; embedded Lua interpreter for the custom pipeline extension; OCCT CAD kernel optionally linked through `HsBaSlicerCADModel` when `HSBA_COPL` is enabled and platform permits.

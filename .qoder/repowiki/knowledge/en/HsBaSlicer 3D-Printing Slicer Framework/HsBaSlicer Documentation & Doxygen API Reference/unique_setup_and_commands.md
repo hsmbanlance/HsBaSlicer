@@ -1,0 +1,1 @@
+Run `cmake -B build && cmake --build build --target docs` (or `make docs`) from the project root to regenerate `docs/doxygen/html`; the target is skipped with a warning if Doxygen is not installed.

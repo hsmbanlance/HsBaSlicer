@@ -1,569 +1,414 @@
 # API Reference
 
 <cite>
-**Referenced Files in This Document**   
-- [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp)
-- [IModel.hpp](file://base/IModel.hpp)
-- [FloatPolygons.hpp](file://2D/FloatPolygons.hpp)
-- [IntPolygon.hpp](file://2D/IntPolygon.hpp)
-- [error.hpp](file://base/error.hpp)
-- [FullTopoModel.hpp](file://meshmodel/FullTopoModel.hpp)
-- [mesh_slice.cpp](file://LibHsBaSlicer/Slice/mesh_slice.cpp)
-- [FloatPolygons.cpp](file://2D/FloatPolygons.cpp)
-- [FullTopoModel.cpp](file://meshmodel/FullTopoModel.cpp)
+**Referenced Files in This Document**
+- [README.md](file://README.md)
+- [dllexport.h](file://DllHsBaSlicer/dllexport.h)
+- [initialize.h](file://DllHsBaSlicer/initialize.h)
+- [version_info.h](file://DllHsBaSlicer/version_info.h)
+- [fdm_pipeline.h](file://DllHsBaSlicer/fdm_pipeline.h)
+- [sla_pipeline.h](file://DllHsBaSlicer/sla_pipeline.h)
+- [sls_pipeline.h](file://DllHsBaSlicer/sls_pipeline.h)
+- [export.h](file://LibHsBaSlicer/export.h)
+- [hsba_slicer.cppm](file://ModuleHsBaSlicer/hsba_slicer.cppm)
+- [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
 </cite>
 
 ## Table of Contents
 1. [Introduction](#introduction)
-2. [Slicing Functions](#slicing-functions)
-3. [IModel Interface](#imodel-interface)
-4. [Polygon Data Structures](#polygon-data-structures)
-5. [Error Handling](#error-handling)
-6. [API Usage Patterns](#api-usage-patterns)
-7. [Resource Management](#resource-management)
+2. [Project Structure](#project-structure)
+3. [Core Components](#core-components)
+4. [Architecture Overview](#architecture-overview)
+5. [Detailed Component Analysis](#detailed-component-analysis)
+6. [Dependency Analysis](#dependency-analysis)
+7. [Performance Considerations](#performance-considerations)
+8. [Troubleshooting Guide](#troubleshooting-guide)
+9. [Conclusion](#conclusion)
+10. [Appendices](#appendices)
 
 ## Introduction
-The HsBaSlicer public API provides a comprehensive set of functions for 3D model processing, with a focus on slicing operations for additive manufacturing. The API is designed to be thread-safe and provides both safe and unsafe slicing operations depending on the requirements of the manufacturing process. This documentation covers the exported functions in mesh_slice.hpp, the IModel interface, polygon data structures, error handling mechanisms, and usage patterns for common workflows.
-
-## Slicing Functions
-
-The slicing functions in the HsBaSlicer API provide both safe and unsafe slicing operations for 3D models. These functions operate on the IModel interface and return polygonal representations of the model at a specified height.
-
-### Slice Function
-The `Slice` function performs a safe slicing operation that only returns closed, valid contours. This is the recommended function for most applications where geometric integrity is critical.
-
-**Function Signature**
-```cpp
-Polygons Slice(const IModel& model, const float height);
-```
-
-**Parameters**
-- `model`: A const reference to an IModel object representing the 3D model to be sliced
-- `height`: The Z-axis height at which to perform the slicing operation
-
-**Return Value**
-- Returns a `Polygons` object containing only closed, valid contours
-
-**Thread Safety**
-- The function is thread-safe as it operates on a const reference to the model and creates a new FullTopoModel instance for each call
-
-**Section sources**
-- [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L12)
-- [mesh_slice.cpp](file://LibHsBaSlicer/Slice/mesh_slice.cpp#L5-L9)
-
-### UnSafeSlice Function
-The `UnSafeSlice` function performs an unsafe slicing operation that includes both closed and open contours. This function is intended for specialized manufacturing processes like wire feeding where open contours may be acceptable.
-
-**Function Signature**
-```cpp
-UnSafePolygons UnSafeSlice(const IModel& model, const float height);
-```
-
-**Parameters**
-- `model`: A const reference to an IModel object representing the 3D model to be sliced
-- `height`: The Z-axis height at which to perform the slicing operation
-
-**Return Value**
-- Returns an `UnSafePolygons` object that may contain both closed and open contours
-
-**Usage Considerations**
-- Not recommended for SLA or other area-based manufacturing processes
-- Suitable for wire feeding and similar processes where open contours are acceptable
-
-**Section sources**
-- [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L15)
-- [mesh_slice.cpp](file://LibHsBaSlicer/Slice/mesh_slice.cpp#L10-L14)
-
-### SliceLua Function
-The `SliceLua` function allows custom slicing logic to be implemented in Lua scripts, providing flexibility for specialized slicing algorithms.
-
-**Function Signature**
-```cpp
-Polygons SliceLua(const IModel& model, const std::string& script, const float height);
-```
-
-**Parameters**
-- `model`: A const reference to an IModel object representing the 3D model to be sliced
-- `script`: A string containing the Lua script to be executed
-- `height`: The Z-axis height at which to perform the slicing operation
-
-**Lua Environment**
-- The script has access to global variables: V (vertices), E (edges), F (faces), and height
-- V is a 1-based array of vertex objects with x, y, z properties
-- E is a 1-based array of edge objects with vertex indices
-- F is a 1-based array of face objects with vertex indices
-- The script must return a table of polygons in the format: polys = { { {x=..,y=..}, ... }, ... }
-
-**Return Value**
-- Returns a `Polygons` object containing the contours generated by the Lua script
-
-**Section sources**
-- [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L17)
-- [mesh_slice.cpp](file://LibHsBaSlicer/Slice/mesh_slice.cpp#L16-L20)
-- [FullTopoModel.cpp](file://meshmodel/FullTopoModel.cpp#L434-L534)
-
-### UnSafeSliceLua Function
-The `UnSafeSliceLua` function is similar to `SliceLua` but returns potentially open polylines with a closed flag.
-
-**Function Signature**
-```cpp
-UnSafePolygons UnSafeSliceLua(const IModel& model, const std::string& script, const float height);
-```
-
-**Parameters**
-- `model`: A const reference to an IModel object representing the 3D model to be sliced
-- `script`: A string containing the Lua script to be executed
-- `height`: The Z-axis height at which to perform the slicing operation
-
-**Return Value**
-- Returns an `UnSafePolygons` object that may contain both closed and open contours with a closed flag indicating the status of each contour
-
-**Section sources**
-- [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L18)
-- [mesh_slice.cpp](file://LibHsBaSlicer/Slice/mesh_slice.cpp#L22-L26)
-- [FullTopoModel.cpp](file://meshmodel/FullTopoModel.cpp#L537-L849)
-
-## IModel Interface
-
-The IModel interface defines the contract for 3D model objects in the HsBaSlicer system. All model types must implement this interface to be compatible with the slicing functions.
-
-### Load Method
-The `Load` method loads a model from a file.
-
-**Function Signature**
-```cpp
-virtual bool Load(std::string_view fileName) = 0;
-```
-
-**Parameters**
-- `fileName`: The path to the file to be loaded
-
-**Return Value**
-- Returns `true` if the model was successfully loaded, `false` otherwise
-
-**Section sources**
-- [IModel.hpp](file://base/IModel.hpp#L19)
-
-### Save Method
-The `Save` method saves a model to a file in the specified format.
-
-**Function Signature**
-```cpp
-virtual bool Save(std::string_view fileName, const ModelFormat format) const = 0;
-```
-
-**Parameters**
-- `fileName`: The path where the file should be saved
-- `format`: The ModelFormat enum value specifying the desired output format
-
-**Return Value**
-- Returns `true` if the model was successfully saved, `false` otherwise
-
-**Section sources**
-- [IModel.hpp](file://base/IModel.hpp#L20)
-- [ModelFormat.hpp](file://base/ModelFormat.hpp#L10)
-
-### Transformation Methods
-The IModel interface provides several methods for transforming the model in 3D space.
-
-#### Translate Method
-Translates the model by the specified vector.
-
-**Function Signature**
-```cpp
-virtual void Translate(const Eigen::Vector3f& translation) = 0;
-```
-
-**Section sources**
-- [IModel.hpp](file://base/IModel.hpp#L22)
-
-#### Rotate Method
-Rotates the model by the specified quaternion.
-
-**Function Signature**
-```cpp
-virtual void Rotate(const Eigen::Quaternionf& rotation) = 0;
-```
-
-**Section sources**
-- [IModel.hpp](file://base/IModel.hpp#L23)
-
-#### Scale Methods
-Scales the model by the specified factor or vector.
-
-**Function Signatures**
-```cpp
-virtual void Scale(const float scale) = 0;
-virtual void Scale(const Eigen::Vector3f& scale) = 0;
-```
-
-**Section sources**
-- [IModel.hpp](file://base/IModel.hpp#L24-L25)
-
-#### Transform Methods
-Applies a complete transformation to the model using various matrix representations.
-
-**Function Signatures**
-```cpp
-virtual void Transform(const Eigen::Isometry3f& transform) = 0;
-virtual void Transform(const Eigen::Matrix4f& transform) = 0;
-virtual void Transform(const Eigen::Transform<float, 3, Eigen::Affine>& transform) = 0;
-```
-
-**Section sources**
-- [IModel.hpp](file://base/IModel.hpp#L26-L28)
-
-### Bounding Box and Volume Methods
-These methods provide geometric information about the model.
-
-#### BoundingBox Method
-Retrieves the axis-aligned bounding box of the model.
-
-**Function Signature**
-```cpp
-virtual void BoundingBox(Eigen::Vector3f& min, Eigen::Vector3f& max) const = 0;
-```
-
-**Parameters**
-- `min`: Output parameter for the minimum coordinates of the bounding box
-- `max`: Output parameter for the maximum coordinates of the bounding box
-
-**Section sources**
-- [IModel.hpp](file://base/IModel.hpp#L30)
-
-#### Volume Method
-Calculates the volume of the model.
-
-**Function Signature**
-```cpp
-virtual float Volume() const = 0;
-```
-
-**Return Value**
-- Returns the volume of the model in cubic units
-
-**Section sources**
-- [IModel.hpp](file://base/IModel.hpp#L31)
-
-### TriangleMesh Method
-Retrieves the triangle mesh representation of the model in IGL format.
-
-**Function Signature**
-```cpp
-virtual std::pair<Eigen::MatrixXf, Eigen::MatrixXi> TriangleMesh() const = 0;
-```
-
-**Return Value**
-- Returns a pair containing:
-  - First: Vertex matrix (V) with dimensions Nx3
-  - Second: Face index matrix (F) with dimensions Mx3
-
-**Section sources**
-- [IModel.hpp](file://base/IModel.hpp#L33)
-
-## Polygon Data Structures
-
-The HsBaSlicer API provides two main polygon data structures for representing 2D contours: Polygons and UnSafePolygons.
-
-### Polygons Structure
-The `Polygons` type is defined as a collection of integer-coordinate polygons using the Clipper2 library's Paths64 type.
-
-**Definition**
-```cpp
-using Polygons = Clipper2Lib::Paths64;
-```
-
-**Characteristics**
-- Uses 64-bit integer coordinates for high precision
-- Coordinates are scaled by a factor of 1e6 (defined as `integerization` in IntPolygon.hpp)
-- Only contains closed, valid contours
-- Compatible with Clipper2 boolean operations and offsetting
-
-**Section sources**
-- [IntPolygon.hpp](file://2D/IntPolygon.hpp#L14)
-
-### FloatPolygons Structure
-The `FloatPolygons` type is defined as a collection of double-precision floating-point polygons.
-
-**Definition**
-```cpp
-using PolygonsD = Clipper2Lib::PathsD;
-```
-
-**Characteristics**
-- Uses double-precision floating-point coordinates
-- Used internally for floating-point operations
-- Can be converted to/from integer polygons using the Integerization/UnIntegerization functions
-
-**Section sources**
-- [FloatPolygons.hpp](file://2D/FloatPolygons.hpp#L15)
-
-### UnSafePolygons Structure
-The `UnSafePolygons` type is a vector of UnSafePolygon structures that can represent both closed and open contours.
-
-**Definition**
-```cpp
-struct UnSafePolygon
-{
-    Polygon path;
-    bool closed = true;
-};
-using UnSafePolygons = std::vector<UnSafePolygon>;
-```
-
-**Characteristics**
-- Contains a `path` member of type Polygon (integer coordinates)
-- Includes a `closed` boolean flag indicating whether the contour is closed
-- Allows for open polylines in addition to closed contours
-- Used in unsafe slicing operations where open contours may be acceptable
-
-**Section sources**
-- [FullTopoModel.hpp](file://meshmodel/FullTopoModel.hpp#L19-L25)
-
-### Polygon Operations
-The API provides a comprehensive set of operations for manipulating polygons.
-
-#### Boolean Operations
-The following boolean operations are available for both integer and floating-point polygons:
-
-**Function Signatures**
-```cpp
-Polygons Union(const Polygons& left, const Polygons& right, Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd);
-Polygons Intersection(const Polygons& left, const Polygons& right, Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd);
-Polygons Difference(const Polygons& left, const Polygons& right, Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd);
-Polygons Xor(const Polygons& left, const Polygons& right, Clipper2Lib::FillRule fill_rule = Clipper2Lib::FillRule::EvenOdd);
-```
-
-**Section sources**
-- [IntPolygon.hpp](file://2D/IntPolygon.hpp#L34-L45)
-
-#### Offset Operations
-The API provides offsetting (inflation/deflation) operations for polygons.
-
-**Function Signatures**
-```cpp
-Polygons Offset(const Polygon& p, double delta, Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square, Clipper2Lib::EndType end_type = Clipper2Lib::EndType::Polygon);
-Polygons Offset(const Polygons& ps, double delta, Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square, Clipper2Lib::EndType end_type = Clipper2Lib::EndType::Polygon);
-```
-
-**Parameters**
-- `delta`: The offset distance (positive for outward, negative for inward)
-- `join_type`: How corners are joined (Square, Round, Miter)
-- `end_type`: How open paths are treated (Polygon, Joined, Butt, Square, Round)
-
-**Section sources**
-- [IntPolygon.hpp](file://2D/IntPolygon.hpp#L47-L54)
-
-#### Area Calculation
-Functions to calculate the area of polygons.
-
-**Function Signatures**
-```cpp
-double Area(const Polygon& p);
-double Area(const Polygons& ps);
-```
-
-**Return Value**
-- Returns the area in square units (with appropriate scaling based on the integerization factor)
-
-**Section sources**
-- [IntPolygon.hpp](file://2D/IntPolygon.hpp#L58-L59)
-- [FloatPolygons.hpp](file://2D/FloatPolygons.hpp#L46-L47)
-
-## Error Handling
-
-The HsBaSlicer API uses a comprehensive exception hierarchy for error handling, defined in the error.hpp file.
-
-### Exception Hierarchy
-The API defines a hierarchy of exception classes that inherit from a base RuntimeError class.
+This document provides a comprehensive API reference for HsBaSlicer across three integration surfaces:
+- C ABI exposed by DllHsBaSlicer (for cross-language and cross-platform use).
+- C++ library API provided by LibHsBaSlicer (class-based, modern C++ usage).
+- C++20 module interface hsba.slicer (single-file module with class wrappers around LibHsBaSlicer).
+
+It also documents memory ownership patterns, thread-safety considerations, error handling, and version compatibility guidance based on the repository’s headers and documentation.
+
+## Project Structure
+HsBaSlicer exposes multiple build targets and installation layouts. The primary public interfaces relevant to this API reference are:
+- DllHsBaSlicer: shared/static library exporting a pure C ABI.
+- LibHsBaSlicer: C++ static/shared library exposing core slicing functionality.
+- ModuleHsBaSlicer: C++20 module hsba.slicer providing a class-based wrapper over LibHsBaSlicer.
 
 ```mermaid
-classDiagram
-class RuntimeError {
-+what() const char*
-}
-class OutOfRangeError {
-+what() const char*
-}
-class InvalidArgumentError {
-+what() const char*
-}
-class IOError {
-+what() const char*
-}
-class NotImplementedError {
-+what() const char*
-}
-class NullValueError {
-+what() const char*
-}
-class NotSupportedError {
-+what() const char*
-}
-class NotFoundError {
-+what() const char*
-}
-class AlreadyExistsError {
-+what() const char*
-}
-class PermissionDeniedError {
-+what() const char*
-}
-class TimeoutError {
-+what() const char*
-}
-class InterruptedError {
-+what() const char*
-}
-class CancelledError {
-+what() const char*
-}
-class OutOfMemoryError {
-+what() const char*
-}
-RuntimeError <|-- OutOfRangeError
-RuntimeError <|-- InvalidArgumentError
-RuntimeError <|-- IOError
-RuntimeError <|-- NotImplementedError
-RuntimeError <|-- NullValueError
-RuntimeError <|-- NotSupportedError
-RuntimeError <|-- NotFoundError
-RuntimeError <|-- AlreadyExistsError
-RuntimeError <|-- PermissionDeniedError
-RuntimeError <|-- TimeoutError
-RuntimeError <|-- InterruptedError
-RuntimeError <|-- CancelledError
-RuntimeError <|-- OutOfMemoryError
+graph TB
+Host["Host Application<br/>Qt / wxWidgets / Unity / UE / C# / Java / Python / Swift"] --> |C ABI| DLL["DllHsBaSlicer<br/>Pure C ABI"]
+DLL --> |Calls exported functions| LIB["LibHsBaSlicer<br/>C++ Core Library"]
+CPPApp["Modern C++ App"] --> |import hsba.slicer| MOD["Module hsba.slicer<br/>Class-based API"]
+MOD --> |Wraps| LIB
 ```
 
 **Diagram sources**
-- [error.hpp](file://base/error.hpp#L12-L136)
-
-### Exception Types
-The API defines the following specific exception types:
-
-- **RuntimeError**: Base class for all runtime errors
-- **OutOfRangeError**: Thrown when an index or value is out of valid range
-- **InvalidArgumentError**: Thrown when a function receives an invalid argument
-- **IOError**: Thrown when an input/output operation fails
-- **NotImplementedError**: Thrown when a function is not implemented
-- **NullValueError**: Thrown when a null value is encountered where it's not allowed
-- **NotSupportedError**: Thrown when an operation is not supported
-- **NotFoundError**: Thrown when a requested resource is not found
-- **AlreadyExistsError**: Thrown when attempting to create a resource that already exists
-- **PermissionDeniedError**: Thrown when access to a resource is denied
-- **TimeoutError**: Thrown when an operation times out
-- **InterruptedError**: Thrown when an operation is interrupted
-- **CancelledError**: Thrown when an operation is cancelled
-- **OutOfMemoryError**: Thrown when memory allocation fails
-
-### Error Handling in Slicing Functions
-The slicing functions may throw exceptions in the following circumstances:
-
-- **RuntimeError**: If Lua initialization fails in SliceLua or UnSafeSliceLua functions
-- **InvalidArgumentError**: If invalid parameters are passed to any function
-- **IOError**: If there are issues with file operations (though the core slicing functions don't directly perform file I/O)
+- [README.md:104-124](file://README.md#L104-L124)
+- [README.md:126-151](file://README.md#L126-L151)
 
 **Section sources**
-- [error.hpp](file://base/error.hpp#L12-L136)
-- [FullTopoModel.cpp](file://meshmodel/FullTopoModel.cpp#L438)
-- [FullTopoModel.cpp](file://meshmodel/FullTopoModel.cpp#L542)
+- [README.md:104-124](file://README.md#L104-L124)
+- [README.md:126-151](file://README.md#L126-L151)
 
-## API Usage Patterns
+## Core Components
+This section summarizes the three main API surfaces and their responsibilities.
 
-This section demonstrates common usage patterns for the HsBaSlicer API.
+- DllHsBaSlicer (C ABI):
+  - Provides platform-independent entry points for pipeline configuration, execution (sync/async), and result cleanup.
+  - Uses HSBA_SLICER_API macro for symbol export/import.
+  - Includes initialization, version query, and per-pipeline headers (FDM, SLA, SLS, etc.).
 
-### Model Loading and Slicing Workflow
-A typical workflow for loading a model and performing slicing operations.
+- LibHsBaSlicer (C++ API):
+  - Exposes core slicing capabilities: preprocess, slice, support, fill, path generation, floor generation, file transfer, parameter store, and Lua extensions.
+  - Uses HSBA_SLICER_LIB_API macro for symbol export/import.
+
+- ModuleHsBaSlicer (C++20 module hsba.slicer):
+  - Single-file module that re-exports types and wraps LibHsBaSlicer free functions into classes like Model, FdmPipeline, SlaPipeline, SlsPipeline, SlmPipeline, LomPipeline, TdpPipeline, WaamPipeline, FileTransferPipeline, ParamStorePipeline, CustomLuaPipeline.
+  - Provides default config factories, utility conversions, and event/callback registration helpers.
+
+**Section sources**
+- [dllexport.h:1-22](file://DllHsBaSlicer/dllexport.h#L1-L22)
+- [export.h:1-22](file://LibHsBaSlicer/export.h#L1-L22)
+- [hsba_slicer.cppm:1-63](file://ModuleHsBaSlicer/hsba_slicer.cppm#L1-L63)
+- [hsba_slicer.cppm:67-146](file://ModuleHsBaSlicer/hsba_slicer.cppm#L67-L146)
+
+## Architecture Overview
+The system architecture separates concerns between a stable C ABI boundary and a rich C++ core.
 
 ```mermaid
 sequenceDiagram
-participant Application
-participant IModel
-participant Slicer
-participant Polygons
-Application->>IModel : Create model instance
-Application->>IModel : Load("model.stl")
-Application->>Slicer : Slice(model, 10.0f)
-Slicer->>Slicer : Create FullTopoModel
-Slicer->>Slicer : Perform slicing
-Slicer-->>Application : Return Polygons
-Application->>Polygons : Process contours
+participant Host as "Host Application"
+participant DLL as "DllHsBaSlicer (C ABI)"
+participant LIB as "LibHsBaSlicer (C++)"
+participant CORE as "Core Algorithms"
+Host->>DLL : Call pipeline function (e.g., HsBaRunFdmPipeline)
+DLL->>LIB : Convert args, call exported C++ function
+LIB->>CORE : Execute preprocessing, slicing, support, fill, path generation
+CORE-->>LIB : Intermediate results
+LIB-->>DLL : Pipeline result struct
+DLL-->>Host : Return result (caller must free via HsBaFree*)
 ```
 
 **Diagram sources**
-- [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L12)
-- [IModel.hpp](file://base/IModel.hpp#L19)
-- [FullTopoModel.hpp](file://meshmodel/FullTopoModel.hpp#L63)
+- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
+- [sla_pipeline.h:17-56](file://DllHsBaSlicer/sla_pipeline.h#L17-L56)
+- [sls_pipeline.h:17-56](file://DllHsBaSlicer/sls_pipeline.h#L17-L56)
 
-### Custom Slicing with Lua
-Using Lua scripts to implement custom slicing logic.
+## Detailed Component Analysis
 
-```mermaid
-sequenceDiagram
-participant Application
-participant Slicer
-participant Lua
-participant FullTopoModel
-participant Polygons
-Application->>Slicer : SliceLua(model, script, 5.0f)
-Slicer->>FullTopoModel : Create instance
-Slicer->>Lua : Initialize Lua state
-Lua->>Lua : Load script
-Lua->>FullTopoModel : Access V, E, F, height
-FullTopoModel-->>Lua : Provide model data
-Lua->>Lua : Execute custom logic
-Lua->>Slicer : Return polys table
-Slicer->>Slicer : Convert to Polygons
-Slicer-->>Application : Return Polygons
-```
+### DllHsBaSlicer C ABI
+This section documents the C ABI surface for common operations and pipelines.
 
-**Diagram sources**
-- [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L17)
-- [FullTopoModel.cpp](file://meshmodel/FullTopoModel.cpp#L434-L534)
+#### Initialization and Versioning
+- initialize(): One-time initialization; safe to call at load time; repeated calls have no additional effect.
+- HsBaGetVersionJson(): Returns dynamically allocated UTF-8 JSON string; caller must free via HsBaFreeVersionString().
+- HsBaGetVersionXml(): Returns dynamically allocated UTF-8 XML string; caller must free via HsBaFreeVersionString().
+- HsBaFreeVersionString(): Frees strings returned by version query functions.
 
-### Complete Slicing Pipeline
-A comprehensive workflow showing the complete process from model loading to path generation.
+Memory management:
+- All strings returned by version APIs are heap-allocated by the library and must be freed by the caller using HsBaFreeVersionString().
 
-```mermaid
-flowchart TD
-A["Load Model"] --> B["Validate Model"]
-B --> C["Transform Model"]
-C --> D["Slice at Multiple Heights"]
-D --> E["Process Each Layer"]
-E --> F["Apply Boolean Operations"]
-F --> G["Offset Contours"]
-G --> H["Generate Toolpaths"]
-H --> I["Save Results"]
-style A fill:#f9f,stroke:#333
-style I fill:#f9f,stroke:#333
-```
+Thread safety:
+- initialize() is idempotent and intended for one-time setup; ensure it is called before invoking other APIs.
 
-**Diagram sources**
-- [IModel.hpp](file://base/IModel.hpp#L19)
-- [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L12)
-- [IntPolygon.hpp](file://2D/IntPolygon.hpp#L34)
-
-## Resource Management
-
-Proper resource management is critical when using the HsBaSlicer API.
-
-### Object Lifetimes
-- IModel objects should be kept alive for the duration of slicing operations
-- The slicing functions take const references to IModel, so the caller is responsible for managing the model's lifetime
-- Temporary FullTopoModel instances are created and destroyed within each slicing function call
-
-### Thread Safety
-All exported slicing functions are thread-safe as they:
-- Operate on const references to models
-- Create independent FullTopoModel instances for each call
-- Do not share mutable state between calls
-
-### Memory Management
-- Polygon data structures use standard containers (std::vector) with automatic memory management
-- The API does not require explicit memory deallocation by the caller
-- Large models may consume significant memory, so applications should be aware of memory usage patterns
+Error handling:
+- No explicit error codes in these functions; errors are typically indicated via exceptions or callback mechanisms in pipeline functions.
 
 **Section sources**
-- [mesh_slice.cpp](file://LibHsBaSlicer/Slice/mesh_slice.cpp#L5-L26)
-- [FullTopoModel.hpp](file://meshmodel/FullTopoModel.hpp#L63)
+- [initialize.h:11-19](file://DllHsBaSlicer/initialize.h#L11-L19)
+- [version_info.h:16-41](file://DllHsBaSlicer/version_info.h#L16-L41)
+
+#### Export Macro
+- HSBA_SLICER_API: Cross-platform macro for exporting/importing symbols in the shared library. On Windows, uses dllexport/dllimport; on non-Windows platforms, defaults to empty.
+
+Usage:
+- All public C ABI functions are annotated with HSBA_SLICER_API.
+
+**Section sources**
+- [dllexport.h:9-20](file://DllHsBaSlicer/dllexport.h#L9-L20)
+
+#### FDM Pipeline (Fused Deposition Modeling)
+Functions:
+- HsBaCreateDefaultConfig(): Creates default FDM pipeline configuration.
+- HsBaRunFdmPipeline(config, callback, user_data): Synchronous full pipeline run; blocks until completion.
+- HsBaRunFdmPipelineAsync(config, callback, user_data, result_callback, result_user_data): Asynchronous non-blocking run; result delivered via callback.
+- HsBaFreePipelineResult(result): Frees memory in the returned result struct (gcode_content, error_message).
+
+Parameters:
+- config: Pointer to HsBaFdmPipelineConfig_t.
+- callback: Optional progress callback; can be NULL.
+- user_data: Optional user data passed to callbacks; can be NULL.
+- result_callback: Completion callback receiving result; must not be NULL for async.
+
+Return values:
+- Sync: Returns HsBaFdmPipelineResult_t; caller must free via HsBaFreePipelineResult().
+- Async: Returns task handle (reserved for future cancellation); result delivered asynchronously.
+
+Validation rules:
+- For async, result_callback must not be NULL.
+- Config fields should be validated by the caller prior to invocation (e.g., non-null pointers where required).
+
+Error handling:
+- Errors during pipeline execution are reported through result structures or callbacks; callers should check success flags and error messages.
+
+Memory ownership:
+- Result structs contain heap-allocated strings; callers must free them using HsBaFreePipelineResult().
+
+Thread safety:
+- Async execution uses coroutines internally; callbacks may be invoked from worker threads; ensure callback implementations are thread-safe.
+
+**Section sources**
+- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
+
+#### SLA Pipeline (Stereolithography)
+Functions:
+- HsBaCreateDefaultSlaConfig(): Creates default SLA pipeline configuration.
+- HsBaRunSlaPipeline(config, callback, user_data): Synchronous full pipeline run.
+- HsBaRunSlaPipelineAsync(config, callback, user_data, result_callback, result_user_data): Asynchronous non-blocking run.
+- HsBaFreeSlaPipelineResult(result): Frees memory in the returned SLA result struct.
+
+Parameters and return values follow the same pattern as FDM pipeline.
+
+Validation rules:
+- For async, result_callback must not be NULL.
+- Config fields should be validated by the caller.
+
+Error handling:
+- Errors are reported through result structures or callbacks.
+
+Memory ownership:
+- Result structs contain heap-allocated strings; callers must free them using HsBaFreeSlaPipelineResult().
+
+Thread safety:
+- Callbacks may be invoked from worker threads; ensure thread safety.
+
+**Section sources**
+- [sla_pipeline.h:17-56](file://DllHsBaSlicer/sla_pipeline.h#L17-L56)
+
+#### SLS Pipeline (Selective Laser Sintering)
+Functions:
+- HsBaCreateDefaultSlsConfig(): Creates default SLS pipeline configuration.
+- HsBaRunSlsPipeline(config, callback, user_data): Synchronous full pipeline run; requires export_lua_script to be set.
+- HsBaRunSlsPipelineAsync(config, callback, user_data, result_callback, result_user_data): Asynchronous non-blocking run.
+- HsBaFreeSlsPipelineResult(result): Frees memory in the returned SLS result struct.
+
+Parameters and return values follow the same pattern as FDM/SLA pipelines.
+
+Validation rules:
+- For sync/async, export_lua_script must not be NULL.
+- For async, result_callback must not be NULL.
+
+Error handling:
+- Errors are reported through result structures or callbacks.
+
+Memory ownership:
+- Result structs contain heap-allocated strings; callers must free them using HsBaFreeSlsPipelineResult().
+
+Thread safety:
+- Callbacks may be invoked from worker threads; ensure thread safety.
+
+**Section sources**
+- [sls_pipeline.h:17-56](file://DllHsBaSlicer/sls_pipeline.h#L17-L56)
+
+### LibHsBaSlicer C++ API
+LibHsBaSlicer exposes the core slicing functionality through C++ classes and free functions. The header layout includes modules for Preprocess, Slice, Support, Fill, Path, Floor, Transfer, ParamStore, and Extends (Lua integration).
+
+Key aspects:
+- Export macro: HSBA_SLICER_LIB_API marks exported symbols.
+- Modules:
+  - Preprocess: Model loading and transformation.
+  - Slice: Mesh slicing into layers.
+  - Support: FDM/SLA support generation.
+  - Fill: Polygon filling algorithms.
+  - Path: G-code and robot path generation.
+  - Floor: SLA floor/raft generation.
+  - Transfer: File transfer utilities.
+  - ParamStore: Parameter persistence (SQLite/MySQL/PostgreSQL).
+  - Extends: Lua integration and custom function registration.
+
+Usage patterns:
+- Consumers include appropriate headers under LibHsBaSlicer/ and link against LibHsBaSlicer.
+- Classes and functions are designed for RAII and exception-based error handling.
+
+**Section sources**
+- [export.h:1-22](file://LibHsBaSlicer/export.h#L1-L22)
+- [README.md:126-151](file://README.md#L126-L151)
+
+### C++20 Module Interface hsba.slicer
+The module hsba.slicer provides a modern C++ interface wrapping LibHsBaSlicer. It defines:
+- Exception type: SlicerError.
+- Type aliases: Point2, Polygon, Polygons, Point2D, PolygonD, PolygonsD.
+- Re-exported pipeline config/result types from pipelinetypes/pipeline_types.h.
+- Default config factories: defaultFdmConfig(), defaultSlaConfig(), defaultSlsConfig(), defaultFileTransferConfig(), defaultCustomConfig(), defaultSlmConfig(), defaultLomConfig(), defaultTdpConfig(), defaultWaamConfig().
+- Model class: RAII wrapper for model lifecycle (load, transform, slice, raw access).
+- Pipeline classes: FdmPipeline, SlaPipeline, SlsPipeline, SlmPipeline, LomPipeline, TdpPipeline, WaamPipeline, FileTransferPipeline, ParamStorePipeline, CustomLuaPipeline.
+- Utilities: toDouble(), toInt(), versionJson(), versionXml().
+- Event/callback registration: add2DFunction(), add3DFunction(), addFileFunction(), addEventCallback(), addZipperEventCallback(), addDBEventCallback().
+
+Design principles:
+- RAII for resource management (Model, pipeline instances).
+- Exceptions for error propagation (SlicerError).
+- Lambda-friendly callbacks for progress and events.
+- Minimal coupling to LibHsBaSlicer internals; consumers interact with high-level classes.
+
+Example usage patterns:
+- Create a Model instance with a file path.
+- Configure a pipeline (e.g., FdmPipeline) with default or custom config.
+- Run the pipeline and obtain results (e.g., G-code string, layer counts).
+- Handle exceptions and optional output saving.
+
+**Section sources**
+- [hsba_slicer.cppm:67-146](file://ModuleHsBaSlicer/hsba_slicer.cppm#L67-L146)
+- [hsba_slicer.cppm:148-540](file://ModuleHsBaSlicer/hsba_slicer.cppm#L148-L540)
+- [hsba_slicer.cppm:542-800](file://ModuleHsBaSlicer/hsba_slicer.cppm#L542-L800)
+
+## Dependency Analysis
+The dependencies between components are structured to maintain clear boundaries:
+- DllHsBaSlicer depends only on LibHsBaSlicer’s exported functions.
+- Module hsba.slicer depends on LibHsBaSlicer headers and re-exports types for convenience.
+- Pipelinetypes provide shared config/result structures used across all surfaces.
+
+```mermaid
+graph LR
+PIPELINE_TYPES["pipelinetypes/pipeline_types.h"] --> DLL_FDM["DllHsBaSlicer/fdm_pipeline.h"]
+PIPELINE_TYPES --> DLL_SLA["DllHsBaSlicer/sla_pipeline.h"]
+PIPELINE_TYPES --> DLL_SLS["DllHsBaSlicer/sls_pipeline.h"]
+LIB_EXPORT["LibHsBaSlicer/export.h"] --> MODULE["Module hsba.slicer"]
+MODULE --> LIB_CORE["LibHsBaSlicer Core"]
+```
+
+**Diagram sources**
+- [fdm_pipeline.h:9-10](file://DllHsBaSlicer/fdm_pipeline.h#L9-L10)
+- [sla_pipeline.h:9-10](file://DllHsBaSlicer/sla_pipeline.h#L9-L10)
+- [sls_pipeline.h:9-10](file://DllHsBaSlicer/sls_pipeline.h#L9-L10)
+- [export.h:1-22](file://LibHsBaSlicer/export.h#L1-L22)
+- [hsba_slicer.cppm:48-62](file://ModuleHsBaSlicer/hsba_slicer.cppm#L48-L62)
+
+**Section sources**
+- [fdm_pipeline.h:9-10](file://DllHsBaSlicer/fdm_pipeline.h#L9-L10)
+- [sla_pipeline.h:9-10](file://DllHsBaSlicer/sla_pipeline.h#L9-L10)
+- [sls_pipeline.h:9-10](file://DllHsBaSlicer/sls_pipeline.h#L9-L10)
+- [export.h:1-22](file://LibHsBaSlicer/export.h#L1-L22)
+- [hsba_slicer.cppm:48-62](file://ModuleHsBaSlicer/hsba_slicer.cppm#L48-L62)
+
+## Performance Considerations
+- Use asynchronous pipeline functions (HsBaRun*Async) for UI responsiveness in host applications.
+- Avoid excessive copying of large polygon sets; prefer references where possible in C++ code.
+- Leverage RAII in C++ to manage resources efficiently and avoid leaks.
+- Batch operations where possible (e.g., pre-reserve vectors for layer collections).
+- Monitor memory usage when processing large models; consider streaming or chunking if necessary.
+
+[No sources needed since this section provides general guidance]
+
+## Troubleshooting Guide
+Common issues and resolutions:
+- Memory leaks: Ensure all returned strings from version APIs and result structs from pipeline functions are freed using the corresponding HsBaFree* functions.
+- Null callbacks: For async pipeline functions, always provide a non-null result_callback.
+- Invalid configurations: Validate config fields (e.g., export_lua_script for SLS) before calling pipeline functions.
+- Thread safety: Implement thread-safe callbacks for progress and events; avoid sharing mutable state without synchronization.
+- Initialization order: Call initialize() once at application startup before invoking other APIs.
+
+**Section sources**
+- [version_info.h:16-41](file://DllHsBaSlicer/version_info.h#L16-L41)
+- [fdm_pipeline.h:37-61](file://DllHsBaSlicer/fdm_pipeline.h#L37-L61)
+- [sla_pipeline.h:36-56](file://DllHsBaSlicer/sla_pipeline.h#L36-L56)
+- [sls_pipeline.h:36-56](file://DllHsBaSlicer/sls_pipeline.h#L36-L56)
+
+## Conclusion
+HsBaSlicer provides a robust, multi-layered API surface suitable for diverse integration scenarios:
+- DllHsBaSlicer offers a stable C ABI for cross-language and cross-platform use.
+- LibHsBaSlicer delivers a rich C++ API for advanced users.
+- Module hsba.slicer enables modern C++20 integration with class-based abstractions.
+
+Adhering to the documented memory management, thread safety, and validation guidelines ensures reliable and efficient usage across all surfaces.
+
+[No sources needed since this section summarizes without analyzing specific files]
+
+## Appendices
+
+### Function Reference Tables
+
+#### DllHsBaSlicer C ABI Functions
+
+| Function | Parameters | Return Value | Validation Rules | Error Handling | Memory Ownership |
+|----------|------------|--------------|------------------|----------------|------------------|
+| initialize() | None | void | Call once at startup | Idempotent; no side effects on repeated calls | N/A |
+| HsBaGetVersionJson() | None | char* (UTF-8 JSON) | None | N/A | Caller must free via HsBaFreeVersionString() |
+| HsBaGetVersionXml() | None | char* (UTF-8 XML) | None | N/A | Caller must free via HsBaFreeVersionString() |
+| HsBaFreeVersionString(str) | str: char* | void | str must be from version APIs | N/A | Frees provided string |
+| HsBaCreateDefaultConfig() | None | HsBaFdmPipelineConfig_t | None | N/A | Stack-allocated; no manual free |
+| HsBaRunFdmPipeline(config, callback, user_data) | config: pointer to config<br/>callback: optional progress callback<br/>user_data: optional user data | HsBaFdmPipelineResult_t | config must be valid; callback/user_data can be NULL | Errors via result struct fields | Caller must free via HsBaFreePipelineResult() |
+| HsBaRunFdmPipelineAsync(config, callback, user_data, result_callback, result_user_data) | Same as sync + result_callback, result_user_data | void (task handle reserved) | result_callback must not be NULL | Errors via result_callback | N/A |
+| HsBaFreePipelineResult(result) | result: pointer to result | void | result must be from HsBaRunFdmPipeline | N/A | Frees internal allocations |
+| HsBaCreateDefaultSlaConfig() | None | HsBaSlaPipelineConfig_t | None | N/A | Stack-allocated; no manual free |
+| HsBaRunSlaPipeline(config, callback, user_data) | Same as FDM sync | HsBaSlaPipelineResult_t | config must be valid | Errors via result struct fields | Caller must free via HsBaFreeSlaPipelineResult() |
+| HsBaRunSlaPipelineAsync(...) | Same as FDM async | void | result_callback must not be NULL | Errors via result_callback | N/A |
+| HsBaFreeSlaPipelineResult(result) | result: pointer to result | void | result must be from SLA pipeline | N/A | Frees internal allocations |
+| HsBaCreateDefaultSlsConfig() | None | HsBaSlsPipelineConfig_t | None | N/A | Stack-allocated; no manual free |
+| HsBaRunSlsPipeline(config, callback, user_data) | Same as FDM sync | HsBaSlsPipelineResult_t | export_lua_script must not be NULL | Errors via result struct fields | Caller must free via HsBaFreeSlsPipelineResult() |
+| HsBaRunSlsPipelineAsync(...) | Same as FDM async | void | result_callback must not be NULL | Errors via result_callback | N/A |
+| HsBaFreeSlsPipelineResult(result) | result: pointer to result | void | result must be from SLS pipeline | N/A | Frees internal allocations |
+
+**Section sources**
+- [initialize.h:11-19](file://DllHsBaSlicer/initialize.h#L11-L19)
+- [version_info.h:16-41](file://DllHsBaSlicer/version_info.h#L16-L41)
+- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
+- [sla_pipeline.h:17-56](file://DllHsBaSlicer/sla_pipeline.h#L17-L56)
+- [sls_pipeline.h:17-56](file://DllHsBaSlicer/sls_pipeline.h#L17-L56)
+
+### Data Structures and Enums
+
+#### Pipeline Types (from pipelinetypes/pipeline_types.h)
+- HsBaFdmPipelineConfig_t: Configuration for FDM pipeline (layer height, support settings, fill mode, etc.).
+- HsBaFdmPipelineResult_t: Result for FDM pipeline (G-code content, total layers, error message).
+- HsBaSlaPipelineConfig_t: Configuration for SLA pipeline (floor settings, export options).
+- HsBaSlaPipelineResult_t: Result for SLA pipeline (package status, total layers, error message).
+- HsBaSlsPipelineConfig_t: Configuration for SLS pipeline (export Lua script, parameters).
+- HsBaSlsPipelineResult_t: Result for SLS pipeline (output paths, total layers, error message).
+- HsBaProgressCallback: Progress callback signature (percentage, message, user_data).
+- HsBaResultCallback: Result callback signature (result, user_data).
+
+Note: Exact field definitions are in pipelinetypes/pipeline_types.h; consult that header for complete details.
+
+**Section sources**
+- [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
+
+### Protocol Specifications
+- Inter-process communication: Not explicitly defined in the analyzed headers; DllHsBaSlicer is designed for direct function calls from host applications.
+- Data serialization formats:
+  - Version info: JSON and XML strings returned by HsBaGetVersionJson() and HsBaGetVersionXml().
+  - Pipeline results: Structs containing strings (e.g., G-code, error messages) and numeric fields (e.g., total_layers).
+- Version compatibility:
+  - Use HsBaGetVersionJson()/HsBaGetVersionXml() to query runtime version information.
+  - Ensure host application versions align with library versions to avoid ABI mismatches.
+
+**Section sources**
+- [version_info.h:16-41](file://DllHsBaSlicer/version_info.h#L16-L41)
+
+### Memory Management Guidelines
+- Strings returned by version APIs must be freed using HsBaFreeVersionString().
+- Result structs from pipeline functions must be freed using the corresponding HsBaFree* function.
+- Avoid manual deletion of internal library-owned objects; rely on provided free functions.
+
+**Section sources**
+- [version_info.h:16-41](file://DllHsBaSlicer/version_info.h#L16-L41)
+- [fdm_pipeline.h:53-61](file://DllHsBaSlicer/fdm_pipeline.h#L53-L61)
+- [sla_pipeline.h:49-56](file://DllHsBaSlicer/sla_pipeline.h#L49-L56)
+- [sls_pipeline.h:49-56](file://DllHsBaSlicer/sls_pipeline.h#L49-L56)
+
+### Thread Safety Considerations
+- initialize() is idempotent and safe for one-time setup.
+- Callbacks (progress, result) may be invoked from worker threads; implement thread-safe handlers.
+- Avoid sharing mutable state across callbacks without proper synchronization.
+
+**Section sources**
+- [initialize.h:11-19](file://DllHsBaSlicer/initialize.h#L11-L19)
+- [fdm_pipeline.h:37-51](file://DllHsBaSlicer/fdm_pipeline.h#L37-L51)
+- [sla_pipeline.h:36-47](file://DllHsBaSlicer/sla_pipeline.h#L36-L47)
+- [sls_pipeline.h:36-47](file://DllHsBaSlicer/sls_pipeline.h#L36-L47)

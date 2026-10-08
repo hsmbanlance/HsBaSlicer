@@ -1,0 +1,1 @@
+C++ coroutines (`Utils::Task<T>`, `co_return`, `task.then`) for asynchronous pipeline execution; Lua scripting hooks via `LibHsBaSlicer/Extends/LuaCommonTypes.hpp` for customizable support, infill, floor, and export stages; Clipper2-backed polygon fill (`FillWithBorder`, `Integerization`); parallel layer iteration via `pipeline_parallel.hpp`'s `ParallelForLayers`.

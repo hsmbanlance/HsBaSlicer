@@ -1,0 +1,1 @@
+Plain C++ compiled into a Windows DLL; exports use the `HSBA_SLICER_API` macro and `extern "C"` linkage to present a stable C ABI to the host.

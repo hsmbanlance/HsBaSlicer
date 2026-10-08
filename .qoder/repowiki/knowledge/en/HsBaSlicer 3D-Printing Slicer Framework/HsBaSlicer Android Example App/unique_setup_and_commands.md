@@ -1,0 +1,1 @@
+Build with the repo's Gradle wrapper: `./gradlew assembleDebug` or `./gradlew assembleRelease`; requires an Android SDK with API level 34 installed and an ARM64 device/emulator since only `arm64-v8a` is included.

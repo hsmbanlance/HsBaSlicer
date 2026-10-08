@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: proto
+title: HsBaSlicer Protobuf 跨语言数据契约
+scope:
+    - proto/
+source_files: []
+depends_on: []
+related_to:
+    - path: convert
+    - path: fileoperator

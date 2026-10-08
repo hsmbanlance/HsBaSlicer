@@ -1,0 +1,1 @@
+C++ with `magic_enum::customize::enum_range` specialization for custom enum ranges; optional C++20 coroutines guarded by `__cpp_lib_coroutine && __cpp_impl_coroutine`; Lua interop via `HsBa::Slicer::MakeUniqueLuaState` / `NewLuaObject` / `LuaGC`.

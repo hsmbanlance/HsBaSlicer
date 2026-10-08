@@ -1,0 +1,3 @@
+- Each slicing pipeline is exposed as a pair of C-ABI functions (e.g. `*_slice`, `*_slice_async`) declared in a dedicated `*_pipeline.h/.cpp` file under this directory.
+- Pipeline stages communicate with the host through the shared proto message types from `pipeline_framework` rather than direct Rust calls.
+- Lua extension points and event-source callbacks are registered once at DLL load time via the shims in `shared_infrastructure` instead of per-pipeline.

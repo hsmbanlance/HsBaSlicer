@@ -1,0 +1,1 @@
+C++ library providing abstract path output types for slicer products — points, layers, images, industrial robot programs, and multi-firmware G-code — with optional Lua post-processing.

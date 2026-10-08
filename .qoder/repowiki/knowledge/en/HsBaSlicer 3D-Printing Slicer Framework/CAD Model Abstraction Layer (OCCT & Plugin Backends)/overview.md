@@ -1,0 +1,1 @@
+Implements the IModel interface for OpenCASCADE BRep shapes and a plugin-backed variant that loads user-supplied CAD libraries via dynamic symbols.

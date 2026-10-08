@@ -1,0 +1,1 @@
+C++17 library linked against Clipper2 (`PkgConfig::Clipper2`) for polygon operations and an embedded Lua interpreter (`${LUA_LIBRARIES}`) for scriptable support generation.

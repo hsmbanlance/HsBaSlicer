@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: modulehsbaslicer
+title: HsBaSlicer C++20 模块封装层
+scope:
+    - ModuleHsBaSlicer/
+source_files: []
+depends_on: []
+related_to: []

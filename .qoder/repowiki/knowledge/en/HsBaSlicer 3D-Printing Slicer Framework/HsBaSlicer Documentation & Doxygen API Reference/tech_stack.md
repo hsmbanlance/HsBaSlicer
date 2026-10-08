@@ -1,0 +1,1 @@
+Doxygen + Graphviz (`dot`) for API reference generation, driven via CMake's `find_package(Doxygen COMPONENTS dot)`; Markdown guides authored in both English and Chinese.

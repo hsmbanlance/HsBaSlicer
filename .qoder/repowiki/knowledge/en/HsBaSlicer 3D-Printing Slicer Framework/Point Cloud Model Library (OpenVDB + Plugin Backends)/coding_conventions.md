@@ -1,0 +1,3 @@
+- Each backend class (`OpenVdbModel`, `UserCustomPointCloudModel`) exposes the same set of point-cloud methods (AddPoint/AddPoints/Points/PointCount/Clear/SetFromVertices/ToVertices/Voxelize/Downsample/Centroid/Merge/RemoveStatisticalOutliers/ComputeNormals) so plugins and the built-in kernel are interchangeable.
+- Transform and geometry operations override the full family of `IModel` overloads (Translate, Rotate, Scale(float/Vector3f), Transform(Isometry3f/Matrix4f/Affine), BoundingBox, Volume, TriangleMesh) rather than delegating through a single entry point.
+- The plugin ABI is expressed as a flat set of C function-pointer typedefs on `IModel*` and `HsBaVector3f_t`, with each getter returning a raw function pointer resolved from the loaded shared object.

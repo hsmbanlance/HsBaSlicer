@@ -1,0 +1,1 @@
+Build requires TBB, Imath, and optionally OpenVDB (plus blosc, ZLIB, Boost::iostreams); on desktop platforms Boost::dll is also required. On MSVC the mesh compilation unit needs `/bigobj` due to OpenVDB template section limits — handled automatically by the CMake script.

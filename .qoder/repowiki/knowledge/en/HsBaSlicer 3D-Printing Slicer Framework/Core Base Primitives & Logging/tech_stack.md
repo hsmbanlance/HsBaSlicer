@@ -1,0 +1,1 @@
+C++17 with Eigen3 (vectors/matrices/quaternions), magic_enum for `ModelFormat` enum-to-string, optional Boost.Log as the production logging backend, Apple `os_log` on iOS, and std::source_location for source-positioned log messages.

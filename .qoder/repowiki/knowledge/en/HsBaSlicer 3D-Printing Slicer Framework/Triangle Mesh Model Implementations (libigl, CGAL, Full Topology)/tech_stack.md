@@ -1,0 +1,1 @@
+libigl + Eigen for `IglModel`; CGAL `Exact_predicates_inexact_constructions_kernel` with `Polyhedron_3` and `Nef_polyhedron_3` for `CgalModel` (optional, gated by `HSBA_COPL`); embedded Lua API (`lua.hpp`) for scripting slice algorithms in `FullTopoModel`.

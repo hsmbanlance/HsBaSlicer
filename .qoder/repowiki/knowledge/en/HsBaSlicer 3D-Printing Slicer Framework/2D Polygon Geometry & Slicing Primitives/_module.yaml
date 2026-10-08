@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: geometry_2d
+title: 2D Polygon Geometry & Slicing Primitives
+scope:
+    - 2D/
+source_files: []
+depends_on: []
+related_to: []

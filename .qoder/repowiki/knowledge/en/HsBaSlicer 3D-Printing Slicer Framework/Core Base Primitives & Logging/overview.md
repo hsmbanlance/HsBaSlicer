@@ -1,0 +1,1 @@
+Foundational C++ primitives (type-erased reflection, error types, memory/thread pools, model interfaces) and a cross-platform singleton logger used across the HsBa Slicer codebase.

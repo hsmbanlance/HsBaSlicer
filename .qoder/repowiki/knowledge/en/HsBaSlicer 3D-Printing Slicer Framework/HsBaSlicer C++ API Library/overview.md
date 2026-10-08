@@ -1,0 +1,1 @@
+CMake-built shared/static library exposing the HsBa slicer pipeline (model preprocessing, mesh slicing, support, fill, floor, path generation, export) and a Lua-driven custom-pipeline API.

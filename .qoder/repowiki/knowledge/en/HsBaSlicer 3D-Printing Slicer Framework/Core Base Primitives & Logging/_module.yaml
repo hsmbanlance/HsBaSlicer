@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: core_base
+title: Core Base Primitives & Logging
+scope:
+    - base/
+    - logger/
+source_files: []
+depends_on: []
+related_to: []

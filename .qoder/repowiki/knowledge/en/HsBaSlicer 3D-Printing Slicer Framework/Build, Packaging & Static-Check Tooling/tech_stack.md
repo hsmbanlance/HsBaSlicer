@@ -1,0 +1,1 @@
+CMake ≥ 3.21 (package config + feature probes), Python 3 with `pathspec` for gitwildmatch, gcov/gcovr for coverage gating, clang-format for style enforcement, and vcpkg overlay/triplet conventions.

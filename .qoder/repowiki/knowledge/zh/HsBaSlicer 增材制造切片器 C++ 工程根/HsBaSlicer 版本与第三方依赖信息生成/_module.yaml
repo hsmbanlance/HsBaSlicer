@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: version
+title: HsBaSlicer 版本与第三方依赖信息生成
+scope:
+    - version/
+source_files: []
+depends_on: []
+related_to: []

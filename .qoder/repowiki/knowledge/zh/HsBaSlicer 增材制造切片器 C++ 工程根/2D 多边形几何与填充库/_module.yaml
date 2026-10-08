@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: 2d
+title: 2D 多边形几何与填充库
+scope:
+    - 2D/
+source_files: []
+depends_on: []
+related_to:
+    - path: libhsbaslicer

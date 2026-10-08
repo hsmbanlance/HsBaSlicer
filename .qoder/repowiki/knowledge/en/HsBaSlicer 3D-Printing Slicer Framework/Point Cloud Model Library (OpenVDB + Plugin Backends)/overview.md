@@ -1,0 +1,1 @@
+Provides point cloud model implementations backed by an OpenVDB voxel grid and a pluggable user DLL/SO, exposing the IModel interface for slicing workflows.

@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: utils
+title: Slicer 通用工具库（图算法、Lua 桥接与结构化数据序列化）
+scope:
+    - utils/
+source_files: []
+depends_on: []
+related_to: []

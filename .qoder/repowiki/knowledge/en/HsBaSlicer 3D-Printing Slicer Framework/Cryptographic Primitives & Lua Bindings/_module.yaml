@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: cipher_lib
+title: Cryptographic Primitives & Lua Bindings
+scope:
+    - cipher/
+source_files: []
+depends_on: []
+related_to: []

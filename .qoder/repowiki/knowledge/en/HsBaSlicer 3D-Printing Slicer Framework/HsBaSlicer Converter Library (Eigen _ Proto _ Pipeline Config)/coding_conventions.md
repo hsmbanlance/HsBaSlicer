@@ -1,0 +1,4 @@
+- Each converter pair is implemented as a matching `<From>2<To>.hpp` / `<From>2<To>.cpp` file set, keeping source-to-target and target-to-source conversions side by side.
+- Public functions are declared inside the `HsBa::Slicer` namespace and use a verb-first naming scheme (`EigenVector3f2Msg`, `MsgVector3f2Eigen`, `FdmConfigToMsg`, `MsgTopoTrimeshes2FullTopoModel`).
+- Headers use include guards of the form `HSBA_SLICER_<NAME>__HPP` alongside `#pragma once`.
+- Conversion functions take the destination object as an out-parameter pointer/reference rather than returning it, so callers can reuse buffers.

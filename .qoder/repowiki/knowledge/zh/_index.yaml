@@ -1,0 +1,307 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: zh-CN
+branch: dev
+nodes_managed: true
+exported_at: "2026-10-08T12:40:46Z"
+modules:
+    "":
+        dir_name: HsBaSlicer 增材制造切片器 C++ 工程根
+        title: HsBaSlicer 增材制造切片器 C++ 工程根
+        scope:
+            - README.md
+            - LICENSE.txt
+            - CMakeLists.txt
+            - CMakePresets.json
+            - vcpkg.json
+            - vcpkg-configuration.json
+            - .clang-format
+            - .gitignore
+            - .gitattributes
+            - cpp.hint
+            - skills-lock.json
+            - .qoderignore
+        source_files: []
+        children:
+            - 2d
+            - android_app
+            - base
+            - build_tooling
+            - cadmodel
+            - cipher
+            - convert
+            - dllhsbaslicer
+            - docs
+            - fileoperator
+            - libhsbaslicer
+            - logger
+            - meshmodel
+            - modulehsbaslicer
+            - paths
+            - pointcloud
+            - preprocess
+            - proto
+            - samples
+            - support
+            - tests
+            - utils
+            - version
+        depends_on: []
+        related_to: []
+    2d:
+        dir_name: 2D 多边形几何与填充库
+        title: 2D 多边形几何与填充库
+        scope:
+            - 2D/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: libhsbaslicer
+    android_app:
+        dir_name: HsBaSlicer Android 示例应用
+        title: HsBaSlicer Android 示例应用
+        scope:
+            - android/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: dllhsbaslicer
+    base:
+        dir_name: HsBaSlicer 基础库（HsBaSlicerBase）
+        title: HsBaSlicer 基础库（HsBaSlicerBase）
+        scope:
+            - base/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    build_tooling:
+        dir_name: 构建与静态检查工具链
+        title: 构建与静态检查工具链
+        scope:
+            - cmake/
+            - scripts/
+            - static_check/
+            - overlay-ports/
+            - .github/
+            - .agents/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    cadmodel:
+        dir_name: CAD 几何模型抽象层（OCCT 与用户自定义插件）
+        title: CAD 几何模型抽象层（OCCT 与用户自定义插件）
+        scope:
+            - cadmodel/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: preprocess
+    cipher:
+        dir_name: 加密与编码工具库 (HsBaCipher)
+        title: 加密与编码工具库 (HsBaCipher)
+        scope:
+            - cipher/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    convert:
+        dir_name: HsBaSlicer 数据转换层（Eigen_Proto_TopoModel_PipelineConfig）
+        title: HsBaSlicer 数据转换层（Eigen/Proto/TopoModel/PipelineConfig）
+        scope:
+            - convert/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: proto
+    dllhsbaslicer:
+        dir_name: HsBaSlicer C ABI 动态库导出层
+        title: HsBaSlicer C ABI 动态库导出层
+        scope:
+            - DllHsBaSlicer/
+        source_files: []
+        children:
+            - dllhsbaslicer/pipeline_technologies
+            - dllhsbaslicer/shared_infrastructure
+        depends_on: []
+        related_to:
+            - path: android_app
+            - path: samples
+    dllhsbaslicer/pipeline_technologies:
+        dir_name: HsBaSlicer C ABI 导出层（跨语言管线调用）
+        title: HsBaSlicer C ABI 导出层（跨语言管线调用）
+        scope:
+            - DllHsBaSlicer/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    dllhsbaslicer/shared_infrastructure:
+        dir_name: HsBaSlicer C ABI 动态库（跨语言集成层）
+        title: HsBaSlicer C ABI 动态库（跨语言集成层）
+        scope:
+            - DllHsBaSlicer/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    docs:
+        dir_name: HsBaSlicer 多语言文档与 Doxygen API 文档
+        title: HsBaSlicer 多语言文档与 Doxygen API 文档
+        scope:
+            - docs/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    fileoperator:
+        dir_name: 文件操作与参数持久化库 (HsBaSlicerFileOperator)
+        title: 文件操作与参数持久化库 (HsBaSlicerFileOperator)
+        scope:
+            - fileoperator/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: libhsbaslicer
+            - path: proto
+    libhsbaslicer:
+        dir_name: HsBaSlicer C++ 切片库
+        title: HsBaSlicer C++ 切片库
+        scope:
+            - LibHsBaSlicer/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: 2d
+            - path: fileoperator
+            - path: paths
+            - path: preprocess
+            - path: support
+    logger:
+        dir_name: 跨平台线程安全日志子系统
+        title: 跨平台线程安全日志子系统
+        scope:
+            - logger/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    meshmodel:
+        dir_name: 网格模型与拓扑切片层
+        title: 网格模型与拓扑切片层
+        scope:
+            - meshmodel/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: preprocess
+    modulehsbaslicer:
+        dir_name: HsBaSlicer C++20 模块封装层
+        title: HsBaSlicer C++20 模块封装层
+        scope:
+            - ModuleHsBaSlicer/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    paths:
+        dir_name: 切片路径输出抽象与多格式序列化
+        title: 切片路径输出抽象与多格式序列化
+        scope:
+            - paths/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: libhsbaslicer
+    pointcloud:
+        dir_name: 点云模型与 OpenVDB 体素化
+        title: 点云模型与 OpenVDB 体素化
+        scope:
+            - pointcloud/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: preprocess
+    preprocess:
+        dir_name: 模型预处理与统一加载器
+        title: 模型预处理与统一加载器
+        scope:
+            - preprocess/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: cadmodel
+            - path: libhsbaslicer
+            - path: meshmodel
+            - path: pointcloud
+    proto:
+        dir_name: HsBaSlicer Protobuf 跨语言数据契约
+        title: HsBaSlicer Protobuf 跨语言数据契约
+        scope:
+            - proto/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: convert
+            - path: fileoperator
+    samples:
+        dir_name: HsBaSlicer 多工艺切片示例与集成演示
+        title: HsBaSlicer 多工艺切片示例与集成演示
+        scope:
+            - samples/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: dllhsbaslicer
+    support:
+        dir_name: 支撑生成器支持库 (HsBaSupport)
+        title: 支撑生成器支持库 (HsBaSupport)
+        scope:
+            - support/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: libhsbaslicer
+    tests:
+        dir_name: HsBaSlicer 单元测试与静态编译期测试套件
+        title: HsBaSlicer 单元测试与静态编译期测试套件
+        scope:
+            - tests/
+            - static_tests/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    utils:
+        dir_name: Slicer 通用工具库（图算法、Lua 桥接与结构化数据序列化）
+        title: Slicer 通用工具库（图算法、Lua 桥接与结构化数据序列化）
+        scope:
+            - utils/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    version:
+        dir_name: HsBaSlicer 版本与第三方依赖信息生成
+        title: HsBaSlicer 版本与第三方依赖信息生成
+        scope:
+            - version/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []

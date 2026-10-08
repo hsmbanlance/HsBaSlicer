@@ -1,0 +1,5 @@
+- Every public function declared in a header under `HsBa::Slicer` is annotated with the `HSBA_SLICER_LIB_API` macro from `../export.h` so it is automatically dllexport'd on Windows and invisible otherwise.
+- Headers use a unique include guard named after the file (`#ifndef HSBA_SLICER_<FILE>_HPP`) and wrap their declarations in the `HsBa::Slicer` namespace.
+- Optional heavy dependencies are guarded by `#ifdef USE_CGAL` / `#ifdef HSBA_COPL` blocks so the same headers compile cleanly without those libraries.
+- Public types are exposed as plain structs (e.g. `ModelInfo`, `FdmPathConfig`, `LayerPathData`, `LuaPipelineContext`) with documented fields rather than accessor classes.
+- Error conditions are communicated by throwing typed exceptions (`InvalidArgumentError`, `RuntimeError`) documented in Doxygen `@throws` tags rather than returning error codes.

@@ -1,0 +1,5 @@
+- Each mesh model class derives from the abstract `IModel` interface and overrides the same transform/query surface (`Translate`/`Rotate`/`Scale` overloads, `Transform` overloads, `BoundingBox`, `Volume`, `TriangleMesh`, `Load`/`Save`).
+- Primitive generation is exposed as static factory methods named `CreateBox`/`CreateSphere`/`CreateCylinder`/`CreateCone`/`CreateTorus` plus overloaded `CreatePrime(const PolygonD& ...)` / `CreatePrime(const PolygonsD& ...)` for extrusions, mirrored across both `IglModel` and `CgalModel`.
+- Boolean operations are implemented as free functions (`Union`, `Intersection`, `Difference`, `Xor`) declared as `friend` of the model class so they can access private storage.
+- Classes that need to be stored in hash containers expose a custom `std::hash<T>` specialization via a `friend struct std::hash<T>;` declaration alongside the class definition.
+- Header guards use the `#ifndef HSBA_SLICER_<NAME>_HPP` / `#define` pattern matching the file name.

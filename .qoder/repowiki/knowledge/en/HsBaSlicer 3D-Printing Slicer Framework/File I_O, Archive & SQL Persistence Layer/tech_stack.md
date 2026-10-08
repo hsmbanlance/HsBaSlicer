@@ -1,0 +1,1 @@
+miniz for default ZIP I/O; optional bit7z (`bit7z::bit7z` + `bit7z::bit7z64`) for richer archive formats; sqlpp11-backed SQLite/MySQL/PostgreSQL adapters; Lua C API for scripting exposure; Boost.Log when available (disabled on Android/iOS/game-console builds).

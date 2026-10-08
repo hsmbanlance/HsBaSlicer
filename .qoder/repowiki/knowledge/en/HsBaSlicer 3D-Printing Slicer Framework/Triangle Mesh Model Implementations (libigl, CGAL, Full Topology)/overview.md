@@ -1,0 +1,1 @@
+Concrete triangle-mesh model implementations for the HsBa slicer: a libigl-backed IModel, an optional CGAL-backed IModel with Nef boolean ops and surface geodesics, and a topology-reconstructed slicing helper.

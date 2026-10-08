@@ -1,0 +1,1 @@
+Bidirectional converters between Eigen geometric types, HsbaProto protobuf messages, FullTopoModel meshes, and C pipeline configuration structs.

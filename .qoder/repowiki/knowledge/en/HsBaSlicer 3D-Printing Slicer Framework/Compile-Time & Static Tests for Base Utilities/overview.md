@@ -1,0 +1,1 @@
+Header-only compile-time test suites that validate constexpr, template, coroutine, serialization, and Lua-binding utilities by forcing compilation to succeed.

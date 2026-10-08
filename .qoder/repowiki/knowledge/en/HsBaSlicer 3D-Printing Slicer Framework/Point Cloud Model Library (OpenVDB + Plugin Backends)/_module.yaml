@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: pointcloud_lib
+title: Point Cloud Model Library (OpenVDB + Plugin Backends)
+scope:
+    - pointcloud/
+source_files: []
+depends_on: []
+related_to:
+    - path: preprocess_lib

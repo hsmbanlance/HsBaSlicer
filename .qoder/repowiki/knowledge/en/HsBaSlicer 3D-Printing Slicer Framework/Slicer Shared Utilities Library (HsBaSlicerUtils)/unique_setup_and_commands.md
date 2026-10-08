@@ -1,0 +1,1 @@
+The library requires both `find_package(boost_date_time CONFIG REQUIRED)` and `find_package(Lua REQUIRED)` at configure time; the DLL loader feature can be disabled entirely by defining `HSBA_NO_DLL_LOADER` before including `LuaDllLoader.hpp`.

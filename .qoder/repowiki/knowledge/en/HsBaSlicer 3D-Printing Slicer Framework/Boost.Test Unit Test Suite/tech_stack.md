@@ -1,0 +1,1 @@
+Boost.Test (`BOOST_TEST_MODULE`, `BOOST_AUTO_TEST_SUITE`, `BOOST_AUTO_TEST_CASE`, `BOOST_CHECK_EQUAL`, `BOOST_FAIL`) with dynamic linking (`BOOST_TEST_DYN_LINK`); integration with Lua via `lua.hpp`; Eigen3 for geometry tests; SQLite, zlib/zipper, OpenSSL/HsBaCipher, and OpenCASCADE/CGAL/IGL where available.

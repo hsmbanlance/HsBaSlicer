@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: dllhsbaslicer/shared_infrastructure
+title: HsBaSlicer C ABI 动态库（跨语言集成层）
+scope:
+    - DllHsBaSlicer/
+source_files: []
+depends_on: []
+related_to: []

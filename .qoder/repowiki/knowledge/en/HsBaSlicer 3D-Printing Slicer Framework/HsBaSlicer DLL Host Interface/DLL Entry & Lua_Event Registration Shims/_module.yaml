@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: dllhsbaslicer/shared_infrastructure
+title: DLL Entry & Lua/Event Registration Shims
+scope:
+    - DllHsBaSlicer/initialize.cpp
+    - DllHsBaSlicer/lua_register.cpp
+    - DllHsBaSlicer/event_source_register.cpp
+source_files: []
+depends_on: []
+related_to: []

@@ -1,0 +1,1 @@
+Thin C-exported shims that register HsBaSlicer's Lua functions and event-source callbacks with the host application at DLL load time.

@@ -1,0 +1,1 @@
+CMake `execute_process` invoking PowerShell Core (`pwsh`) or legacy `powershell.exe`; JSON parsing via PowerShell's built-in `ConvertFrom-Json` against `vcpkg.json`.

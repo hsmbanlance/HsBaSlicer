@@ -1,0 +1,1 @@
+Build target `HsBaPreprocess` is a static library; OCCT/CAD support requires the `HSBA_COPL` CMake flag and is disabled on Android/iOS/game-console builds. CGAL-dependent methods (`ThickSolidModel`, `BooleanUnion`/`Intersection`/`Difference`/`Xor`) require `USE_CGAL`; OpenVDB-dependent methods require `USE_OPENVDB`.

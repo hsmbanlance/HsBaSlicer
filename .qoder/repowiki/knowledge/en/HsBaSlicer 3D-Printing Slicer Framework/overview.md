@@ -1,0 +1,1 @@
+Top-level CMake orchestrator for the HsBaSlicer framework, wiring modular slicing libraries (2D geometry, mesh/CAD/point-cloud models, support, paths) into a shared C ABI and C++ API consumed by samples, Android, and external hosts.

@@ -1,0 +1,4 @@
+- Each utility class is stateless and exposes functionality exclusively through `static` member functions operating on `std::vector<unsigned char>` buffers.
+- Overloads accepting `std::string_view` are provided as inline wrappers that convert to `std::vector<unsigned char>` before delegating to the buffer-based core implementation.
+- Public APIs return data by value (`std::string`, `std::vector<unsigned char>`, or `std::pair<std::string,std::string>`) rather than via output parameters or pointers.
+- Algorithm constants (key sizes, IV sizes, default RSA bits) are declared as `inline constexpr` at namespace scope alongside the class they belong to.

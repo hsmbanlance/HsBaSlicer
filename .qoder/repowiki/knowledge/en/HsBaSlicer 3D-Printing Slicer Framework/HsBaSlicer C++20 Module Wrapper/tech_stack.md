@@ -1,0 +1,1 @@
+C++20 modules (`export module hsba.slicer`), CMake `FILE_SET CXX_MODULES`, lib.exe archiver workaround for pure-module archives; runtime deps on Clipper2, Eigen3, Lua, and the internal `LibHsBaSlicer` slicing engine.

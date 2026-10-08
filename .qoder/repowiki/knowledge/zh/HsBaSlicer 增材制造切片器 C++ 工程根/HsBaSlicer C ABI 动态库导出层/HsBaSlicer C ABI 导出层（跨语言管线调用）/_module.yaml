@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: dllhsbaslicer/pipeline_technologies
+title: HsBaSlicer C ABI 导出层（跨语言管线调用）
+scope:
+    - DllHsBaSlicer/
+source_files: []
+depends_on: []
+related_to: []

@@ -1,0 +1,4 @@
+- Validation is expressed as `static_assert` at file scope or inside small free functions, with no runtime assertions or test framework.
+- Coroutines are conditionally compiled behind `#if __cpp_lib_coroutine && __cpp_impl_coroutine` guards so the suite still builds on compilers without coroutine support.
+- Custom types exposed to `AnyObject` register their metadata by specializing `HsBa::Slicer::Utils::GetTypeInfo<T>()` in the `HsBa::Slicer::Utils` namespace.
+- Reflection-enabled classes declare a `FieldList` tuple of `StaticReflect::FieldInfo` entries (plus optional `MethodList` and `ClassName`) rather than using macros.

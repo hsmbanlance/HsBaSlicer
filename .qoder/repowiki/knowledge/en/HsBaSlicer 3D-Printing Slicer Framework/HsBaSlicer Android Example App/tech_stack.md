@@ -1,0 +1,1 @@
+Android Application Plugin 8.3.2, NDK with arm64-v8a ABI filter; depends on prebuilt ARM64 shared libraries (`libHsBaSlicer.so`, `libDllHsBaSlicer.so`) rather than building C/C++ code in-tree.

@@ -1,0 +1,1 @@
+The protobuf layer requires `HSBA_PROTOBUF_OUT` to be set to enable the optional multi-language generator targets; otherwise only the native C++ static library `HsBaSlicerProto` is built via `PROTOBUF_GENERATE_CPP`.

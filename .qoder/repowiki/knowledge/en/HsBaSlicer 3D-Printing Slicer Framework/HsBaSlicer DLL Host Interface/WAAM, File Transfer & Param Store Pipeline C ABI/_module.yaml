@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: dllhsbaslicer/waam_and_file_transfer
+title: WAAM, File Transfer & Param Store Pipeline C ABI
+scope:
+    - DllHsBaSlicer/waam_pipeline.cpp
+    - DllHsBaSlicer/file_transfer_pipeline.cpp
+    - DllHsBaSlicer/param_store_pipeline.cpp
+source_files: []
+depends_on: []
+related_to:
+    - path: dllhsbaslicer/pipeline_framework
+    - path: samples

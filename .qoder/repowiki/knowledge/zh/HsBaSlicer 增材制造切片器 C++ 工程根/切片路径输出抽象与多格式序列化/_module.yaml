@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: paths
+title: 切片路径输出抽象与多格式序列化
+scope:
+    - paths/
+source_files: []
+depends_on: []
+related_to:
+    - path: libhsbaslicer

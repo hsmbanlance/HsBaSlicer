@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: samples
+title: HsBaSlicer 多工艺切片示例与集成演示
+scope:
+    - samples/
+source_files: []
+depends_on: []
+related_to:
+    - path: dllhsbaslicer

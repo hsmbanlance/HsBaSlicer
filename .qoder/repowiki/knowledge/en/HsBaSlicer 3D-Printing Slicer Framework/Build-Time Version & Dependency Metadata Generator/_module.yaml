@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: version_gen
+title: Build-Time Version & Dependency Metadata Generator
+scope:
+    - version/
+source_files: []
+depends_on: []
+related_to: []

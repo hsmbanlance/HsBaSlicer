@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: convert
+title: HsBaSlicer 数据转换层（Eigen/Proto/TopoModel/PipelineConfig）
+scope:
+    - convert/
+source_files: []
+depends_on: []
+related_to:
+    - path: proto

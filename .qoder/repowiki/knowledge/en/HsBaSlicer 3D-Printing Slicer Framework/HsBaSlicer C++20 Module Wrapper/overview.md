@@ -1,0 +1,1 @@
+C++20 module `hsba.slicer` exposing a class-based API over LibHsBaSlicer free functions, providing RAII model handles and per-process-type pipeline orchestrators (FDM/SLA/SLS/SLM/LOM/TDP/WAAM/FileTransfer/Custom Lua).
