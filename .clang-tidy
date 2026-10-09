@@ -1,0 +1,63 @@
+# ============================================================================
+# clang-tidy 配置 — HsBaSlicer
+# ============================================================================
+# 用法: clang-tidy --p=build/compile_commands.json src/*.cpp
+# IDE 集成: clangd 自动读取本文件（需在 .clangd 中启用 Diagnostics.ClangTidy）
+# ============================================================================
+
+Checks: >
+  -*,
+  clang-analyzer-*,
+  bugprone-*,
+  cert-*,
+  cppcoreguidelines-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  -modernize-use-trailing-return-type,
+  -modernize-use-nodiscard,
+  -readability-identifier-length,
+  -readability-magic-numbers,
+  -readability-function-cognitive-complexity,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-owning-memory,
+  -misc-non-private-member-variables-in-classes,
+  -misc-include-cleaner,
+  -bugprone-easily-swappable-parameters
+
+WarningsAsErrors: ''
+HeaderFilterRegex: '^(?!.*(vcpkg|third_parts|out/)).*\.(h|hpp|cpp|hppm)$'
+FormatStyle: file
+UseColor: true
+
+CheckOptions:
+  # ---- modernize ----
+  modernize-use-auto.MinTypeNameLength: 8
+  modernize-use-nullptr.NullMacros: 'NULL'
+  modernize-use-override.AllowDefaultedVirtualDestructors: true
+
+  # ---- readability ----
+  readability-braces-around-statements.ShortStatementLength: 0
+  readability-implicit-bool-conversion.AllowIntegerConditions: true
+  readability-inconsistent-declaration-parameter-name.IgnoreMacros: true
+  readability-named-parameter.IgnorePublicApi: true
+  readability-redundant-member-init.IgnoreBaseInConstructors: true
+  readability-simplify-boolean-expr.ChainedComparison: true
+
+  # ---- bugprone ----
+  bugprone-argument-comment.StrictMode: false
+  bugprone-dangling-handle.HandleIncludeNamespaces: 'std::'
+  bugprone-suspicious-stringview-data-usage.TrickyUsage: 'operator=='
+
+  # ---- performance ----
+  performance-move-const-arg.CheckTriviallyCopyableMove: false
+
+  # ---- cppcoreguidelines ----
+  cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor: true
+  cppcoreguidelines-pro-type-member-init.IgnoreArrays: true
+  cppcoreguidelines-rvalue-reference-param-not-moved.IgnoreNonMovedParams: true
+
+  # ---- misc ----
+  misc-throw-by-value-catch-by-reference.CheckThrowTemporaries: true
