@@ -18,12 +18,12 @@ std::string EigenVector2fTranslator::put_value(const Eigen::Vector2f& v)
 }
 Eigen::Vector2f EigenVector2fTranslator::get_value(const std::string& str)
 {
-    std::regex regex_pattern("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?");
+    std::regex const regex_pattern("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?");
     std::sregex_iterator it(str.begin(), str.end(), regex_pattern);
     std::array<float, 2> arr{};
     for (size_t i = 0; i != 2; ++i)
     {
-        if (it->size() >= 1)
+        if (!it->empty())
         {
             arr[i] = std::stof(it->str());
             ++it;
@@ -41,12 +41,12 @@ std::string EigenVector2iTranslator::put_value(const Eigen::Vector2i& v)
 }
 Eigen::Vector2i EigenVector2iTranslator::get_value(const std::string& str)
 {
-    std::regex regex_pattern("[-+]?[0-9]+");
+    std::regex const regex_pattern("[-+]?[0-9]+");
     std::sregex_iterator it(str.begin(), str.end(), regex_pattern);
     std::array<int, 2> arr{};
     for (size_t i = 0; i != 2; ++i)
     {
-        if (it->size() >= 1)
+        if (!it->empty())
         {
             arr[i] = std::stoi(it->str());
             ++it;
@@ -64,12 +64,12 @@ std::string EigenVector2dTranslator::put_value(const Eigen::Vector2d& v)
 }
 Eigen::Vector2d EigenVector2dTranslator::get_value(const std::string& str)
 {
-    std::regex regex_pattern("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?");
+    std::regex const regex_pattern("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?");
     std::sregex_iterator it(str.begin(), str.end(), regex_pattern);
     std::array<double, 2> arr{};
     for (size_t i = 0; i != 2; ++i)
     {
-        if (it->size() >= 1)
+        if (!it->empty())
         {
             arr[i] = std::stod(it->str());
             ++it;
@@ -89,12 +89,12 @@ std::string EigenVector3fTranslator::put_value(const Eigen::Vector3f& v)
 Eigen::Vector3f EigenVector3fTranslator::get_value(const std::string& str)
 {
 
-    std::regex regex_pattern("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?");
+    std::regex const regex_pattern("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?");
     std::sregex_iterator it(str.begin(), str.end(), regex_pattern);
     std::array<float, 3> arr{};
     for (size_t i = 0; i != 3; ++i)
     {
-        if (it->size() >= 1)
+        if (!it->empty())
         {
             arr[i] = std::stof(it->str());
             ++it;
@@ -112,12 +112,12 @@ std::string EigenVector3iTranslator::put_value(const Eigen::Vector3i& v)
 }
 Eigen::Vector3i EigenVector3iTranslator::get_value(const std::string& str)
 {
-    std::regex regex_pattern("[-+]?[0-9]+");
+    std::regex const regex_pattern("[-+]?[0-9]+");
     std::sregex_iterator it(str.begin(), str.end(), regex_pattern);
     std::array<int, 3> arr{};
     for (size_t i = 0; i != 3; ++i)
     {
-        if (it->size() >= 1)
+        if (!it->empty())
         {
             arr[i] = std::stoi(it->str());
             ++it;
@@ -136,12 +136,12 @@ std::string EigenVector3dTranslator::put_value(const Eigen::Vector3d& v)
 }
 Eigen::Vector3d EigenVector3dTranslator::get_value(const std::string& str)
 {
-    std::regex regex_pattern("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?");
+    std::regex const regex_pattern("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?");
     std::sregex_iterator it(str.begin(), str.end(), regex_pattern);
     std::array<double, 3> arr{};
     for (size_t i = 0; i != 3; ++i)
     {
-        if (it->size() >= 1)
+        if (!it->empty())
         {
             arr[i] = std::stod(it->str());
             ++it;
@@ -160,12 +160,12 @@ std::string EigenVector4fTranslator::put_value(const Eigen::Vector4f& v)
 }
 Eigen::Vector4f EigenVector4fTranslator::get_value(const std::string& str)
 {
-    std::regex regex_pattern("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?");
+    std::regex const regex_pattern("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?");
     std::sregex_iterator it(str.begin(), str.end(), regex_pattern);
     std::array<float, 4> arr{};
     for (size_t i = 0; i != 4; ++i)
     {
-        if (it->size() >= 1)
+        if (!it->empty())
         {
             arr[i] = std::stof(it->str());
             ++it;
@@ -184,12 +184,12 @@ std::string EigenVector4iTranslator::put_value(const Eigen::Vector4i& v)
 }
 Eigen::Vector4i EigenVector4iTranslator::get_value(const std::string& str)
 {
-    std::regex regex_pattern("[-+]?[0-9]+");
+    std::regex const regex_pattern("[-+]?[0-9]+");
     std::sregex_iterator it(str.begin(), str.end(), regex_pattern);
     std::array<int, 4> arr{};
     for (size_t i = 0; i != 4; ++i)
     {
-        if (it->size() >= 1)
+        if (!it->empty())
         {
             arr[i] = std::stoi(it->str());
             ++it;
@@ -208,12 +208,12 @@ std::string EigenVector4dTranslator::put_value(const Eigen::Vector4d& v)
 }
 Eigen::Vector4d EigenVector4dTranslator::get_value(const std::string& str)
 {
-    std::regex regex_pattern("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?");
+    std::regex const regex_pattern("[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?");
     std::sregex_iterator it(str.begin(), str.end(), regex_pattern);
     std::array<double, 4> arr{};
     for (size_t i = 0; i != 4; ++i)
     {
-        if (it->size() >= 1)
+        if (!it->empty())
         {
             arr[i] = std::stod(it->str());
             ++it;

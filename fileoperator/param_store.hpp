@@ -55,7 +55,7 @@ public:
      * @param cfg   AnyObject wrapping a registered PipelineConfig struct (non-owning).
      * @return param_id of the persisted row.
      */
-    int64_t Save(std::string_view table, std::string_view key, Utils::AnyObject cfg);
+    int64_t Save(std::string_view table, std::string_view key, const Utils::AnyObject& cfg);
 
     /** @brief Batch save wrapped in a single transaction; any failure rolls back and throws. Returns each param_id. */
     std::vector<int64_t> SaveBatch(std::string_view table,
@@ -72,7 +72,7 @@ public:
     std::vector<std::string> List(std::string_view table, const std::string& whereJson);
 
     /** @brief Update only the fields listed in changedFields; returns false when the key does not exist. */
-    bool Update(std::string_view table, std::string_view key, Utils::AnyObject partial,
+    bool Update(std::string_view table, std::string_view key, const Utils::AnyObject& partial,
                 const std::vector<std::string>& changedFields);
 
     /** @brief Delete by key; returns whether a row was hit (judged by the row count before and after deletion). */
@@ -90,7 +90,7 @@ public:
     Backend backend() const noexcept { return backend_; }
 
     /** @brief Resolve the table name: returned as-is when non-empty, otherwise a default name is derived from the cfg type. */
-    static std::string ResolveTable(std::string_view table, Utils::AnyObject cfg);
+    static std::string ResolveTable(std::string_view table, const Utils::AnyObject& cfg);
 
 private:
     void Raise(int percent, const char* stage);

@@ -7,6 +7,7 @@
 #include <exception>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
 #include "base/error.hpp"
@@ -29,7 +30,7 @@ auto GuardSlice(Fn&& fn) -> decltype(fn())
 {
     try
     {
-        return fn();
+        return std::forward<Fn>(fn)();
     }
     catch (const RuntimeError&)
     {

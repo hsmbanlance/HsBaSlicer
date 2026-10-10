@@ -7,6 +7,7 @@
  */
 #include "param_reflect.hpp"
 
+#include <algorithm>
 #include <array>
 #include <mutex>
 
@@ -27,17 +28,42 @@ struct ConfigEntry
 const std::array<ConfigEntry, 9>& Entries()
 {
     static const std::array<ConfigEntry, 9> entries = {
-        ConfigEntry{PipelineConfigTag::Fdm, Utils::GetTypeInfo<HsBaFdmPipelineConfig_t>(), "fdm", "hsba_param_fdm"},
-        ConfigEntry{PipelineConfigTag::Sla, Utils::GetTypeInfo<HsBaSlaPipelineConfig_t>(), "sla", "hsba_param_sla"},
-        ConfigEntry{PipelineConfigTag::Sls, Utils::GetTypeInfo<HsBaSlsPipelineConfig_t>(), "sls", "hsba_param_sls"},
-        ConfigEntry{PipelineConfigTag::Slm, Utils::GetTypeInfo<HsBaSlmPipelineConfig_t>(), "slm", "hsba_param_slm"},
-        ConfigEntry{PipelineConfigTag::Lom, Utils::GetTypeInfo<HsBaLomPipelineConfig_t>(), "lom", "hsba_param_lom"},
-        ConfigEntry{PipelineConfigTag::Tdp, Utils::GetTypeInfo<HsBaTdpPipelineConfig_t>(), "tdp", "hsba_param_tdp"},
-        ConfigEntry{PipelineConfigTag::Waam, Utils::GetTypeInfo<HsBaWaamPipelineConfig_t>(), "waam", "hsba_param_waam"},
-        ConfigEntry{PipelineConfigTag::Custom, Utils::GetTypeInfo<HsBaCustomPipelineConfig_t>(), "custom",
-                    "hsba_param_custom"},
-        ConfigEntry{PipelineConfigTag::FileTransfer, Utils::GetTypeInfo<HsBaFileTransferPipelineConfig_t>(),
-                    "filetransfer", "hsba_param_filetransfer"},
+        ConfigEntry{.tag = PipelineConfigTag::Fdm,
+                    .info = Utils::GetTypeInfo<HsBaFdmPipelineConfig_t>(),
+                    .short_name = "fdm",
+                    .table_name = "hsba_param_fdm"},
+        ConfigEntry{.tag = PipelineConfigTag::Sla,
+                    .info = Utils::GetTypeInfo<HsBaSlaPipelineConfig_t>(),
+                    .short_name = "sla",
+                    .table_name = "hsba_param_sla"},
+        ConfigEntry{.tag = PipelineConfigTag::Sls,
+                    .info = Utils::GetTypeInfo<HsBaSlsPipelineConfig_t>(),
+                    .short_name = "sls",
+                    .table_name = "hsba_param_sls"},
+        ConfigEntry{.tag = PipelineConfigTag::Slm,
+                    .info = Utils::GetTypeInfo<HsBaSlmPipelineConfig_t>(),
+                    .short_name = "slm",
+                    .table_name = "hsba_param_slm"},
+        ConfigEntry{.tag = PipelineConfigTag::Lom,
+                    .info = Utils::GetTypeInfo<HsBaLomPipelineConfig_t>(),
+                    .short_name = "lom",
+                    .table_name = "hsba_param_lom"},
+        ConfigEntry{.tag = PipelineConfigTag::Tdp,
+                    .info = Utils::GetTypeInfo<HsBaTdpPipelineConfig_t>(),
+                    .short_name = "tdp",
+                    .table_name = "hsba_param_tdp"},
+        ConfigEntry{.tag = PipelineConfigTag::Waam,
+                    .info = Utils::GetTypeInfo<HsBaWaamPipelineConfig_t>(),
+                    .short_name = "waam",
+                    .table_name = "hsba_param_waam"},
+        ConfigEntry{.tag = PipelineConfigTag::Custom,
+                    .info = Utils::GetTypeInfo<HsBaCustomPipelineConfig_t>(),
+                    .short_name = "custom",
+                    .table_name = "hsba_param_custom"},
+        ConfigEntry{.tag = PipelineConfigTag::FileTransfer,
+                    .info = Utils::GetTypeInfo<HsBaFileTransferPipelineConfig_t>(),
+                    .short_name = "filetransfer",
+                    .table_name = "hsba_param_filetransfer"},
     };
     return entries;
 }
@@ -63,36 +89,42 @@ void RegisterPipelineConfigTypes()
                    });
 }
 
-bool IsPipelineConfigType(const Utils::TypeInfo* ti) noexcept
+bool IsPipelineConfigType(const Utils::TypeInfo* ti) noexcept  // NOLINT(bugprone-exception-escape) first-call static
+                                                               // init of Entries() is the only throw path
 {
     if (!ti)
-        return false;
-    for (const auto& e : Entries())
     {
-        if (e.info == ti)
-            return true;
+        return false;
     }
-    return false;
+    return std::ranges::any_of(Entries(), [ti](const auto& e) { return e.info == ti; });
 }
 
-PipelineConfigTag TagOf(const Utils::TypeInfo* ti) noexcept
+PipelineConfigTag TagOf(const Utils::TypeInfo* ti) noexcept  // NOLINT(bugprone-exception-escape) Entries() first-call
+                                                             // static init is the only throw path
 {
     if (!ti)
+    {
         return PipelineConfigTag::Unknown;
+    }
     for (const auto& e : Entries())
     {
         if (e.info == ti)
+        {
             return e.tag;
+        }
     }
     return PipelineConfigTag::Unknown;
 }
 
-std::string_view DefaultTableName(PipelineConfigTag tag) noexcept
+std::string_view DefaultTableName(PipelineConfigTag tag) noexcept  // NOLINT(bugprone-exception-escape) Entries()
+                                                                   // first-call static init is the only throw path
 {
     for (const auto& e : Entries())
     {
         if (e.tag == tag)
+        {
             return e.table_name;
+        }
     }
     return {};
 }
@@ -102,22 +134,28 @@ std::string_view DefaultTableName(const Utils::TypeInfo* ti) noexcept
     return DefaultTableName(TagOf(ti));
 }
 
-PipelineConfigTag TagFromName(std::string_view name) noexcept
+PipelineConfigTag TagFromName(std::string_view name) noexcept  // NOLINT(bugprone-exception-escape) Entries() first-call
+                                                               // static init is the only throw path
 {
     for (const auto& e : Entries())
     {
         if (name == e.short_name)
+        {
             return e.tag;
+        }
     }
     return PipelineConfigTag::Unknown;
 }
 
-Utils::TypeInfo* TypeInfoOf(PipelineConfigTag tag) noexcept
+Utils::TypeInfo* TypeInfoOf(PipelineConfigTag tag) noexcept  // NOLINT(bugprone-exception-escape) Entries() first-call
+                                                             // static init is the only throw path
 {
     for (const auto& e : Entries())
     {
         if (e.tag == tag)
+        {
             return e.info;
+        }
     }
     return nullptr;
 }

@@ -27,6 +27,8 @@
 
 namespace HsBa::Slicer::Pipeline
 {
+namespace
+{
 
 // Internal result (namespace-visible, referenced by lambdas)
 struct InternalResult
@@ -43,8 +45,8 @@ struct InternalConfig
 {
     std::string model_name;
     std::string model_path;
-    float layer_height = 0.2f;
-    float first_layer_height = 0.25f;
+    float layer_height = 0.2F;
+    float first_layer_height = 0.25F;
     double fill_spacing = 0.4;
     FillMode fill_mode = FillMode::Zigzag;
     double fill_angle = 45.0;
@@ -67,9 +69,6 @@ struct InternalConfig
     void* progress_user_data = nullptr;
 };
 
-namespace
-{
-
 // RAII guard: ensures malloc-allocated C strings are freed on exception/early return
 struct OwnedCString
 {
@@ -82,7 +81,9 @@ struct OwnedCString
         {
             data = static_cast<char*>(std::malloc(str.size() + 1));
             if (data)
+            {
                 std::memcpy(data, str.c_str(), str.size() + 1);
+            }
         }
     }
 
@@ -108,20 +109,26 @@ struct OwnedCString
 
 int CalculateLayerCount(const ModelInfo& info, float layer_height, float first_layer_height)
 {
-    float model_height = info.bbox_max.z() - info.bbox_min.z();
-    if (model_height <= 0.0f)
+    float const model_height = info.bbox_max.z() - info.bbox_min.z();
+    if (model_height <= 0.0F)
+    {
         return 0;
-    float remaining = model_height - first_layer_height;
-    if (remaining <= 0.0f)
+    }
+    float const remaining = model_height - first_layer_height;
+    if (remaining <= 0.0F)
+    {
         return 1;
+    }
     return 1 + static_cast<int>(std::ceil(remaining / layer_height));
 }
 
 float GetLayerZ(int layer_index, float first_layer_height, float layer_height)
 {
     if (layer_index == 0)
+    {
         return first_layer_height;
-    return first_layer_height + layer_index * layer_height;
+    }
+    return first_layer_height + static_cast<float>(layer_index) * layer_height;
 }
 
 void ReportProgress(const InternalConfig& cfg, int percent, const std::string& stage)
@@ -131,8 +138,6 @@ void ReportProgress(const InternalConfig& cfg, int percent, const std::string& s
         cfg.progress_cb(percent, stage.c_str(), cfg.progress_user_data);
     }
 }
-
-}  // anonymous namespace
 
 InternalConfig BuildConfig(const HsBaFdmPipelineConfig_t* cfg, HsBaProgressCallback cb, void* ud)
 {
@@ -162,7 +167,7 @@ InternalConfig BuildConfig(const HsBaFdmPipelineConfig_t* cfg, HsBaProgressCallb
     ic.support_config.support_density = cfg->support_density;
     ic.support_config.support_pattern = static_cast<int>(cfg->support_pattern);
     ic.support_config.interface_layers = cfg->interface_layers;
-    ic.support_config.honeycomb_cell_size = 5.0f;
+    ic.support_config.honeycomb_cell_size = 5.0F;
 
     ic.path_config.layer_height = cfg->layer_height;
     ic.path_config.line_width = cfg->line_width;
@@ -211,9 +216,11 @@ HsBaFdmPipelineResult_t ToCResult(const InternalResult& ir)
 /**
  * @brief Core coroutine implementation of the FDM pipeline.
  */
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-reference-coroutine-parameters) caller keeps cfg alive
 Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
 {
-    // Install the common custom types' AnyObject/Lua registration functions into the shared registry pool for use by each stage's Lua environment
+    // Install the common custom types' AnyObject/Lua registration functions into the shared registry pool for use by
+    // each stage's Lua environment
     HsBa::Slicer::InstallCommonAnyObjectTypes();
 
     InternalResult result;
@@ -261,12 +268,12 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             total_layers,
             [&](int i)
             {
-                float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
+                float const z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
                 layer_outlines[i] = SliceLayer(*topo, z);
             },
             [&](int done)
             {
-                int progress = 15 + (done * 25) / total_layers;
+                int const progress = 15 + (done * 25) / total_layers;
                 ReportProgress(cfg, progress, "Slicing layer");
             });
         ReportProgress(cfg, 40, "Slicing complete");
@@ -284,9 +291,10 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             if (!cfg.support_lua_script.empty())
             {
                 // Lua custom support via LibHsBaSlicer API
-                std::string func = cfg.support_lua_func.empty() ? "generate_support" : cfg.support_lua_func;
+                std::string const func = cfg.support_lua_func.empty() ? "generate_support" : cfg.support_lua_func;
                 std::ifstream ifs(cfg.support_lua_script);
-                std::string script_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+                std::string const script_content((std::istreambuf_iterator<char>(ifs)),
+                                                 std::istreambuf_iterator<char>());
                 layer_supports = GenerateAllLuaSupport(layer_outlines, cfg.support_config,
                                                        std::string_view(script_content), std::string_view(func));
             }
@@ -323,11 +331,14 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
         auto cpp_fill_layer = [&](int i)
         {
             if (layer_outlines[i].empty())
+            {
                 return;
-            Polygons int_polys = Integerization(layer_outlines[i]);
-            bool is_solid = (i < bottom_end) || (i >= top_start);  // solid fill for top/bottom layers
-            double spacing = is_solid ? cfg.fill_spacing : middle_spacing;
-            Polygons fill_result = FillWithBorder(int_polys, spacing, cfg.wall_count, cfg.fill_mode, cfg.fill_angle);
+            }
+            Polygons const int_polys = Integerization(layer_outlines[i]);
+            bool const is_solid = (i < bottom_end) || (i >= top_start);  // solid fill for top/bottom layers
+            double const spacing = is_solid ? cfg.fill_spacing : middle_spacing;
+            Polygons const fill_result =
+                FillWithBorder(int_polys, spacing, cfg.wall_count, cfg.fill_mode, cfg.fill_angle);
             layer_fills[i] = UnIntegerization(fill_result);
         };
 
@@ -343,12 +354,12 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             {
                 if (!layer_outlines[i].empty())
                 {
-                    Polygons int_polys = Integerization(layer_outlines[i]);
-                    bool is_solid = (i < bottom_end) || (i >= top_start);
+                    Polygons const int_polys = Integerization(layer_outlines[i]);
+                    bool const is_solid = (i < bottom_end) || (i >= top_start);
                     if (!is_solid)
                     {
                         // Lua custom fill via LibHsBaSlicer API
-                        Polygons fill_result = LuaCustomFillByFile(int_polys, cfg.infill_lua_script, infill_func);
+                        Polygons const fill_result = LuaCustomFillByFile(int_polys, cfg.infill_lua_script, infill_func);
                         layer_fills[i] = UnIntegerization(fill_result);
                     }
                     else
@@ -356,7 +367,7 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
                         cpp_fill_layer(i);
                     }
                 }
-                int progress = 65 + (i * 20) / total_layers;
+                int const progress = 65 + (i * 20) / total_layers;
                 ReportProgress(cfg, progress, "Filling layer");
             }
         }
@@ -365,7 +376,7 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             ParallelForLayers(total_layers, cpp_fill_layer,
                               [&](int done)
                               {
-                                  int progress = 65 + (done * 20) / total_layers;
+                                  int const progress = 65 + (done * 20) / total_layers;
                                   ReportProgress(cfg, progress, "Filling layer");
                               });
         }
@@ -380,7 +391,9 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             // Z-rising helix (no per-layer travel, no infill/support).
             std::vector<double> layer_zs(total_layers);
             for (int i = 0; i < total_layers; ++i)
+            {
                 layer_zs[i] = static_cast<double>(GetLayerZ(i, cfg.first_layer_height, cfg.layer_height));
+            }
 
             auto gcode_path = GenerateGCodePathSpiral(layer_outlines, layer_zs, cfg.printer_config);
             if (gcode_path)
@@ -433,6 +446,8 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
     co_return result;
 }
 
+}  // anonymous namespace
+
 }  // namespace HsBa::Slicer::Pipeline
 
 // ========== C export interface ==========
@@ -460,20 +475,22 @@ HSBA_SLICER_API void HsBaRunFdmPipelineAsync(const HsBaFdmPipelineConfig_t* conf
         HsBa::Slicer::Pipeline::BuildConfig(config, callback, user_data));
     auto task = HsBa::Slicer::Pipeline::RunPipelineAsync(*shared_cfg);
     task.then(
-        [shared_cfg, result_callback, result_user_data](HsBa::Slicer::Pipeline::InternalResult ir)
+        [shared_cfg, result_callback, result_user_data](const HsBa::Slicer::Pipeline::InternalResult& ir)
         {
             auto cr = HsBa::Slicer::Pipeline::ToCResult(ir);
             if (result_callback)
             {
                 result_callback(cr, result_user_data);
             }
-        });
+        });  // NOLINT(clang-analyzer-unix.Malloc) C-ABI ownership transfer: result_callback frees cr strings
 }
 
 HSBA_SLICER_API void HsBaFreePipelineResult(HsBaFdmPipelineResult_t* result)
 {
     if (!result)
+    {
         return;
+    }
     std::free(std::exchange(result->gcode_content, nullptr));
     std::free(std::exchange(result->error_message, nullptr));
 }

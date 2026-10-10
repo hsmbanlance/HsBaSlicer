@@ -58,7 +58,7 @@ public:
      * @param script_file Path to the Lua script file.
      * @param funcName Name of the Lua function to call.
      */
-    explicit LuaSupport(const std::filesystem::path& script_file, std::string_view funcName);
+    explicit LuaSupport(std::filesystem::path script_file, std::string_view funcName);
 
     PolygonsD Generate(const PolygonsD& current_layer, const PolygonsD& prev_layer, float layer_height,
                        const SupportConfig& config) override;

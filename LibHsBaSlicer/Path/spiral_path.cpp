@@ -46,7 +46,7 @@ PolygonD NormalizeOuterLoop(const PolygonD& in)
     }
     if (SignedArea2(p) < 0.0)
     {
-        std::reverse(p.begin(), p.end());
+        std::ranges::reverse(p);
     }
     return p;
 }
@@ -58,9 +58,9 @@ size_t NearestToXY(const PolygonD& loop, double x, double y)
     double bestD = std::numeric_limits<double>::max();
     for (size_t i = 0; i < loop.size(); ++i)
     {
-        double dx = loop[i].x - x;
-        double dy = loop[i].y - y;
-        double d = dx * dx + dy * dy;
+        double const dx = loop[i].x - x;
+        double const dy = loop[i].y - y;
+        double const d = dx * dx + dy * dy;
         if (d < bestD)
         {
             bestD = d;
@@ -110,7 +110,7 @@ std::vector<SpiralPoint> SpiralizeOuterWall(const std::vector<PolygonsD>& layer_
         double bestArea = 0.0;
         for (const auto& poly : layer_sections[i])
         {
-            double area = std::abs(SignedArea2(poly));
+            double const area = std::abs(SignedArea2(poly));
             if (area > bestArea)
             {
                 bestArea = area;
@@ -126,7 +126,7 @@ std::vector<SpiralPoint> SpiralizeOuterWall(const std::vector<PolygonsD>& layer_
         {
             continue;
         }
-        loops.push_back(LayerLoop{std::move(loop), layer_zs[i]});
+        loops.push_back(LayerLoop{.loop = std::move(loop), .z = layer_zs[i]});
     }
     if (loops.empty())
     {
@@ -153,7 +153,7 @@ std::vector<SpiralPoint> SpiralizeOuterWall(const std::vector<PolygonsD>& layer_
         {
             const Point2D& pt = loop[(start + k) % m];
             const double frac = static_cast<double>(k) / static_cast<double>(m);
-            path.push_back(SpiralPoint{pt.x, pt.y, z_start + (z_end - z_start) * frac});
+            path.push_back(SpiralPoint{.x = pt.x, .y = pt.y, .z = z_start + (z_end - z_start) * frac});
         }
 
         seam_x = loop[start].x;

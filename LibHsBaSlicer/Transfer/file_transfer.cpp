@@ -4,6 +4,8 @@
  */
 #include "file_transfer.hpp"
 
+#include <algorithm>
+
 #include "fileoperator/RemoteExecutor.hpp"
 
 namespace HsBa::Slicer
@@ -23,7 +25,7 @@ void ReportProgress(const FileTransferProgressFunc& progress, int percent, std::
 }  // anonymous namespace
 
 HSBA_SLICER_LIB_API FileTransferResult TransferFiles(const FileTransferConfig& config,
-                                                     FileTransferProgressFunc progress)
+                                                     const FileTransferProgressFunc& progress)
 {
     FileTransferResult result;
     result.total_files = static_cast<int>(config.files.size());
@@ -65,10 +67,7 @@ HSBA_SLICER_LIB_API FileTransferResult TransferFiles(const FileTransferConfig& c
     {
         pool_size = 1;
     }
-    if (pool_size > RemoteExecutorConnectionPool::MaxConnections)
-    {
-        pool_size = RemoteExecutorConnectionPool::MaxConnections;
-    }
+    pool_size = std::min(pool_size, RemoteExecutorConnectionPool::MaxConnections);
 
     RemoteExecutorConnectionPool pool(config.host, config.port, pool_size);
     ReportProgress(progress, 20, "Connections established");
@@ -82,7 +81,7 @@ HSBA_SLICER_LIB_API FileTransferResult TransferFiles(const FileTransferConfig& c
         pool.SendFile(config.files[static_cast<std::size_t>(i)]);
         result.files_transferred = i + 1;
 
-        int pct = 25 + ((i + 1) * 70) / total;
+        int const pct = 25 + ((i + 1) * 70) / total;
         ReportProgress(progress, pct, "Transferring file");
     }
 

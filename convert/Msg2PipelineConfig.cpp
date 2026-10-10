@@ -19,10 +19,14 @@ namespace
 char* DupString(const std::string& str)
 {
     if (str.empty())
+    {
         return nullptr;
+    }
     char* dup = static_cast<char*>(std::malloc(str.size() + 1));
     if (dup)
+    {
         std::memcpy(dup, str.c_str(), str.size() + 1);
+    }
     return dup;
 }
 

@@ -10,9 +10,13 @@ namespace HsBa::Slicer
 void FdmConfigToMsg(const HsBaFdmPipelineConfig_t& config, HsbaProto::msg_fdm_pipeline_config* msg)
 {
     if (config.model_name)
+    {
         msg->set_fdm_pipe_config_model_name(config.model_name);
+    }
     if (config.model_path)
+    {
         msg->set_fdm_pipe_config_model_path(config.model_path);
+    }
 
     msg->set_fdm_pipe_config_layer_height(config.layer_height);
     msg->set_fdm_pipe_config_first_layer_height(config.first_layer_height);
@@ -48,16 +52,26 @@ void FdmConfigToMsg(const HsBaFdmPipelineConfig_t& config, HsbaProto::msg_fdm_pi
     msg->set_fdm_pipe_config_first_layer_speed(config.first_layer_speed);
 
     if (config.support_lua_script)
+    {
         msg->set_fdm_pipe_config_support_lua_script(config.support_lua_script);
+    }
     if (config.support_lua_func)
+    {
         msg->set_fdm_pipe_config_support_lua_func(config.support_lua_func);
+    }
     if (config.infill_lua_script)
+    {
         msg->set_fdm_pipe_config_infill_lua_script(config.infill_lua_script);
+    }
     if (config.infill_lua_func)
+    {
         msg->set_fdm_pipe_config_infill_lua_func(config.infill_lua_func);
+    }
 
     if (config.output_path)
+    {
         msg->set_fdm_pipe_config_output_path(config.output_path);
+    }
 
     msg->set_fdm_pipe_config_spiral_mode(config.spiral_mode != 0);
 }
@@ -67,18 +81,26 @@ void FdmResultToMsg(const HsBaFdmPipelineResult_t& result, HsbaProto::msg_fdm_pi
     msg->set_fdm_pipe_result_success(result.success != 0);
     msg->set_fdm_pipe_result_total_layers(result.total_layers);
     if (result.gcode_content)
+    {
         msg->set_fdm_pipe_result_gcode_content(result.gcode_content);
+    }
     if (result.error_message)
+    {
         msg->set_fdm_pipe_result_error_message(result.error_message);
+    }
     msg->set_fdm_pipe_result_elapsed_seconds(result.elapsed_seconds);
 }
 
 void SlaConfigToMsg(const HsBaSlaPipelineConfig_t& config, HsbaProto::sla_pipe_config* msg)
 {
     if (config.model_name)
+    {
         msg->set_sla_pipe_config_model_name(config.model_name);
+    }
     if (config.model_path)
+    {
         msg->set_sla_pipe_config_model_path(config.model_path);
+    }
 
     msg->set_sla_pipe_config_layer_height(config.layer_height);
     msg->set_sla_pipe_config_first_layer_height(config.first_layer_height);
@@ -105,20 +127,34 @@ void SlaConfigToMsg(const HsBaSlaPipelineConfig_t& config, HsbaProto::sla_pipe_c
     msg->set_sla_pipe_config_support_pattern(static_cast<HsbaProto::sla_support_pattern>(config.support_pattern));
 
     if (config.support_lua_script)
+    {
         msg->set_sla_pipe_config_support_lua_script(config.support_lua_script);
+    }
     if (config.support_lua_func)
+    {
         msg->set_sla_pipe_config_support_lua_func(config.support_lua_func);
+    }
     if (config.floor_lua_script)
+    {
         msg->set_sla_pipe_config_floor_lua_script(config.floor_lua_script);
+    }
     if (config.floor_lua_func)
+    {
         msg->set_sla_pipe_config_floor_lua_func(config.floor_lua_func);
+    }
     if (config.export_lua_script)
+    {
         msg->set_sla_pipe_config_export_lua_script(config.export_lua_script);
+    }
     if (config.export_lua_func)
+    {
         msg->set_sla_pipe_config_export_lua_func(config.export_lua_func);
+    }
 
     if (config.output_path)
+    {
         msg->set_sla_pipe_config_output_path(config.output_path);
+    }
     msg->set_sla_pipe_config_output_image_type(static_cast<HsbaProto::sla_image_type>(config.image_type));
     msg->set_sla_pipe_config_output_image_width(config.image_width);
     msg->set_sla_pipe_config_output_image_height(config.image_height);
@@ -129,18 +165,26 @@ void SlaResultToMsg(const HsBaSlaPipelineResult_t& result, HsbaProto::sla_pipe_r
     msg->set_sla_pipe_result_success(result.success != 0);
     msg->set_sla_pipe_result_total_layers(result.total_layers);
     if (result.export_path)
+    {
         msg->set_sla_pipe_result_export_path(result.export_path);
+    }
     if (result.error_message)
+    {
         msg->set_sla_pipe_result_error_message(result.error_message);
+    }
     msg->set_sla_pipe_result_elapsed_seconds(result.elapsed_seconds);
 }
 
 void SlsConfigToMsg(const HsBaSlsPipelineConfig_t& config, HsbaProto::sls_pipe_config* msg)
 {
     if (config.model_name)
+    {
         msg->set_sls_pipe_config_model_name(config.model_name);
+    }
     if (config.model_path)
+    {
         msg->set_sls_pipe_config_model_path(config.model_path);
+    }
 
     msg->set_sls_pipe_config_layer_height(config.layer_height);
     msg->set_sls_pipe_config_first_layer_height(config.first_layer_height);
@@ -152,12 +196,18 @@ void SlsConfigToMsg(const HsBaSlsPipelineConfig_t& config, HsbaProto::sls_pipe_c
     msg->set_sls_pipe_config_bed_temperature(config.bed_temperature);
 
     if (config.export_lua_script)
+    {
         msg->set_sls_pipe_config_export_lua_script(config.export_lua_script);
+    }
     if (config.export_lua_func)
+    {
         msg->set_sls_pipe_config_export_lua_func(config.export_lua_func);
+    }
 
     if (config.output_path)
+    {
         msg->set_sls_pipe_config_output_path(config.output_path);
+    }
 }
 
 void SlsResultToMsg(const HsBaSlsPipelineResult_t& result, HsbaProto::sls_pipe_result* msg)
@@ -165,18 +215,26 @@ void SlsResultToMsg(const HsBaSlsPipelineResult_t& result, HsbaProto::sls_pipe_r
     msg->set_sls_pipe_result_success(result.success != 0);
     msg->set_sls_pipe_result_total_layers(result.total_layers);
     if (result.export_path)
+    {
         msg->set_sls_pipe_result_export_path(result.export_path);
+    }
     if (result.error_message)
+    {
         msg->set_sls_pipe_result_error_message(result.error_message);
+    }
     msg->set_sls_pipe_result_elapsed_seconds(result.elapsed_seconds);
 }
 
 void FileTransferConfigToMsg(const HsBaFileTransferPipelineConfig_t& config, HsbaProto::file_transfer_pipe_config* msg)
 {
     if (config.host)
+    {
         msg->set_file_transfer_config_host(config.host);
+    }
     if (config.port)
+    {
         msg->set_file_transfer_config_port(config.port);
+    }
     msg->set_file_transfer_config_pool_size(config.pool_size);
 
     if (config.file_paths && config.file_count > 0)
@@ -184,7 +242,9 @@ void FileTransferConfigToMsg(const HsBaFileTransferPipelineConfig_t& config, Hsb
         for (int i = 0; i < config.file_count; ++i)
         {
             if (config.file_paths[i])
+            {
                 msg->add_file_transfer_config_file_paths(config.file_paths[i]);
+            }
         }
     }
 }
@@ -195,28 +255,44 @@ void FileTransferResultToMsg(const HsBaFileTransferPipelineResult_t& result, Hsb
     msg->set_file_transfer_result_files_transferred(result.files_transferred);
     msg->set_file_transfer_result_total_files(result.total_files);
     if (result.error_message)
+    {
         msg->set_file_transfer_result_error_message(result.error_message);
+    }
     msg->set_file_transfer_result_elapsed_seconds(result.elapsed_seconds);
 }
 
 void CustomConfigToMsg(const HsBaCustomPipelineConfig_t& config, HsbaProto::custom_pipe_config* msg)
 {
     if (config.pipeline_lua_script)
+    {
         msg->set_custom_pipe_config_pipeline_lua_script(config.pipeline_lua_script);
+    }
     if (config.pipeline_lua_source)
+    {
         msg->set_custom_pipe_config_pipeline_lua_source(config.pipeline_lua_source);
+    }
     if (config.entry_func)
+    {
         msg->set_custom_pipe_config_entry_func(config.entry_func);
+    }
     if (config.config_json)
+    {
         msg->set_custom_pipe_config_config_json(config.config_json);
+    }
 
     if (config.model_name)
+    {
         msg->set_custom_pipe_config_model_name(config.model_name);
+    }
     if (config.model_path)
+    {
         msg->set_custom_pipe_config_model_path(config.model_path);
+    }
 
     if (config.output_path)
+    {
         msg->set_custom_pipe_config_output_path(config.output_path);
+    }
 }
 
 void CustomResultToMsg(const HsBaCustomPipelineResult_t& result, HsbaProto::custom_pipe_result* msg)
@@ -224,20 +300,30 @@ void CustomResultToMsg(const HsBaCustomPipelineResult_t& result, HsbaProto::cust
     msg->set_custom_pipe_result_success(result.success != 0);
     msg->set_custom_pipe_result_total_layers(result.total_layers);
     if (result.output_path)
+    {
         msg->set_custom_pipe_result_output_path(result.output_path);
+    }
     if (result.result_string)
+    {
         msg->set_custom_pipe_result_result_string(result.result_string);
+    }
     if (result.error_message)
+    {
         msg->set_custom_pipe_result_error_message(result.error_message);
+    }
     msg->set_custom_pipe_result_elapsed_seconds(result.elapsed_seconds);
 }
 
 void SlmConfigToMsg(const HsBaSlmPipelineConfig_t& config, HsbaProto::slm_pipe_config* msg)
 {
     if (config.model_name)
+    {
         msg->set_slm_pipe_config_model_name(config.model_name);
+    }
     if (config.model_path)
+    {
         msg->set_slm_pipe_config_model_path(config.model_path);
+    }
 
     msg->set_slm_pipe_config_layer_height(config.layer_height);
     msg->set_slm_pipe_config_first_layer_height(config.first_layer_height);
@@ -253,12 +339,18 @@ void SlmConfigToMsg(const HsBaSlmPipelineConfig_t& config, HsbaProto::slm_pipe_c
     msg->set_slm_pipe_config_protect_gas(static_cast<HsbaProto::slm_protect_gas>(config.protect_gas));
 
     if (config.export_lua_script)
+    {
         msg->set_slm_pipe_config_export_lua_script(config.export_lua_script);
+    }
     if (config.export_lua_func)
+    {
         msg->set_slm_pipe_config_export_lua_func(config.export_lua_func);
+    }
 
     if (config.output_path)
+    {
         msg->set_slm_pipe_config_output_path(config.output_path);
+    }
 }
 
 void SlmResultToMsg(const HsBaSlmPipelineResult_t& result, HsbaProto::slm_pipe_result* msg)
@@ -266,18 +358,26 @@ void SlmResultToMsg(const HsBaSlmPipelineResult_t& result, HsbaProto::slm_pipe_r
     msg->set_slm_pipe_result_success(result.success != 0);
     msg->set_slm_pipe_result_total_layers(result.total_layers);
     if (result.export_path)
+    {
         msg->set_slm_pipe_result_export_path(result.export_path);
+    }
     if (result.error_message)
+    {
         msg->set_slm_pipe_result_error_message(result.error_message);
+    }
     msg->set_slm_pipe_result_elapsed_seconds(result.elapsed_seconds);
 }
 
 void LomConfigToMsg(const HsBaLomPipelineConfig_t& config, HsbaProto::lom_pipe_config* msg)
 {
     if (config.model_name)
+    {
         msg->set_lom_pipe_config_model_name(config.model_name);
+    }
     if (config.model_path)
+    {
         msg->set_lom_pipe_config_model_path(config.model_path);
+    }
 
     msg->set_lom_pipe_config_layer_height(config.layer_height);
     msg->set_lom_pipe_config_first_layer_height(config.first_layer_height);
@@ -294,12 +394,18 @@ void LomConfigToMsg(const HsBaLomPipelineConfig_t& config, HsbaProto::lom_pipe_c
     msg->set_lom_pipe_config_cut_mode(static_cast<HsbaProto::lom_cut_mode>(config.cut_mode));
 
     if (config.export_lua_script)
+    {
         msg->set_lom_pipe_config_export_lua_script(config.export_lua_script);
+    }
     if (config.export_lua_func)
+    {
         msg->set_lom_pipe_config_export_lua_func(config.export_lua_func);
+    }
 
     if (config.output_path)
+    {
         msg->set_lom_pipe_config_output_path(config.output_path);
+    }
 }
 
 void LomResultToMsg(const HsBaLomPipelineResult_t& result, HsbaProto::lom_pipe_result* msg)
@@ -307,18 +413,26 @@ void LomResultToMsg(const HsBaLomPipelineResult_t& result, HsbaProto::lom_pipe_r
     msg->set_lom_pipe_result_success(result.success != 0);
     msg->set_lom_pipe_result_total_layers(result.total_layers);
     if (result.export_path)
+    {
         msg->set_lom_pipe_result_export_path(result.export_path);
+    }
     if (result.error_message)
+    {
         msg->set_lom_pipe_result_error_message(result.error_message);
+    }
     msg->set_lom_pipe_result_elapsed_seconds(result.elapsed_seconds);
 }
 
 void TdpConfigToMsg(const HsBaTdpPipelineConfig_t& config, HsbaProto::tdp_pipe_config* msg)
 {
     if (config.model_name)
+    {
         msg->set_tdp_pipe_config_model_name(config.model_name);
+    }
     if (config.model_path)
+    {
         msg->set_tdp_pipe_config_model_path(config.model_path);
+    }
 
     msg->set_tdp_pipe_config_layer_height(config.layer_height);
     msg->set_tdp_pipe_config_first_layer_height(config.first_layer_height);
@@ -332,12 +446,18 @@ void TdpConfigToMsg(const HsBaTdpPipelineConfig_t& config, HsbaProto::tdp_pipe_c
     msg->set_tdp_pipe_config_binder_mode(static_cast<HsbaProto::tdp_binder_mode>(config.binder_mode));
 
     if (config.export_lua_script)
+    {
         msg->set_tdp_pipe_config_export_lua_script(config.export_lua_script);
+    }
     if (config.export_lua_func)
+    {
         msg->set_tdp_pipe_config_export_lua_func(config.export_lua_func);
+    }
 
     if (config.output_path)
+    {
         msg->set_tdp_pipe_config_output_path(config.output_path);
+    }
 
     msg->set_tdp_pipe_config_spiral_mode(config.spiral_mode != 0);
 }
@@ -347,18 +467,26 @@ void TdpResultToMsg(const HsBaTdpPipelineResult_t& result, HsbaProto::tdp_pipe_r
     msg->set_tdp_pipe_result_success(result.success != 0);
     msg->set_tdp_pipe_result_total_layers(result.total_layers);
     if (result.export_path)
+    {
         msg->set_tdp_pipe_result_export_path(result.export_path);
+    }
     if (result.error_message)
+    {
         msg->set_tdp_pipe_result_error_message(result.error_message);
+    }
     msg->set_tdp_pipe_result_elapsed_seconds(result.elapsed_seconds);
 }
 
 void WaamConfigToMsg(const HsBaWaamPipelineConfig_t& config, HsbaProto::waam_pipe_config* msg)
 {
     if (config.model_name)
+    {
         msg->set_waam_pipe_config_model_name(config.model_name);
+    }
     if (config.model_path)
+    {
         msg->set_waam_pipe_config_model_path(config.model_path);
+    }
 
     msg->set_waam_pipe_config_layer_height(config.layer_height);
     msg->set_waam_pipe_config_first_layer_height(config.first_layer_height);
@@ -380,12 +508,18 @@ void WaamConfigToMsg(const HsBaWaamPipelineConfig_t& config, HsbaProto::waam_pip
     msg->set_waam_pipe_config_robot_type(static_cast<HsbaProto::waam_robot_type>(config.robot_type));
 
     if (config.path_lua_script)
+    {
         msg->set_waam_pipe_config_path_lua_script(config.path_lua_script);
+    }
     if (config.path_lua_func)
+    {
         msg->set_waam_pipe_config_path_lua_func(config.path_lua_func);
+    }
 
     if (config.output_path)
+    {
         msg->set_waam_pipe_config_output_path(config.output_path);
+    }
 
     msg->set_waam_pipe_config_spiral_mode(config.spiral_mode != 0);
 }
@@ -395,9 +529,13 @@ void WaamResultToMsg(const HsBaWaamPipelineResult_t& result, HsbaProto::waam_pip
     msg->set_waam_pipe_result_success(result.success != 0);
     msg->set_waam_pipe_result_total_layers(result.total_layers);
     if (result.output_path)
+    {
         msg->set_waam_pipe_result_output_path(result.output_path);
+    }
     if (result.error_message)
+    {
         msg->set_waam_pipe_result_error_message(result.error_message);
+    }
     msg->set_waam_pipe_result_elapsed_seconds(result.elapsed_seconds);
 }
 

@@ -23,7 +23,8 @@ namespace HsBa::Slicer
 {
 namespace
 {
-static const bool kOpenVdbInitialized = []()
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization,cert-err58-cpp) eager OpenVDB init by design
+const bool kOpenVdbInitialized = []()
 {
     openvdb::initialize();
     return true;
@@ -34,8 +35,8 @@ bool IsVdbFile(std::string_view fileName)
     const std::string lower = [&]()
     {
         std::string result{fileName};
-        std::transform(result.begin(), result.end(), result.begin(),
-                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        std::ranges::transform(result, result.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         return result;
     }();
 
@@ -47,8 +48,8 @@ bool IsXYZFormat(std::string_view fileName)
     const std::string lower = [&]()
     {
         std::string result{fileName};
-        std::transform(result.begin(), result.end(), result.begin(),
-                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        std::ranges::transform(result, result.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         return result;
     }();
 
@@ -73,9 +74,9 @@ std::vector<Eigen::Vector3f> ReadPointsFromFile(const std::string& fileName)
         }
 
         std::istringstream stream(line);
-        float x = 0.0f;
-        float y = 0.0f;
-        float z = 0.0f;
+        float x = 0.0F;
+        float y = 0.0F;
+        float z = 0.0F;
         if (!(stream >> x >> y >> z))
         {
             continue;
@@ -113,7 +114,7 @@ using vdb_internal::NormalizePath;
 using vdb_internal::ToCoord;
 using vdb_internal::ToEigen;
 
-OpenVdbModel::OpenVdbModel() : grid_{openvdb::Vec3fGrid::create(openvdb::Vec3f(0.0f))}
+OpenVdbModel::OpenVdbModel() : grid_{openvdb::Vec3fGrid::create(openvdb::Vec3f(0.0F))}
 {
     grid_->setName("point_cloud");
     grid_->setTransform(openvdb::math::Transform::createLinearTransform(1.0));
@@ -129,6 +130,7 @@ OpenVdbModel::OpenVdbModel(const std::pair<Eigen::MatrixXf, Eigen::MatrixXi>& me
     SetFromVertices(mesh.first);
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved) sink copies into grid (no rvalue overload)
 OpenVdbModel::OpenVdbModel(std::pair<Eigen::MatrixXf, Eigen::MatrixXi>&& mesh) : OpenVdbModel()
 {
     SetFromVertices(mesh.first);
@@ -156,7 +158,7 @@ bool OpenVdbModel::Load(std::string_view fileName)
         {
             openvdb::io::File file(normalizedPath);
             file.open();
-            openvdb::GridPtrVecPtr grids = file.getGrids();
+            openvdb::GridPtrVecPtr const grids = file.getGrids();
             file.close();
 
             if (!grids || grids->empty())
@@ -176,7 +178,7 @@ bool OpenVdbModel::Load(std::string_view fileName)
         else
         {
             const auto points = ReadPointsFromFile(normalizedPath);
-            grid_ = openvdb::Vec3fGrid::create(openvdb::Vec3f(0.0f));
+            grid_ = openvdb::Vec3fGrid::create(openvdb::Vec3f(0.0F));
             grid_->setName("point_cloud");
             grid_->setTransform(openvdb::math::Transform::createLinearTransform(1.0));
             for (const auto& point : points)
@@ -231,7 +233,7 @@ void OpenVdbModel::Rotate(const Eigen::Quaternionf& rotation)
     const Eigen::Matrix3f rotationMatrix = rotation.toRotationMatrix();
     for (auto iter = grid_->beginValueOn(); iter; ++iter)
     {
-        openvdb::Vec3f value = *iter;
+        openvdb::Vec3f const value = *iter;
         Eigen::Vector3f point = ToEigen(value);
         point = rotationMatrix * point;
         iter.setValue(openvdb::Vec3f(point.x(), point.y(), point.z()));
@@ -274,7 +276,7 @@ void OpenVdbModel::Transform(const Eigen::Matrix4f& transform)
 {
     for (auto iter = grid_->beginValueOn(); iter; ++iter)
     {
-        Eigen::Vector4f homogeneous(ToEigen(*iter).x(), ToEigen(*iter).y(), ToEigen(*iter).z(), 1.0f);
+        Eigen::Vector4f const homogeneous(ToEigen(*iter).x(), ToEigen(*iter).y(), ToEigen(*iter).z(), 1.0F);
         const Eigen::Vector4f transformed = transform * homogeneous;
         const Eigen::Vector3f point = transformed.head<3>();
         iter.setValue(openvdb::Vec3f(point.x(), point.y(), point.z()));
@@ -317,7 +319,7 @@ void OpenVdbModel::BoundingBox(Eigen::Vector3f& min, Eigen::Vector3f& max) const
 
 float OpenVdbModel::Volume() const
 {
-    return 0.0f;
+    return 0.0F;
 }
 
 std::pair<Eigen::MatrixXf, Eigen::MatrixXi> OpenVdbModel::TriangleMesh() const
@@ -329,7 +331,7 @@ void OpenVdbModel::AddPoint(const Eigen::Vector3f& point)
 {
     if (!grid_)
     {
-        grid_ = openvdb::Vec3fGrid::create(openvdb::Vec3f(0.0f));
+        grid_ = openvdb::Vec3fGrid::create(openvdb::Vec3f(0.0F));
         grid_->setName("point_cloud");
         grid_->setTransform(openvdb::math::Transform::createLinearTransform(1.0));
     }
@@ -401,7 +403,7 @@ void OpenVdbModel::Clear()
 {
     if (!grid_)
     {
-        grid_ = openvdb::Vec3fGrid::create(openvdb::Vec3f(0.0f));
+        grid_ = openvdb::Vec3fGrid::create(openvdb::Vec3f(0.0F));
         grid_->setName("point_cloud");
         grid_->setTransform(openvdb::math::Transform::createLinearTransform(1.0));
         return;
@@ -454,7 +456,7 @@ std::vector<Eigen::Vector3f> OpenVdbModel::KNN(const Eigen::Vector3f& query, std
         ranked.emplace_back((point - query).squaredNorm(), point);
     }
 
-    std::sort(ranked.begin(), ranked.end(), [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+    std::ranges::sort(ranked, [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
 
     std::vector<Eigen::Vector3f> result;
     result.reserve(std::min<std::size_t>(k, ranked.size()));
@@ -486,7 +488,7 @@ std::vector<Eigen::Vector3f> OpenVdbModel::Filter(const std::function<bool(const
 
 void OpenVdbModel::Voxelize(float voxelSize)
 {
-    if (voxelSize <= 0.0f)
+    if (voxelSize <= 0.0F)
     {
         throw InvalidArgumentError("voxel size must be positive");
     }
@@ -497,7 +499,7 @@ void OpenVdbModel::Voxelize(float voxelSize)
         return;
     }
 
-    auto newGrid = openvdb::Vec3fGrid::create(openvdb::Vec3f(0.0f));
+    auto newGrid = openvdb::Vec3fGrid::create(openvdb::Vec3f(0.0F));
     newGrid->setName("point_cloud");
     newGrid->setTransform(openvdb::math::Transform::createLinearTransform(static_cast<double>(voxelSize)));
 
@@ -512,7 +514,7 @@ void OpenVdbModel::Voxelize(float voxelSize)
 
 std::vector<Eigen::Vector3f> OpenVdbModel::VoxelCenters(float voxelSize) const
 {
-    if (voxelSize <= 0.0f)
+    if (voxelSize <= 0.0F)
     {
         throw InvalidArgumentError("voxel size must be positive");
     }

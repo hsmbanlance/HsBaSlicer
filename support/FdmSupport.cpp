@@ -17,8 +17,8 @@ namespace
 {
 bool PointInsidePolygonsD(double x, double y, const PolygonsD& polys)
 {
-    Clipper2Lib::Point64 p64{static_cast<int64_t>(std::llround(x * integerization)),
-                             static_cast<int64_t>(std::llround(y * integerization))};
+    Clipper2Lib::Point64 const p64{static_cast<int64_t>(std::llround(x * integerization)),
+                                   static_cast<int64_t>(std::llround(y * integerization))};
     const Polygons polys_int = Integerization(polys);
     auto r = PointInPolygons(p64, polys_int);
     return r != Clipper2Lib::PointInPolygonResult::IsOutside;
@@ -49,10 +49,12 @@ PolygonsD FdmPlaneSupport::Generate(const PolygonsD& current_layer, const Polygo
                                     const SupportConfig& config)
 {
     // Detect overhang regions
-    PolygonsD overhang =
+    PolygonsD const overhang =
         OverhangDetector::Detect(current_layer, prev_layer, layer_height, config.overhang_angle_threshold);
     if (overhang.empty())
+    {
         return {};
+    }
 
     // Apply gap: shrink overhang by gap distance to separate support from model
     const double gap = static_cast<double>(config.support_gap);
@@ -61,7 +63,9 @@ PolygonsD FdmPlaneSupport::Generate(const PolygonsD& current_layer, const Polygo
         Offset(overhang_int, -gap * integerization, Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
 
     if (gapped.empty())
+    {
         return {};
+    }
 
     // Inflate by support_diameter/2 to create column cross-sections
     const double radius = static_cast<double>(config.support_diameter) * 0.5;
@@ -74,7 +78,8 @@ PolygonsD FdmPlaneSupport::Generate(const PolygonsD& current_layer, const Polygo
 // ---------------------------------------------------------------------------
 // FdmTreeSupport
 // ---------------------------------------------------------------------------
-PolygonsD FdmTreeSupport::GenerateBranches(const PolygonsD& overhang, float layer_height, const SupportConfig& config)
+PolygonsD FdmTreeSupport::GenerateBranches(const PolygonsD& overhang, float /*layer_height*/,
+                                           const SupportConfig& config)
 {
     // For tree support, we place circular branch tips at regular sample points
     // within the overhang region, with radius determined by branch angle.
@@ -86,7 +91,10 @@ PolygonsD FdmTreeSupport::GenerateBranches(const PolygonsD& overhang, float laye
     const double spacing = static_cast<double>(config.support_diameter) * 1.5;  // spacing between branch points
 
     // Get bounding box of overhang
-    double min_x = 1e18, min_y = 1e18, max_x = -1e18, max_y = -1e18;
+    double min_x = 1e18;
+    double min_y = 1e18;
+    double max_x = -1e18;
+    double max_y = -1e18;
     for (const auto& poly : overhang)
     {
         for (const auto& pt : poly)
@@ -99,7 +107,9 @@ PolygonsD FdmTreeSupport::GenerateBranches(const PolygonsD& overhang, float laye
     }
 
     if (min_x > max_x || min_y > max_y)
+    {
         return {};
+    }
 
     // Generate grid of candidate branch points
     PolygonsD branch_circles;
@@ -118,12 +128,16 @@ PolygonsD FdmTreeSupport::GenerateBranches(const PolygonsD& overhang, float laye
 
     // Union all branch circles
     if (branch_circles.empty())
+    {
         return {};
+    }
 
     PolygonsD result;
     result.reserve(branch_circles.size());
     for (auto& c : branch_circles)
+    {
         result.push_back(std::move(c));
+    }
     // Collapse overlapping circles via Clipper2 union
     return UnionD(result, Clipper2Lib::FillRule::NonZero);
 }
@@ -131,10 +145,12 @@ PolygonsD FdmTreeSupport::GenerateBranches(const PolygonsD& overhang, float laye
 PolygonsD FdmTreeSupport::Generate(const PolygonsD& current_layer, const PolygonsD& prev_layer, float layer_height,
                                    const SupportConfig& config)
 {
-    PolygonsD overhang =
+    PolygonsD const overhang =
         OverhangDetector::Detect(current_layer, prev_layer, layer_height, config.overhang_angle_threshold);
     if (overhang.empty())
+    {
         return {};
+    }
 
     // Apply gap
     const double gap = static_cast<double>(config.support_gap);
@@ -143,7 +159,9 @@ PolygonsD FdmTreeSupport::Generate(const PolygonsD& current_layer, const Polygon
         Offset(overhang_int, -gap * integerization, Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
 
     if (gapped.empty())
+    {
         return {};
+    }
 
     const PolygonsD gapped_d = UnIntegerization(gapped);
     return GenerateBranches(gapped_d, layer_height, config);
@@ -156,15 +174,20 @@ PolygonsD FdmHoneycombSupport::GenerateHoneycomb(const PolygonsD& overhang, cons
 {
     const double cell_size = static_cast<double>(config.honeycomb_cell_size);
     if (cell_size <= 0.0)
+    {
         return {};
+    }
 
     // Honeycomb geometry: flat-top hexagons
     // Width (x-direction) = cell_size, Height (y-direction) = cell_size * sqrt(3)/2
     const double hex_w = cell_size;
-    const double hex_h = cell_size * std::sqrt(3.0) * 0.5;
+    const double hex_h = cell_size * std::numbers::sqrt3 * 0.5;
 
     // Get bounding box
-    double min_x = 1e18, min_y = 1e18, max_x = -1e18, max_y = -1e18;
+    double min_x = 1e18;
+    double min_y = 1e18;
+    double max_x = -1e18;
+    double max_y = -1e18;
     for (const auto& poly : overhang)
     {
         for (const auto& pt : poly)
@@ -177,7 +200,9 @@ PolygonsD FdmHoneycombSupport::GenerateHoneycomb(const PolygonsD& overhang, cons
     }
 
     if (min_x > max_x || min_y > max_y)
+    {
         return {};
+    }
 
     // Generate hexagonal cells
     PolygonsD hex_cells;
@@ -200,14 +225,18 @@ PolygonsD FdmHoneycombSupport::GenerateHoneycomb(const PolygonsD& overhang, cons
     }
 
     if (hex_cells.empty())
+    {
         return {};
+    }
 
     // Intersect hex cells with overhang region
     // First union all hex cells into a single polygon set, then intersect with overhang
     PolygonsD all_hex;
     all_hex.reserve(hex_cells.size());
     for (auto& h : hex_cells)
+    {
         all_hex.push_back(std::move(h));
+    }
 
     return IntersectD(UnionD(all_hex, Clipper2Lib::FillRule::NonZero), overhang, Clipper2Lib::FillRule::NonZero);
 }
@@ -215,10 +244,12 @@ PolygonsD FdmHoneycombSupport::GenerateHoneycomb(const PolygonsD& overhang, cons
 PolygonsD FdmHoneycombSupport::Generate(const PolygonsD& current_layer, const PolygonsD& prev_layer, float layer_height,
                                         const SupportConfig& config)
 {
-    PolygonsD overhang =
+    PolygonsD const overhang =
         OverhangDetector::Detect(current_layer, prev_layer, layer_height, config.overhang_angle_threshold);
     if (overhang.empty())
+    {
         return {};
+    }
 
     // Apply gap
     const double gap = static_cast<double>(config.support_gap);
@@ -227,7 +258,9 @@ PolygonsD FdmHoneycombSupport::Generate(const PolygonsD& current_layer, const Po
         Offset(overhang_int, -gap * integerization, Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
 
     if (gapped.empty())
+    {
         return {};
+    }
 
     const PolygonsD gapped_d = UnIntegerization(gapped);
     return GenerateHoneycomb(gapped_d, config);

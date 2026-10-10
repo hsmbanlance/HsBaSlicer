@@ -104,10 +104,14 @@ std::string WeldRobotPath::ToString(std::string_view script, const std::function
 {
     auto L = MakeUniqueLuaState();
     if (!L)
+    {
         throw RuntimeError("Lua init failed");
+    }
     luaL_openlibs(L.get());
     if (lua_reg)
+    {
         lua_reg(L.get());
+    }
 
     // Push header
     const std::string header = "// WeldRobotPath script - robot type ignored, welding params available\n";
@@ -157,20 +161,20 @@ std::string WeldRobotPath::ToString(std::string_view script, const std::function
     lua_setglobal(L.get(), "points");
 
     // Execute script
-    int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "WeldRobotPathScript");
+    int const loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "WeldRobotPathScript");
     if (loadStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
         throw RuntimeError(std::format("-- Lua load error: {}", err));
     }
-    int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
+    int const callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
     if (callStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
         throw RuntimeError(std::format("-- Lua runtime error: {}", err));
     }
 
-    int nret = lua_gettop(L.get());
+    int const nret = lua_gettop(L.get());
     std::string body;
     if (nret > 0 && lua_isstring(L.get(), -1))
     {
@@ -252,7 +256,7 @@ std::string WeldRobotPath::GenerateWeldAbbCode() const
         else if (wpt.isWelding && arcActive)
         {
             // Check if this is the last welding point or next is non-welding
-            bool nextIsWeld = (i + 1 < weldPoints_.size()) && weldPoints_[i + 1].isWelding;
+            bool const nextIsWeld = (i + 1 < weldPoints_.size()) && weldPoints_[i + 1].isWelding;
             if (!nextIsWeld)
             {
                 // Arc end
@@ -339,7 +343,7 @@ std::string WeldRobotPath::GenerateWeldKukaCode() const
         }
         else if (wpt.isWelding && arcActive)
         {
-            bool nextIsWeld = (i + 1 < weldPoints_.size()) && weldPoints_[i + 1].isWelding;
+            bool const nextIsWeld = (i + 1 < weldPoints_.size()) && weldPoints_[i + 1].isWelding;
             if (!nextIsWeld)
             {
                 // Arc end
@@ -437,7 +441,7 @@ std::string WeldRobotPath::GenerateWeldFanucCode() const
         }
         else if (wpt.isWelding && arcActive)
         {
-            bool nextIsWeld = (i + 1 < weldPoints_.size()) && weldPoints_[i + 1].isWelding;
+            bool const nextIsWeld = (i + 1 < weldPoints_.size()) && weldPoints_[i + 1].isWelding;
             if (!nextIsWeld)
             {
                 // Arc end

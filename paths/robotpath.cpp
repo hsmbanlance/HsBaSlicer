@@ -12,6 +12,7 @@
 
 #include "utils/LuaNewObject.hpp"
 #include <lua.hpp>
+#include <utility>
 
 #include "base/error.hpp"
 
@@ -57,8 +58,8 @@ const char* RLPointTypeToString(RLPointType t)
 namespace HsBa::Slicer
 {
 RobotPath::RobotPath(RLType robotType, OutPoints3 startPoint, std::string startProgramFunc, std::string endProgramFunc)
-    : robotType_{robotType}, points_{}, startPoint_{startPoint}, startProgramFunc_{startProgramFunc},
-      endProgramFunc_{endProgramFunc}
+    : robotType_{robotType}, startPoint_{startPoint}, startProgramFunc_{std::move(startProgramFunc)},
+      endProgramFunc_{std::move(endProgramFunc)}
 {
 }
 
@@ -119,10 +120,14 @@ std::string RobotPath::ToString(std::string_view script, const std::function<voi
 
     auto L = MakeUniqueLuaState();
     if (!L)
+    {
         throw RuntimeError("Lua init failed");
+    }
     luaL_openlibs(L.get());
     if (lua_reg)
+    {
         lua_reg(L.get());
+    }
 
     // push header
     lua_pushstring(L.get(), header.c_str());
@@ -180,14 +185,14 @@ std::string RobotPath::ToString(std::string_view script, const std::function<voi
     lua_setglobal(L.get(), "startPoint");
 
     // execute script
-    int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "RobotPathScript");
+    int const loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "RobotPathScript");
     if (loadStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
         throw RuntimeError(std::format("-- Lua load error: {}", err));
     }
 
-    int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
+    int const callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
     if (callStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
@@ -195,7 +200,7 @@ std::string RobotPath::ToString(std::string_view script, const std::function<voi
     }
 
     // if returned a string, take it
-    int nret = lua_gettop(L.get());
+    int const nret = lua_gettop(L.get());
     std::string body;
     if (nret > 0 && lua_isstring(L.get(), -1))
     {
@@ -234,9 +239,8 @@ std::string RobotPath::GenerateAbbCode() const
        << startPoint_.z << ",0.0,0.0,0.0]"
        << " ,v100 ,z10 ,tooldata1\\Wobj=workjob1; !Start Point\n";
     // points
-    for (size_t i = 0; i < points_.size(); ++i)
+    for (const auto& pt : points_)
     {
-        auto& pt = points_[i];
         if (pt.type == RLPointType::ProgramLStart || pt.type == RLPointType::ProgramStart ||
             pt.type == RLPointType::ProgramCStart)
         {
@@ -308,9 +312,8 @@ std::string RobotPath::GenerateKukaCode() const
     ss << "DEF main()\n";
     ss << "  ; start P[0]\n";
     ss << "  P[0]:=\"Start\"\n";
-    for (size_t i = 0; i < points_.size(); ++i)
+    for (const auto& pt : points_)
     {
-        auto& pt = points_[i];
         ss << "  ; " << RLPointTypeToString(pt.type) << " to (" << pt.end.x << "," << pt.end.y << "," << pt.end.z
            << ")\n";
         if (pt.type == RLPointType::ProgramLStart || pt.type == RLPointType::ProgramStart ||
@@ -359,7 +362,7 @@ std::string RobotPath::GenerateFanucCode() const
     ss << "PR[1]=\"Start\"\n";
     for (size_t i = 0; i < points_.size(); ++i)
     {
-        auto& pt = points_[i];
+        const auto& pt = points_[i];
         ss << "  ! " << RLPointTypeToString(pt.type) << " to (" << pt.end.x << "," << pt.end.y << "," << pt.end.z
            << ")\n";
         if (pt.type == RLPointType::ProgramLStart || pt.type == RLPointType::ProgramStart ||
@@ -405,12 +408,16 @@ std::string RobotPath::ToString(std::string_view script, std::string_view funcNa
 {
     auto L = MakeUniqueLuaState();
     if (!L)
+    {
         throw RuntimeError("Lua init failed");
+    }
     luaL_openlibs(L.get());
     if (lua_reg)
+    {
         lua_reg(L.get());
+    }
     // push function name
-    lua_pushstring(L.get(), funcName.data());
+    lua_pushlstring(L.get(), funcName.data(), funcName.size());
     lua_setglobal(L.get(), "funcName");
     // push points
     lua_newtable(L.get());
@@ -447,20 +454,20 @@ std::string RobotPath::ToString(std::string_view script, std::string_view funcNa
     }
     lua_setglobal(L.get(), "points");
     // execute script
-    int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "RobotPathScriptWithFunc");
+    int const loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "RobotPathScriptWithFunc");
     if (loadStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
         throw RuntimeError(std::format("-- Lua load error: {}", err));
     }
-    int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
+    int const callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
     if (callStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
         throw RuntimeError(std::format("-- Lua runtime error: {}", err));
     }
     // if returned a string, take it
-    int nret = lua_gettop(L.get());
+    int const nret = lua_gettop(L.get());
     std::string result;
     if (nret > 0 && lua_isstring(L.get(), -1))
     {
@@ -488,9 +495,11 @@ std::string RobotPath::ToString(std::string_view script, std::string_view funcNa
 std::string RobotPath::ToString(const std::filesystem::path& script_file, const std::string_view funcName,
                                 const std::function<void(lua_State*)>& lua_reg) const
 {
-    std::ifstream ifs(script_file, std::ios::binary);
+    std::ifstream const ifs(script_file, std::ios::binary);
     if (!ifs)
+    {
         throw RuntimeError("Failed to open Lua script file: " + script_file.string());
+    }
     std::stringstream buffer;
     buffer << ifs.rdbuf();
     auto script = buffer.str();

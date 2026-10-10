@@ -27,13 +27,13 @@ namespace
 // ---------------------------------------------------------------------------
 // Low-level Lua table helpers
 // ---------------------------------------------------------------------------
-static void set_number(lua_State* L, const char* key, lua_Number v)
+void set_number(lua_State* L, const char* key, lua_Number v)
 {
     lua_pushnumber(L, v);
     lua_setfield(L, -2, key);
 }
 
-static void set_int(lua_State* L, const char* key, long long v)
+void set_int(lua_State* L, const char* key, long long v)
 {
     lua_pushinteger(L, static_cast<lua_Integer>(v));
     lua_setfield(L, -2, key);
@@ -41,7 +41,7 @@ static void set_int(lua_State* L, const char* key, long long v)
 
 // Reads coordinate @p i (0 based) from table at @p idx, preferring the named key
 // (@p key) and falling back to the sequence element at index i + 1.
-static lua_Number read_component(lua_State* L, int idx, int i, const char* key)
+lua_Number read_component(lua_State* L, int idx, int i, const char* key)
 {
     lua_Number value = 0;
     lua_getfield(L, idx, key);
@@ -53,7 +53,9 @@ static lua_Number read_component(lua_State* L, int idx, int i, const char* key)
     {
         lua_rawgeti(L, idx, i + 1);
         if (lua_isnumber(L, -1) || lua_isinteger(L, -1))
+        {
             value = lua_tonumber(L, -1);
+        }
         lua_pop(L, 1);
     }
     lua_pop(L, 1);
@@ -61,12 +63,14 @@ static lua_Number read_component(lua_State* L, int idx, int i, const char* key)
 }
 
 // Reads the sequence element at 1-based @p i from the table currently on top of the stack.
-static lua_Number read_element(lua_State* L, int tbl_idx, int i)
+lua_Number read_element(lua_State* L, int tbl_idx, int i)
 {
     lua_rawgeti(L, tbl_idx, i);
     lua_Number value = 0;
     if (lua_isnumber(L, -1) || lua_isinteger(L, -1))
+    {
         value = lua_tonumber(L, -1);
+    }
     lua_pop(L, 1);
     return value;
 }
@@ -75,26 +79,32 @@ static lua_Number read_element(lua_State* L, int tbl_idx, int i)
 // Eigen fixed vectors and quaternions: named coordinate maps {x, y, (z), (w)}
 // ---------------------------------------------------------------------------
 template <typename V>
-static void push_named_vector(lua_State* L, const V& v)
+void push_named_vector(lua_State* L, const V& v)
 {
     static constexpr const char* keys[] = {"x", "y", "z", "w"};
     lua_createtable(L, 0, V::SizeAtCompileTime);
-    for (int i = 0; i < V::SizeAtCompileTime && i < 4; ++i)
+    int const count = V::SizeAtCompileTime < 4 ? V::SizeAtCompileTime : 4;
+    for (int i = 0; i < count; ++i)
+    {
         set_number(L, keys[i], static_cast<lua_Number>(v(i)));
+    }
 }
 
 template <typename V>
-static V read_named_vector(lua_State* L, int idx)
+V read_named_vector(lua_State* L, int idx)
 {
     static constexpr const char* keys[] = {"x", "y", "z", "w"};
     V v = V::Zero();
-    for (int i = 0; i < V::SizeAtCompileTime && i < 4; ++i)
-        v(i) = static_cast<typename V::Scalar>(read_component(L, idx, i, keys[i]));
+    int const count = V::SizeAtCompileTime < 4 ? V::SizeAtCompileTime : 4;
+    for (int i = 0; i < count; ++i)
+    {
+        v(i) = static_cast<V::Scalar>(read_component(L, idx, i, keys[i]));
+    }
     return v;
 }
 
 template <typename Q>
-static void push_quaternion(lua_State* L, const Q& q)
+void push_quaternion(lua_State* L, const Q& q)
 {
     lua_createtable(L, 0, 4);
     set_number(L, "x", static_cast<lua_Number>(q.x()));
@@ -104,9 +114,9 @@ static void push_quaternion(lua_State* L, const Q& q)
 }
 
 template <typename Q>
-static Q read_quaternion(lua_State* L, int idx)
+Q read_quaternion(lua_State* L, int idx)
 {
-    using S = typename Q::Scalar;
+    using S = Q::Scalar;
     const auto x = static_cast<S>(read_component(L, idx, 0, "x"));
     const auto y = static_cast<S>(read_component(L, idx, 1, "y"));
     const auto z = static_cast<S>(read_component(L, idx, 2, "z"));
@@ -118,18 +128,22 @@ static Q read_quaternion(lua_State* L, int idx)
 // Eigen matrices (fixed & dynamic): nested row sequences
 // ---------------------------------------------------------------------------
 template <typename M>
-static M make_matrix(int rows, int cols)
+M make_matrix(int rows, int cols)
 {
     if constexpr (M::RowsAtCompileTime == Eigen::Dynamic || M::ColsAtCompileTime == Eigen::Dynamic)
+    {
         return M(rows, cols);
+    }
     else
+    {
         return M::Zero();
+    }
 }
 
 template <typename M>
-static void push_matrix(lua_State* L, const M& m)
+void push_matrix(lua_State* L, const M& m)
 {
-    using S = typename M::Scalar;
+    using S = M::Scalar;
     const int rows = static_cast<int>(m.rows());
     const int cols = static_cast<int>(m.cols());
     lua_createtable(L, rows, 0);
@@ -139,9 +153,13 @@ static void push_matrix(lua_State* L, const M& m)
         for (int c = 0; c < cols; ++c)
         {
             if constexpr (std::is_integral_v<S>)
+            {
                 lua_pushinteger(L, static_cast<lua_Integer>(m(r, c)));
+            }
             else
+            {
                 lua_pushnumber(L, static_cast<lua_Number>(m(r, c)));
+            }
             lua_rawseti(L, -2, c + 1);
         }
         lua_rawseti(L, -2, r + 1);
@@ -149,7 +167,7 @@ static void push_matrix(lua_State* L, const M& m)
 }
 
 template <typename M>
-static M read_matrix(lua_State* L, int idx)
+M read_matrix(lua_State* L, int idx)
 {
     const int rows = static_cast<int>(lua_rawlen(L, idx));
     int cols = 0;
@@ -157,7 +175,9 @@ static M read_matrix(lua_State* L, int idx)
     {
         lua_rawgeti(L, idx, 1);
         if (lua_istable(L, -1))
+        {
             cols = static_cast<int>(lua_rawlen(L, -1));
+        }
         lua_pop(L, 1);
     }
 
@@ -170,7 +190,9 @@ static M read_matrix(lua_State* L, int idx)
         if (lua_istable(L, -1))
         {
             for (int c = 0; c < cmax; ++c)
-                m(r, c) = static_cast<typename M::Scalar>(read_element(L, -1, c + 1));
+            {
+                m(r, c) = static_cast<M::Scalar>(read_element(L, -1, c + 1));
+            }
         }
         lua_pop(L, 1);
     }
@@ -180,33 +202,33 @@ static M read_matrix(lua_State* L, int idx)
 // ---------------------------------------------------------------------------
 // Clipper2 point / polygon conversions
 // ---------------------------------------------------------------------------
-static void push_point2d(lua_State* L, const Point2D& p)
+void push_point2d(lua_State* L, const Point2D& p)
 {
     lua_createtable(L, 0, 2);
     set_number(L, "x", static_cast<lua_Number>(p.x));
     set_number(L, "y", static_cast<lua_Number>(p.y));
 }
 
-static Point2D read_point2d(lua_State* L, int idx)
+Point2D read_point2d(lua_State* L, int idx)
 {
     return Point2D(static_cast<double>(read_component(L, idx, 0, "x")),
                    static_cast<double>(read_component(L, idx, 1, "y")));
 }
 
-static void push_point2(lua_State* L, const Point2& p)
+void push_point2(lua_State* L, const Point2& p)
 {
     lua_createtable(L, 0, 2);
     set_int(L, "x", static_cast<long long>(p.x));
     set_int(L, "y", static_cast<long long>(p.y));
 }
 
-static Point2 read_point2(lua_State* L, int idx)
+Point2 read_point2(lua_State* L, int idx)
 {
     return Point2(static_cast<int64_t>(std::llround(read_component(L, idx, 0, "x"))),
                   static_cast<int64_t>(std::llround(read_component(L, idx, 1, "y"))));
 }
 
-static void push_polygon_d(lua_State* L, const PolygonD& poly)
+void push_polygon_d(lua_State* L, const PolygonD& poly)
 {
     lua_createtable(L, static_cast<int>(poly.size()), 0);
     int i = 1;
@@ -217,7 +239,7 @@ static void push_polygon_d(lua_State* L, const PolygonD& poly)
     }
 }
 
-static PolygonD read_polygon_d(lua_State* L, int idx)
+PolygonD read_polygon_d(lua_State* L, int idx)
 {
     PolygonD poly;
     const int n = static_cast<int>(lua_rawlen(L, idx));
@@ -225,13 +247,15 @@ static PolygonD read_polygon_d(lua_State* L, int idx)
     {
         lua_rawgeti(L, idx, i);
         if (lua_istable(L, -1))
+        {
             poly.push_back(read_point2d(L, -1));
+        }
         lua_pop(L, 1);
     }
     return poly;
 }
 
-static void push_polygons_d(lua_State* L, const PolygonsD& polys)
+void push_polygons_d(lua_State* L, const PolygonsD& polys)
 {
     lua_createtable(L, static_cast<int>(polys.size()), 0);
     int i = 1;
@@ -242,7 +266,7 @@ static void push_polygons_d(lua_State* L, const PolygonsD& polys)
     }
 }
 
-static PolygonsD read_polygons_d(lua_State* L, int idx)
+PolygonsD read_polygons_d(lua_State* L, int idx)
 {
     PolygonsD polys;
     const int n = static_cast<int>(lua_rawlen(L, idx));
@@ -250,13 +274,15 @@ static PolygonsD read_polygons_d(lua_State* L, int idx)
     {
         lua_rawgeti(L, idx, i);
         if (lua_istable(L, -1))
+        {
             polys.push_back(read_polygon_d(L, -1));
+        }
         lua_pop(L, 1);
     }
     return polys;
 }
 
-static void push_polygon(lua_State* L, const Polygon& poly)
+void push_polygon(lua_State* L, const Polygon& poly)
 {
     lua_createtable(L, static_cast<int>(poly.size()), 0);
     int i = 1;
@@ -267,7 +293,7 @@ static void push_polygon(lua_State* L, const Polygon& poly)
     }
 }
 
-static Polygon read_polygon(lua_State* L, int idx)
+Polygon read_polygon(lua_State* L, int idx)
 {
     Polygon poly;
     const int n = static_cast<int>(lua_rawlen(L, idx));
@@ -275,13 +301,15 @@ static Polygon read_polygon(lua_State* L, int idx)
     {
         lua_rawgeti(L, idx, i);
         if (lua_istable(L, -1))
+        {
             poly.push_back(read_point2(L, -1));
+        }
         lua_pop(L, 1);
     }
     return poly;
 }
 
-static void push_polygons(lua_State* L, const Polygons& polys)
+void push_polygons(lua_State* L, const Polygons& polys)
 {
     lua_createtable(L, static_cast<int>(polys.size()), 0);
     int i = 1;
@@ -292,7 +320,7 @@ static void push_polygons(lua_State* L, const Polygons& polys)
     }
 }
 
-static Polygons read_polygons(lua_State* L, int idx)
+Polygons read_polygons(lua_State* L, int idx)
 {
     Polygons polys;
     const int n = static_cast<int>(lua_rawlen(L, idx));
@@ -300,7 +328,9 @@ static Polygons read_polygons(lua_State* L, int idx)
     {
         lua_rawgeti(L, idx, i);
         if (lua_istable(L, -1))
+        {
             polys.push_back(read_polygon(L, -1));
+        }
         lua_pop(L, 1);
     }
     return polys;
@@ -313,8 +343,14 @@ template <typename T, Utils::TemplateString Name, void (*Push)(lua_State*, const
 class TableAdapter final : public LuaAnyObjectNewCastBase
 {
 public:
-    LuaFuncPair GetNewFuncPair() const override { return {"new_" + std::string(Name.ToStringView()), &New}; }
-    LuaFuncPair GetCastFuncPair() const override { return {"cast_" + std::string(Name.ToStringView()), &Cast}; }
+    LuaFuncPair GetNewFuncPair() const override
+    {
+        return {.name = "new_" + std::string(Name.ToStringView()), .func = &New};
+    }
+    LuaFuncPair GetCastFuncPair() const override
+    {
+        return {.name = "cast_" + std::string(Name.ToStringView()), .func = &Cast};
+    }
 
 private:
     static int New(lua_State* L)
@@ -481,8 +517,9 @@ void InstallCommonAnyObjectTypes()
     std::call_once(once,
                    []
                    {
-                       // Complete PipelineConfig reflection registration at pipeline start (idempotent via an internal call_once),
-                       // so ParamStore and any stage consuming GetFileFunctions() can traverse the fields immediately.
+                       // Complete PipelineConfig reflection registration at pipeline start (idempotent via an internal
+                       // call_once), so ParamStore and any stage consuming GetFileFunctions() can traverse the fields
+                       // immediately.
                        RegisterPipelineConfigTypes();
                        // One LuaRegFunc per generic pool; the per-state guard above keeps stages that
                        // consume several pools from registering the same Lua state twice.

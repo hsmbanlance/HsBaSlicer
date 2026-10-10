@@ -114,10 +114,7 @@ Clipper2Lib::PointInPolygonResult PointInPolygons(const Clipper2Lib::Point64& po
         clipper.Execute(Clipper2Lib::ClipType::Union, Clipper2Lib::FillRule::EvenOdd, odd_polys);
         return even_odd_inside(point, odd_polys);
     }
-    else
-    {
-        return even_odd_inside(point, polys);
-    }
+    return even_odd_inside(point, polys);
 }
 
 double Area(const Polygon& p)
@@ -139,7 +136,9 @@ std::string MakeSvgPathData(const std::vector<PointT>& poly, bool close_path, do
     std::ostringstream out;
     out << std::fixed << std::setprecision(6);
     if (poly.empty())
+    {
         return {};
+    }
     out << "M " << (static_cast<double>(poly.front().x) / scale) << ' '
         << (static_cast<double>(poly.front().y) / scale);
     for (size_t i = 1; i < poly.size(); ++i)
@@ -147,7 +146,9 @@ std::string MakeSvgPathData(const std::vector<PointT>& poly, bool close_path, do
         out << " L " << (static_cast<double>(poly[i].x) / scale) << ' ' << (static_cast<double>(poly[i].y) / scale);
     }
     if (close_path)
+    {
         out << " Z";
+    }
     return out.str();
 }
 
@@ -158,8 +159,10 @@ void DumpSvgPaths(const std::vector<std::vector<PointT>>& polys, std::ofstream& 
     {
         auto data = MakeSvgPathData(poly, close_path, scale);
         if (data.empty())
+        {
             continue;
-        file << "  <path d=\"" << data << "\" fill=\"none\" stroke=\"#000\" stroke-width=0.5";
+        }
+        file << R"(  <path d=")" << data << R"(" fill="none" stroke="#000" stroke-width=0.5)";
         file << " fill-rule=\"evenodd\" />\n";
     }
 }
@@ -170,7 +173,9 @@ void WriteSvgFile(std::string_view filename, const std::vector<std::vector<Point
 {
     std::ofstream file(std::string(filename), std::ios::binary);
     if (!file)
+    {
         return;
+    }
 
     double min_x = 0;
     double min_y = 0;
@@ -181,8 +186,8 @@ void WriteSvgFile(std::string_view filename, const std::vector<std::vector<Point
     {
         for (const auto& point : poly)
         {
-            double x = static_cast<double>(point.x) / scale;
-            double y = static_cast<double>(point.y) / scale;
+            const double x = static_cast<double>(point.x) / scale;
+            const double y = static_cast<double>(point.y) / scale;
             if (first)
             {
                 min_x = max_x = x;
@@ -203,14 +208,14 @@ void WriteSvgFile(std::string_view filename, const std::vector<std::vector<Point
         min_x = min_y = 0.0;
         max_x = max_y = 1.0;
     }
-    double width = std::max(1e-6, max_x - min_x);
-    double height = std::max(1e-6, max_y - min_y);
+    const double width = std::max(1e-6, max_x - min_x);
+    const double height = std::max(1e-6, max_y - min_y);
 
     file << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
     file << "<!-- HsBaSlicer polygon dump -->\n";
     file << "<!-- " << type_comment << " / integerization=" << integerization << " / scale=1/" << integerization
          << " -->\n";
-    file << "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"" << min_x << " " << min_y << " " << width << " "
+    file << R"(<svg xmlns="http://www.w3.org/2000/svg" viewBox=")" << min_x << " " << min_y << " " << width << " "
          << height << "\" preserveAspectRatio=\"xMinYMin meet\">\n";
     DumpSvgPaths(polys, file, close_path, scale);
     file << "</svg>\n";
@@ -237,7 +242,9 @@ void ExtractPolygonsFromPolyTree(const Clipper2Lib::PolyTree64& node, std::vecto
     if (node.Polygon().empty())
     {
         for (const auto& child : node)
+        {
             ExtractPolygonsFromPolyTree(*child, out);
+        }
         return;
     }
 
@@ -245,13 +252,19 @@ void ExtractPolygonsFromPolyTree(const Clipper2Lib::PolyTree64& node, std::vecto
     current.emplace_back(node.Polygon());
 
     for (const auto& hole : node)
+    {
         current.emplace_back(hole->Polygon());
+    }
 
     out.emplace_back(std::move(current));
 
     for (const auto& hole : node)
+    {
         for (const auto& island : *hole)
+        {
             ExtractPolygonsFromPolyTree(*island, out);
+        }
+    }
 }
 
 std::vector<Polygons> PolyTreeSplit(const Clipper2Lib::PolyTree64& tree)
@@ -268,7 +281,6 @@ std::vector<Polygons> MakeSimpleAndSplit(const Polygon& p, double epsilon)
     Clipper2Lib::Clipper64 clipper;
     clipper.AddSubject(Polygons{p});
     clipper.Execute(Clipper2Lib::ClipType::Union, Clipper2Lib::FillRule::EvenOdd, polyTree);
-    std::vector<Polygons> result;
     auto res = PolyTreeSplit(polyTree);
     for (auto& ps : res)
     {
@@ -290,7 +302,9 @@ struct ContourNode
 bool PointInPolygon(const Polygon& poly, const Point2& pt)
 {
     if (poly.size() < 3)
+    {
         return false;
+    }
 
     bool inside = false;
     for (size_t i = 0, j = poly.size() - 1; i < poly.size(); j = i++)
@@ -298,9 +312,11 @@ bool PointInPolygon(const Polygon& poly, const Point2& pt)
         const auto& a = poly[i];
         const auto& b = poly[j];
         const bool intersect =
-            ((a.y > pt.y) != (b.y > pt.y)) && (pt.x < (b.x - a.x) * (pt.y - a.y) / (b.y - a.y) + a.x);
+            ((a.y > pt.y) != (b.y > pt.y)) && (pt.x < ((b.x - a.x) * (pt.y - a.y) / (b.y - a.y)) + a.x);
         if (intersect)
+        {
             inside = !inside;
+        }
     }
     return inside;
 }
@@ -308,21 +324,29 @@ bool PointInPolygon(const Polygon& poly, const Point2& pt)
 bool ContainsPolygon(const Polygon& outer, const Polygon& inner)
 {
     if (outer.size() < 3 || inner.size() < 3)
+    {
         return false;
+    }
     return PointInPolygon(outer, inner.front());
 }
 
 void NormalizeOrientation(Polygon& poly)
 {
     if (poly.size() < 3)
+    {
         return;
+    }
 
     const double area = Area(poly);
     if (std::abs(area) < 1e-6)
+    {
         return;
+    }
 
     if (area < 0.0)
-        std::reverse(poly.begin(), poly.end());
+    {
+        std::ranges::reverse(poly);
+    }
 }
 }  // namespace
 
@@ -355,7 +379,7 @@ std::vector<Polygon> NormalizeToSimplePolygons(const Polygon& p, double epsilon)
                 continue;
             }
 
-            nodes.push_back({std::move(normalized), false, -1, {}});
+            nodes.push_back(ContourNode{.path = std::move(normalized)});
         }
     }
 
@@ -368,11 +392,15 @@ std::vector<Polygon> NormalizeToSimplePolygons(const Polygon& p, double epsilon)
         for (size_t j = 0; j < nodes.size(); ++j)
         {
             if (i == j)
+            {
                 continue;
+            }
             if (!ContainsPolygon(nodes[j].path, nodes[i].path))
+            {
                 continue;
+            }
 
-            double area_j = std::abs(Area(nodes[j].path));
+            const double area_j = std::abs(Area(nodes[j].path));
             if (area_j < best_area)
             {
                 best_area = area_j;
@@ -391,10 +419,12 @@ std::vector<Polygon> NormalizeToSimplePolygons(const Polygon& p, double epsilon)
     for (size_t i = 0; i < nodes.size(); ++i)
     {
         if (nodes[i].parent != -1)
+        {
             continue;
+        }
 
         result.push_back(nodes[i].path);
-        for (int child : nodes[i].children)
+        for (const int child : nodes[i].children)
         {
             result.push_back(nodes[child].path);
         }
@@ -432,7 +462,7 @@ std::size_t std::hash<HsBa::Slicer::Polygons>::operator()(const HsBa::Slicer::Po
     size_t seed = 0;
     for (const auto& poly : p)
     {
-        std::hash<HsBa::Slicer::Polygon> hasher;
+        const std::hash<HsBa::Slicer::Polygon> hasher;
         boost::hash_combine(seed, hasher(poly));
     }
     return seed;

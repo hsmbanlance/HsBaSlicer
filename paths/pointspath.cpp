@@ -53,7 +53,7 @@ inline const char* GcodeTypeToString(HsBa::Slicer::GcodeType t)
 }
 }  // namespace
 
-PointsPath::PointsPath(GCodeUnits units, OutPoints3 p) : units_{units}, startPoint_{p}, points_{}
+PointsPath::PointsPath(GCodeUnits units, OutPoints3 p) : units_{units}, startPoint_{p}
 {
 }
 
@@ -69,9 +69,13 @@ std::string PointsPath::ToString() const
     ss << std::fixed << std::setprecision(4);
     // Units header
     if (units_ == GCodeUnits::mm)
+    {
         ss << "G21 ; units mm\n";
+    }
     else
+    {
         ss << "G20 ; units inch\n";
+    }
     // Start absolute positioning
     ss << "G90\n";
     // start point move
@@ -81,26 +85,30 @@ std::string PointsPath::ToString() const
     {
         if (pt.type == GcodeType::G0 || pt.type == GcodeType::G1)
         {
-            auto code = GcodeTypeToString(pt.type);
+            const auto* code = GcodeTypeToString(pt.type);
             ss << code;
             // For linear moves include XYZ, feed and extrusion
             ss << " ";
             ss << "X" << pt.p1.x << " Y" << pt.p1.y << " Z" << pt.p1.z;
-            if (pt.velocity > 0.0f)
+            if (pt.velocity > 0.0F)
+            {
                 ss << " F" << pt.velocity;
+            }
             ss << " E" << std::setprecision(6) << pt.extrusion << std::setprecision(4);
             ss << "\n";
         }
         else if (pt.type == GcodeType::G2 || pt.type == GcodeType::G3)
         {
-            auto code = GcodeTypeToString(pt.type);
+            const auto* code = GcodeTypeToString(pt.type);
             ss << code;
             // For arc moves include XYZ, IJK, feed and extrusion
             ss << " ";
             ss << "X" << pt.p1.x << " Y" << pt.p1.y << " Z" << pt.p1.z;
             ss << " I" << pt.center.x << " J" << pt.center.y << " K" << pt.center.z;
-            if (pt.velocity > 0.0f)
+            if (pt.velocity > 0.0F)
+            {
                 ss << " F" << pt.velocity;
+            }
             ss << " E" << std::setprecision(6) << pt.extrusion << std::setprecision(4);
             ss << "\n";
         }
@@ -118,10 +126,14 @@ std::string PointsPath::ToString(std::string_view script, const std::function<vo
     std::string result;
     auto L = MakeUniqueLuaState();
     if (!L)
+    {
         throw RuntimeError("Lua init failed");
+    }
     luaL_openlibs(L.get());
     if (lua_reg)
+    {
         lua_reg(L.get());
+    }
 
     // push points table
     lua_newtable(L.get());  // points table at -1
@@ -177,14 +189,14 @@ std::string PointsPath::ToString(std::string_view script, const std::function<vo
     lua_setglobal(L.get(), "units");
 
     // load and run script
-    int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "PointsPathScript");
+    int const loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "PointsPathScript");
     if (loadStatus != LUA_OK)
     {
         result = std::string("Lua load error: ") + lua_tostring(L.get(), -1);
         return result;
     }
 
-    int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
+    int const callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
     if (callStatus != LUA_OK)
     {
         result = std::string("Lua runtime error: ") + lua_tostring(L.get(), -1);
@@ -192,7 +204,7 @@ std::string PointsPath::ToString(std::string_view script, const std::function<vo
     }
 
     // If the chunk returned a string, take the top of stack
-    int nret = lua_gettop(L.get());
+    int const nret = lua_gettop(L.get());
     if (nret > 0 && lua_isstring(L.get(), -1))
     {
         size_t len = 0;
@@ -232,15 +244,19 @@ void PointsPath::Save(const std::filesystem::path& p, std::string_view script,
     ofs << txt;
 }
 
-std::string PointsPath::ToString(std::string_view script, std::string_view funcName,
+std::string PointsPath::ToString(std::string_view /*script*/, std::string_view funcName,
                                  const std::function<void(lua_State*)>& lua_reg) const
 {
     auto L = MakeUniqueLuaState();
     if (!L)
+    {
         throw RuntimeError("Lua init failed");
+    }
     luaL_openlibs(L.get());
     if (lua_reg)
+    {
         lua_reg(L.get());
+    }
     // push points as global
     lua_newtable(L.get());
     int idx = 1;
@@ -292,12 +308,13 @@ std::string PointsPath::ToString(std::string_view script, std::string_view funcN
     lua_pushstring(L.get(), units_ == GCodeUnits::mm ? "mm" : "inch");
     lua_setglobal(L.get(), "units");
     // call function
-    lua_getglobal(L.get(), funcName.data());
+    std::string const func_name_str{funcName};
+    lua_getglobal(L.get(), func_name_str.c_str());
     if (!lua_isfunction(L.get(), -1))
     {
         throw RuntimeError("Lua function '" + std::string(funcName) + "' not found");
     }
-    int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
+    int const callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
     if (callStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
@@ -305,7 +322,7 @@ std::string PointsPath::ToString(std::string_view script, std::string_view funcN
     }
     std::string result;
     // If the function returned a string, take the top of stack
-    int nret = lua_gettop(L.get());
+    int const nret = lua_gettop(L.get());
     if (nret > 0 && lua_isstring(L.get(), -1))
     {
         size_t len = 0;
@@ -339,9 +356,11 @@ void PointsPath::Save(const std::filesystem::path& path, std::string_view script
 std::string PointsPath::ToString(const std::filesystem::path& script_file, const std::string_view funcName,
                                  const std::function<void(lua_State*)>& lua_reg) const
 {
-    std::ifstream ifs(script_file, std::ios::binary);
+    std::ifstream const ifs(script_file, std::ios::binary);
     if (!ifs)
+    {
         throw RuntimeError("Failed to open Lua script file: " + script_file.string());
+    }
     std::stringstream buffer;
     buffer << ifs.rdbuf();
     auto script = buffer.str();

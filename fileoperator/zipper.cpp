@@ -49,7 +49,7 @@ Zipper::Zipper(MinizCompression compression)
  */
 void Zipper::AddByteFile(std::string_view name, const std::string& data)
 {
-    std::string ansi_name = utf8_to_local(std::string{name});
+    std::string const ansi_name = utf8_to_local(std::string{name});
     auto [add, add_res] = byteFilesWaitCompress_.emplace(ansi_name, Bytes{data});
     if (!add_res)
     {
@@ -64,7 +64,7 @@ void Zipper::AddByteFile(std::string_view name, const std::string& data)
  */
 void Zipper::AddFile(std::string_view name, std::string_view path)
 {
-    std::string ansi_name = utf8_to_local(std::string{name});
+    std::string const ansi_name = utf8_to_local(std::string{name});
     auto [add, add_res] = byteFilesWaitCompress_.emplace(ansi_name, std::string(path));
     if (!add_res)
     {
@@ -79,8 +79,8 @@ void Zipper::AddFile(std::string_view name, std::string_view path)
  */
 void Zipper::AddByteFileIgnoreDuplicate(std::string_view name, const std::string& data)
 {
-    std::string ansi_name = utf8_to_local(std::string{name});
-    if (byteFilesWaitCompress_.count(std::string{ansi_name}))
+    std::string const ansi_name = utf8_to_local(std::string{name});
+    if (static_cast<unsigned int>(byteFilesWaitCompress_.contains(std::string{ansi_name})) != 0U)
     {
         byteFilesWaitCompress_.emplace((std::string(ansi_name) + duplicate_addition), Bytes{data});
     }
@@ -96,8 +96,8 @@ void Zipper::AddByteFileIgnoreDuplicate(std::string_view name, const std::string
  */
 void Zipper::AddFileIgnoreDuplicate(std::string_view name, std::string_view path)
 {
-    std::string ansi_name = utf8_to_local(std::string{name});
-    if (byteFilesWaitCompress_.count(std::string{ansi_name}))
+    std::string const ansi_name = utf8_to_local(std::string{name});
+    if (static_cast<unsigned int>(byteFilesWaitCompress_.contains(std::string{ansi_name})) != 0U)
     {
         byteFilesWaitCompress_.emplace((std::string(ansi_name) + duplicate_addition), std::string(path));
     }
@@ -117,9 +117,9 @@ void Zipper::Save(std::string_view filePath)
     path = utf8_to_local(path);
     mz_zip_archive archiver{};
     mz_zip_zero_struct(&archiver);
-    mz_bool status = mz_zip_writer_init_file(&archiver, path.c_str(), 0);
-    mz_bool add_files_status = AddAllToZip(archiver);
-    status = mz_zip_writer_finalize_archive(&archiver);
+    (void)mz_zip_writer_init_file(&archiver, path.c_str(), 0);
+    mz_bool const add_files_status = AddAllToZip(archiver);
+    mz_bool const status = mz_zip_writer_finalize_archive(&archiver);
     if (status <= MZ_OK && add_files_status <= MZ_OK)
     {
         mz_zip_writer_end(&archiver);
@@ -137,7 +137,7 @@ void Zipper::Save(std::string_view filePath)
 mz_bool Zipper::AddAllToZip(mz_zip_archive& archiver)
 {
     mz_bool status = MZ_OK;
-    size_t fileCount = byteFilesWaitCompress_.size();
+    size_t const fileCount = byteFilesWaitCompress_.size();
     size_t currentFileIndex = 0;
     for (const auto& [name, bytes] : byteFilesWaitCompress_)
     {
@@ -151,7 +151,7 @@ mz_bool Zipper::AddAllToZip(mz_zip_archive& archiver)
             return status;
         }
         ++currentFileIndex;
-        double progress = static_cast<double>(currentFileIndex) / fileCount;
+        double const progress = static_cast<double>(currentFileIndex) / static_cast<double>(fileCount);
         RaiseEvent(progress, name);
     }
     return status;
@@ -162,7 +162,7 @@ mz_bool Zipper::AddAllToZip(mz_zip_archive& archiver)
  */
 mz_bool Zipper::ZipAddFile(mz_zip_archive& archiver, const std::string& name, const std::string& path) const
 {
-    return mz_zip_writer_add_file(&archiver, name.c_str(), path.c_str(), NULL, 0, compression_);
+    return mz_zip_writer_add_file(&archiver, name.c_str(), path.c_str(), nullptr, 0, compression_);
 }
 
 /**
@@ -183,16 +183,17 @@ void MiniZExtractFile(std::string_view archive_path, std::string_view output_pat
 {
     mz_zip_archive archiver{};
     mz_zip_zero_struct(&archiver);
-    if (!mz_zip_reader_init_file(&archiver, archive_path.data(), 0))
+    std::string const archive_str{archive_path};
+    if (!mz_zip_reader_init_file(&archiver, archive_str.c_str(), 0))
     {
         throw IOError("Failed to open zip file");
     }
-    std::filesystem::path outputDir(output_path);
+    std::filesystem::path const outputDir(output_path);
     if (!std::filesystem::exists(outputDir))
     {
         std::filesystem::create_directories(outputDir);
     }
-    mz_uint file_count = mz_zip_reader_get_num_files(&archiver);
+    mz_uint const file_count = mz_zip_reader_get_num_files(&archiver);
     for (mz_uint i = 0; i != file_count; ++i)
     {
         mz_zip_archive_file_stat file_stat;
@@ -201,8 +202,8 @@ void MiniZExtractFile(std::string_view archive_path, std::string_view output_pat
             mz_zip_reader_end(&archiver);
             throw IOError("Failed to get file stat from zip");
         }
-        std::string full_output_path = (outputDir / file_stat.m_filename).string();
-        std::filesystem::path full_output_path_obj(full_output_path);
+        std::string const full_output_path = (outputDir / file_stat.m_filename).string();
+        std::filesystem::path const full_output_path_obj(full_output_path);
 
         if (file_stat.m_is_directory)
         {
@@ -213,7 +214,7 @@ void MiniZExtractFile(std::string_view archive_path, std::string_view output_pat
         }
         else
         {
-            std::filesystem::path output_dir = full_output_path_obj.parent_path();
+            std::filesystem::path const output_dir = full_output_path_obj.parent_path();
             if (!std::filesystem::exists(output_dir))
             {
                 std::filesystem::create_directories(output_dir);
@@ -239,12 +240,13 @@ std::unordered_map<std::string, std::string> MiniZExtractFileToBuffer(std::strin
 {
     mz_zip_archive archiver{};
     mz_zip_zero_struct(&archiver);
-    if (!mz_zip_reader_init_file(&archiver, archive_path.data(), 0))
+    std::string const archive_str{archive_path};
+    if (!mz_zip_reader_init_file(&archiver, archive_str.c_str(), 0))
     {
         throw IOError("Failed to open zip file");
     }
     std::unordered_map<std::string, std::string> result;
-    mz_uint file_count = mz_zip_reader_get_num_files(&archiver);
+    mz_uint const file_count = mz_zip_reader_get_num_files(&archiver);
     for (mz_uint i = 0; i != file_count; ++i)
     {
         mz_zip_archive_file_stat file_stat;

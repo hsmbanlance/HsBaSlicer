@@ -5,24 +5,27 @@
 #include "2Dhull.hpp"
 
 #include <algorithm>
+#include <utility>
 
 #include <clipper2/clipper.h>
 
 namespace HsBa::Slicer
 {
-static double CrossProduct(const Point2& o, const Point2& a, const Point2& b)
+namespace
+{
+double CrossProduct(const Point2& o, const Point2& a, const Point2& b)
 {
     return Clipper2Lib::CrossProduct(a - o, b - o);
 }
 
-static double CrossProductD(const Point2D& o, const Point2D& a, const Point2D& b)
+double CrossProductD(const Point2D& o, const Point2D& a, const Point2D& b)
 {
     return Clipper2Lib::CrossProduct(a - o, b - o);
 }
 
-static bool CmpFromAngleDistance(const Point2& left, const Point2& right)
+bool CmpFromAngleDistance(const Point2& left, const Point2& right)
 {
-    double cp = Clipper2Lib::CrossProduct(left, right);
+    double const cp = Clipper2Lib::CrossProduct(left, right);
     if (cp == 0)
     {
         return (left.x * left.x + left.y * left.y) < (right.x * right.x + right.y * right.y);
@@ -30,15 +33,16 @@ static bool CmpFromAngleDistance(const Point2& left, const Point2& right)
     return cp > 0;
 }
 
-static bool CmpFromAngleDistanceD(const Point2D& left, const Point2D& right)
+bool CmpFromAngleDistanceD(const Point2D& left, const Point2D& right)
 {
-    double cp = Clipper2Lib::CrossProduct(left, right);
+    double const cp = Clipper2Lib::CrossProduct(left, right);
     if (cp == 0)
     {
         return (left.x * left.x + left.y * left.y) < (right.x * right.x + right.y * right.y);
     }
     return cp > 0;
 }
+}  // namespace
 
 Polygon ConcaveHullSimulation(const Polygon& polygon, int numAdditionalPoints)
 {
@@ -59,12 +63,15 @@ Polygon ConcaveHullSimulation(const Polygon& polygon, int numAdditionalPoints)
     concaveHullPoints.reserve(size * (static_cast<size_t>(numAdditionalPoints) + 1));
     for (size_t i = 0; i != size; ++i)
     {
-        size_t j = (i + 1) % size;
+        size_t const j = (i + 1) % size;
         for (int k = 0; k <= numAdditionalPoints; ++k)
         {
-            double t = static_cast<double>(k) / (numAdditionalPoints + 1);
-            Point2 newPoint(convexHullPoints[i].x + t * (convexHullPoints[j].x - convexHullPoints[i].x),
-                            convexHullPoints[i].y + t * (convexHullPoints[j].y - convexHullPoints[i].y));
+            double const t = static_cast<double>(k) / (numAdditionalPoints + 1);
+            double const xi = static_cast<double>(convexHullPoints[i].x);
+            double const xj = static_cast<double>(convexHullPoints[j].x);
+            double const yi = static_cast<double>(convexHullPoints[i].y);
+            double const yj = static_cast<double>(convexHullPoints[j].y);
+            Point2 const newPoint(xi + t * (xj - xi), yi + t * (yj - yi));
             concaveHullPoints.push_back(newPoint);
         }
     }
@@ -73,7 +80,7 @@ Polygon ConcaveHullSimulation(const Polygon& polygon, int numAdditionalPoints)
 }
 Polygon ConvexHull(const Polygon& polygon)
 {
-    size_t size = polygon.size();
+    size_t const size = polygon.size();
     if (size <= 3)
     {
         return polygon;
@@ -96,7 +103,7 @@ Polygon ConvexHull(const Polygon& polygon)
     Polygon hull;
     hull.push_back(points[0]);
     hull.push_back(points[1]);
-    for (int i = 2; i != size; ++i)
+    for (int i = 2; std::cmp_not_equal(i, size); ++i)
     {
         while (hull.size() > 1 && CrossProduct(hull[hull.size() - 2], hull.back(), points[i]) <= 0)
         {
@@ -142,12 +149,12 @@ PolygonD ConcaveHullSimulation(const PolygonD& polygon, int numAdditionalPoints)
     concaveHullPoints.reserve(size * (static_cast<size_t>(numAdditionalPoints) + 1));
     for (size_t i = 0; i != size; ++i)
     {
-        size_t j = (i + 1) % size;
+        size_t const j = (i + 1) % size;
         for (int k = 0; k <= numAdditionalPoints; ++k)
         {
-            double t = static_cast<double>(k) / (numAdditionalPoints + 1);
-            Point2D newPoint(convexHullPoints[i].x + t * (convexHullPoints[j].x - convexHullPoints[i].x),
-                             convexHullPoints[i].y + t * (convexHullPoints[j].y - convexHullPoints[i].y));
+            double const t = static_cast<double>(k) / (numAdditionalPoints + 1);
+            Point2D const newPoint(convexHullPoints[i].x + t * (convexHullPoints[j].x - convexHullPoints[i].x),
+                                   convexHullPoints[i].y + t * (convexHullPoints[j].y - convexHullPoints[i].y));
             concaveHullPoints.push_back(newPoint);
         }
     }
@@ -156,7 +163,7 @@ PolygonD ConcaveHullSimulation(const PolygonD& polygon, int numAdditionalPoints)
 }
 PolygonD ConvexHull(const PolygonD& polygon)
 {
-    size_t size = polygon.size();
+    size_t const size = polygon.size();
     if (size <= 3)
     {
         return polygon;
@@ -179,7 +186,7 @@ PolygonD ConvexHull(const PolygonD& polygon)
     PolygonD hull;
     hull.push_back(points[0]);
     hull.push_back(points[1]);
-    for (int i = 2; i != size; ++i)
+    for (int i = 2; std::cmp_not_equal(i, size); ++i)
     {
         while (hull.size() > 1 && CrossProductD(hull[hull.size() - 2], hull.back(), points[i]) <= 0)
         {

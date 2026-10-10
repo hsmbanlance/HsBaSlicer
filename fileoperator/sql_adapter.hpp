@@ -274,7 +274,7 @@ public:
     Rows Query(const std::string& query) override;
     bool IsConnected() const noexcept override;
     void Insert(const std::string& table, const std::unordered_map<std::string, std::any>& data) override;
-    void Delete(const std::string& table, const std::unordered_map<std::string, std::any>& data) override;
+    void Delete(const std::string& table, const std::unordered_map<std::string, std::any>& key) override;
     void Update(const std::string& table, const std::unordered_map<std::string, std::any>& set,
                 const std::unordered_map<std::string, std::any>& where) override;
     Rows Select(const std::string& table, const std::vector<std::string>& columns,

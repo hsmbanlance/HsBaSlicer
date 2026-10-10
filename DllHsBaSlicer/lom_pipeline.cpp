@@ -24,6 +24,8 @@
 
 namespace HsBa::Slicer::Pipeline
 {
+namespace
+{
 
 struct InternalLomResult
 {
@@ -38,14 +40,14 @@ struct InternalLomConfig
 {
     std::string model_name;
     std::string model_path;
-    float layer_height = 0.2f;
-    float first_layer_height = 0.2f;
-    float cut_speed = 300.0f;
-    float cut_margin = 0.5f;
-    float cut_power = 0.8f;
-    float bond_temperature = 150.0f;
-    float bond_pressure = 1.0f;
-    float bond_time = 5.0f;
+    float layer_height = 0.2F;
+    float first_layer_height = 0.2F;
+    float cut_speed = 300.0F;
+    float cut_margin = 0.5F;
+    float cut_power = 0.8F;
+    float bond_temperature = 150.0F;
+    float bond_pressure = 1.0F;
+    float bond_time = 5.0F;
     int seal_contour = 1;
     HsBaLomCutMode_t cut_mode = HSBA_LOM_CUT_CONTOUR;
     std::string export_lua_script;
@@ -54,9 +56,6 @@ struct InternalLomConfig
     HsBaLomProgressCallback progress_cb = nullptr;
     void* progress_user_data = nullptr;
 };
-
-namespace
-{
 
 struct OwnedCString
 {
@@ -69,7 +68,9 @@ struct OwnedCString
         {
             data = static_cast<char*>(std::malloc(str.size() + 1));
             if (data)
+            {
                 std::memcpy(data, str.c_str(), str.size() + 1);
+            }
         }
     }
 
@@ -94,20 +95,26 @@ struct OwnedCString
 
 int CalculateLayerCount(const ModelInfo& info, float layer_height, float first_layer_height)
 {
-    float model_height = info.bbox_max.z() - info.bbox_min.z();
-    if (model_height <= 0.0f)
+    float const model_height = info.bbox_max.z() - info.bbox_min.z();
+    if (model_height <= 0.0F)
+    {
         return 0;
-    float remaining = model_height - first_layer_height;
-    if (remaining <= 0.0f)
+    }
+    float const remaining = model_height - first_layer_height;
+    if (remaining <= 0.0F)
+    {
         return 1;
+    }
     return 1 + static_cast<int>(std::ceil(remaining / layer_height));
 }
 
 float GetLayerZ(int layer_index, float first_layer_height, float layer_height)
 {
     if (layer_index == 0)
+    {
         return first_layer_height;
-    return first_layer_height + layer_index * layer_height;
+    }
+    return first_layer_height + static_cast<float>(layer_index) * layer_height;
 }
 
 void ReportProgress(const InternalLomConfig& cfg, int percent, const std::string& stage)
@@ -134,7 +141,7 @@ std::string BuildLomConfigJson(const InternalLomConfig& cfg, int total_layers)
     json << "    \"margin\": " << cfg.cut_margin << ",\n";
     json << "    \"power\": " << cfg.cut_power << ",\n";
     json << "    \"seal_contour\": " << (cfg.seal_contour ? "true" : "false") << ",\n";
-    json << "    \"mode\": \"" << (cfg.cut_mode == HSBA_LOM_CUT_HALFTONE ? "halftone" : "contour") << "\"\n";
+    json << R"(    "mode": ")" << (cfg.cut_mode == HSBA_LOM_CUT_HALFTONE ? "halftone" : "contour") << "\"\n";
     json << "  },\n";
     json << "  \"bond\": {\n";
     json << "    \"temperature\": " << cfg.bond_temperature << ",\n";
@@ -144,8 +151,6 @@ std::string BuildLomConfigJson(const InternalLomConfig& cfg, int total_layers)
     json << "}\n";
     return json.str();
 }
-
-}  // anonymous namespace
 
 InternalLomConfig BuildLomConfig(const HsBaLomPipelineConfig_t* cfg, HsBaLomProgressCallback cb, void* ud)
 {
@@ -184,6 +189,7 @@ HsBaLomPipelineResult_t ToCResult(const InternalLomResult& ir)
     return cr;
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-reference-coroutine-parameters) caller keeps cfg alive
 Utils::Task<InternalLomResult> RunLomPipelineAsync(const InternalLomConfig& cfg)
 {
     HsBa::Slicer::InstallCommonAnyObjectTypes();
@@ -233,13 +239,13 @@ Utils::Task<InternalLomResult> RunLomPipelineAsync(const InternalLomConfig& cfg)
             total_layers,
             [&](int i)
             {
-                float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
+                float const z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
                 layer_z_heights[i] = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height);
                 layer_outlines[i] = SliceLayer(*topo, z);
             },
             [&](int done)
             {
-                int progress = 15 + (done * 35) / total_layers;
+                int const progress = 15 + (done * 35) / total_layers;
                 ReportProgress(cfg, progress, "Slicing sheet");
             });
         ReportProgress(cfg, 50, "Slicing complete");
@@ -262,16 +268,16 @@ Utils::Task<InternalLomResult> RunLomPipelineAsync(const InternalLomConfig& cfg)
             output_path = cfg.model_name + "_lom_output.zip";
         }
 
-        std::string config_json = BuildLomConfigJson(cfg, total_layers);
+        std::string const config_json = BuildLomConfigJson(cfg, total_layers);
 
         SlsPackage pkg;
         pkg.layer_outlines = layer_outlines;
         pkg.layer_z_heights = layer_z_heights;
         pkg.config_json = config_json;
 
-        std::string func = cfg.export_lua_func.empty() ? "export_lom" : cfg.export_lua_func;
+        std::string const func = cfg.export_lua_func.empty() ? "export_lom" : cfg.export_lua_func;
         std::string lua_error;
-        bool export_ok = SaveSlsPackageLua(pkg, output_path, cfg.export_lua_script, func, &lua_error);
+        bool const export_ok = SaveSlsPackageLua(pkg, output_path, cfg.export_lua_script, func, &lua_error);
 
         if (export_ok)
         {
@@ -297,6 +303,8 @@ Utils::Task<InternalLomResult> RunLomPipelineAsync(const InternalLomConfig& cfg)
 
     co_return result;
 }
+
+}  // anonymous namespace
 
 }  // namespace HsBa::Slicer::Pipeline
 
@@ -324,20 +332,22 @@ HSBA_SLICER_API void HsBaRunLomPipelineAsync(const HsBaLomPipelineConfig_t* conf
         HsBa::Slicer::Pipeline::BuildLomConfig(config, callback, user_data));
     auto task = HsBa::Slicer::Pipeline::RunLomPipelineAsync(*shared_cfg);
     task.then(
-        [shared_cfg, result_callback, result_user_data](HsBa::Slicer::Pipeline::InternalLomResult ir)
+        [shared_cfg, result_callback, result_user_data](const HsBa::Slicer::Pipeline::InternalLomResult& ir)
         {
             auto cr = HsBa::Slicer::Pipeline::ToCResult(ir);
             if (result_callback)
             {
                 result_callback(cr, result_user_data);
             }
-        });
+        });  // NOLINT(clang-analyzer-unix.Malloc) C-ABI ownership transfer: result_callback frees cr strings
 }
 
 HSBA_SLICER_API void HsBaFreeLomPipelineResult(HsBaLomPipelineResult_t* result)
 {
     if (!result)
+    {
         return;
+    }
     std::free(std::exchange(result->export_path, nullptr));
     std::free(std::exchange(result->error_message, nullptr));
 }

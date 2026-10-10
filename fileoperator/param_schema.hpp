@@ -68,7 +68,7 @@ public:
     std::string CreateStatement(const std::string& table, Backend backend) const;
 
     /** @brief Emit a probe query that returns at least one row when the table already exists. */
-    std::string ExistenceCheck(const std::string& table, Backend backend) const;
+    static std::string ExistenceCheck(const std::string& table, Backend backend);
 
     /** @brief Detect the concrete ISQLAdapter backend via dynamic_cast; throws SQLAdapterInvalidArgumentError for unknown types. */
     static Backend DetectBackend(const SQL::ISQLAdapter& db);

@@ -12,21 +12,28 @@
 #include "base/error.hpp"
 
 // Helper: convert shared_ptr<IModel> to opaque handle (adds a reference)
-static void* ToHandle(std::shared_ptr<HsBa::Slicer::IModel> model)
+namespace
+{
+void* ToHandle(std::shared_ptr<HsBa::Slicer::IModel> model)
 {
     if (!model)
+    {
         return nullptr;
+    }
     // Heap-allocate a shared_ptr to keep the model alive via handle
     auto* ptr = new std::shared_ptr<HsBa::Slicer::IModel>(std::move(model));
     return static_cast<void*>(ptr);
 }
+}  // namespace
 
 // ========== Basic Operations ==========
 
 HSBA_SLICER_API void* HsBaLoadModel(const char* name, const char* file_path)
 {
     if (!name || !file_path)
+    {
         return nullptr;
+    }
     try
     {
         auto model = HsBa::Slicer::LoadModel(name, file_path);
@@ -41,7 +48,9 @@ HSBA_SLICER_API void* HsBaLoadModel(const char* name, const char* file_path)
 HSBA_SLICER_API void* HsBaGetModel(const char* name)
 {
     if (!name)
+    {
         return nullptr;
+    }
     try
     {
         auto model = HsBa::Slicer::GetModel(name);
@@ -56,11 +65,14 @@ HSBA_SLICER_API void* HsBaGetModel(const char* name)
 HSBA_SLICER_API void HsBaRemoveModel(const char* name)
 {
     if (!name)
+    {
         return;
+    }
     try
     {
         HsBa::Slicer::RemoveModel(name);
     }
+    // NOLINTNEXTLINE(bugprone-empty-catch) C ABI: swallow RuntimeError, do not propagate across C boundary
     catch (const HsBa::Slicer::RuntimeError&)
     {
     }
@@ -69,7 +81,9 @@ HSBA_SLICER_API void HsBaRemoveModel(const char* name)
 HSBA_SLICER_API int HsBaContainsModel(const char* name)
 {
     if (!name)
+    {
         return 0;
+    }
     try
     {
         return HsBa::Slicer::ContainsModel(name) ? 1 : 0;
@@ -109,7 +123,9 @@ HSBA_SLICER_API int HsBaCleanupModels(void)
 HSBA_SLICER_API int HsBaTranslateModel(const char* name, float tx, float ty, float tz)
 {
     if (!name)
+    {
         return 0;
+    }
     try
     {
         HsBa::Slicer::TranslateModel(name, Eigen::Vector3f(tx, ty, tz));
@@ -124,7 +140,9 @@ HSBA_SLICER_API int HsBaTranslateModel(const char* name, float tx, float ty, flo
 HSBA_SLICER_API int HsBaRotateModel(const char* name, float qx, float qy, float qz, float qw)
 {
     if (!name)
+    {
         return 0;
+    }
     try
     {
         HsBa::Slicer::RotateModel(name, Eigen::Quaternionf(qw, qx, qy, qz));
@@ -139,7 +157,9 @@ HSBA_SLICER_API int HsBaRotateModel(const char* name, float qx, float qy, float 
 HSBA_SLICER_API int HsBaScaleModelUniform(const char* name, float scale)
 {
     if (!name)
+    {
         return 0;
+    }
     try
     {
         HsBa::Slicer::ScaleModel(name, scale);
@@ -154,7 +174,9 @@ HSBA_SLICER_API int HsBaScaleModelUniform(const char* name, float scale)
 HSBA_SLICER_API int HsBaScaleModel(const char* name, float sx, float sy, float sz)
 {
     if (!name)
+    {
         return 0;
+    }
     try
     {
         HsBa::Slicer::ScaleModel(name, Eigen::Vector3f(sx, sy, sz));
@@ -171,7 +193,9 @@ HSBA_SLICER_API int HsBaScaleModel(const char* name, float sx, float sy, float s
 HSBA_SLICER_API int HsBaGetModelInfo(const char* name, float out_bbox_min[3], float out_bbox_max[3], float* out_volume)
 {
     if (!name)
+    {
         return 0;
+    }
     try
     {
         auto info = HsBa::Slicer::GetModelInfo(name);
@@ -204,7 +228,9 @@ HSBA_SLICER_API int HsBaGetModelInfo(const char* name, float out_bbox_min[3], fl
 HSBA_SLICER_API void* HsBaThickSolidModel(const char* source_name, const char* result_name, float thickness)
 {
     if (!source_name || !result_name)
+    {
         return nullptr;
+    }
 #ifdef USE_CGAL
     try
     {
@@ -224,7 +250,9 @@ HSBA_SLICER_API void* HsBaThickSolidModel(const char* source_name, const char* r
 HSBA_SLICER_API void* HsBaBooleanUnion(const char* left_name, const char* right_name, const char* result_name)
 {
     if (!left_name || !right_name || !result_name)
+    {
         return nullptr;
+    }
 #ifdef USE_CGAL
     try
     {
@@ -243,7 +271,9 @@ HSBA_SLICER_API void* HsBaBooleanUnion(const char* left_name, const char* right_
 HSBA_SLICER_API void* HsBaBooleanIntersection(const char* left_name, const char* right_name, const char* result_name)
 {
     if (!left_name || !right_name || !result_name)
+    {
         return nullptr;
+    }
 #ifdef USE_CGAL
     try
     {
@@ -262,7 +292,9 @@ HSBA_SLICER_API void* HsBaBooleanIntersection(const char* left_name, const char*
 HSBA_SLICER_API void* HsBaBooleanDifference(const char* left_name, const char* right_name, const char* result_name)
 {
     if (!left_name || !right_name || !result_name)
+    {
         return nullptr;
+    }
 #ifdef USE_CGAL
     try
     {
@@ -281,7 +313,9 @@ HSBA_SLICER_API void* HsBaBooleanDifference(const char* left_name, const char* r
 HSBA_SLICER_API void* HsBaBooleanXor(const char* left_name, const char* right_name, const char* result_name)
 {
     if (!left_name || !right_name || !result_name)
+    {
         return nullptr;
+    }
 #ifdef USE_CGAL
     try
     {
@@ -300,7 +334,9 @@ HSBA_SLICER_API void* HsBaBooleanXor(const char* left_name, const char* right_na
 HSBA_SLICER_API void HsBaReleaseModelHandle(void* handle)
 {
     if (!handle)
+    {
         return;
+    }
     auto* ptr = static_cast<std::shared_ptr<HsBa::Slicer::IModel>*>(handle);
     delete ptr;
 }

@@ -24,7 +24,7 @@ std::string to_hex(const unsigned char* data, size_t len)
     out.reserve(len * 2);
     for (size_t i = 0; i < len; ++i)
     {
-        unsigned char c = data[i];
+        unsigned char const c = data[i];
         out.push_back(hex_chars[(c >> 4) & 0xF]);
         out.push_back(hex_chars[c & 0xF]);
     }
@@ -35,7 +35,9 @@ std::string digest_hex(const std::vector<unsigned char>& data, const EVP_MD* md)
 {
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     if (!ctx)
+    {
         throw RuntimeError("EVP_MD_CTX_new failed");
+    }
     if (EVP_DigestInit_ex(ctx, md, nullptr) != 1)
     {
         EVP_MD_CTX_free(ctx);

@@ -24,6 +24,8 @@
 
 namespace HsBa::Slicer::Pipeline
 {
+namespace
+{
 
 struct InternalSlsResult
 {
@@ -38,22 +40,19 @@ struct InternalSlsConfig
 {
     std::string model_name;
     std::string model_path;
-    float layer_height = 0.1f;
-    float first_layer_height = 0.15f;
-    float laser_power = 30.0f;
-    float scan_speed = 2000.0f;
-    float hatch_spacing = 0.15f;
-    float hatch_rotation = 90.0f;
-    float bed_temperature = 180.0f;
+    float layer_height = 0.1F;
+    float first_layer_height = 0.15F;
+    float laser_power = 30.0F;
+    float scan_speed = 2000.0F;
+    float hatch_spacing = 0.15F;
+    float hatch_rotation = 90.0F;
+    float bed_temperature = 180.0F;
     std::string export_lua_script;
     std::string export_lua_func;
     std::string output_path;
     HsBaSlsProgressCallback progress_cb = nullptr;
     void* progress_user_data = nullptr;
 };
-
-namespace
-{
 
 struct OwnedCString
 {
@@ -66,7 +65,9 @@ struct OwnedCString
         {
             data = static_cast<char*>(std::malloc(str.size() + 1));
             if (data)
+            {
                 std::memcpy(data, str.c_str(), str.size() + 1);
+            }
         }
     }
 
@@ -91,20 +92,26 @@ struct OwnedCString
 
 int CalculateLayerCount(const ModelInfo& info, float layer_height, float first_layer_height)
 {
-    float model_height = info.bbox_max.z() - info.bbox_min.z();
-    if (model_height <= 0.0f)
+    float const model_height = info.bbox_max.z() - info.bbox_min.z();
+    if (model_height <= 0.0F)
+    {
         return 0;
-    float remaining = model_height - first_layer_height;
-    if (remaining <= 0.0f)
+    }
+    float const remaining = model_height - first_layer_height;
+    if (remaining <= 0.0F)
+    {
         return 1;
+    }
     return 1 + static_cast<int>(std::ceil(remaining / layer_height));
 }
 
 float GetLayerZ(int layer_index, float first_layer_height, float layer_height)
 {
     if (layer_index == 0)
+    {
         return first_layer_height;
-    return first_layer_height + layer_index * layer_height;
+    }
+    return first_layer_height + static_cast<float>(layer_index) * layer_height;
 }
 
 void ReportProgress(const InternalSlsConfig& cfg, int percent, const std::string& stage)
@@ -136,8 +143,6 @@ std::string BuildSlsConfigJson(const InternalSlsConfig& cfg, int total_layers)
     json << "}\n";
     return json.str();
 }
-
-}  // anonymous namespace
 
 InternalSlsConfig BuildSlsConfig(const HsBaSlsPipelineConfig_t* cfg, HsBaSlsProgressCallback cb, void* ud)
 {
@@ -173,9 +178,11 @@ HsBaSlsPipelineResult_t ToCResult(const InternalSlsResult& ir)
     return cr;
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-reference-coroutine-parameters) caller keeps cfg alive
 Utils::Task<InternalSlsResult> RunSlsPipelineAsync(const InternalSlsConfig& cfg)
 {
-    // Load the AnyObject/Lua registration functions for common custom types into the generic registry pool for the per-stage Lua environments to use
+    // Load the AnyObject/Lua registration functions for common custom types into the generic registry pool for the
+    // per-stage Lua environments to use
     HsBa::Slicer::InstallCommonAnyObjectTypes();
 
     InternalSlsResult result;
@@ -223,13 +230,13 @@ Utils::Task<InternalSlsResult> RunSlsPipelineAsync(const InternalSlsConfig& cfg)
             total_layers,
             [&](int i)
             {
-                float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
+                float const z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
                 layer_z_heights[i] = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height);
                 layer_outlines[i] = SliceLayer(*topo, z);
             },
             [&](int done)
             {
-                int progress = 15 + (done * 35) / total_layers;
+                int const progress = 15 + (done * 35) / total_layers;
                 ReportProgress(cfg, progress, "Slicing layer");
             });
         ReportProgress(cfg, 50, "Slicing complete");
@@ -252,16 +259,16 @@ Utils::Task<InternalSlsResult> RunSlsPipelineAsync(const InternalSlsConfig& cfg)
             output_path = cfg.model_name + "_sls_output.zip";
         }
 
-        std::string config_json = BuildSlsConfigJson(cfg, total_layers);
+        std::string const config_json = BuildSlsConfigJson(cfg, total_layers);
 
         SlsPackage pkg;
         pkg.layer_outlines = layer_outlines;
         pkg.layer_z_heights = layer_z_heights;
         pkg.config_json = config_json;
 
-        std::string func = cfg.export_lua_func.empty() ? "export_sls" : cfg.export_lua_func;
+        std::string const func = cfg.export_lua_func.empty() ? "export_sls" : cfg.export_lua_func;
         std::string lua_error;
-        bool export_ok = SaveSlsPackageLua(pkg, output_path, cfg.export_lua_script, func, &lua_error);
+        bool const export_ok = SaveSlsPackageLua(pkg, output_path, cfg.export_lua_script, func, &lua_error);
 
         if (export_ok)
         {
@@ -287,6 +294,8 @@ Utils::Task<InternalSlsResult> RunSlsPipelineAsync(const InternalSlsConfig& cfg)
 
     co_return result;
 }
+
+}  // anonymous namespace
 
 }  // namespace HsBa::Slicer::Pipeline
 
@@ -314,20 +323,22 @@ HSBA_SLICER_API void HsBaRunSlsPipelineAsync(const HsBaSlsPipelineConfig_t* conf
         HsBa::Slicer::Pipeline::BuildSlsConfig(config, callback, user_data));
     auto task = HsBa::Slicer::Pipeline::RunSlsPipelineAsync(*shared_cfg);
     task.then(
-        [shared_cfg, result_callback, result_user_data](HsBa::Slicer::Pipeline::InternalSlsResult ir)
+        [shared_cfg, result_callback, result_user_data](const HsBa::Slicer::Pipeline::InternalSlsResult& ir)
         {
             auto cr = HsBa::Slicer::Pipeline::ToCResult(ir);
             if (result_callback)
             {
                 result_callback(cr, result_user_data);
             }
-        });
+        });  // NOLINT(clang-analyzer-unix.Malloc) C-ABI ownership transfer: result_callback frees cr strings
 }
 
 HSBA_SLICER_API void HsBaFreeSlsPipelineResult(HsBaSlsPipelineResult_t* result)
 {
     if (!result)
+    {
         return;
+    }
     std::free(std::exchange(result->export_path, nullptr));
     std::free(std::exchange(result->error_message, nullptr));
 }

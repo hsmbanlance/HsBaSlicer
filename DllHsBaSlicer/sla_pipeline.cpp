@@ -6,6 +6,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -26,8 +27,10 @@
 
 namespace HsBa::Slicer::Pipeline
 {
+namespace
+{
 
-enum class SlaImageType
+enum class SlaImageType : std::uint8_t
 {
     Png = 0,
     Jpg = 1,
@@ -47,25 +50,25 @@ struct InternalSlaConfig
 {
     std::string model_name;
     std::string model_path;
-    float layer_height = 0.05f;
-    float first_layer_height = 0.1f;
-    float bottom_exposure_time = 60.0f;
-    float normal_exposure_time = 2.5f;
-    float bottom_lift_distance = 5.0f;
-    float lift_distance = 3.0f;
-    float lift_speed = 60.0f;
-    float retract_speed = 150.0f;
-    float floor_raft_offset = 2.0f;
-    float floor_border_width = 1.0f;
-    float floor_fill_spacing = 0.5f;
-    float floor_fill_angle = 0.0f;
+    float layer_height = 0.05F;
+    float first_layer_height = 0.1F;
+    float bottom_exposure_time = 60.0F;
+    float normal_exposure_time = 2.5F;
+    float bottom_lift_distance = 5.0F;
+    float lift_distance = 3.0F;
+    float lift_speed = 60.0F;
+    float retract_speed = 150.0F;
+    float floor_raft_offset = 2.0F;
+    float floor_border_width = 1.0F;
+    float floor_fill_spacing = 0.5F;
+    float floor_fill_angle = 0.0F;
     int floor_border_count = 2;
     bool floor_use_convex_hull = false;
     bool enable_support = true;
-    float overhang_angle = 45.0f;
-    float support_gap = 0.5f;
-    float support_diameter = 2.0f;
-    float support_density = 0.3f;
+    float overhang_angle = 45.0F;
+    float support_gap = 0.5F;
+    float support_diameter = 2.0F;
+    float support_density = 0.3F;
     int support_pattern = 0;
     std::string support_lua_script;
     std::string support_lua_func;
@@ -81,9 +84,6 @@ struct InternalSlaConfig
     void* progress_user_data = nullptr;
 };
 
-namespace
-{
-
 struct OwnedCString
 {
     char* data = nullptr;
@@ -95,7 +95,9 @@ struct OwnedCString
         {
             data = static_cast<char*>(std::malloc(str.size() + 1));
             if (data)
+            {
                 std::memcpy(data, str.c_str(), str.size() + 1);
+            }
         }
     }
 
@@ -120,20 +122,26 @@ struct OwnedCString
 
 int CalculateLayerCount(const ModelInfo& info, float layer_height, float first_layer_height)
 {
-    float model_height = info.bbox_max.z() - info.bbox_min.z();
-    if (model_height <= 0.0f)
+    float const model_height = info.bbox_max.z() - info.bbox_min.z();
+    if (model_height <= 0.0F)
+    {
         return 0;
-    float remaining = model_height - first_layer_height;
-    if (remaining <= 0.0f)
+    }
+    float const remaining = model_height - first_layer_height;
+    if (remaining <= 0.0F)
+    {
         return 1;
+    }
     return 1 + static_cast<int>(std::ceil(remaining / layer_height));
 }
 
 float GetLayerZ(int layer_index, float first_layer_height, float layer_height)
 {
     if (layer_index == 0)
+    {
         return first_layer_height;
-    return first_layer_height + layer_index * layer_height;
+    }
+    return first_layer_height + static_cast<float>(layer_index) * layer_height;
 }
 
 void ReportProgress(const InternalSlaConfig& cfg, int percent, const std::string& stage)
@@ -157,9 +165,22 @@ std::string GetImageExtension(SlaImageType type)
     }
 }
 
+const char* GetImageTypeLabel(SlaImageType type)
+{
+    switch (type)
+    {
+    case SlaImageType::Jpg:
+        return "jpg";
+    case SlaImageType::Svg:
+        return "svg";
+    default:
+        return "png";
+    }
+}
+
 std::string BuildConfigJson(const InternalSlaConfig& cfg, int total_layers)
 {
-    std::string ext = GetImageExtension(cfg.image_type);
+    std::string const ext = GetImageExtension(cfg.image_type);
     std::ostringstream json;
     json << "{\n";
     json << "  \"version\": \"1.0\",\n";
@@ -195,34 +216,30 @@ std::string BuildConfigJson(const InternalSlaConfig& cfg, int total_layers)
     json << "    \"pattern\": " << cfg.support_pattern << "\n";
     json << "  },\n";
     json << "  \"image\": {\n";
-    json << "    \"type\": \""
-         << (cfg.image_type == SlaImageType::Jpg   ? "jpg"
-             : cfg.image_type == SlaImageType::Svg ? "svg"
-                                                   : "png")
-         << "\",\n";
+    json << R"(    "type": ")" << GetImageTypeLabel(cfg.image_type) << "\",\n";
     json << "    \"width\": " << cfg.image_width << ",\n";
     json << "    \"height\": " << cfg.image_height << "\n";
     json << "  },\n";
     json << "  \"layers\": [\n";
     for (int i = 0; i < total_layers; ++i)
     {
-        bool is_bottom = (i == 0);
+        bool const is_bottom = (i == 0);
         json << "    {\n";
         json << "      \"layer\": " << i << ",\n";
-        json << "      \"image_path\": \"layers/layer_" << i << ext << "\",\n";
+        json << R"(      "image_path": "layers/layer_)" << i << ext << "\",\n";
         json << "      \"exposure_time\": " << (is_bottom ? cfg.bottom_exposure_time : cfg.normal_exposure_time)
              << "\n";
         json << "    }";
         if (i < total_layers - 1)
+        {
             json << ",";
+        }
         json << "\n";
     }
     json << "  ]\n";
     json << "}\n";
     return json.str();
 }
-
-}  // anonymous namespace
 
 InternalSlaConfig BuildSlaConfig(const HsBaSlaPipelineConfig_t* cfg, HsBaSlaProgressCallback cb, void* ud)
 {
@@ -278,9 +295,11 @@ HsBaSlaPipelineResult_t ToCResult(const InternalSlaResult& ir)
     return cr;
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-reference-coroutine-parameters) caller keeps cfg alive
 Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
 {
-    // Load the AnyObject/Lua registration functions for common custom types into the generic registry pool for the per-stage Lua environments to use
+    // Load the AnyObject/Lua registration functions for common custom types into the generic registry pool for the
+    // per-stage Lua environments to use
     HsBa::Slicer::InstallCommonAnyObjectTypes();
 
     InternalSlaResult result;
@@ -328,19 +347,19 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
             total_layers,
             [&](int i)
             {
-                float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
+                float const z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
                 layer_outlines[i] = SliceLayer(*topo, z);
             },
             [&](int done)
             {
-                int progress = 15 + (done * 20) / total_layers;
+                int const progress = 15 + (done * 20) / total_layers;
                 ReportProgress(cfg, progress, "Slicing layer");
             });
         ReportProgress(cfg, 35, "Slicing complete");
 
         // ========== Stage 3: Floor / Raft ==========
         ReportProgress(cfg, 40, "Generating floor...");
-        Polygons bottom_int = Integerization(layer_outlines[0]);
+        Polygons const bottom_int = Integerization(layer_outlines[0]);
 
         SlaFloorConfig floor_cfg;
         floor_cfg.raft_offset = cfg.floor_raft_offset;
@@ -353,13 +372,13 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
         PolygonsD floor_result_d;
         if (!cfg.floor_lua_script.empty())
         {
-            std::string func = cfg.floor_lua_func.empty() ? "generate_floor" : cfg.floor_lua_func;
-            Polygons floor_int = LuaCustomFloorByFile(bottom_int, cfg.floor_lua_script, func, floor_cfg);
+            std::string const func = cfg.floor_lua_func.empty() ? "generate_floor" : cfg.floor_lua_func;
+            Polygons const floor_int = LuaCustomFloorByFile(bottom_int, cfg.floor_lua_script, func, floor_cfg);
             floor_result_d = UnIntegerization(floor_int);
         }
         else
         {
-            Polygons floor_int = GenerateFloorRaft(bottom_int, floor_cfg);
+            Polygons const floor_int = GenerateFloorRaft(bottom_int, floor_cfg);
             floor_result_d = UnIntegerization(floor_int);
         }
         ReportProgress(cfg, 50, "Floor generation complete");
@@ -381,9 +400,10 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
             if (!cfg.support_lua_script.empty())
             {
                 // Lua custom support via LibHsBaSlicer API (script content is required, load file first)
-                std::string func = cfg.support_lua_func.empty() ? "generate_support" : cfg.support_lua_func;
+                std::string const func = cfg.support_lua_func.empty() ? "generate_support" : cfg.support_lua_func;
                 std::ifstream ifs(cfg.support_lua_script);
-                std::string script_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+                std::string const script_content((std::istreambuf_iterator<char>(ifs)),
+                                                 std::istreambuf_iterator<char>());
                 if (script_content.empty())
                 {
                     result.success = false;
@@ -413,7 +433,7 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
             output_zip = cfg.model_name + "_sla_output.zip";
         }
 
-        std::string config_json = BuildConfigJson(cfg, total_layers);
+        std::string const config_json = BuildConfigJson(cfg, total_layers);
 
         SlaPackage pkg;
         pkg.layer_outlines = layer_outlines;
@@ -429,7 +449,7 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
         bool export_ok = false;
         if (!cfg.export_lua_script.empty())
         {
-            std::string func = cfg.export_lua_func.empty() ? "export_sla" : cfg.export_lua_func;
+            std::string const func = cfg.export_lua_func.empty() ? "export_sla" : cfg.export_lua_func;
             export_ok = SaveSlaPackageLua(pkg, output_zip, cfg.export_lua_script, func);
         }
         else
@@ -462,6 +482,8 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
     co_return result;
 }
 
+}  // anonymous namespace
+
 }  // namespace HsBa::Slicer::Pipeline
 
 // ========== C API ==========
@@ -488,20 +510,22 @@ HSBA_SLICER_API void HsBaRunSlaPipelineAsync(const HsBaSlaPipelineConfig_t* conf
         HsBa::Slicer::Pipeline::BuildSlaConfig(config, callback, user_data));
     auto task = HsBa::Slicer::Pipeline::RunSlaPipelineAsync(*shared_cfg);
     task.then(
-        [shared_cfg, result_callback, result_user_data](HsBa::Slicer::Pipeline::InternalSlaResult ir)
+        [shared_cfg, result_callback, result_user_data](const HsBa::Slicer::Pipeline::InternalSlaResult& ir)
         {
             auto cr = HsBa::Slicer::Pipeline::ToCResult(ir);
             if (result_callback)
             {
                 result_callback(cr, result_user_data);
             }
-        });
+        });  // NOLINT(clang-analyzer-unix.Malloc) C-ABI ownership transfer: result_callback frees cr strings
 }
 
 HSBA_SLICER_API void HsBaFreeSlaPipelineResult(HsBaSlaPipelineResult_t* result)
 {
     if (!result)
+    {
         return;
+    }
     std::free(std::exchange(result->export_path, nullptr));
     std::free(std::exchange(result->error_message, nullptr));
 }

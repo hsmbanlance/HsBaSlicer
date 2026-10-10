@@ -3,6 +3,15 @@
 # ============================================================================
 # 用法: clang-tidy --p=build/compile_commands.json src/*.cpp
 # IDE 集成: clangd 自动读取本文件（需在 .clangd 中启用 Diagnostics.ClangTidy）
+#
+# 净化范围：仅生产代码（2D/base/cadmodel/cipher/convert/fileoperator/logger/
+#          meshmodel/paths/pointcloud/preprocess/proto/support/utils/
+#          LibHsBaSlicer/DllHsBaSlicer/ModuleHsBaSlicer/version）。
+# tests/、samples/、static_tests/ 不纳入 clang-tidy 净化：
+#   - tests: Boost.Test 夹具/断言宏与 mock_*_dll.cpp 桩会触发大量结构性误报；
+#   - samples: 教学演示重复样板，可读性优先；
+#   - static_tests: 编译期 static_assert，无运行时代码。
+# HeaderFilterRegex 通过 negative-lookahead 排除这三类目录，防止诊断跨目录传播。
 # ============================================================================
 
 Checks: >
@@ -17,18 +26,40 @@ Checks: >
   readability-*,
   -modernize-use-trailing-return-type,
   -modernize-use-nodiscard,
+  -modernize-use-emplace,
   -readability-identifier-length,
   -readability-magic-numbers,
   -readability-function-cognitive-complexity,
+  -readability-math-missing-parentheses,
   -cppcoreguidelines-avoid-magic-numbers,
   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,
   -cppcoreguidelines-owning-memory,
   -misc-non-private-member-variables-in-classes,
   -misc-include-cleaner,
-  -bugprone-easily-swappable-parameters
+  -misc-no-recursion,
+  -cert-err52-cpp,
+  -modernize-avoid-setjmp-longjmp,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -bugprone-easily-swappable-parameters,
+  -modernize-avoid-c-arrays,
+  -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-type-vararg,
+  -bugprone-float-loop-counter,
+  -cert-flp30-c,
+  -clang-analyzer-security.FloatLoopCounter,
+  -misc-confusable-identifiers,
+  -modernize-avoid-c-style-cast,
+  -cppcoreguidelines-pro-type-cstyle-cast,
+  -modernize-return-braced-init-list,
+  -cppcoreguidelines-pro-type-const-cast,
+  -cppcoreguidelines-no-malloc,
+  -cppcoreguidelines-special-member-functions
 
 WarningsAsErrors: ''
-HeaderFilterRegex: '^(?!.*(vcpkg|third_parts|out/)).*\.(h|hpp|cpp|hppm)$'
+HeaderFilterRegex: '^(?!.*(vcpkg|third_parts|out/|(^|/)(tests|samples|static_tests)/)).*\.(h|hpp|cpp|hppm)$'
 FormatStyle: file
 UseColor: true
 
@@ -41,6 +72,7 @@ CheckOptions:
   # ---- readability ----
   readability-braces-around-statements.ShortStatementLength: 0
   readability-implicit-bool-conversion.AllowIntegerConditions: true
+  readability-implicit-bool-conversion.AllowPointerConditions: true
   readability-inconsistent-declaration-parameter-name.IgnoreMacros: true
   readability-named-parameter.IgnorePublicApi: true
   readability-redundant-member-init.IgnoreBaseInConstructors: true

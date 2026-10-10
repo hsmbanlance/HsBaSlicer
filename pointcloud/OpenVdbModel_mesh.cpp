@@ -27,23 +27,24 @@ std::pair<Eigen::MatrixXf, Eigen::MatrixXi> OpenVdbModel::GenerateMesh(float vox
     }
 
     // Auto-estimate voxel size from bounding box
-    Eigen::Vector3f bbMin, bbMax;
+    Eigen::Vector3f bbMin;
+    Eigen::Vector3f bbMax;
     BoundingBox(bbMin, bbMax);
     float maxExtent = (bbMax - bbMin).maxCoeff();
-    if (maxExtent < 1e-6f)
+    if (maxExtent < 1e-6F)
     {
-        maxExtent = 1.0f;  // Degenerate case: all points coincide
+        maxExtent = 1.0F;  // Degenerate case: all points coincide
     }
 
-    if (voxelSize <= 0.0f)
+    if (voxelSize <= 0.0F)
     {
-        voxelSize = maxExtent / 100.0f;
+        voxelSize = maxExtent / 100.0F;
     }
-    if (particleRadius <= 0.0f)
+    if (particleRadius <= 0.0F)
     {
         // Estimate radius from point density: average spacing ~ extent / cbrt(count)
         const float avgSpacing = maxExtent / std::cbrt(static_cast<float>(points.size()));
-        particleRadius = avgSpacing * 1.5f;
+        particleRadius = avgSpacing * 1.5F;
     }
 
     // Create particle adapter
@@ -51,7 +52,7 @@ std::pair<Eigen::MatrixXf, Eigen::MatrixXi> OpenVdbModel::GenerateMesh(float vox
     adapter.radius_ = static_cast<openvdb::Real>(particleRadius);
 
     // Create SDF grid and rasterize particles as spheres
-    auto sdfGrid = openvdb::FloatGrid::create(/*background=*/particleRadius * 3.0f);
+    auto sdfGrid = openvdb::FloatGrid::create(/*background=*/particleRadius * 3.0F);
     sdfGrid->setTransform(openvdb::math::Transform::createLinearTransform(static_cast<double>(voxelSize)));
     sdfGrid->setGridClass(openvdb::GRID_LEVEL_SET);
 

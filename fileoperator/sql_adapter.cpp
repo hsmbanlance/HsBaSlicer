@@ -58,7 +58,8 @@ public:
     void Connect(std::string_view database)
     {
         db = nullptr;
-        if (sqlite3_open(database.data(), &db) != SQLITE_OK)
+        std::string const databaseStr(database);
+        if (sqlite3_open(databaseStr.c_str(), &db) != SQLITE_OK)
         {
             lastError = sqlite3_errmsg(db);
             sqlite3_close(db);
@@ -87,8 +88,8 @@ public:
             throw SQLAdapterNotConnectedError("Not connected to the database.");
         }
         Rows rows;
-        char* errMsg = nullptr;
-        sqlite3_stmt* stmt;
+        char const* errMsg = nullptr;
+        sqlite3_stmt* stmt = nullptr;
         if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
         {
             lastError = sqlite3_errmsg(db);
@@ -97,7 +98,7 @@ public:
         while (sqlite3_step(stmt) == SQLITE_ROW)
         {
             std::unordered_map<std::string, std::any> row;
-            int columnCount = sqlite3_column_count(stmt);
+            int const columnCount = sqlite3_column_count(stmt);
             for (int i = 0; i < columnCount; ++i)
             {
                 const char* columnName = sqlite3_column_name(stmt, i);
@@ -121,9 +122,7 @@ public:
                     break;
                 case SQLITE_BLOB:
                     row[columnName] = std::vector<unsigned char>(
-                        reinterpret_cast<const unsigned char*>(sqlite3_column_text(stmt, i)),
-                        reinterpret_cast<const unsigned char*>(sqlite3_column_text(stmt, i)) +
-                            sqlite3_column_bytes(stmt, i));
+                        sqlite3_column_text(stmt, i), sqlite3_column_text(stmt, i) + sqlite3_column_bytes(stmt, i));
                     break;
                 default:
                     lastError = "Unsupported column type";
@@ -149,7 +148,7 @@ SQLiteAdapter::~SQLiteAdapter() = default;
 
 void SQLiteAdapter::Connect(std::string_view path)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (impl_->connected)
     {
         throw SQLAdapterConnectionError("Already connected to the database.");
@@ -162,10 +161,10 @@ void SQLiteAdapter::Connect(std::string_view path)
     RaiseEvent("Connected to SQLite database", std::string(path));
 }
 
-void SQLiteAdapter::Connect(std::string_view host, std::string_view user, std::string_view password,
-                            std::string_view database, unsigned int port)
+void SQLiteAdapter::Connect(std::string_view /*host*/, std::string_view /*user*/, std::string_view /*password*/,
+                            std::string_view database, unsigned int /*port*/)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (impl_->connected)
     {
         throw SQLAdapterConnectionError("Already connected to the database.");
@@ -176,14 +175,14 @@ void SQLiteAdapter::Connect(std::string_view host, std::string_view user, std::s
 
 void SQLiteAdapter::Execute(const std::string& query)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     impl_->Execute(query);
     RaiseEvent("Execute query", query);
 }
 
 SQLiteAdapter::Rows SQLiteAdapter::Query(const std::string& query)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     auto rows = impl_->Query(query);
     RaiseEvent("Query executed", query);
     return rows;
@@ -192,15 +191,22 @@ SQLiteAdapter::Rows SQLiteAdapter::Query(const std::string& query)
 void SQLiteAdapter::Insert(const std::string& table, const std::unordered_map<std::string, std::any>& data)
 {
     if (!impl_->db)
+    {
         throw SQLAdapterNotConnectedError("SQLite db is null");
+    }
     if (data.empty())
+    {
         return;
+    }
 
-    std::ostringstream cols, placeholders;
+    std::ostringstream cols;
+    std::ostringstream placeholders;
     std::vector<std::string> keys;
     keys.reserve(data.size());
     for (const auto& [k, _] : data)
+    {
         keys.push_back(k);
+    }
 
     for (size_t i = 0; i < keys.size(); ++i)
     {
@@ -279,20 +285,28 @@ bool SQLiteAdapter::IsConnected() const noexcept
 void SQLiteAdapter::Delete(const std::string& table, const std::unordered_map<std::string, std::any>& data)
 {
     if (!impl_->db)
+    {
         throw SQLAdapterNotConnectedError("SQLite db is null");
+    }
     if (data.empty())
+    {
         return;
+    }
 
     std::ostringstream where;
     std::vector<std::string> keys;
     keys.reserve(data.size());
     for (const auto& [k, _] : data)
+    {
         keys.push_back(k);
+    }
 
     for (size_t i = 0; i < keys.size(); ++i)
     {
         if (i)
+        {
             where << " AND ";
+        }
         where << keys[i] << "=?";
     }
 
@@ -320,15 +334,25 @@ void SQLiteAdapter::Delete(const std::string& table, const std::unordered_map<st
             {
                 using T = std::decay_t<decltype(v)>;
                 if constexpr (std::is_same_v<T, int64_t>)
+                {
                     sqlite3_bind_int64(stmt, idx, v);
+                }
                 else if constexpr (std::is_same_v<T, double>)
+                {
                     sqlite3_bind_double(stmt, idx, v);
+                }
                 else if constexpr (std::is_same_v<T, std::string>)
+                {
                     sqlite3_bind_text(stmt, idx, v.c_str(), v.size(), SQLITE_TRANSIENT);
+                }
                 else if constexpr (std::is_same_v<T, std::vector<unsigned char>>)
+                {
                     sqlite3_bind_blob(stmt, idx, v.data(), v.size(), SQLITE_TRANSIENT);
+                }
                 else if constexpr (std::is_same_v<T, std::nullptr_t>)
+                {
                     sqlite3_bind_null(stmt, idx);
+                }
             },
             val);
     }
@@ -348,20 +372,28 @@ void SQLiteAdapter::Update(const std::string& table, const std::unordered_map<st
                            const std::unordered_map<std::string, std::any>& where)
 {
     if (!impl_->db)
+    {
         throw SQLAdapterNotConnectedError("SQLite db is null");
+    }
     if (set.empty())
+    {
         return;
+    }
 
     std::ostringstream setClause;
     std::vector<std::string> setKeys;
     setKeys.reserve(set.size());
     for (const auto& [k, _] : set)
+    {
         setKeys.push_back(k);
+    }
 
     for (size_t i = 0; i < setKeys.size(); ++i)
     {
         if (i)
+        {
             setClause << ',';
+        }
         setClause << setKeys[i] << "=?";
     }
 
@@ -369,18 +401,24 @@ void SQLiteAdapter::Update(const std::string& table, const std::unordered_map<st
     std::vector<std::string> whereKeys;
     whereKeys.reserve(where.size());
     for (const auto& [k, _] : where)
+    {
         whereKeys.push_back(k);
+    }
 
     for (size_t i = 0; i < whereKeys.size(); ++i)
     {
         if (i)
+        {
             whereClause << " AND ";
+        }
         whereClause << whereKeys[i] << "=?";
     }
 
     std::string sql = "UPDATE " + table + " SET " + setClause.str();
     if (!whereKeys.empty())
+    {
         sql += " WHERE " + whereClause.str();
+    }
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(impl_->db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
@@ -406,24 +444,38 @@ void SQLiteAdapter::Update(const std::string& table, const std::unordered_map<st
             {
                 using T = std::decay_t<decltype(v)>;
                 if constexpr (std::is_same_v<T, int64_t>)
+                {
                     sqlite3_bind_int64(stmt, idx, v);
+                }
                 else if constexpr (std::is_same_v<T, double>)
+                {
                     sqlite3_bind_double(stmt, idx, v);
+                }
                 else if constexpr (std::is_same_v<T, std::string>)
+                {
                     sqlite3_bind_text(stmt, idx, v.c_str(), v.size(), SQLITE_TRANSIENT);
+                }
                 else if constexpr (std::is_same_v<T, std::vector<unsigned char>>)
+                {
                     sqlite3_bind_blob(stmt, idx, v.data(), v.size(), SQLITE_TRANSIENT);
+                }
                 else if constexpr (std::is_same_v<T, std::nullptr_t>)
+                {
                     sqlite3_bind_null(stmt, idx);
+                }
             },
             val);
     };
 
     for (const auto& key : setKeys)
+    {
         bindValue(set.at(key));
+    }
 
     for (const auto& key : whereKeys)
+    {
         bindValue(where.at(key));
+    }
 
     if (sqlite3_step(stmt) != SQLITE_DONE)
     {
@@ -441,18 +493,26 @@ SQLiteAdapter::Rows SQLiteAdapter::Select(const std::string& table, const std::v
                                           const std::optional<std::string>& orderBy, int64_t limit, int64_t offset)
 {
     if (!impl_->db)
+    {
         throw SQLAdapterNotConnectedError("SQLite db is null");
+    }
 
     std::string cols;
     if (columns.empty())
-        cols = "*";
+    {
+        {
+            cols = "*";
+        }
+    }
     else
     {
         std::ostringstream oss;
         for (size_t i = 0; i < columns.size(); ++i)
         {
             if (i)
+            {
                 oss << ',';
+            }
             oss << columns[i];
         }
         cols = oss.str();
@@ -462,26 +522,36 @@ SQLiteAdapter::Rows SQLiteAdapter::Select(const std::string& table, const std::v
     std::vector<std::string> whereKeys;
     whereKeys.reserve(where.size());
     for (const auto& [k, _] : where)
+    {
         whereKeys.push_back(k);
+    }
 
     for (size_t i = 0; i < whereKeys.size(); ++i)
     {
         if (i)
+        {
             whereClause << " AND ";
+        }
         whereClause << whereKeys[i] << "=?";
     }
 
     std::ostringstream sql;
     sql << "SELECT " << cols << " FROM " << table;
     if (!whereClause.str().empty())
+    {
         sql << " WHERE " << whereClause.str();
+    }
     if (orderBy)
+    {
         sql << " ORDER BY " << *orderBy;
+    }
     if (limit >= 0)
     {
         sql << " LIMIT ?";
         if (offset >= 0)
+        {
             sql << " OFFSET ?";
+        }
     }
 
     sqlite3_stmt* stmt = nullptr;
@@ -507,21 +577,33 @@ SQLiteAdapter::Rows SQLiteAdapter::Select(const std::string& table, const std::v
             {
                 using T = std::decay_t<decltype(v)>;
                 if constexpr (std::is_same_v<T, int64_t>)
+                {
                     sqlite3_bind_int64(stmt, idx, v);
+                }
                 else if constexpr (std::is_same_v<T, double>)
+                {
                     sqlite3_bind_double(stmt, idx, v);
+                }
                 else if constexpr (std::is_same_v<T, std::string>)
+                {
                     sqlite3_bind_text(stmt, idx, v.c_str(), v.size(), SQLITE_TRANSIENT);
+                }
                 else if constexpr (std::is_same_v<T, std::vector<unsigned char>>)
+                {
                     sqlite3_bind_blob(stmt, idx, v.data(), v.size(), SQLITE_TRANSIENT);
+                }
                 else if constexpr (std::is_same_v<T, std::nullptr_t>)
+                {
                     sqlite3_bind_null(stmt, idx);
+                }
             },
             val);
     };
 
     for (const auto& key : whereKeys)
+    {
         bindOne(where.at(key));
+    }
 
     if (limit >= 0)
     {
@@ -559,17 +641,19 @@ SQLiteAdapter::Rows SQLiteAdapter::Select(const std::string& table, const std::v
             case SQLITE_TEXT:
             {
                 const char* txt = reinterpret_cast<const char*>(sqlite3_column_text(stmt, i));
-                int bytes = sqlite3_column_bytes(stmt, i);
+                int const bytes = sqlite3_column_bytes(stmt, i);
                 row.emplace(colName, std::any(std::string(txt, txt + bytes)));
                 break;
             }
             case SQLITE_BLOB:
             {
-                const unsigned char* blob = static_cast<const unsigned char*>(sqlite3_column_blob(stmt, i));
-                int bytes = sqlite3_column_bytes(stmt, i);
+                const auto* blob = static_cast<const unsigned char*>(sqlite3_column_blob(stmt, i));
+                int const bytes = sqlite3_column_bytes(stmt, i);
                 row.emplace(colName, std::any(std::vector<unsigned char>(blob, blob + bytes)));
                 break;
             }
+            default:
+                break;
             }
         }
         rows.emplace_back(std::move(row));
@@ -583,15 +667,21 @@ SQLiteAdapter::Rows SQLiteAdapter::Select(const std::string& table, const std::v
 void SQLiteAdapter::CreateTable(const std::string& table, const std::unordered_map<std::string, std::string>& columns)
 {
     if (!impl_->db)
+    {
         throw SQLAdapterNotConnectedError("SQLite db is null");
+    }
     if (columns.empty())
+    {
         throw SQLAdapterInvalidArgumentError("No columns provided for table creation");
+    }
 
     std::ostringstream cols;
     for (const auto& [colName, colType] : columns)
     {
         if (!cols.str().empty())
+        {
             cols << ", ";
+        }
         cols << colName << " " << colType;
     }
 
@@ -617,7 +707,9 @@ void SQLiteAdapter::CreateTable(const std::string& table, const std::unordered_m
 void SQLiteAdapter::RemoveTable(const std::string& table)
 {
     if (!impl_->db)
+    {
         throw SQLAdapterNotConnectedError("SQLite db is null");
+    }
 
     const std::string sql = "DROP TABLE IF EXISTS " + table;
 
@@ -663,7 +755,12 @@ public:
             lastError = "mysql_init() failed";
             throw SQLAdapterConnectionError(lastError);
         }
-        if (!mysql_real_connect(conn, host.data(), user.data(), password.data(), database.data(), port, nullptr, 0))
+        std::string const hostStr(host);
+        std::string const userStr(user);
+        std::string const passwordStr(password);
+        std::string const databaseStr(database);
+        if (!mysql_real_connect(conn, hostStr.c_str(), userStr.c_str(), passwordStr.c_str(), databaseStr.c_str(), port,
+                                nullptr, 0))
         {
             lastError = mysql_error(conn);
             mysql_close(conn);
@@ -701,10 +798,10 @@ public:
             throw SQLAdapterQueryError(lastError);
         }
         Rows rows;
-        MYSQL_ROW row;
+        MYSQL_ROW row = nullptr;
         while ((row = mysql_fetch_row(result)))
         {
-            unsigned int numFields = mysql_num_fields(result);
+            unsigned int const numFields = mysql_num_fields(result);
             std::unordered_map<std::string, std::any> rowData;
             for (unsigned int i = 0; i < numFields; ++i)
             {
@@ -752,7 +849,7 @@ MySQLAdapter::~MySQLAdapter() = default;
 void MySQLAdapter::Connect(std::string_view host, std::string_view user, std::string_view password,
                            std::string_view database, unsigned int port)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (impl_->connected)
     {
         throw SQLAdapterConnectionError("Already connected to the database.");
@@ -763,13 +860,13 @@ void MySQLAdapter::Connect(std::string_view host, std::string_view user, std::st
 }
 void MySQLAdapter::Execute(const std::string& query)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     impl_->Execute(query);
     RaiseEvent("Execute query", query);
 }
 MySQLAdapter::Rows MySQLAdapter::Query(const std::string& query)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     auto rows = impl_->Query(query);
     RaiseEvent("Query executed", query);
     return rows;
@@ -782,18 +879,25 @@ bool MySQLAdapter::IsConnected() const noexcept
 
 void MySQLAdapter::Insert(const std::string& table, const std::unordered_map<std::string, std::any>& data)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (!impl_->connected)
+    {
         throw SQLAdapterNotConnectedError("Not connected");
+    }
 
     if (data.empty())
+    {
         return;
+    }
 
-    std::ostringstream cols, ph;
+    std::ostringstream cols;
+    std::ostringstream ph;
     std::vector<std::string> keys;
     keys.reserve(data.size());
     for (const auto& [k, _] : data)
+    {
         keys.push_back(k);
+    }
 
     for (size_t i = 0; i < keys.size(); ++i)
     {
@@ -812,15 +916,21 @@ void MySQLAdapter::Insert(const std::string& table, const std::unordered_map<std
         void operator()(MYSQL_STMT* s) const
         {
             if (s)
+            {
                 mysql_stmt_close(s);
+            }
         }
     };
 
-    std::unique_ptr<MYSQL_STMT, StmtDeleter> stmt(mysql_stmt_init(impl_->conn));
+    std::unique_ptr<MYSQL_STMT, StmtDeleter> const stmt(mysql_stmt_init(impl_->conn));
     if (!stmt)
+    {
         throw SQLAdapterQueryError("mysql_stmt_init failed");
+    }
     if (!stmt)
+    {
         throw SQLAdapterQueryError("mysql_stmt_init failed");
+    }
 
     if (mysql_stmt_prepare(stmt.get(), sql.c_str(), sql.size()))
     {
@@ -845,7 +955,7 @@ void MySQLAdapter::Insert(const std::string& table, const std::unordered_map<std
 
         if (!value.has_value())
         {
-            is_null[i] = 1;
+            is_null[i] = true;
             b.buffer_type = MYSQL_TYPE_NULL;
         }
 
@@ -858,7 +968,7 @@ void MySQLAdapter::Insert(const std::string& table, const std::unordered_map<std
                     str_storage.emplace_back(v);
                     const std::string& s = str_storage.back();
                     b.buffer_type = MYSQL_TYPE_STRING;
-                    b.buffer = (char*)s.c_str();
+                    b.buffer = const_cast<char*>(s.c_str());
                     b.buffer_length = s.size();
                 }
                 else if constexpr (std::is_same_v<T, int64_t>)
@@ -878,14 +988,14 @@ void MySQLAdapter::Insert(const std::string& table, const std::unordered_map<std
                     blob_storage.emplace_back(v);
                     const auto& blob = blob_storage.back();
                     b.buffer_type = MYSQL_TYPE_BLOB;
-                    b.buffer = (void*)blob.data();
+                    b.buffer = const_cast<void*>(reinterpret_cast<const void*>(blob.data()));
                     b.buffer_length = blob.size();
                     blob_lengths.push_back(blob.size());
                     b.length = &blob_lengths.back();
                 }
                 else if (std::is_same_v<T, std::nullptr_t>)
                 {
-                    is_null[i] = 1;
+                    is_null[i] = true;
                     b.buffer_type = MYSQL_TYPE_NULL;
                 }
             },
@@ -908,22 +1018,30 @@ void MySQLAdapter::Insert(const std::string& table, const std::unordered_map<std
 void MySQLAdapter::Delete(const std::string& table, const std::unordered_map<std::string, std::any>& key)
 {
     if (key.empty())
+    {
         return;
+    }
 
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (!impl_->connected)
+    {
         throw SQLAdapterNotConnectedError("Not connected");
+    }
 
     std::ostringstream where;
     std::vector<std::string> colNames;
     colNames.reserve(key.size());
     for (const auto& [k, _] : key)
+    {
         colNames.push_back(k);
+    }
 
     for (size_t i = 0; i < colNames.size(); ++i)
     {
         if (i)
+        {
             where << " AND ";
+        }
         where << colNames[i] << " = ?";
     }
     const std::string sql = "DELETE FROM " + table + " WHERE " + where.str();
@@ -933,15 +1051,21 @@ void MySQLAdapter::Delete(const std::string& table, const std::unordered_map<std
         void operator()(MYSQL_STMT* s) const
         {
             if (s)
+            {
                 mysql_stmt_close(s);
+            }
         }
     };
-    std::unique_ptr<MYSQL_STMT, StmtDeleter> stmt(mysql_stmt_init(impl_->conn));
+    std::unique_ptr<MYSQL_STMT, StmtDeleter> const stmt(mysql_stmt_init(impl_->conn));
     if (!stmt)
+    {
         throw SQLAdapterQueryError("mysql_stmt_init failed");
+    }
 
     if (mysql_stmt_prepare(stmt.get(), sql.c_str(), sql.size()))
+    {
         throw SQLAdapterQueryError("prepare failed: " + std::string(mysql_error(impl_->conn)));
+    }
 
     std::vector<MYSQL_BIND> bind(key.size());
     boost::container::vector<bool> isNull(key.size(), false);
@@ -979,7 +1103,7 @@ void MySQLAdapter::Delete(const std::string& table, const std::unordered_map<std
                     strBuf.emplace_back(val);
                     const std::string& s = strBuf.back();
                     b.buffer_type = MYSQL_TYPE_STRING;
-                    b.buffer = (char*)s.c_str();
+                    b.buffer = const_cast<char*>(s.c_str());
                     b.buffer_length = s.size();
                 }
                 else if constexpr (std::is_same_v<T, std::vector<unsigned char>>)
@@ -987,7 +1111,7 @@ void MySQLAdapter::Delete(const std::string& table, const std::unordered_map<std
                     blobBuf.emplace_back(val);
                     const auto& blob = blobBuf.back();
                     b.buffer_type = MYSQL_TYPE_BLOB;
-                    b.buffer = (void*)blob.data();
+                    b.buffer = const_cast<void*>(reinterpret_cast<const void*>(blob.data()));
                     b.buffer_length = blob.size();
                     blobLen.push_back(blob.size());
                     b.length = &blobLen.back();
@@ -1003,29 +1127,42 @@ void MySQLAdapter::Delete(const std::string& table, const std::unordered_map<std
     }
 
     if (mysql_stmt_bind_param(stmt.get(), bind.data()))
+    {
         throw SQLAdapterQueryError("mysql_stmt_bind_param failed: " + std::string(mysql_stmt_error(stmt.get())));
+    }
 
     if (mysql_stmt_execute(stmt.get()))
+    {
         throw SQLAdapterQueryError("mysql_stmt_execute failed: " + std::string(mysql_stmt_error(stmt.get())));
+    }
 }
 
 void MySQLAdapter::Update(const std::string& table, const std::unordered_map<std::string, std::any>& set,
                           const std::unordered_map<std::string, std::any>& where)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (!impl_->connected)
+    {
         throw SQLAdapterNotConnectedError("Not connected");
+    }
 
     if (set.empty())
+    {
         return;
+    }
 
-    std::vector<std::string> setKeys, whereKeys;
+    std::vector<std::string> setKeys;
+    std::vector<std::string> whereKeys;
     setKeys.reserve(set.size());
     whereKeys.reserve(where.size());
     for (const auto& [k, _] : set)
+    {
         setKeys.emplace_back(k);
+    }
     for (const auto& [k, _] : where)
+    {
         whereKeys.emplace_back(k);
+    }
 
     /* 2. Build the SQL statement */
     std::ostringstream sql;
@@ -1033,7 +1170,9 @@ void MySQLAdapter::Update(const std::string& table, const std::unordered_map<std
     for (size_t i = 0; i < setKeys.size(); ++i)
     {
         if (i)
+        {
             sql << ',';
+        }
         sql << setKeys[i] << "=?";
     }
 
@@ -1041,7 +1180,9 @@ void MySQLAdapter::Update(const std::string& table, const std::unordered_map<std
     for (size_t i = 0; i < whereKeys.size(); ++i)
     {
         if (i)
+        {
             sql << " AND ";
+        }
         sql << whereKeys[i] << "=?";
     }
 
@@ -1050,15 +1191,21 @@ void MySQLAdapter::Update(const std::string& table, const std::unordered_map<std
         void operator()(MYSQL_STMT* s) const
         {
             if (s)
+            {
                 mysql_stmt_close(s);
+            }
         }
     };
-    std::unique_ptr<MYSQL_STMT, StmtDeleter> stmt(mysql_stmt_init(impl_->conn));
+    std::unique_ptr<MYSQL_STMT, StmtDeleter> const stmt(mysql_stmt_init(impl_->conn));
     if (!stmt)
+    {
         throw SQLAdapterQueryError("mysql_stmt_init failed");
+    }
 
-    if (mysql_stmt_prepare(stmt.get(), sql.str().c_str(), sql.str().size()))
+    if (mysql_stmt_prepare(stmt.get(), sql.str().c_str(), sql.str().size()) != 0)
+    {
         throw SQLAdapterQueryError("prepare failed: " + std::string(mysql_error(impl_->conn)));
+    }
 
     const size_t total = setKeys.size() + whereKeys.size();
     std::vector<MYSQL_BIND> bind(total);
@@ -1076,7 +1223,7 @@ void MySQLAdapter::Update(const std::string& table, const std::unordered_map<std
         MYSQL_BIND& b = bind[idx];
         if (!value.has_value())
         {
-            is_null[idx] = 1;
+            is_null[idx] = true;
             b.buffer_type = MYSQL_TYPE_NULL;
             b.is_null = &is_null[idx];
             return;
@@ -1091,7 +1238,7 @@ void MySQLAdapter::Update(const std::string& table, const std::unordered_map<std
                     str_storage.emplace_back(v);
                     const std::string& s = str_storage.back();
                     b.buffer_type = MYSQL_TYPE_STRING;
-                    b.buffer = (char*)s.c_str();
+                    b.buffer = const_cast<char*>(s.c_str());
                     b.buffer_length = static_cast<unsigned long>(s.size());
                 }
                 else if constexpr (std::is_same_v<T, int64_t>)
@@ -1111,14 +1258,14 @@ void MySQLAdapter::Update(const std::string& table, const std::unordered_map<std
                     blob_storage.emplace_back(v);
                     const auto& blob = blob_storage.back();
                     b.buffer_type = MYSQL_TYPE_BLOB;
-                    b.buffer = (void*)blob.data();
+                    b.buffer = const_cast<void*>(reinterpret_cast<const void*>(blob.data()));
                     b.buffer_length = static_cast<unsigned long>(blob.size());
                     blob_lengths.push_back(b.buffer_length);
                     b.length = &blob_lengths.back();
                 }
                 else if constexpr (std::is_same_v<T, std::nullptr_t>)
                 {
-                    is_null[idx] = 1;
+                    is_null[idx] = true;
                     b.buffer_type = MYSQL_TYPE_NULL;
                 }
             },
@@ -1128,15 +1275,23 @@ void MySQLAdapter::Update(const std::string& table, const std::unordered_map<std
 
     size_t idx = 0;
     for (const auto& k : setKeys)
+    {
         bindOne(idx++, set.at(k));
+    }
     for (const auto& k : whereKeys)
+    {
         bindOne(idx++, where.at(k));
+    }
 
     if (mysql_stmt_bind_param(stmt.get(), bind.data()))
+    {
         throw SQLAdapterQueryError("mysql_stmt_bind_param failed: " + std::string(mysql_stmt_error(stmt.get())));
+    }
 
     if (mysql_stmt_execute(stmt.get()))
+    {
         throw SQLAdapterQueryError("mysql_stmt_execute failed: " + std::string(mysql_stmt_error(stmt.get())));
+    }
 
     RaiseEvent("Update executed", sql.str());
 }
@@ -1145,20 +1300,28 @@ MySQLAdapter::Rows MySQLAdapter::Select(const std::string& table, const std::vec
                                         const std::unordered_map<std::string, std::any>& where,
                                         const std::optional<std::string>& orderBy, int64_t limit, int64_t offset)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (!impl_->connected)
+    {
         throw SQLAdapterNotConnectedError("Not connected");
+    }
 
     std::ostringstream sql;
     sql << "SELECT ";
     if (columns.empty())
-        sql << '*';
+    {
+        {
+            sql << '*';
+        }
+    }
     else
     {
         for (size_t i = 0; i < columns.size(); ++i)
         {
             if (i)
+            {
                 sql << ',';
+            }
             sql << columns[i];
         }
     }
@@ -1167,7 +1330,9 @@ MySQLAdapter::Rows MySQLAdapter::Select(const std::string& table, const std::vec
     std::vector<std::string> whereKeys;
     whereKeys.reserve(where.size());
     for (const auto& [k, _] : where)
+    {
         whereKeys.emplace_back(k);
+    }
 
     if (!whereKeys.empty())
     {
@@ -1175,32 +1340,46 @@ MySQLAdapter::Rows MySQLAdapter::Select(const std::string& table, const std::vec
         for (size_t i = 0; i < whereKeys.size(); ++i)
         {
             if (i)
+            {
                 sql << " AND ";
+            }
             sql << whereKeys[i] << "=?";
         }
     }
 
     if (orderBy)
+    {
         sql << " ORDER BY " << *orderBy;
+    }
     if (limit > 0)
+    {
         sql << " LIMIT " << limit;
+    }
     if (offset > 0)
+    {
         sql << " OFFSET " << offset;
+    }
 
     struct StmtDeleter
     {
         void operator()(MYSQL_STMT* s) const
         {
             if (s)
+            {
                 mysql_stmt_close(s);
+            }
         }
     };
-    std::unique_ptr<MYSQL_STMT, StmtDeleter> stmt(mysql_stmt_init(impl_->conn));
+    std::unique_ptr<MYSQL_STMT, StmtDeleter> const stmt(mysql_stmt_init(impl_->conn));
     if (!stmt)
+    {
         throw SQLAdapterQueryError("mysql_stmt_init failed");
+    }
 
-    if (mysql_stmt_prepare(stmt.get(), sql.str().c_str(), sql.str().size()))
+    if (mysql_stmt_prepare(stmt.get(), sql.str().c_str(), sql.str().size()) != 0)
+    {
         throw SQLAdapterQueryError("prepare failed: " + std::string(mysql_error(impl_->conn)));
+    }
 
     if (!whereKeys.empty())
     {
@@ -1221,7 +1400,7 @@ MySQLAdapter::Rows MySQLAdapter::Select(const std::string& table, const std::vec
 
             if (!value.has_value())
             {
-                is_null[i] = 1;
+                is_null[i] = true;
                 b.buffer_type = MYSQL_TYPE_NULL;
                 b.is_null = &is_null[i];
                 continue;
@@ -1236,7 +1415,7 @@ MySQLAdapter::Rows MySQLAdapter::Select(const std::string& table, const std::vec
                         str_storage.emplace_back(v);
                         const std::string& s = str_storage.back();
                         b.buffer_type = MYSQL_TYPE_STRING;
-                        b.buffer = (char*)s.c_str();
+                        b.buffer = const_cast<char*>(s.c_str());
                         b.buffer_length = static_cast<unsigned long>(s.size());
                     }
                     else if constexpr (std::is_same_v<T, int64_t>)
@@ -1256,14 +1435,14 @@ MySQLAdapter::Rows MySQLAdapter::Select(const std::string& table, const std::vec
                         blob_storage.emplace_back(v);
                         const auto& blob = blob_storage.back();
                         b.buffer_type = MYSQL_TYPE_BLOB;
-                        b.buffer = (void*)blob.data();
+                        b.buffer = const_cast<void*>(reinterpret_cast<const void*>(blob.data()));
                         b.buffer_length = static_cast<unsigned long>(blob.size());
                         blob_lengths.push_back(b.buffer_length);
                         b.length = &blob_lengths.back();
                     }
                     else if constexpr (std::is_same_v<T, std::nullptr_t>)
                     {
-                        is_null[i] = 1;
+                        is_null[i] = true;
                         b.buffer_type = MYSQL_TYPE_NULL;
                     }
                 },
@@ -1272,34 +1451,46 @@ MySQLAdapter::Rows MySQLAdapter::Select(const std::string& table, const std::vec
         }
 
         if (mysql_stmt_bind_param(stmt.get(), bind.data()))
+        {
             throw SQLAdapterQueryError("mysql_stmt_bind_param failed: " + std::string(mysql_stmt_error(stmt.get())));
+        }
     }
 
     if (mysql_stmt_execute(stmt.get()))
+    {
         throw SQLAdapterQueryError("mysql_stmt_execute failed: " + std::string(mysql_stmt_error(stmt.get())));
+    }
 
     if (mysql_stmt_store_result(stmt.get()))
+    {
         throw SQLAdapterQueryError("mysql_stmt_store_result failed: " + std::string(mysql_stmt_error(stmt.get())));
+    }
 
     MYSQL_RES* meta = mysql_stmt_result_metadata(stmt.get());
     if (!meta)
+    {
         throw SQLAdapterQueryError("mysql_stmt_result_metadata failed");
+    }
 
     struct MetaDeleter
     {
         void operator()(MYSQL_RES* r) const
         {
             if (r)
+            {
                 mysql_free_result(r);
+            }
         }
     };
-    std::unique_ptr<MYSQL_RES, MetaDeleter> metaGuard(meta);
+    std::unique_ptr<MYSQL_RES, MetaDeleter> const metaGuard(meta);
 
     const unsigned int numFields = mysql_num_fields(meta);
     if (numFields == 0)
+    {
         return {};
+    }
 
-    MYSQL_FIELD* fields = mysql_fetch_fields(meta);
+    MYSQL_FIELD const* fields = mysql_fetch_fields(meta);
 
     std::vector<MYSQL_BIND> bindOut(numFields);
     boost::container::vector<bool> isNull(numFields);
@@ -1308,7 +1499,7 @@ MySQLAdapter::Rows MySQLAdapter::Select(const std::string& table, const std::vec
     std::vector<int64_t> intBuf(numFields);
     std::vector<double> doubleBuf(numFields);
     std::vector<std::string> strBuf(numFields);  // Pre-size to empty strings; resized per row later
-    std::vector<std::vector<unsigned char>> blobBuf(numFields);
+    std::vector<std::vector<unsigned char>> const blobBuf(numFields);
 
     std::memset(bindOut.data(), 0, sizeof(MYSQL_BIND) * numFields);
 
@@ -1338,23 +1529,29 @@ MySQLAdapter::Rows MySQLAdapter::Select(const std::string& table, const std::vec
         default:
             strBuf[i].resize(fields[i].max_length + 1, '\0');
             b.buffer_type = MYSQL_TYPE_STRING;
-            b.buffer = &strBuf[i][0];
+            b.buffer = strBuf[i].data();
             b.buffer_length = static_cast<unsigned long>(strBuf[i].size());
         }
     }
 
     if (mysql_stmt_bind_result(stmt.get(), bindOut.data()))
+    {
         throw SQLAdapterQueryError("mysql_stmt_bind_result failed");
+    }
 
     std::vector<std::unordered_map<std::string, std::any>> result;
 
     while (true)
     {
-        int ret = mysql_stmt_fetch(stmt.get());
+        int const ret = mysql_stmt_fetch(stmt.get());
         if (ret == MYSQL_NO_DATA)
+        {
             break;
+        }
         if (ret == 1)
+        {
             throw SQLAdapterQueryError("mysql_stmt_fetch failed");
+        }
 
         std::unordered_map<std::string, std::any> row;
         for (unsigned int i = 0; i < numFields; ++i)
@@ -1393,12 +1590,16 @@ MySQLAdapter::Rows MySQLAdapter::Select(const std::string& table, const std::vec
 }
 void MySQLAdapter::CreateTable(const std::string& table, const std::unordered_map<std::string, std::string>& columns)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (!impl_->connected)
+    {
         throw SQLAdapterNotConnectedError("Not connected");
+    }
 
     if (columns.empty())
+    {
         throw SQLAdapterQueryError("No columns provided for table creation");
+    }
 
     std::ostringstream sql;
     sql << "CREATE TABLE IF NOT EXISTS " << table << " (";
@@ -1406,7 +1607,9 @@ void MySQLAdapter::CreateTable(const std::string& table, const std::unordered_ma
     for (size_t i = 0; i < columns.size(); ++i)
     {
         if (i > 0)
+        {
             sql << ", ";
+        }
         for (const auto& [colName, colType] : columns)
         {
             sql << colName << " " << colType;
@@ -1414,23 +1617,29 @@ void MySQLAdapter::CreateTable(const std::string& table, const std::unordered_ma
     }
     sql << ")";
 
-    if (mysql_real_query(impl_->conn, sql.str().c_str(), sql.str().size()))
+    if (mysql_real_query(impl_->conn, sql.str().c_str(), sql.str().size()) != 0)
+    {
         throw SQLAdapterQueryError("CREATE TABLE failed: " + std::string(mysql_error(impl_->conn)));
+    }
 
     RaiseEvent("Table created", sql.str());
 }
 
 void MySQLAdapter::RemoveTable(const std::string& table)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (!impl_->connected)
+    {
         throw SQLAdapterNotConnectedError("Not connected");
+    }
 
     std::ostringstream sql;
     sql << "DROP TABLE IF EXISTS " << table;
 
-    if (mysql_real_query(impl_->conn, sql.str().c_str(), sql.str().size()))
+    if (mysql_real_query(impl_->conn, sql.str().c_str(), sql.str().size()) != 0)
+    {
         throw SQLAdapterQueryError("DROP TABLE failed: " + std::string(mysql_error(impl_->conn)));
+    }
 
     RaiseEvent("Table removed", sql.str());
 }
@@ -1455,8 +1664,12 @@ public:
     void Connect(std::string_view host, std::string_view user, std::string_view password, std::string_view database,
                  unsigned int port)
     {
-        conn = PQsetdbLogin(host.data(), std::to_string(port).c_str(), nullptr, nullptr, database.data(), user.data(),
-                            password.data());
+        std::string const hostStr(host);
+        std::string const databaseStr(database);
+        std::string const userStr(user);
+        std::string const passwordStr(password);
+        conn = PQsetdbLogin(hostStr.c_str(), std::to_string(port).c_str(), nullptr, nullptr, databaseStr.c_str(),
+                            userStr.c_str(), passwordStr.c_str());
         if (PQstatus(conn) != CONNECTION_OK)
         {
             lastError = PQerrorMessage(conn);
@@ -1494,21 +1707,21 @@ public:
             throw SQLAdapterQueryError(lastError);
         }
         Rows rows;
-        int numRows = PQntuples(result);
-        int numFields = PQnfields(result);
+        int const numRows = PQntuples(result);
+        int const numFields = PQnfields(result);
         for (int i = 0; i < numRows; ++i)
         {
             std::unordered_map<std::string, std::any> rowData;
             for (int j = 0; j < numFields; ++j)
             {
-                std::string fieldName = PQfname(result, j);
+                std::string const fieldName = PQfname(result, j);
                 if (PQgetisnull(result, i, j))
                 {
                     rowData[fieldName] = std::any();
                 }
                 else
                 {
-                    Oid fieldType = PQftype(result, j);
+                    Oid const fieldType = PQftype(result, j);
                     switch (fieldType)
                     {
                     case PG_TYPE_INT8:  // INT8
@@ -1526,7 +1739,7 @@ public:
                         break;
                     case PG_TYPE_BYTEA:  // BYTEA
                     {
-                        size_t length;
+                        size_t length = 0;
                         unsigned char* value =
                             PQunescapeBytea(reinterpret_cast<const unsigned char*>(PQgetvalue(result, i, j)), &length);
                         rowData[fieldName] = std::vector<unsigned char>(value, value + length);
@@ -1553,7 +1766,7 @@ PostgreSQLAdapter::~PostgreSQLAdapter() = default;
 void PostgreSQLAdapter::Connect(std::string_view host, std::string_view user, std::string_view password,
                                 std::string_view database, unsigned int port)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (impl_->connected)
     {
         throw SQLAdapterConnectionError("Already connected to the database.");
@@ -1564,13 +1777,13 @@ void PostgreSQLAdapter::Connect(std::string_view host, std::string_view user, st
 }
 void PostgreSQLAdapter::Execute(const std::string& query)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     impl_->Execute(query);
     RaiseEvent("Execute query", query);
 }
 PostgreSQLAdapter::Rows PostgreSQLAdapter::Query(const std::string& query)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     auto rows = impl_->Query(query);
     RaiseEvent("Query executed", query);
     return rows;
@@ -1596,24 +1809,22 @@ std::string to_pg_literal(const std::any& value)
             {
                 return "NULL";
             }
-            else if constexpr (std::is_same_v<T, int64_t>)
-            {
-                return std::to_string(v);
-            }
-            else if constexpr (std::is_same_v<T, double>)
+            else if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, double>)
             {
                 return std::to_string(v);
             }
             else if constexpr (std::is_same_v<T, std::string>)
             {
-                std::string s = v;
+                std::string const& s = v;
                 std::string out;
                 out.reserve(s.size() + 2);
                 out.push_back('\'');
-                for (char c : s)
+                for (char const c : s)
                 {
                     if (c == '\'')
+                    {
                         out.push_back('\'');
+                    }
                     out.push_back(c);
                 }
                 out.push_back('\'');
@@ -1624,8 +1835,10 @@ std::string to_pg_literal(const std::any& value)
                 const auto& bytes = v;
                 std::ostringstream os;
                 os << "E'\\\\x" << std::hex << std::setfill('0');
-                for (unsigned char b : bytes)
+                for (unsigned char const b : bytes)
+                {
                     os << std::setw(2) << +b;
+                }
                 os << "'";
                 return os.str();
             }
@@ -1639,14 +1852,19 @@ std::string to_pg_literal(const std::any& value)
 }  // namespace
 void PostgreSQLAdapter::Insert(const std::string& table, const std::unordered_map<std::string, std::any>& data)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (!impl_->conn || PQstatus(impl_->conn) != CONNECTION_OK)
+    {
         throw SQLAdapterNotConnectedError("PostgreSQL connection not ready");
+    }
 
     if (data.empty())
+    {
         throw SQLAdapterQueryError("Insert data is empty");
+    }
 
-    std::ostringstream cols, vals;
+    std::ostringstream cols;
+    std::ostringstream vals;
     bool first = true;
     for (const auto& [k, v] : data)
     {
@@ -1661,7 +1879,7 @@ void PostgreSQLAdapter::Insert(const std::string& table, const std::unordered_ma
         vals << to_pg_literal(v);
     }
 
-    std::string sql = "INSERT INTO " + table + " (" + cols.str() + ") VALUES (" + vals.str() + ");";
+    std::string const sql = "INSERT INTO " + table + " (" + cols.str() + ") VALUES (" + vals.str() + ");";
 
     PGresult* res = PQexec(impl_->conn, sql.c_str());
     if (PQresultStatus(res) != PGRES_COMMAND_OK)
@@ -1675,9 +1893,11 @@ void PostgreSQLAdapter::Insert(const std::string& table, const std::unordered_ma
 }
 void PostgreSQLAdapter::Delete(const std::string& table, const std::unordered_map<std::string, std::any>& data)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (!impl_->conn || PQstatus(impl_->conn) != CONNECTION_OK)
+    {
         throw SQLAdapterNotConnectedError("PostgreSQL connection not ready");
+    }
 
     std::ostringstream sql;
     sql << "DELETE FROM " << table;
@@ -1689,7 +1909,9 @@ void PostgreSQLAdapter::Delete(const std::string& table, const std::unordered_ma
         for (const auto& [k, v] : data)
         {
             if (!first)
+            {
                 sql << " AND ";
+            }
             first = false;
 
             sql << k << " = " << to_pg_literal(v);
@@ -1710,12 +1932,16 @@ void PostgreSQLAdapter::Delete(const std::string& table, const std::unordered_ma
 void PostgreSQLAdapter::Update(const std::string& table, const std::unordered_map<std::string, std::any>& set,
                                const std::unordered_map<std::string, std::any>& where)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (!impl_->conn || PQstatus(impl_->conn) != CONNECTION_OK)
+    {
         throw SQLAdapterNotConnectedError("PostgreSQL connection not ready");
+    }
 
     if (set.empty())
+    {
         throw SQLAdapterQueryError("Update SET clause is empty");
+    }
 
     std::ostringstream sql;
     sql << "UPDATE " << table << " SET ";
@@ -1725,7 +1951,9 @@ void PostgreSQLAdapter::Update(const std::string& table, const std::unordered_ma
     for (const auto& [col, val] : set)
     {
         if (!first)
+        {
             sql << ',';
+        }
         first = false;
         sql << col << " = " << to_pg_literal(val);
     }
@@ -1738,7 +1966,9 @@ void PostgreSQLAdapter::Update(const std::string& table, const std::unordered_ma
         for (const auto& [col, val] : where)
         {
             if (!first)
+            {
                 sql << " AND ";
+            }
             first = false;
             sql << col << " = " << to_pg_literal(val);
         }
@@ -1761,9 +1991,11 @@ PostgreSQLAdapter::Rows PostgreSQLAdapter::Select(const std::string& table, cons
                                                   const std::optional<std::string>& orderBy, int64_t limit,
                                                   int64_t offset)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (!impl_->conn || PQstatus(impl_->conn) != CONNECTION_OK)
+    {
         throw SQLAdapterNotConnectedError("PostgreSQL connection not ready");
+    }
 
     std::ostringstream sql;
     sql << "SELECT ";
@@ -1779,7 +2011,9 @@ PostgreSQLAdapter::Rows PostgreSQLAdapter::Select(const std::string& table, cons
         for (const auto& col : columns)
         {
             if (!first)
+            {
                 sql << ',';
+            }
             first = false;
             sql << col;
         }
@@ -1795,7 +2029,9 @@ PostgreSQLAdapter::Rows PostgreSQLAdapter::Select(const std::string& table, cons
         for (const auto& [col, val] : where)
         {
             if (!first)
+            {
                 sql << " AND ";
+            }
             first = false;
             sql << col << " = " << to_pg_literal(val);
         }
@@ -1856,11 +2092,9 @@ PostgreSQLAdapter::Rows PostgreSQLAdapter::Select(const std::string& table, cons
                 row.emplace(colName, static_cast<int64_t>(std::stoll(val)));
                 break;  // int8 / bigint
             case PG_TYPE_INT2:
-                row.emplace(colName, static_cast<int64_t>(std::stoi(val)));
-                break;  // int2
             case PG_TYPE_INT4:
                 row.emplace(colName, static_cast<int64_t>(std::stoi(val)));
-                break;  // int4
+                break;  // int2 / int4
             case PG_TYPE_FLOAT4:
                 row.emplace(colName, static_cast<double>(std::stof(val)));
                 break;  // float4
@@ -1871,7 +2105,7 @@ PostgreSQLAdapter::Rows PostgreSQLAdapter::Select(const std::string& table, cons
             {  // bytea
                 size_t len = 0;
                 unsigned char* data = PQunescapeBytea(reinterpret_cast<const unsigned char*>(val), &len);
-                std::vector<unsigned char> bytes(data, data + len);
+                std::vector<unsigned char> const bytes(data, data + len);
                 PQfreemem(data);
                 row.emplace(colName, bytes);
                 break;
@@ -1896,12 +2130,16 @@ PostgreSQLAdapter::Rows PostgreSQLAdapter::Select(const std::string& table, cons
 void PostgreSQLAdapter::CreateTable(const std::string& table,
                                     const std::unordered_map<std::string, std::string>& columns)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (!impl_->conn || PQstatus(impl_->conn) != CONNECTION_OK)
+    {
         throw SQLAdapterNotConnectedError("PostgreSQL connection not ready");
+    }
 
     if (columns.empty())
+    {
         throw SQLAdapterQueryError("CreateTable: No columns specified");
+    }
 
     std::ostringstream sql;
     sql << "CREATE TABLE " << table << " (";
@@ -1910,7 +2148,9 @@ void PostgreSQLAdapter::CreateTable(const std::string& table,
     for (const auto& [colName, colType] : columns)
     {
         if (!first)
+        {
             sql << ", ";
+        }
         first = false;
         sql << colName << " " << colType;
     }
@@ -1919,18 +2159,20 @@ void PostgreSQLAdapter::CreateTable(const std::string& table,
     PGresult* res = PQexec(impl_->conn, sql.str().c_str());
     if (PQresultStatus(res) != PGRES_COMMAND_OK)
     {
-        std::string err = PQerrorMessage(impl_->conn);
+        std::string const err = PQerrorMessage(impl_->conn);
         PQclear(res);
-        throw SQLAdapterQueryError(std::string("CreateTable failed: ") + impl_->lastError);
+        throw SQLAdapterQueryError(std::string("CreateTable failed: ") + err);
     }
     PQclear(res);
     RaiseEvent("CreateTable executed", sql.str());
 }
 void PostgreSQLAdapter::RemoveTable(const std::string& table)
 {
-    std::lock_guard lock(mutex_);
+    std::scoped_lock const lock(mutex_);
     if (!impl_->conn || PQstatus(impl_->conn) != CONNECTION_OK)
+    {
         throw SQLAdapterNotConnectedError("PostgreSQL connection not ready");
+    }
 
     std::ostringstream sql;
     sql << "DROP TABLE IF EXISTS " << table << ";";

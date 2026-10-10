@@ -76,17 +76,21 @@ AnyObject::~AnyObject()
 void AnyObject::ForeachField(const std::function<void(std::string_view, AnyObject)>& callback)
 {
     if (!type_info)
+    {
         return;
+    }
     for (const auto& [name, field] : type_info->fields)
     {
-        AnyObject any = AnyObject{field.first, static_cast<char*>(data) + field.second};
+        AnyObject const any = AnyObject{field.first, static_cast<char*>(data) + field.second};
         callback(name, any);
     }
 }
 AnyObject AnyObject::Invoke(std::string_view method_name, std::span<AnyObject> args)
 {
     if (!type_info)
+    {
         throw RuntimeError("Invoke on empty AnyObject");
+    }
 #ifdef HSBA_ANY_OBJECT_ENABLE_MOCK
     // Mockit-like hook: when mocking is enabled and a stub matches, serve the
     // call from the registry instead of dispatching to the real method.

@@ -57,7 +57,7 @@ using FileTransferProgressFunc = std::function<void(int percent, std::string_vie
  * @return Transfer result with success status and counts.
  */
 HSBA_SLICER_LIB_API FileTransferResult TransferFiles(const FileTransferConfig& config,
-                                                     FileTransferProgressFunc progress = nullptr);
+                                                     const FileTransferProgressFunc& progress = nullptr);
 
 }  // namespace HsBa::Slicer
 

@@ -68,12 +68,14 @@ HSBA_SLICER_LIB_API bool SaveWaamRobotPath(const WaamRobotPackage& pkg, const st
         if (layer_count == 0)
         {
             if (error_out)
+            {
                 *error_out = "WAAM package has no layers";
+            }
             return false;
         }
 
-        WeldParam base_weld = BuildWeldParam(pkg.weld);
-        float travel = (pkg.weld.travel_speed > 0.0f) ? pkg.weld.travel_speed : DEFAULT_ROBOT_VELOCITY;
+        WeldParam const base_weld = BuildWeldParam(pkg.weld);
+        float const travel = (pkg.weld.travel_speed > 0.0F) ? pkg.weld.travel_speed : DEFAULT_ROBOT_VELOCITY;
 
         WeldRobotPath path(ToRobotType(pkg.robot_type));
 
@@ -82,14 +84,15 @@ HSBA_SLICER_LIB_API bool SaveWaamRobotPath(const WaamRobotPackage& pkg, const st
         // arc-interrupt between layers - one uninterrupted MoveL deposition.
         if (pkg.spiral_mode)
         {
-            std::vector<double> zs(pkg.layer_z_heights.begin(), pkg.layer_z_heights.end());
+            std::vector<double> const zs(pkg.layer_z_heights.begin(), pkg.layer_z_heights.end());
             const std::vector<SpiralPoint> helix = SpiralizeOuterWall(pkg.layer_outlines, zs);
             if (helix.size() >= 2)
             {
                 // Rapid (non-welding) move to the base of the helix.
                 RLPoint travel_point;
-                travel_point.end = {static_cast<float>(helix[0].x), static_cast<float>(helix[0].y),
-                                    static_cast<float>(helix[0].z)};
+                travel_point.end = {.x = static_cast<float>(helix[0].x),
+                                    .y = static_cast<float>(helix[0].y),
+                                    .z = static_cast<float>(helix[0].z)};
                 travel_point.middle = {};
                 travel_point.velocity = DEFAULT_ROBOT_VELOCITY;
                 travel_point.type = RLPointType::MoveJ;
@@ -100,8 +103,9 @@ HSBA_SLICER_LIB_API bool SaveWaamRobotPath(const WaamRobotPackage& pkg, const st
                 for (size_t i = 1; i < helix.size(); ++i)
                 {
                     WeldRLPoint wp;
-                    wp.point.end = {static_cast<float>(helix[i].x), static_cast<float>(helix[i].y),
-                                    static_cast<float>(helix[i].z)};
+                    wp.point.end = {.x = static_cast<float>(helix[i].x),
+                                    .y = static_cast<float>(helix[i].y),
+                                    .z = static_cast<float>(helix[i].z)};
                     wp.point.middle = {};
                     wp.point.velocity = travel;
                     wp.point.type = RLPointType::MoveL;
@@ -113,9 +117,13 @@ HSBA_SLICER_LIB_API bool SaveWaamRobotPath(const WaamRobotPackage& pkg, const st
 
                 const std::filesystem::path out_spiral(output_path);
                 if (!lua_script.empty())
+                {
                     path.Save(out_spiral, std::filesystem::path(lua_script), std::string_view(lua_func));
+                }
                 else
+                {
                     path.Save(out_spiral);
+                }
                 return true;
             }
             // helix degenerate (no closed contours) -> fall through to per-layer deposition
@@ -123,17 +131,20 @@ HSBA_SLICER_LIB_API bool SaveWaamRobotPath(const WaamRobotPackage& pkg, const st
 
         for (std::size_t li = 0; li < layer_count; ++li)
         {
-            const float z = (li < pkg.layer_z_heights.size()) ? pkg.layer_z_heights[li] : 0.0f;
+            const float z = (li < pkg.layer_z_heights.size()) ? pkg.layer_z_heights[li] : 0.0F;
             const PolygonsD& contours = pkg.layer_outlines[li];
 
             for (const PolygonD& contour : contours)
             {
                 if (contour.size() < 2)
+                {
                     continue;
+                }
 
                 // Rapid move to the contour start (non-welding travel point).
                 RLPoint travel_point;
-                travel_point.end = {static_cast<float>(contour.front().x), static_cast<float>(contour.front().y), z};
+                travel_point.end = {
+                    .x = static_cast<float>(contour.front().x), .y = static_cast<float>(contour.front().y), .z = z};
                 travel_point.middle = {};
                 travel_point.velocity = DEFAULT_ROBOT_VELOCITY;
                 travel_point.type = RLPointType::MoveJ;
@@ -144,7 +155,7 @@ HSBA_SLICER_LIB_API bool SaveWaamRobotPath(const WaamRobotPackage& pkg, const st
                 for (const Point2D& pt : contour)
                 {
                     WeldRLPoint wp;
-                    wp.point.end = {static_cast<float>(pt.x), static_cast<float>(pt.y), z};
+                    wp.point.end = {.x = static_cast<float>(pt.x), .y = static_cast<float>(pt.y), .z = z};
                     wp.point.middle = {};
                     wp.point.velocity = travel;
                     wp.point.type = RLPointType::MoveL;
@@ -170,7 +181,9 @@ HSBA_SLICER_LIB_API bool SaveWaamRobotPath(const WaamRobotPackage& pkg, const st
     catch (const RuntimeError& e)
     {
         if (error_out)
+        {
             *error_out = e.what();
+        }
         return false;
     }
 }

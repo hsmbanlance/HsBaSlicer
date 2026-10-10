@@ -16,8 +16,8 @@ namespace
 {
 bool PointInsidePolygonsD(double x, double y, const PolygonsD& polys)
 {
-    Clipper2Lib::Point64 p64{static_cast<int64_t>(std::llround(x * integerization)),
-                             static_cast<int64_t>(std::llround(y * integerization))};
+    Clipper2Lib::Point64 const p64{static_cast<int64_t>(std::llround(x * integerization)),
+                                   static_cast<int64_t>(std::llround(y * integerization))};
     const Polygons polys_int = Integerization(polys);
     auto r = PointInPolygons(p64, polys_int);
     return r != Clipper2Lib::PointInPolygonResult::IsOutside;
@@ -38,10 +38,15 @@ PolygonsD UnionD(const PolygonsD& subjects, Clipper2Lib::FillRule fr)
 PolygonsD SlaSacrificialSupport::SampleSupportPoints(const PolygonsD& overhang, double tip_radius, double spacing)
 {
     if (overhang.empty() || spacing <= 0.0)
+    {
         return {};
+    }
 
     // Get bounding box
-    double min_x = 1e18, min_y = 1e18, max_x = -1e18, max_y = -1e18;
+    double min_x = 1e18;
+    double min_y = 1e18;
+    double max_x = -1e18;
+    double max_y = -1e18;
     for (const auto& poly : overhang)
     {
         for (const auto& pt : poly)
@@ -54,7 +59,9 @@ PolygonsD SlaSacrificialSupport::SampleSupportPoints(const PolygonsD& overhang, 
     }
 
     if (min_x > max_x || min_y > max_y)
+    {
         return {};
+    }
 
     PolygonsD support_points;
     for (double y = min_y; y <= max_y; y += spacing)
@@ -74,10 +81,12 @@ PolygonsD SlaSacrificialSupport::SampleSupportPoints(const PolygonsD& overhang, 
 PolygonsD SlaSacrificialSupport::Generate(const PolygonsD& current_layer, const PolygonsD& prev_layer,
                                           float layer_height, const SlaSupportConfig& config)
 {
-    PolygonsD overhang =
+    PolygonsD const overhang =
         OverhangDetector::Detect(current_layer, prev_layer, layer_height, config.overhang_angle_threshold);
     if (overhang.empty())
+    {
         return {};
+    }
 
     // Apply gap
     const double gap = static_cast<double>(config.support_gap);
@@ -86,7 +95,9 @@ PolygonsD SlaSacrificialSupport::Generate(const PolygonsD& current_layer, const 
         Offset(overhang_int, -gap * integerization, Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
 
     if (gapped.empty())
+    {
         return {};
+    }
 
     const PolygonsD gapped_d = UnIntegerization(gapped);
 
@@ -97,13 +108,17 @@ PolygonsD SlaSacrificialSupport::Generate(const PolygonsD& current_layer, const 
 
     PolygonsD points = SampleSupportPoints(gapped_d, tip_radius, spacing);
     if (points.empty())
+    {
         return {};
+    }
 
     // Union all support point circles
     PolygonsD result;
     result.reserve(points.size());
     for (auto& p : points)
+    {
         result.push_back(std::move(p));
+    }
 
     return UnionD(result, Clipper2Lib::FillRule::NonZero);
 }

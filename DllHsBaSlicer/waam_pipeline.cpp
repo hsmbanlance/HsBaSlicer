@@ -22,6 +22,8 @@
 
 namespace HsBa::Slicer::Pipeline
 {
+namespace
+{
 
 struct InternalWaamResult
 {
@@ -36,19 +38,19 @@ struct InternalWaamConfig
 {
     std::string model_name;
     std::string model_path;
-    float layer_height = 0.8f;
-    float first_layer_height = 1.0f;
-    float bead_width = 1.2f;
-    float travel_speed = 8.0f;
-    float wire_feed_speed = 5.0f;
-    float arc_current = 180.0f;
-    float arc_voltage = 22.0f;
-    float gas_flow_rate = 15.0f;
+    float layer_height = 0.8F;
+    float first_layer_height = 1.0F;
+    float bead_width = 1.2F;
+    float travel_speed = 8.0F;
+    float wire_feed_speed = 5.0F;
+    float arc_current = 180.0F;
+    float arc_voltage = 22.0F;
+    float gas_flow_rate = 15.0F;
     HsBaWaamMaterial_t material = HSBA_WAAM_MATERIAL_STEEL;
     HsBaWaamWeldProcess_t welding_process = HSBA_WAAM_WELD_ARC;
     HsBaWaamProtection_t protection = HSBA_WAAM_PROTECTION_SHIELD_GAS;
     HsBaMetalProtectGas_t protect_gas = HSBA_METAL_GAS_ARGON;
-    float interpass_temperature = 100.0f;
+    float interpass_temperature = 100.0F;
     HsBaWaamRobotType_t robot_type = HSBA_WAAM_ROBOT_ABB;
     std::string path_lua_script;
     std::string path_lua_func;
@@ -57,9 +59,6 @@ struct InternalWaamConfig
     HsBaWaamProgressCallback progress_cb = nullptr;
     void* progress_user_data = nullptr;
 };
-
-namespace
-{
 
 struct OwnedCString
 {
@@ -72,7 +71,9 @@ struct OwnedCString
         {
             data = static_cast<char*>(std::malloc(str.size() + 1));
             if (data)
+            {
                 std::memcpy(data, str.c_str(), str.size() + 1);
+            }
         }
     }
 
@@ -97,20 +98,26 @@ struct OwnedCString
 
 int CalculateLayerCount(const ModelInfo& info, float layer_height, float first_layer_height)
 {
-    float model_height = info.bbox_max.z() - info.bbox_min.z();
-    if (model_height <= 0.0f)
+    float const model_height = info.bbox_max.z() - info.bbox_min.z();
+    if (model_height <= 0.0F)
+    {
         return 0;
-    float remaining = model_height - first_layer_height;
-    if (remaining <= 0.0f)
+    }
+    float const remaining = model_height - first_layer_height;
+    if (remaining <= 0.0F)
+    {
         return 1;
+    }
     return 1 + static_cast<int>(std::ceil(remaining / layer_height));
 }
 
 float GetLayerZ(int layer_index, float first_layer_height, float layer_height)
 {
     if (layer_index == 0)
+    {
         return first_layer_height;
-    return first_layer_height + layer_index * layer_height;
+    }
+    return first_layer_height + static_cast<float>(layer_index) * layer_height;
 }
 
 void ReportProgress(const InternalWaamConfig& cfg, int percent, const std::string& stage)
@@ -120,8 +127,6 @@ void ReportProgress(const InternalWaamConfig& cfg, int percent, const std::strin
         cfg.progress_cb(percent, stage.c_str(), cfg.progress_user_data);
     }
 }
-
-}  // anonymous namespace
 
 InternalWaamConfig BuildWaamConfig(const HsBaWaamPipelineConfig_t* cfg, HsBaWaamProgressCallback cb, void* ud)
 {
@@ -165,6 +170,7 @@ HsBaWaamPipelineResult_t ToCResult(const InternalWaamResult& ir)
     return cr;
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-reference-coroutine-parameters) caller keeps cfg alive
 Utils::Task<InternalWaamResult> RunWaamPipelineAsync(const InternalWaamConfig& cfg)
 {
     InternalWaamResult result;
@@ -212,13 +218,13 @@ Utils::Task<InternalWaamResult> RunWaamPipelineAsync(const InternalWaamConfig& c
             total_layers,
             [&](int i)
             {
-                float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
+                float const z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
                 layer_z_heights[i] = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height);
                 layer_outlines[i] = SliceLayer(*topo, z);
             },
             [&](int done)
             {
-                int progress = 15 + (done * 45) / total_layers;
+                int const progress = 15 + (done * 45) / total_layers;
                 ReportProgress(cfg, progress, "Slicing bead layer");
             });
         ReportProgress(cfg, 60, "Slicing complete");
@@ -248,8 +254,9 @@ Utils::Task<InternalWaamResult> RunWaamPipelineAsync(const InternalWaamConfig& c
         pkg.spiral_mode = cfg.spiral_mode;
 
         std::string lua_error;
-        bool export_ok = SaveWaamRobotPath(pkg, output_path, cfg.path_lua_script,
-                                           cfg.path_lua_func.empty() ? "export_waam" : cfg.path_lua_func, &lua_error);
+        bool const export_ok =
+            SaveWaamRobotPath(pkg, output_path, cfg.path_lua_script,
+                              cfg.path_lua_func.empty() ? "export_waam" : cfg.path_lua_func, &lua_error);
 
         if (export_ok)
         {
@@ -275,6 +282,8 @@ Utils::Task<InternalWaamResult> RunWaamPipelineAsync(const InternalWaamConfig& c
 
     co_return result;
 }
+
+}  // anonymous namespace
 
 }  // namespace HsBa::Slicer::Pipeline
 
@@ -302,20 +311,22 @@ HSBA_SLICER_API void HsBaRunWaamPipelineAsync(const HsBaWaamPipelineConfig_t* co
         HsBa::Slicer::Pipeline::BuildWaamConfig(config, callback, user_data));
     auto task = HsBa::Slicer::Pipeline::RunWaamPipelineAsync(*shared_cfg);
     task.then(
-        [shared_cfg, result_callback, result_user_data](HsBa::Slicer::Pipeline::InternalWaamResult ir)
+        [shared_cfg, result_callback, result_user_data](const HsBa::Slicer::Pipeline::InternalWaamResult& ir)
         {
             auto cr = HsBa::Slicer::Pipeline::ToCResult(ir);
             if (result_callback)
             {
                 result_callback(cr, result_user_data);
             }
-        });
+        });  // NOLINT(clang-analyzer-unix.Malloc) C-ABI ownership transfer: result_callback frees cr strings
 }
 
 HSBA_SLICER_API void HsBaFreeWaamPipelineResult(HsBaWaamPipelineResult_t* result)
 {
     if (!result)
+    {
         return;
+    }
     std::free(std::exchange(result->output_path, nullptr));
     std::free(std::exchange(result->error_message, nullptr));
 }

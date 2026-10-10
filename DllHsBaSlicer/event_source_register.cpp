@@ -13,7 +13,8 @@ void HsBaAddZipperEventCallback(const char* event_name, void (*func)(double, con
         {
             if (std::string(event_name) == "zipper.on_add")
             {
-                func(progress, message.data());
+                std::string const msg{message};
+                func(progress, msg.c_str());
             }
         });
 }
@@ -25,7 +26,9 @@ void HsBaAddDBEventCallback(const char* event_name, void (*func)(const char*, co
         {
             if (std::string(event_name) == "db.on_query")
             {
-                func(query.data(), result.data());
+                std::string const q{query};
+                std::string const r{result};
+                func(q.c_str(), r.c_str());
             }
         });
 }

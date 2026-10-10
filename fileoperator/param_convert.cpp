@@ -3,6 +3,7 @@
  */
 #include "param_convert.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <cstring>
@@ -39,40 +40,52 @@ const std::array<Utils::TypeInfo*, 14>& EnumTypeInfos()
 }
 }  // namespace
 
-bool IsEnumFieldType(Utils::TypeInfo* field_ti) noexcept
+bool IsEnumFieldType(Utils::TypeInfo* field_ti) noexcept  // NOLINT(bugprone-exception-escape) deliberate: first-call
+                                                          // static init of the enum table is the only throw path
 {
     if (!field_ti)
-        return false;
-    for (auto* e : EnumTypeInfos())
     {
-        if (e == field_ti)
-            return true;
+        return false;
     }
-    return false;
+    return std::ranges::any_of(EnumTypeInfos(), [field_ti](Utils::TypeInfo* e) { return e == field_ti; });
 }
 
 std::any FieldToAny(std::string_view field_name, Utils::TypeInfo* field_ti, const void* ptr)
 {
     if (!field_ti || !ptr)
+    {
         ThrowUnsupported(field_name, "FieldToAny");
+    }
 
     if (field_ti == Utils::GetTypeInfo<float>())
+    {
         return std::any(static_cast<double>(*static_cast<const float*>(ptr)));
+    }
     if (field_ti == Utils::GetTypeInfo<double>())
+    {
         return std::any(*static_cast<const double*>(ptr));
+    }
     if (field_ti == Utils::GetTypeInfo<int>())
+    {
         return std::any(static_cast<int64_t>(*static_cast<const int*>(ptr)));
+    }
     if (field_ti == Utils::GetTypeInfo<int64_t>())
+    {
         return std::any(*static_cast<const int64_t*>(ptr));
+    }
     if (field_ti == Utils::GetTypeInfo<std::string>())
+    {
         return std::any(*static_cast<const std::string*>(ptr));
+    }
     if (field_ti == Utils::GetTypeInfo<const char*>())
     {
         const char* s = *static_cast<const char* const*>(ptr);
         return s ? std::any(std::string(s)) : std::any(nullptr);
     }
     if (IsEnumFieldType(field_ti))
+    {
         return std::any(static_cast<int64_t>(*static_cast<const int*>(ptr)));
+    }
 
     ThrowUnsupported(field_name, "FieldToAny");
 }
@@ -80,7 +93,9 @@ std::any FieldToAny(std::string_view field_name, Utils::TypeInfo* field_ti, cons
 void AnyToField(const std::any& value, Utils::TypeInfo* field_ti, void* ptr, StringArena& arena)
 {
     if (!field_ti || !ptr)
+    {
         ThrowUnsupported("<load>", "AnyToField");
+    }
 
     // Aggregate NULL: an empty any or one holding nullptr is uniformly treated as NULL.
     const bool is_null = !value.has_value() || value.type() == typeid(std::nullptr_t);
@@ -89,11 +104,13 @@ void AnyToField(const std::any& value, Utils::TypeInfo* field_ti, void* ptr, Str
     {
         if (is_null)
         {
-            *static_cast<float*>(ptr) = 0.0f;
+            *static_cast<float*>(ptr) = 0.0F;
             return;
         }
         if (value.type() != typeid(double))
+        {
             ThrowUnsupported("float", "AnyToField");
+        }
         *static_cast<float*>(ptr) = static_cast<float>(std::any_cast<double>(value));
         return;
     }
@@ -105,7 +122,9 @@ void AnyToField(const std::any& value, Utils::TypeInfo* field_ti, void* ptr, Str
             return;
         }
         if (value.type() != typeid(double))
+        {
             ThrowUnsupported("double", "AnyToField");
+        }
         *static_cast<double*>(ptr) = std::any_cast<double>(value);
         return;
     }
@@ -117,7 +136,9 @@ void AnyToField(const std::any& value, Utils::TypeInfo* field_ti, void* ptr, Str
             return;
         }
         if (value.type() != typeid(int64_t))
+        {
             ThrowUnsupported("int", "AnyToField");
+        }
         *static_cast<int*>(ptr) = static_cast<int>(std::any_cast<int64_t>(value));
         return;
     }
@@ -129,7 +150,9 @@ void AnyToField(const std::any& value, Utils::TypeInfo* field_ti, void* ptr, Str
             return;
         }
         if (value.type() != typeid(int64_t))
+        {
             ThrowUnsupported("int64_t", "AnyToField");
+        }
         *static_cast<int64_t*>(ptr) = std::any_cast<int64_t>(value);
         return;
     }
@@ -141,7 +164,9 @@ void AnyToField(const std::any& value, Utils::TypeInfo* field_ti, void* ptr, Str
             return;
         }
         if (value.type() != typeid(std::string))
+        {
             ThrowUnsupported("std::string", "AnyToField");
+        }
         *static_cast<std::string*>(ptr) = std::any_cast<std::string>(value);
         return;
     }
@@ -154,7 +179,9 @@ void AnyToField(const std::any& value, Utils::TypeInfo* field_ti, void* ptr, Str
             return;
         }
         if (value.type() != typeid(std::string))
+        {
             ThrowUnsupported("const char*", "AnyToField");
+        }
         const auto& s = std::any_cast<const std::string&>(value);
         auto buf = std::make_unique<char[]>(s.size() + 1);
         std::memcpy(buf.get(), s.c_str(), s.size() + 1);
@@ -170,7 +197,9 @@ void AnyToField(const std::any& value, Utils::TypeInfo* field_ti, void* ptr, Str
             return;
         }
         if (value.type() != typeid(int64_t))
+        {
             ThrowUnsupported("enum", "AnyToField");
+        }
         *static_cast<int*>(ptr) = static_cast<int>(std::any_cast<int64_t>(value));
         return;
     }
@@ -181,21 +210,29 @@ void AnyToField(const std::any& value, Utils::TypeInfo* field_ti, void* ptr, Str
 void ConfigStringsToOwning(Utils::TypeInfo* cfgTi, void* cfg)
 {
     if (!cfgTi || !cfg)
+    {
         return;
+    }
     Utils::AnyObject obj(cfgTi, cfg);
     obj.ForeachField(
-        [](std::string_view, Utils::AnyObject child)
+        [](std::string_view, const Utils::AnyObject& child)
         {
             if (child.get_type_info() != Utils::GetTypeInfo<const char*>())
+            {
                 return;
+            }
             const char** slot = static_cast<const char**>(child.get_data());
             const char* src = *slot;
             if (!src)
+            {
                 return;
+            }
             const std::size_t n = std::strlen(src);
             char* dup = static_cast<char*>(std::malloc(n + 1));
             if (!dup)
+            {
                 return;
+            }
             std::memcpy(dup, src, n + 1);
             *slot = dup;
         });
@@ -204,13 +241,17 @@ void ConfigStringsToOwning(Utils::TypeInfo* cfgTi, void* cfg)
 void FreeConfigStrings(Utils::TypeInfo* cfgTi, void* cfg)
 {
     if (!cfgTi || !cfg)
+    {
         return;
+    }
     Utils::AnyObject obj(cfgTi, cfg);
     obj.ForeachField(
-        [](std::string_view, Utils::AnyObject child)
+        [](std::string_view, const Utils::AnyObject& child)
         {
             if (child.get_type_info() != Utils::GetTypeInfo<const char*>())
+            {
                 return;
+            }
             const char** slot = static_cast<const char**>(child.get_data());
             std::free(const_cast<char*>(*slot));
             *slot = nullptr;

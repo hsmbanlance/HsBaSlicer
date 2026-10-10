@@ -9,35 +9,37 @@
 
 namespace HsBa::Slicer
 {
+namespace
+{
 class ExtRegexMatch
 {
     // mesh
-    const std::regex stl_match{"\\.?stl", std::regex_constants::icase};
-    const std::regex ply_match{"\\.?ply", std::regex_constants::icase};
-    const std::regex obj_match{"\\.?obj", std::regex_constants::icase};
-    const std::regex off_match{"\\.?off", std::regex_constants::icase};
+    std::regex stl_match{"\\.?stl", std::regex_constants::icase};
+    std::regex ply_match{"\\.?ply", std::regex_constants::icase};
+    std::regex obj_match{"\\.?obj", std::regex_constants::icase};
+    std::regex off_match{"\\.?off", std::regex_constants::icase};
 
     bool MatchSTL(const std::string& ext) { return std::regex_match(ext, stl_match); }
     bool MatchPLY(const std::string& ext) { return std::regex_match(ext, ply_match); }
     bool MatchOBJ(const std::string& ext) { return std::regex_match(ext, obj_match); }
     bool MatchOFF(const std::string& ext) { return std::regex_match(ext, off_match); }
     // BRep
-    const std::regex step_match{"\\.?ste?p", std::regex_constants::icase};
-    const std::regex vrml_match{"\\.?(vrml|wrl)", std::regex_constants::icase};
-    const std::regex iges_match{"\\.?iges", std::regex_constants::icase};
-    const std::regex brep_match{"\\.?brep", std::regex_constants::icase};
+    std::regex step_match{"\\.?ste?p", std::regex_constants::icase};
+    std::regex vrml_match{"\\.?(vrml|wrl)", std::regex_constants::icase};
+    std::regex iges_match{"\\.?iges", std::regex_constants::icase};
+    std::regex brep_match{"\\.?brep", std::regex_constants::icase};
     bool MatchSTEP(const std::string& ext) { return std::regex_match(ext, step_match); }
     bool MatchVRML(const std::string& ext) { return std::regex_match(ext, vrml_match); }
     bool MatchIGES(const std::string& ext) { return std::regex_match(ext, iges_match); }
     bool MatchBRep(const std::string& ext) { return std::regex_match(ext, brep_match); }
     // csg
-    const std::regex sldprt_match{"\\.?sldprt", std::regex_constants::icase};
-    const std::regex catpart_match{"\\.?catpart", std::regex_constants::icase};
+    std::regex sldprt_match{"\\.?sldprt", std::regex_constants::icase};
+    std::regex catpart_match{"\\.?catpart", std::regex_constants::icase};
     bool MatchSLDPRT(const std::string& ext) { return std::regex_match(ext, sldprt_match); }
     bool MatchCATPART(const std::string& ext) { return std::regex_match(ext, catpart_match); }
 
     // point cloud
-    const std::regex xyz_match{"\\.?xyz", std::regex_constants::icase};
+    std::regex xyz_match{"\\.?xyz", std::regex_constants::icase};
     bool MatchXYZ(const std::string& ext) { return std::regex_match(ext, xyz_match); }
 
 public:
@@ -47,48 +49,46 @@ public:
         {
             return ModelFormat::UnknownSTL;
         }
-        else if (MatchPLY(ext))
+        if (MatchPLY(ext))
         {
             return ModelFormat::UnknownPLY;
         }
-        else if (MatchOBJ(ext))
+        if (MatchOBJ(ext))
         {
             return ModelFormat::OBJ;
         }
-        else if (MatchOFF(ext))
+        if (MatchOFF(ext))
         {
             return ModelFormat::OFF;
         }
-        else if (MatchSTEP(ext))
+        if (MatchSTEP(ext))
         {
             return ModelFormat::STEP;
         }
-        else if (MatchVRML(ext))
+        if (MatchVRML(ext))
         {
             return ModelFormat::VRML;
         }
-        else if (MatchIGES(ext))
+        if (MatchIGES(ext))
         {
             return ModelFormat::IGES;
         }
-        else if (MatchBRep(ext))
+        if (MatchBRep(ext))
         {
             return ModelFormat::BREP;
         }
-        else if (MatchXYZ(ext))
+        if (MatchXYZ(ext))
         {
             return ModelFormat::XYZ;
         }
-        else
-        {
-            return ModelFormat::Unknown;
-        }
+        return ModelFormat::Unknown;
     }
 };
+}  // namespace
 
 std::string GetExtName(const std::string& file_name)
 {
-    std::filesystem::path fp{file_name};
+    std::filesystem::path const fp{file_name};
     return fp.extension().string();
 }
 
@@ -147,7 +147,6 @@ bool IsPointCloudFormat(ModelFormat format)
     switch (format)
     {
     case ModelFormat::XYZ:
-        return true;
     case ModelFormat::VDB:
         return true;
     default:

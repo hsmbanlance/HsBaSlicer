@@ -6,8 +6,14 @@
 
 namespace HsBa::Slicer
 {
-static std::vector<ZipperEventCallback> zipper_event_callbacks;
-static std::vector<DBEventCallback> db_event_callbacks;
+namespace
+{
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables) module callback registry
+std::vector<ZipperEventCallback> zipper_event_callbacks;
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables) module callback registry
+std::vector<DBEventCallback> db_event_callbacks;
+}  // namespace
+
 void AddZipperEventCallback(ZipperEventCallback func)
 {
     zipper_event_callbacks.push_back(std::move(func));

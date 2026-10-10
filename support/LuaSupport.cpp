@@ -5,6 +5,7 @@
 #include "LuaSupport.hpp"
 
 #include <lua.hpp>
+#include <utility>
 
 #include "2D/LuaAdapter.hpp"
 #include "LuaAdapter.hpp"
@@ -50,7 +51,7 @@ void PushConfigToLua(lua_State* L, const SupportConfig& config)
 PolygonsD GetResultFromLua(lua_State* L)
 {
     // Check return value on top of stack, or global 'support_polys'
-    int top = lua_gettop(L);
+    int const top = lua_gettop(L);
     if (top == 0 || !lua_istable(L, -1))
     {
         lua_getglobal(L, "support_polys");
@@ -99,8 +100,8 @@ LuaSupport::LuaSupport(std::string_view script, std::string_view funcName)
 {
 }
 
-LuaSupport::LuaSupport(const std::filesystem::path& script_file, std::string_view funcName)
-    : source_type_(SourceType::File), script_file_(script_file), func_name_(funcName)
+LuaSupport::LuaSupport(std::filesystem::path script_file, std::string_view funcName)
+    : source_type_(SourceType::File), script_file_(std::move(script_file)), func_name_(funcName)
 {
 }
 
@@ -114,13 +115,17 @@ PolygonsD LuaSupport::Generate(const PolygonsD& current_layer, const PolygonsD& 
 {
     auto L = MakeUniqueLuaState();
     if (!L)
+    {
         throw RuntimeError("LuaSupport: failed to create Lua state");
+    }
 
     SetupLuaEnvironment(L.get(), current_layer, prev_layer, layer_height, config);
 
     // Register external 2D+3D functions for support stage
     for (auto& reg : ext_regs_)
+    {
         reg(L.get());
+    }
 
     // Load script
     int loadStatus = LUA_OK;
@@ -136,16 +141,16 @@ PolygonsD LuaSupport::Generate(const PolygonsD& current_layer, const PolygonsD& 
     if (loadStatus != LUA_OK)
     {
         const char* es = lua_tostring(L.get(), -1);
-        std::string err = es ? es : "<lua error>";
+        std::string const err = es ? es : "<lua error>";
         throw RuntimeError("LuaSupport load error: " + err);
     }
 
     // Execute script chunk
-    int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
+    int const callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
     if (callStatus != LUA_OK)
     {
         const char* es = lua_tostring(L.get(), -1);
-        std::string err = es ? es : "<lua error>";
+        std::string const err = es ? es : "<lua error>";
         throw RuntimeError("LuaSupport runtime error: " + err);
     }
 
@@ -155,11 +160,11 @@ PolygonsD LuaSupport::Generate(const PolygonsD& current_layer, const PolygonsD& 
         lua_getglobal(L.get(), func_name_.c_str());
         if (lua_isfunction(L.get(), -1))
         {
-            int funcCallStatus = lua_pcall(L.get(), 0, 1, 0);
+            int const funcCallStatus = lua_pcall(L.get(), 0, 1, 0);
             if (funcCallStatus != LUA_OK)
             {
                 const char* es = lua_tostring(L.get(), -1);
-                std::string err = es ? es : "<lua error>";
+                std::string const err = es ? es : "<lua error>";
                 throw RuntimeError("LuaSupport function call error: " + err);
             }
         }

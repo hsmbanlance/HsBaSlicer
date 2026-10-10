@@ -41,12 +41,12 @@ std::unique_ptr<bit7z::BitArchiveReader> OpenInnerTarReader(const bit7z::Bit7zLi
                                                             const std::string& password,
                                                             /*out*/ std::string& out_temp_tar)
 {
-    std::filesystem::path temp_tar = MakeInnerTarTempPath(archive);
+    std::filesystem::path const temp_tar = MakeInnerTarTempPath(archive);
     try
     {
-        bit7z::BitArchiveReader outer{lib, archive, bit7z::BitFormat::Auto, password};
+        bit7z::BitArchiveReader const outer{lib, archive, bit7z::BitFormat::Auto, password};
         std::ofstream ofs(temp_tar, std::ios_base::out | std::ios_base::binary);
-        outer.extractTo(ofs, 0u);
+        outer.extractTo(ofs, 0U);
         ofs.close();
         out_temp_tar = temp_tar.string();
         return std::make_unique<bit7z::BitArchiveReader>(lib, out_temp_tar, bit7z::BitFormat::Tar, password);
@@ -62,7 +62,7 @@ std::unique_ptr<bit7z::BitArchiveReader> OpenInnerTarReader(const bit7z::Bit7zLi
 void Bit7zExtract(const std::string& archive, const std::string& outdir, const std::string& password,
                   const std::string& dll_path)
 {
-    bit7z::Bit7zLibrary lib{dll_path};
+    bit7z::Bit7zLibrary const lib{dll_path};
     if (IsCompressedTarPath(archive))
     {
         std::string temp_tar;
@@ -95,7 +95,7 @@ void Bit7zExtract(const std::string& archive, const std::string& outdir, const s
 void Bit7zExtract(const std::string& archive, std::map<std::string, std::vector<bit7z::byte_t>>& bufs,
                   const std::string& password, const std::string& dll_path)
 {
-    bit7z::Bit7zLibrary lib{dll_path};
+    bit7z::Bit7zLibrary const lib{dll_path};
     if (IsCompressedTarPath(archive))
     {
         std::string temp_tar;
@@ -156,7 +156,7 @@ void Bit7zZipper::AddFile(std::string_view name, std::string_view path)
 
 void Bit7zZipper::AddByteFileIgnoreDuplicate(std::string_view name, const std::vector<bit7z::byte_t>& data)
 {
-    if (byteFilesWaitCompress_.count(std::string{name}))
+    if (static_cast<unsigned int>(byteFilesWaitCompress_.contains(std::string{name})) != 0U)
     {
         byteFilesWaitCompress_.emplace((std::string(name) + duplicate_addition), data);
     }
@@ -178,7 +178,7 @@ void Bit7zZipper::AddByteFileIgnoreDuplicate(std::string_view name, const std::s
 
 void Bit7zZipper::AddFileIgnoreDuplicate(std::string_view name, std::string_view path)
 {
-    if (byteFilesWaitCompress_.count(std::string{name}))
+    if (static_cast<unsigned int>(byteFilesWaitCompress_.contains(std::string{name})) != 0U)
     {
         byteFilesWaitCompress_.emplace((std::string(name) + duplicate_addition), std::string(path));
     }
@@ -194,7 +194,7 @@ void Bit7zZipper::Save(std::string_view filePath)
     path = utf8_to_local(path);
     try
     {
-        bit7z::Bit7zLibrary lib{dll_path_};
+        bit7z::Bit7zLibrary const lib{dll_path_};
         switch (format_)
         {
         case HsBa::Slicer::ZipperFormat::Zip:
@@ -256,7 +256,7 @@ void Bit7zZipper::Save(std::string_view filePath)
 
 void Bit7zZipper::AddAllWaitFiles(bit7z::BitArchiveWriter& compress)
 {
-    size_t fileCount = byteFilesWaitCompress_.size();
+    size_t const fileCount = byteFilesWaitCompress_.size();
     size_t currentFileIndex = 0;
     compress.setPassword(password_);
     compress.setOverwriteMode(bit7z::OverwriteMode::Overwrite);
@@ -265,7 +265,7 @@ void Bit7zZipper::AddAllWaitFiles(bit7z::BitArchiveWriter& compress)
         std::visit(Utils::Overloaded{[&name, &compress](const std::string& arg) { compress.addFile(arg, name); },
                                      [&name, &compress](const Bytes& arg) { compress.addFile(arg, name); }},
                    bytes);
-        double progress = static_cast<double>(currentFileIndex) / fileCount;
+        double const progress = static_cast<double>(currentFileIndex) / static_cast<double>(fileCount);
         RaiseEvent(progress, name);
         ++currentFileIndex;
     }

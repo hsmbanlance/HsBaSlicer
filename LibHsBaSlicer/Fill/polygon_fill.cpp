@@ -19,7 +19,6 @@ HSBA_SLICER_LIB_API Polygons FillPolygon(const Polygons& poly, double spacing, F
     case FillMode::SimpleZigzag:
         return SimpleZigzagFill(poly, spacing, angle_deg);
     case FillMode::Zigzag:
-        return ZigzagFill(poly, spacing, angle_deg);
     default:
         return ZigzagFill(poly, spacing, angle_deg);
     }
@@ -38,10 +37,12 @@ HSBA_SLICER_LIB_API Polygons LuaCustomFillByFile(const Polygons& poly, const std
 {
     // Compose external 2D functions and the path optimize functions (PathOptimize)
     // into lua_reg callback, so fill scripts can optimize regions before path output
-    std::function<void(lua_State*)> reg = [](lua_State* L)
+    std::function<void(lua_State*)> const reg = [](lua_State* L)
     {
         for (auto& f : Get2DFunctions())
+        {
             f(L);
+        }
         RegisterLuaPathOptimizeFunctions(L);
     };
     return LuaCustomFill(poly, scriptPath, functionName, lineThickness, reg);

@@ -4,6 +4,7 @@
  */
 #include "LuaAdapter.hpp"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -19,7 +20,7 @@ namespace HsBa::Slicer::Support
 namespace
 {
 // Type tag for support userdata
-enum class SupportType : int
+enum class SupportType : std::uint8_t
 {
     Plane = 0,
     Tree = 1,
@@ -31,7 +32,7 @@ enum class SupportType : int
 
 struct LuaSupportWrapper
 {
-    SupportType type;
+    SupportType type{};
     std::unique_ptr<ISupport> impl;
 
     ~LuaSupportWrapper() = default;
@@ -43,46 +44,64 @@ SupportConfig ReadConfigFromTable(lua_State* L, int idx)
 {
     SupportConfig cfg;
     if (!lua_istable(L, idx))
+    {
         return cfg;
+    }
 
     lua_getfield(L, idx, "overhang_angle_threshold");
     if (lua_isnumber(L, -1))
+    {
         cfg.overhang_angle_threshold = static_cast<float>(lua_tonumber(L, -1));
+    }
     lua_pop(L, 1);
 
     lua_getfield(L, idx, "layer_height");
     if (lua_isnumber(L, -1))
+    {
         cfg.layer_height = static_cast<float>(lua_tonumber(L, -1));
+    }
     lua_pop(L, 1);
 
     lua_getfield(L, idx, "support_gap");
     if (lua_isnumber(L, -1))
+    {
         cfg.support_gap = static_cast<float>(lua_tonumber(L, -1));
+    }
     lua_pop(L, 1);
 
     lua_getfield(L, idx, "support_diameter");
     if (lua_isnumber(L, -1))
+    {
         cfg.support_diameter = static_cast<float>(lua_tonumber(L, -1));
+    }
     lua_pop(L, 1);
 
     lua_getfield(L, idx, "support_density");
     if (lua_isnumber(L, -1))
+    {
         cfg.support_density = static_cast<float>(lua_tonumber(L, -1));
+    }
     lua_pop(L, 1);
 
     lua_getfield(L, idx, "tree_branch_angle");
     if (lua_isnumber(L, -1))
+    {
         cfg.tree_branch_angle = static_cast<float>(lua_tonumber(L, -1));
+    }
     lua_pop(L, 1);
 
     lua_getfield(L, idx, "tree_max_branch_radius");
     if (lua_isnumber(L, -1))
+    {
         cfg.tree_max_branch_radius = static_cast<float>(lua_tonumber(L, -1));
+    }
     lua_pop(L, 1);
 
     lua_getfield(L, idx, "honeycomb_cell_size");
     if (lua_isnumber(L, -1))
+    {
         cfg.honeycomb_cell_size = static_cast<float>(lua_tonumber(L, -1));
+    }
     lua_pop(L, 1);
 
     return cfg;
@@ -130,7 +149,9 @@ int l_new_lua(lua_State* L)
     const char* script = luaL_checkstring(L, 1);
     std::string_view funcName = "generate_support";
     if (lua_gettop(L) >= 2 && lua_isstring(L, 2))
+    {
         funcName = lua_tostring(L, 2);
+    }
 
     auto* wrapper = NewLuaObject<LuaSupportWrapper>(L, SUPPORT_MT);
     wrapper->type = SupportType::LuaInline;
@@ -160,14 +181,14 @@ int l_generate(lua_State* L)
         return lua_error(L);
     }
 
-    PolygonsD current_layer = LuaTableToPolygonsD(L, 2);
-    PolygonsD prev_layer = LuaTableToPolygonsD(L, 3);
-    float layer_height = static_cast<float>(luaL_checknumber(L, 4));
-    SupportConfig config = ReadConfigFromTable(L, 5);
+    PolygonsD const current_layer = LuaTableToPolygonsD(L, 2);
+    PolygonsD const prev_layer = LuaTableToPolygonsD(L, 3);
+    float const layer_height = static_cast<float>(luaL_checknumber(L, 4));
+    SupportConfig const config = ReadConfigFromTable(L, 5);
 
     try
     {
-        PolygonsD result = wrapper->impl->Generate(current_layer, prev_layer, layer_height, config);
+        PolygonsD const result = wrapper->impl->Generate(current_layer, prev_layer, layer_height, config);
         PushPolygonsDToLua(L, result);
         return 1;
     }
@@ -181,12 +202,12 @@ int l_generate(lua_State* L)
 // Lua: Support.detect_overhang(current_layer, prev_layer, layer_height, angle_deg)
 int l_detect_overhang(lua_State* L)
 {
-    PolygonsD current_layer = LuaTableToPolygonsD(L, 1);
-    PolygonsD prev_layer = LuaTableToPolygonsD(L, 2);
-    float layer_height = static_cast<float>(luaL_checknumber(L, 3));
-    float angle_deg = static_cast<float>(luaL_checknumber(L, 4));
+    PolygonsD const current_layer = LuaTableToPolygonsD(L, 1);
+    PolygonsD const prev_layer = LuaTableToPolygonsD(L, 2);
+    float const layer_height = static_cast<float>(luaL_checknumber(L, 3));
+    float const angle_deg = static_cast<float>(luaL_checknumber(L, 4));
 
-    PolygonsD result = OverhangDetector::Detect(current_layer, prev_layer, layer_height, angle_deg);
+    PolygonsD const result = OverhangDetector::Detect(current_layer, prev_layer, layer_height, angle_deg);
     PushPolygonsDToLua(L, result);
     return 1;
 }
@@ -194,7 +215,7 @@ int l_detect_overhang(lua_State* L)
 // Lua: Support.default_config() -> config table
 int l_default_config(lua_State* L)
 {
-    SupportConfig cfg;
+    SupportConfig const cfg;
     lua_newtable(L);
 
     lua_pushnumber(L, cfg.overhang_angle_threshold);
@@ -223,20 +244,22 @@ int l_support_gc(lua_State* L)
 {
     auto* wrapper = static_cast<LuaSupportWrapper*>(luaL_checkudata(L, 1, SUPPORT_MT));
     if (wrapper)
+    {
         wrapper->~LuaSupportWrapper();
+    }
     return 0;
 }
 
-static const luaL_Reg supportLib[] = {{"new_plane", l_new_plane},
-                                      {"new_tree", l_new_tree},
-                                      {"new_honeycomb", l_new_honeycomb},
-                                      {"new_sla", l_new_sla},
-                                      {"new_lua", l_new_lua},
-                                      {"new_lua_file", l_new_lua_file},
-                                      {"generate", l_generate},
-                                      {"detect_overhang", l_detect_overhang},
-                                      {"default_config", l_default_config},
-                                      {nullptr, nullptr}};
+const luaL_Reg supportLib[] = {{.name = "new_plane", .func = l_new_plane},
+                               {.name = "new_tree", .func = l_new_tree},
+                               {.name = "new_honeycomb", .func = l_new_honeycomb},
+                               {.name = "new_sla", .func = l_new_sla},
+                               {.name = "new_lua", .func = l_new_lua},
+                               {.name = "new_lua_file", .func = l_new_lua_file},
+                               {.name = "generate", .func = l_generate},
+                               {.name = "detect_overhang", .func = l_detect_overhang},
+                               {.name = "default_config", .func = l_default_config},
+                               {.name = nullptr, .func = nullptr}};
 }  // namespace
 
 void RegisterLuaSupport(lua_State* L)

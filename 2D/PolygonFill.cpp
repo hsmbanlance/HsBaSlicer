@@ -1,14 +1,17 @@
 ﻿/** @file PolygonFill.cpp
- * @brief Implementations of polygon infill pattern generators (offset, line, zigzag, composite, hybrid and Lua-custom fills).
+ * @brief Implementations of polygon infill pattern generators (offset, line, zigzag, composite, hybrid and Lua-custom
+ * fills).
  * @author HsBa
  */
 #include "PolygonFill.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <lua.hpp>
 #include <numbers>
 #include <sstream>
+#include <utility>
 
 #include "LuaAdapter.hpp"
 #include "base/error.hpp"
@@ -30,7 +33,9 @@ constexpr double INTEGERIZATION_PRECISION = 100.0;
 Polygon ClosePath(const Polygon& p)
 {
     if (p.empty() || p.front() == p.back())
+    {
         return p;
+    }
     Polygon res = p;
     res.push_back(res.front());
     return res;
@@ -43,7 +48,10 @@ std::vector<std::vector<std::pair<Point2D, Point2D>>> LineFilling(const Polygons
     std::vector<std::vector<std::pair<Point2D, Point2D>>> rows;
     polyD = UnIntegerization(poly);
 
-    double minx = 1e300, miny = 1e300, maxx = -1e300, maxy = -1e300;
+    double minx = 1e300;
+    double miny = 1e300;
+    double maxx = -1e300;
+    double maxy = -1e300;
     for (auto& ps : polyD)
     {
         for (const auto& pt : ps)
@@ -55,34 +63,42 @@ std::vector<std::vector<std::pair<Point2D, Point2D>>> LineFilling(const Polygons
         }
     }
     if (minx > maxx)
+    {
         return rows;
+    }
 
-    double ang = angle_deg * std::numbers::pi_v<double> / DEG_TO_RAD_FACTOR;
+    double const ang = angle_deg * std::numbers::pi_v<double> / DEG_TO_RAD_FACTOR;
     ux = std::cos(ang), uy = std::sin(ang);
-    double vx = -uy, vy = ux;
+    double const vx = -uy;
+    double const vy = ux;
 
-    double cornersX[4] = {minx, maxx, maxx, minx};
-    double cornersY[4] = {miny, miny, maxy, maxy};
-    double minProj = 1e300, maxProj = -1e300;
+    double const cornersX[4] = {minx, maxx, maxx, minx};
+    double const cornersY[4] = {miny, miny, maxy, maxy};
+    double minProj = 1e300;
+    double maxProj = -1e300;
     for (int i = 0; i != 4; ++i)
     {
-        double proj = cornersX[i] * vx + cornersY[i] * vy;
+        double const proj = cornersX[i] * vx + cornersY[i] * vy;
         minProj = std::min(minProj, proj);
         maxProj = std::max(maxProj, proj);
     }
 
-    double length = std::hypot(maxx - minx, maxy - miny) * 2.0;
+    double const length = std::hypot(maxx - minx, maxy - miny) * 2.0;
     for (double t = minProj - spacing; t <= maxProj + spacing; t += spacing)
     {
-        double cx = vx * t;
-        double cy = vy * t;
-        double hx = ux * (length * 0.5);
-        double hy = uy * (length * 0.5);
-        double p1x = cx - hx, p1y = cy - hy;
-        double p2x = cx + hx, p2y = cy + hy;
-        double half = lineThickness * 0.5;
-        double pvx = -uy, pvy = ux;
-        double rx = pvx * half, ry = pvy * half;
+        double const cx = vx * t;
+        double const cy = vy * t;
+        double const hx = ux * (length * 0.5);
+        double const hy = uy * (length * 0.5);
+        double const p1x = cx - hx;
+        double const p1y = cy - hy;
+        double const p2x = cx + hx;
+        double const p2y = cy + hy;
+        double const half = lineThickness * 0.5;
+        double const pvx = -uy;
+        double const pvy = ux;
+        double const rx = pvx * half;
+        double const ry = pvy * half;
 
         PolygonD rect;
         rect.emplace_back(Point2D{p1x + rx, p1y + ry});
@@ -90,87 +106,109 @@ std::vector<std::vector<std::pair<Point2D, Point2D>>> LineFilling(const Polygons
         rect.emplace_back(Point2D{p2x - rx, p2y - ry});
         rect.emplace_back(Point2D{p1x - rx, p1y - ry});
 
-        Polygon rectI = Integerization(rect);
-        Polygons clipped = Intersection(poly, Polygons{rectI});
+        Polygon const rectI = Integerization(rect);
+        Polygons const clipped = Intersection(poly, Polygons{rectI});
 
         std::vector<std::pair<Point2D, Point2D>> segs;
-        for (auto& c : clipped)
+        for (const auto& c : clipped)
         {
-            PolygonD pc = UnIntegerization(c);
+            PolygonD const pc = UnIntegerization(c);
             if (pc.empty())
+            {
                 continue;
-            double s_min = 1e300, s_max = -1e300;
+            }
+            double s_min = 1e300;
+            double s_max = -1e300;
             double p_sum = 0;
             int cnt = 0;
-            for (auto& v : pc)
+            for (const auto& v : pc)
             {
-                double s = v.x * ux + v.y * uy;
-                double p = v.x * vx + v.y * vy;
+                double const s = v.x * ux + v.y * uy;
+                double const p = v.x * vx + v.y * vy;
                 s_min = std::min(s_min, s);
                 s_max = std::max(s_max, s);
                 p_sum += p;
                 ++cnt;
             }
             if (cnt == 0)
+            {
                 continue;
-            double p_avg = p_sum / cnt;
+            }
+            double const p_avg = p_sum / cnt;
             Point2D a{ux * s_min + vx * p_avg, uy * s_min + vy * p_avg};
             Point2D b{ux * s_max + vx * p_avg, uy * s_max + vy * p_avg};
             // ensure ordering a->b along u
             if ((a.x * ux + a.y * uy) > (b.x * ux + b.y * uy))
+            {
                 std::swap(a, b);
+            }
             segs.emplace_back(a, b);
         }
 
         // sort segments by their s_min
-        std::sort(segs.begin(), segs.end(),
-                  [&](const auto& A, const auto& B)
-                  {
-                      double sa = A.first.x * ux + A.first.y * uy;
-                      double sb = B.first.x * ux + B.first.y * uy;
-                      return sa < sb;
-                  });
+        std::ranges::sort(segs,
+                          [&](const auto& A, const auto& B)
+                          {
+                              double const sa = A.first.x * ux + A.first.y * uy;
+                              double const sb = B.first.x * ux + B.first.y * uy;
+                              return sa < sb;
+                          });
 
         rows.push_back(std::move(segs));
     }
     return rows;
 }
 
-Polygons OffsetOnly(const Polygons poly, double delta, size_t inner, size_t outer, Clipper2Lib::JoinType join_type,
+Polygons OffsetOnly(const Polygons& poly, double delta, size_t inner, size_t outer, Clipper2Lib::JoinType join_type,
                     std::pair<Polygons, Polygons>& out_inner_outer)
 {
     Polygons res;
     if (delta == 0 || (poly.empty() && inner == 0 && outer == 0))
+    {
         return res;
+    }
     int step = 0;
     bool inner_done = (inner == 0);
     bool outer_done = (outer == 0);
     while (true)
     {
-        double cur_delta = delta + step * delta;
+        double const cur_delta = delta + step * delta;
         if (inner_done && outer_done)
+        {
             break;
-        Polygons offs_inner, offs_outer;
+        }
+        Polygons offs_inner;
+        Polygons offs_outer;
         if (!inner_done)
+        {
             offs_inner = Offset(poly, -cur_delta, join_type, Clipper2Lib::EndType::Polygon);
+        }
         if (!outer_done)
+        {
             offs_outer = Offset(poly, cur_delta, join_type, Clipper2Lib::EndType::Polygon);
+        }
         if (offs_inner.empty() && offs_outer.empty())
+        {
             break;
-        if (step < inner)
+        }
+        if (std::cmp_less(step, inner))
         {
             for (const auto& p : offs_inner)
+            {
                 res.emplace_back(p);
+            }
         }
         else
         {
             out_inner_outer.first = offs_inner;
             inner_done = true;
         }
-        if (step < outer)
+        if (std::cmp_less(step, outer))
         {
             for (const auto& p : offs_outer)
+            {
                 res.emplace_back(p);
+            }
         }
         else
         {
@@ -192,24 +230,32 @@ int l_report(lua_State* L, const char* fname, const char* msg)
 
 int l_offsetFill(lua_State* L)
 {
-    PolygonsD polyD = LuaTableToPolygonsD(L, 1);
-    Polygons poly = Integerization(polyD);
-    double spacing = lua_tonumber(L, 2);
+    PolygonsD const polyD = LuaTableToPolygonsD(L, 1);
+    Polygons const poly = Integerization(polyD);
+    double const spacing = lua_tonumber(L, 2);
     Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square;
     if (lua_getfield(L, 3, "join_type") == LUA_TSTRING)
     {
         const char* jt_str = lua_tostring(L, -1);
         if (strcmp(jt_str, "Square") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Square;
+        }
         else if (strcmp(jt_str, "Bevel") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Bevel;
+        }
         else if (strcmp(jt_str, "Round") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Round;
+        }
         else if (strcmp(jt_str, "Miter") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Miter;
+        }
     }
     lua_pop(L, 1);
-    Polygons res = OffsetFill(poly, spacing, join_type);
+    Polygons const res = OffsetFill(poly, spacing, join_type);
     PolygonsD resD;
     for (const auto& p : res)
     {
@@ -221,12 +267,12 @@ int l_offsetFill(lua_State* L)
 
 int l_lineFill(lua_State* L)
 {
-    PolygonsD polyD = LuaTableToPolygonsD(L, 1);
-    Polygons poly = Integerization(polyD);
-    double spacing = lua_tonumber(L, 2);
-    double angle_deg = lua_tonumber(L, 3);
-    double lineThickness = lua_tonumber(L, 4);
-    Polygons res = LineFill(poly, spacing, angle_deg, lineThickness);
+    PolygonsD const polyD = LuaTableToPolygonsD(L, 1);
+    Polygons const poly = Integerization(polyD);
+    double const spacing = lua_tonumber(L, 2);
+    double const angle_deg = lua_tonumber(L, 3);
+    double const lineThickness = lua_tonumber(L, 4);
+    Polygons const res = LineFill(poly, spacing, angle_deg, lineThickness);
     PolygonsD resD;
     for (const auto& p : res)
     {
@@ -238,12 +284,12 @@ int l_lineFill(lua_State* L)
 
 int l_simpleZigzagFill(lua_State* L)
 {
-    PolygonsD polyD = LuaTableToPolygonsD(L, 1);
-    Polygons poly = Integerization(polyD);
-    double spacing = lua_tonumber(L, 2);
-    double angle_deg = lua_tonumber(L, 3);
-    double lineThickness = lua_tonumber(L, 4);
-    Polygons res = SimpleZigzagFill(poly, spacing, angle_deg, lineThickness);
+    PolygonsD const polyD = LuaTableToPolygonsD(L, 1);
+    Polygons const poly = Integerization(polyD);
+    double const spacing = lua_tonumber(L, 2);
+    double const angle_deg = lua_tonumber(L, 3);
+    double const lineThickness = lua_tonumber(L, 4);
+    Polygons const res = SimpleZigzagFill(poly, spacing, angle_deg, lineThickness);
     PolygonsD resD;
     for (const auto& p : res)
     {
@@ -255,12 +301,12 @@ int l_simpleZigzagFill(lua_State* L)
 
 int l_zigzagFill(lua_State* L)
 {
-    PolygonsD polyD = LuaTableToPolygonsD(L, 1);
-    Polygons poly = Integerization(polyD);
-    double spacing = lua_tonumber(L, 2);
-    double angle_deg = lua_tonumber(L, 3);
-    double lineThickness = lua_tonumber(L, 4);
-    Polygons res = ZigzagFill(poly, spacing, angle_deg, lineThickness);
+    PolygonsD const polyD = LuaTableToPolygonsD(L, 1);
+    Polygons const poly = Integerization(polyD);
+    double const spacing = lua_tonumber(L, 2);
+    double const angle_deg = lua_tonumber(L, 3);
+    double const lineThickness = lua_tonumber(L, 4);
+    Polygons const res = ZigzagFill(poly, spacing, angle_deg, lineThickness);
     PolygonsD resD;
     for (const auto& p : res)
     {
@@ -272,34 +318,48 @@ int l_zigzagFill(lua_State* L)
 
 int l_compositeOffsetFill(lua_State* L)
 {
-    PolygonsD polyD = LuaTableToPolygonsD(L, 1);
-    Polygons poly = Integerization(polyD);
-    double spacing = lua_tonumber(L, 2);
-    double offsetStep = lua_tonumber(L, 3);
-    int outwardCount = static_cast<int>(lua_tointeger(L, 4));
-    int inwardCount = static_cast<int>(lua_tointeger(L, 5));
+    PolygonsD const polyD = LuaTableToPolygonsD(L, 1);
+    Polygons const poly = Integerization(polyD);
+    double const spacing = lua_tonumber(L, 2);
+    double const offsetStep = lua_tonumber(L, 3);
+    int const outwardCount = static_cast<int>(lua_tointeger(L, 4));
+    int const inwardCount = static_cast<int>(lua_tointeger(L, 5));
     FillMode mode = FillMode::Line;
     const char* mode_str = lua_tostring(L, 6);
     if (strcmp(mode_str, "Line") == 0)
+    {
         mode = FillMode::Line;
+    }
     else if (strcmp(mode_str, "SimpleZigzag") == 0)
+    {
         mode = FillMode::SimpleZigzag;
+    }
     else if (strcmp(mode_str, "Zigzag") == 0)
+    {
         mode = FillMode::Zigzag;
-    double angle_deg = lua_tonumber(L, 7);
-    double lineThickness = lua_tonumber(L, 8);
+    }
+    double const angle_deg = lua_tonumber(L, 7);
+    double const lineThickness = lua_tonumber(L, 8);
     Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square;
     if (lua_getfield(L, 9, "join_type") == LUA_TSTRING)
     {
         const char* jt_str = lua_tostring(L, -1);
         if (strcmp(jt_str, "Square") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Square;
+        }
         else if (strcmp(jt_str, "Bevel") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Bevel;
+        }
         else if (strcmp(jt_str, "Round") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Round;
+        }
         else if (strcmp(jt_str, "Miter") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Miter;
+        }
     }
     lua_pop(L, 1);
     Polygons res;
@@ -316,34 +376,48 @@ int l_compositeOffsetFill(lua_State* L)
 
 int l_hybridFill(lua_State* L)
 {
-    PolygonsD polyD = LuaTableToPolygonsD(L, 1);
-    Polygons poly = Integerization(polyD);
-    double spacing = lua_tonumber(L, 2);
-    double offsetStep = lua_tonumber(L, 3);
-    int outwardCount = static_cast<int>(lua_tointeger(L, 4));
-    int inwardCount = static_cast<int>(lua_tointeger(L, 5));
+    PolygonsD const polyD = LuaTableToPolygonsD(L, 1);
+    Polygons const poly = Integerization(polyD);
+    double const spacing = lua_tonumber(L, 2);
+    double const offsetStep = lua_tonumber(L, 3);
+    int const outwardCount = static_cast<int>(lua_tointeger(L, 4));
+    int const inwardCount = static_cast<int>(lua_tointeger(L, 5));
     FillMode mode = FillMode::Line;
     const char* mode_str = lua_tostring(L, 6);
     if (strcmp(mode_str, "Line") == 0)
+    {
         mode = FillMode::Line;
+    }
     else if (strcmp(mode_str, "SimpleZigzag") == 0)
+    {
         mode = FillMode::SimpleZigzag;
+    }
     else if (strcmp(mode_str, "Zigzag") == 0)
+    {
         mode = FillMode::Zigzag;
-    double angle_deg = lua_tonumber(L, 7);
-    double lineThickness = lua_tonumber(L, 8);
+    }
+    double const angle_deg = lua_tonumber(L, 7);
+    double const lineThickness = lua_tonumber(L, 8);
     Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square;
     if (lua_getfield(L, 9, "join_type") == LUA_TSTRING)
     {
         const char* jt_str = lua_tostring(L, -1);
         if (strcmp(jt_str, "Square") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Square;
+        }
         else if (strcmp(jt_str, "Bevel") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Bevel;
+        }
         else if (strcmp(jt_str, "Round") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Round;
+        }
         else if (strcmp(jt_str, "Miter") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Miter;
+        }
     }
     lua_pop(L, 1);
     Polygons res;
@@ -359,27 +433,35 @@ int l_hybridFill(lua_State* L)
 
 int l_offsetOnly(lua_State* L)
 {
-    PolygonsD polyD = LuaTableToPolygonsD(L, 1);
-    Polygons poly = Integerization(polyD);
-    double delta = lua_tonumber(L, 2);
-    size_t inner = static_cast<size_t>(lua_tointeger(L, 3));
-    size_t outer = static_cast<size_t>(lua_tointeger(L, 4));
+    PolygonsD const polyD = LuaTableToPolygonsD(L, 1);
+    Polygons const poly = Integerization(polyD);
+    double const delta = lua_tonumber(L, 2);
+    size_t const inner = static_cast<size_t>(lua_tointeger(L, 3));
+    size_t const outer = static_cast<size_t>(lua_tointeger(L, 4));
     Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square;
     if (lua_getfield(L, 5, "join_type") == LUA_TSTRING)
     {
         const char* jt_str = lua_tostring(L, -1);
         if (strcmp(jt_str, "Square") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Square;
+        }
         else if (strcmp(jt_str, "Bevel") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Bevel;
+        }
         else if (strcmp(jt_str, "Round") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Round;
+        }
         else if (strcmp(jt_str, "Miter") == 0)
+        {
             join_type = Clipper2Lib::JoinType::Miter;
+        }
     }
     lua_pop(L, 1);
     std::pair<Polygons, Polygons> out_inner_outer;
-    Polygons res = OffsetOnly(poly, delta, inner, outer, join_type, out_inner_outer);
+    Polygons const res = OffsetOnly(poly, delta, inner, outer, join_type, out_inner_outer);
     PolygonsD resD;
     for (const auto& p : res)
     {
@@ -403,14 +485,14 @@ int l_offsetOnly(lua_State* L)
     return 3;
 }
 
-const luaL_Reg polygonFillLib[] = {{"offsetFill", l_offsetFill},
-                                   {"lineFill", l_lineFill},
-                                   {"simpleZigzagFill", l_simpleZigzagFill},
-                                   {"zigzagFill", l_zigzagFill},
-                                   {"compositeOffsetFill", l_compositeOffsetFill},
-                                   {"hybridFill", l_hybridFill},
-                                   {"offsetOnly", l_offsetOnly},
-                                   {NULL, nullptr}};
+const luaL_Reg polygonFillLib[] = {{.name = "offsetFill", .func = l_offsetFill},
+                                   {.name = "lineFill", .func = l_lineFill},
+                                   {.name = "simpleZigzagFill", .func = l_simpleZigzagFill},
+                                   {.name = "zigzagFill", .func = l_zigzagFill},
+                                   {.name = "compositeOffsetFill", .func = l_compositeOffsetFill},
+                                   {.name = "hybridFill", .func = l_hybridFill},
+                                   {.name = "offsetOnly", .func = l_offsetOnly},
+                                   {.name = nullptr, .func = nullptr}};
 }  // namespace
 
 void RegisterLuaPolygonFillFunctions(lua_State* L)
@@ -423,15 +505,19 @@ Polygons OffsetFill(const Polygons& poly, double spacing, Clipper2Lib::JoinType 
 {
     Polygons res;
     if (spacing <= 0)
+    {
         return res;
+    }
 
     int step = 1;
     while (true)
     {
-        double delta = -spacing * step;
-        Polygons offs = Offset(poly, delta, join_type, Clipper2Lib::EndType::Polygon);
+        double const delta = -spacing * step;
+        Polygons const offs = Offset(poly, delta, join_type, Clipper2Lib::EndType::Polygon);
         if (offs.empty())
+        {
             break;
+        }
         // Add first point to close
         Polygons offset_path = offs;
         for (auto& p : offset_path)
@@ -442,10 +528,14 @@ Polygons OffsetFill(const Polygons& poly, double spacing, Clipper2Lib::JoinType 
             }
         }
         for (const auto& p : offset_path)
+        {
             res.emplace_back(p);
+        }
         ++step;
         if (step > MAX_FILL_ITERATIONS)
+        {
             break;
+        }
     }
     return res;
 }
@@ -453,7 +543,8 @@ Polygons OffsetFill(const Polygons& poly, double spacing, Clipper2Lib::JoinType 
 // Generate independent straight line segments (each Path has exactly 2 points)
 Polygons LineFill(const Polygons& poly, double spacing, double angle_deg, double /*lineThickness*/)
 {
-    double ux, uy;
+    double ux = 0.0;
+    double uy = 0.0;
     PolygonsD polyD;
     auto rows = LineFilling(poly, spacing, angle_deg, 1.0, ux, uy, polyD);
     (void)ux;
@@ -478,55 +569,76 @@ Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg
 {
     Polygons res;
     if (spacing <= 0)
+    {
         return res;
+    }
 
-    double ux, uy;
+    double ux = 0.0;
+    double uy = 0.0;
     PolygonsD polyD;
     auto rows = LineFilling(poly, spacing, angle_deg, lineThickness, ux, uy, polyD);
 
     // helpers
     auto point_inside = [&](const Point2D& pt) -> bool
     {
-        Clipper2Lib::Point64 p64{(int64_t)std::llround(pt.x * integerization),
-                                 (int64_t)std::llround(pt.y * integerization)};
+        Clipper2Lib::Point64 const p64{static_cast<int64_t>(std::llround(pt.x * integerization)),
+                                       static_cast<int64_t>(std::llround(pt.y * integerization))};
         auto r = PointInPolygons(p64, poly);
         return r != Clipper2Lib::PointInPolygonResult::IsOutside;
     };
 
     auto find_first_inside = [&](const Point2D& from, const Point2D& to) -> double
     {
-        double lo = 0.0, hi = 1.0;
+        double lo = 0.0;
+        double hi = 1.0;
         if (point_inside(from))
+        {
             return 0.0;
+        }
         if (!point_inside(to))
+        {
             return 1.0;
+        }
         for (int iter = 0; iter < MAX_BINARY_SEARCH_ITERATIONS; ++iter)
         {
-            double mid = (lo + hi) * 0.5;
-            Point2D p{from.x + (to.x - from.x) * mid, from.y + (to.y - from.y) * mid};
+            double const mid = (lo + hi) * 0.5;
+            Point2D const p{from.x + (to.x - from.x) * mid, from.y + (to.y - from.y) * mid};
             if (point_inside(p))
+            {
                 hi = mid;
+            }
             else
+            {
                 lo = mid;
+            }
         }
         return hi;
     };
 
     auto find_last_inside = [&](const Point2D& from, const Point2D& to) -> double
     {
-        double lo = 0.0, hi = 1.0;
+        double lo = 0.0;
+        double hi = 1.0;
         if (point_inside(to))
+        {
             return 1.0;
+        }
         if (!point_inside(from))
+        {
             return 0.0;
+        }
         for (int iter = 0; iter < MAX_BINARY_SEARCH_ITERATIONS; ++iter)
         {
-            double mid = (lo + hi) * 0.5;
-            Point2D p{from.x + (to.x - from.x) * mid, from.y + (to.y - from.y) * mid};
+            double const mid = (lo + hi) * 0.5;
+            Point2D const p{from.x + (to.x - from.x) * mid, from.y + (to.y - from.y) * mid};
             if (point_inside(p))
+            {
                 lo = mid;
+            }
             else
+            {
                 hi = mid;
+            }
         }
         return lo;
     };
@@ -534,10 +646,10 @@ Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg
     auto dump_segment = [&](const Point2D& a, const Point2D& b)
     {
         Polygon ln;
-        ln.emplace_back(
-            Point2{(int64_t)std::llround(a.x * integerization), (int64_t)std::llround(a.y * integerization)});
-        ln.emplace_back(
-            Point2{(int64_t)std::llround(b.x * integerization), (int64_t)std::llround(b.y * integerization)});
+        ln.emplace_back(Point2{static_cast<int64_t>(std::llround(a.x * integerization)),
+                               static_cast<int64_t>(std::llround(a.y * integerization))});
+        ln.emplace_back(Point2{static_cast<int64_t>(std::llround(b.x * integerization)),
+                               static_cast<int64_t>(std::llround(b.y * integerization))});
         res.emplace_back(std::move(ln));
     };
 
@@ -548,50 +660,56 @@ Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg
     {
         auto& segs = rows[r];
         if (segs.empty())
+        {
             continue;
+        }
         if ((r & 1) == 0)
         {
-            for (size_t i = 0; i < segs.size(); ++i)
+            for (auto [a, b] : segs)
             {
-                const auto& [a, b] = segs[i];
-                double dx = b.x - a.x, dy = b.y - a.y;
-                double len = std::hypot(dx, dy);
+                double const dx = b.x - a.x;
+                double const dy = b.y - a.y;
+                double const len = std::hypot(dx, dy);
                 if (len <= 1e-12)
+                {
                     continue;
-                double eps = (integerization / INTEGERIZATION_PRECISION) / integerization;
-                double sx = dx / len;
-                double sy = dy / len;
-                Point2D a2{a.x + sx * eps, a.y + sy * eps};
-                Point2D b2{b.x - sx * eps, b.y - sy * eps};
-                double t0 = find_first_inside(a2, b2);
-                double t1 = find_last_inside(a2, b2);
+                }
+                double const eps = (integerization / INTEGERIZATION_PRECISION) / integerization;
+                double const sx = dx / len;
+                double const sy = dy / len;
+                Point2D const a2{a.x + sx * eps, a.y + sy * eps};
+                Point2D const b2{b.x - sx * eps, b.y - sy * eps};
+                double const t0 = find_first_inside(a2, b2);
+                double const t1 = find_last_inside(a2, b2);
                 if (t1 <= t0)
                 {
                     dump_segment(a2, b2);
                     continue;
                 }
-                Point2D aa{a2.x + (b2.x - a2.x) * t0, a2.y + (b2.y - a2.y) * t0};
-                Point2D bb{a2.x + (b2.x - a2.x) * t1, a2.y + (b2.y - a2.y) * t1};
+                Point2D const aa{a2.x + (b2.x - a2.x) * t0, a2.y + (b2.y - a2.y) * t0};
+                Point2D const bb{a2.x + (b2.x - a2.x) * t1, a2.y + (b2.y - a2.y) * t1};
 
                 if (polylines.empty())
                 {
                     polylines.emplace_back();
                     polylines.back().push_back(aa);
                     polylines.back().push_back(bb);
-                    current_row = (int)r;
+                    current_row = static_cast<int>(r);
                 }
                 else
                 {
                     // allow connector only if same row or adjacent row
-                    if ((int)r == current_row || (int)r == current_row + 1)
+                    if (std::cmp_equal(r, current_row) || static_cast<int>(r) == current_row + 1)
                     {
                         // append connector by pushing aa then bb
                         // avoid duplicate points
                         auto& cur = polylines.back();
                         if (std::hypot(cur.back().x - aa.x, cur.back().y - aa.y) > 1e-9)
+                        {
                             cur.push_back(aa);
+                        }
                         cur.push_back(bb);
-                        current_row = (int)r;
+                        current_row = static_cast<int>(r);
                     }
                     else
                     {
@@ -599,7 +717,7 @@ Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg
                         polylines.emplace_back();
                         polylines.back().push_back(aa);
                         polylines.back().push_back(bb);
-                        current_row = (int)r;
+                        current_row = static_cast<int>(r);
                     }
                 }
             }
@@ -608,50 +726,55 @@ Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg
         {
             for (size_t ii = 0; ii < segs.size(); ++ii)
             {
-                size_t i = segs.size() - 1 - ii;
+                size_t const i = segs.size() - 1 - ii;
                 const auto& [a, b] = segs[i];
-                double dx = b.x - a.x, dy = b.y - a.y;
-                double len = std::hypot(dx, dy);
+                double const dx = b.x - a.x;
+                double const dy = b.y - a.y;
+                double const len = std::hypot(dx, dy);
                 if (len <= 1e-12)
+                {
                     continue;
-                double eps = (integerization / INTEGERIZATION_PRECISION) / integerization;
-                double sx = dx / len;
-                double sy = dy / len;
-                Point2D a2{a.x + sx * eps, a.y + sy * eps};
-                Point2D b2{b.x - sx * eps, b.y - sy * eps};
-                double t0 = find_first_inside(a2, b2);
-                double t1 = find_last_inside(a2, b2);
+                }
+                double const eps = (integerization / INTEGERIZATION_PRECISION) / integerization;
+                double const sx = dx / len;
+                double const sy = dy / len;
+                Point2D const a2{a.x + sx * eps, a.y + sy * eps};
+                Point2D const b2{b.x - sx * eps, b.y - sy * eps};
+                double const t0 = find_first_inside(a2, b2);
+                double const t1 = find_last_inside(a2, b2);
                 if (t1 <= t0)
                 {
                     dump_segment(a2, b2);
                     continue;
                 }
-                Point2D aa{a2.x + (b2.x - a2.x) * t0, a2.y + (b2.y - a2.y) * t0};
-                Point2D bb{a2.x + (b2.x - a2.x) * t1, a2.y + (b2.y - a2.y) * t1};
+                Point2D const aa{a2.x + (b2.x - a2.x) * t0, a2.y + (b2.y - a2.y) * t0};
+                Point2D const bb{a2.x + (b2.x - a2.x) * t1, a2.y + (b2.y - a2.y) * t1};
 
                 if (polylines.empty())
                 {
                     polylines.emplace_back();
                     polylines.back().push_back(aa);
                     polylines.back().push_back(bb);
-                    current_row = (int)r;
+                    current_row = static_cast<int>(r);
                 }
                 else
                 {
-                    if ((int)r == current_row || (int)r == current_row + 1)
+                    if (std::cmp_equal(r, current_row) || static_cast<int>(r) == current_row + 1)
                     {
                         auto& cur = polylines.back();
                         if (std::hypot(cur.back().x - aa.x, cur.back().y - aa.y) > 1e-9)
+                        {
                             cur.push_back(aa);
+                        }
                         cur.push_back(bb);
-                        current_row = (int)r;
+                        current_row = static_cast<int>(r);
                     }
                     else
                     {
                         polylines.emplace_back();
                         polylines.back().push_back(aa);
                         polylines.back().push_back(bb);
-                        current_row = (int)r;
+                        current_row = static_cast<int>(r);
                     }
                 }
             }
@@ -662,12 +785,16 @@ Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg
     for (auto& pl : polylines)
     {
         if (pl.empty())
+        {
             continue;
+        }
         Polygon out;
         out.reserve(pl.size());
         for (auto& p : pl)
-            out.emplace_back(
-                Point2{(int64_t)std::llround(p.x * integerization), (int64_t)std::llround(p.y * integerization)});
+        {
+            out.emplace_back(Point2{static_cast<int64_t>(std::llround(p.x * integerization)),
+                                    static_cast<int64_t>(std::llround(p.y * integerization))});
+        }
         res.emplace_back(std::move(out));
     }
     return res;
@@ -677,22 +804,25 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
 {
     Polygons res;
     if (spacing <= 0)
+    {
         return res;
+    }
 
-    double ux = 0, uy = 0;
+    double ux = 0;
+    double uy = 0;
     PolygonsD polyD;
     auto rows = LineFilling(poly, spacing, angle_deg, lineThickness, ux, uy, polyD);
 
     // sort each row by s_min
     for (auto& segs : rows)
     {
-        std::sort(segs.begin(), segs.end(),
-                  [&](const auto& A, const auto& B)
-                  {
-                      double sa = A.first.x * ux + A.first.y * uy;
-                      double sb = B.first.x * ux + B.first.y * uy;
-                      return sa < sb;
-                  });
+        std::ranges::sort(segs,
+                          [&](const auto& A, const auto& B)
+                          {
+                              double const sa = A.first.x * ux + A.first.y * uy;
+                              double const sb = B.first.x * ux + B.first.y * uy;
+                              return sa < sb;
+                          });
     }
 
     // flatten segments and compute connectivity (islands)
@@ -709,24 +839,30 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
         for (size_t i = 0; i < rows[r].size(); ++i)
         {
             const auto& [a, b] = rows[r][i];
-            double smin = a.x * ux + a.y * uy;
-            double smax = b.x * ux + b.y * uy;
-            segList.push_back(SegInfo{r, i, a, b, smin, smax});
+            double const smin = a.x * ux + a.y * uy;
+            double const smax = b.x * ux + b.y * uy;
+            segList.push_back(SegInfo{.row = r, .idx = i, .a = a, .b = b, .s_min = smin, .s_max = smax});
         }
     }
-    size_t N = segList.size();
+    size_t const N = segList.size();
     if (N == 0)
+    {
         return res;
+    }
 
     std::vector<size_t> parent(N);
     for (size_t i = 0; i < N; ++i)
+    {
         parent[i] = i;
+    }
 #ifndef __cpp_explicit_this_parameter
     auto findp = Utils::YCombinator(
         [&](auto&& self, size_t x) -> size_t
         {
             if (parent[x] == x)
+            {
                 return x;
+            }
             return parent[x] = self(parent[x]);
         });
 #else
@@ -739,9 +875,12 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
 #endif  // !__cpp_explicit_this_parameter
     auto unite = [&](size_t a, size_t b)
     {
-        size_t pa = findp(a), pb = findp(b);
+        size_t const pa = findp(a);
+        size_t const pb = findp(b);
         if (pa != pb)
+        {
             parent[pa] = pb;
+        }
     };
 
     // index mapping
@@ -751,7 +890,9 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
     {
         segIndex[r].reserve(rows[r].size());
         for (size_t i = 0; i < rows[r].size(); ++i)
+        {
             segIndex[r].push_back(idx++);
+        }
     }
 
     // connect adjacent rows by interval overlap
@@ -759,14 +900,16 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
     {
         for (size_t i = 0; i < rows[r].size(); ++i)
         {
-            size_t id1 = segIndex[r][i];
+            size_t const id1 = segIndex[r][i];
             for (size_t j = 0; j < rows[r + 1].size(); ++j)
             {
-                size_t id2 = segIndex[r + 1][j];
-                double lo = std::max(segList[id1].s_min, segList[id2].s_min);
-                double hi = std::min(segList[id1].s_max, segList[id2].s_max);
+                size_t const id2 = segIndex[r + 1][j];
+                double const lo = std::max(segList[id1].s_min, segList[id2].s_min);
+                double const hi = std::min(segList[id1].s_max, segList[id2].s_max);
                 if (lo <= hi)
+                {
                     unite(id1, id2);
+                }
             }
         }
     }
@@ -777,7 +920,7 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
     int compCnt = 0;
     for (size_t i = 0; i < N; ++i)
     {
-        size_t r = findp(i);
+        size_t const r = findp(i);
         auto it = compMap.find(r);
         if (it == compMap.end())
         {
@@ -786,52 +929,74 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
             compCnt++;
         }
         else
-            compId[i] = it->second;
+        {
+            {
+                compId[i] = it->second;
+            }
+        }
     }
 
     // point inside helper and clamping helpers
     auto point_inside = [&](const Point2D& pt) -> bool
     {
-        Clipper2Lib::Point64 p64{(int64_t)std::llround(pt.x * integerization),
-                                 (int64_t)std::llround(pt.y * integerization)};
+        Clipper2Lib::Point64 const p64{static_cast<int64_t>(std::llround(pt.x * integerization)),
+                                       static_cast<int64_t>(std::llround(pt.y * integerization))};
         auto r = PointInPolygons(p64, poly);
         return r != Clipper2Lib::PointInPolygonResult::IsOutside;
     };
 
     auto find_first_inside = [&](const Point2D& from, const Point2D& to) -> double
     {
-        double lo = 0.0, hi = 1.0;
+        double lo = 0.0;
+        double hi = 1.0;
         if (point_inside(from))
+        {
             return 0.0;
+        }
         if (!point_inside(to))
+        {
             return 1.0;
+        }
         for (int iter = 0; iter < MAX_BINARY_SEARCH_ITERATIONS; ++iter)
         {
-            double mid = (lo + hi) * 0.5;
-            Point2D p{from.x + (to.x - from.x) * mid, from.y + (to.y - from.y) * mid};
+            double const mid = (lo + hi) * 0.5;
+            Point2D const p{from.x + (to.x - from.x) * mid, from.y + (to.y - from.y) * mid};
             if (point_inside(p))
+            {
                 hi = mid;
+            }
             else
+            {
                 lo = mid;
+            }
         }
         return hi;
     };
 
     auto find_last_inside = [&](const Point2D& from, const Point2D& to) -> double
     {
-        double lo = 0.0, hi = 1.0;
+        double lo = 0.0;
+        double hi = 1.0;
         if (point_inside(to))
+        {
             return 1.0;
+        }
         if (!point_inside(from))
+        {
             return 0.0;
+        }
         for (int iter = 0; iter < MAX_BINARY_SEARCH_ITERATIONS; ++iter)
         {
-            double mid = (lo + hi) * 0.5;
-            Point2D p{from.x + (to.x - from.x) * mid, from.y + (to.y - from.y) * mid};
+            double const mid = (lo + hi) * 0.5;
+            Point2D const p{from.x + (to.x - from.x) * mid, from.y + (to.y - from.y) * mid};
             if (point_inside(p))
+            {
                 lo = mid;
+            }
             else
+            {
                 hi = mid;
+            }
         }
         return lo;
     };
@@ -846,12 +1011,14 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
             return path;
         }
         const int steps = MAX_BINARY_SEARCH_ITERATIONS;
-        Point2D p1, p2;
-        bool ok1 = false, ok2 = false;
+        Point2D p1;
+        Point2D p2;
+        bool ok1 = false;
+        bool ok2 = false;
         for (int i = 0; i <= steps; i++)
         {
-            double t = double(i) / steps;
-            Point2D p{ca.x * (1 - t) + cb.x * t, ca.y * (1 - t) + cb.y * t};
+            double const t = static_cast<double>(i) / steps;
+            Point2D const p{ca.x * (1 - t) + cb.x * t, ca.y * (1 - t) + cb.y * t};
             if (!ok1 && point_inside(p))
             {
                 p1 = p;
@@ -860,8 +1027,8 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
         }
         for (int i = steps; i >= 0; i--)
         {
-            double t = double(i) / steps;
-            Point2D p{ca.x * (1 - t) + cb.x * t, ca.y * (1 - t) + cb.y * t};
+            double const t = static_cast<double>(i) / steps;
+            Point2D const p{ca.x * (1 - t) + cb.x * t, ca.y * (1 - t) + cb.y * t};
             if (!ok2 && point_inside(p))
             {
                 p2 = p;
@@ -869,26 +1036,32 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
             }
         }
         if (!ok1 || !ok2)
+        {
             return {};
+        }
         PolygonD outer = polyD[0];
         if (Clipper2Lib::Area(Integerization(outer)) < 0)
-            std::reverse(outer.begin(), outer.end());
+        {
+            std::ranges::reverse(outer);
+        }
         auto distOnRing = [&](size_t i, size_t j) -> double
         {
             double d = 0;
             for (size_t k = i; k != j; k = (k + 1) % outer.size())
             {
-                size_t kk = (k + 1) % outer.size();
+                size_t const kk = (k + 1) % outer.size();
                 d += std::hypot(outer[kk].x - outer[k].x, outer[kk].y - outer[k].y);
             }
             return d;
         };
-        size_t i1 = 0, i2 = 0;
-        double best1 = 1e300, best2 = 1e300;
+        size_t i1 = 0;
+        size_t i2 = 0;
+        double best1 = 1e300;
+        double best2 = 1e300;
         for (size_t i = 0; i < outer.size(); i++)
         {
-            double d1 = std::hypot(outer[i].x - p1.x, outer[i].y - p1.y);
-            double d2 = std::hypot(outer[i].x - p2.x, outer[i].y - p2.y);
+            double const d1 = std::hypot(outer[i].x - p1.x, outer[i].y - p1.y);
+            double const d2 = std::hypot(outer[i].x - p2.x, outer[i].y - p2.y);
             if (d1 < best1)
             {
                 best1 = d1;
@@ -900,8 +1073,8 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
                 i2 = i;
             }
         }
-        double dCW = distOnRing(i1, i2);
-        double dCCW = distOnRing(i2, i1);
+        double const dCW = distOnRing(i1, i2);
+        double const dCCW = distOnRing(i2, i1);
         std::vector<Point2D> arc;
         if (dCW < dCCW)
         {
@@ -909,7 +1082,9 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
             {
                 arc.push_back(outer[k]);
                 if (k == i2)
+                {
                     break;
+                }
             }
         }
         else
@@ -918,12 +1093,15 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
             {
                 arc.push_back(outer[k]);
                 if (k == i2)
+                {
                     break;
+                }
             }
         }
         std::vector<Point2D> samp;
         samp.push_back(p1);
-        double acc = 0, step = std::min(0.5 * integerization, lineThickness * 2.0);
+        double acc = 0;
+        double const step = std::min(0.5 * integerization, lineThickness * 2.0);
         for (size_t i = 1; i < arc.size(); i++)
         {
             acc += std::hypot(arc[i].x - arc[i - 1].x, arc[i].y - arc[i - 1].y);
@@ -936,7 +1114,9 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
         samp.push_back(p2);
         path.push_back(ca);
         for (auto& p : samp)
+        {
             path.push_back(p);
+        }
         path.push_back(cb);
         return path;
     };
@@ -944,10 +1124,10 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
     auto dump_segment = [&](const Point2D& a, const Point2D& b)
     {
         Polygon ln;
-        ln.emplace_back(
-            Point2{(int64_t)std::llround(a.x * integerization), (int64_t)std::llround(a.y * integerization)});
-        ln.emplace_back(
-            Point2{(int64_t)std::llround(b.x * integerization), (int64_t)std::llround(b.y * integerization)});
+        ln.emplace_back(Point2{static_cast<int64_t>(std::llround(a.x * integerization)),
+                               static_cast<int64_t>(std::llround(a.y * integerization))});
+        ln.emplace_back(Point2{static_cast<int64_t>(std::llround(b.x * integerization)),
+                               static_cast<int64_t>(std::llround(b.y * integerization))});
         res.emplace_back(std::move(ln));
     };
 
@@ -956,7 +1136,6 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
     // collect extra straight segments when connector/bridge fails
     std::vector<Polygon> extraLines;
     int prev_row = -LARGE_ROW_OFFSET;
-    bool have_prev = false;
     int prev_comp_local = -1;
     double eps = (integerization / INTEGERIZATION_PRECISION) / integerization;
 
@@ -969,23 +1148,31 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
             return;
         }
         if (std::hypot(pl.back().x - aa.x, pl.back().y - aa.y) > 1e-9)
+        {
             pl.push_back(aa);
+        }
         pl.push_back(bb);
     };
 
     auto clamp_segment = [&](const Point2D& a, const Point2D& b, Point2D& aa, Point2D& bb) -> bool
     {
-        double dx = b.x - a.x, dy = b.y - a.y;
-        double len = std::hypot(dx, dy);
+        double const dx = b.x - a.x;
+        double const dy = b.y - a.y;
+        double const len = std::hypot(dx, dy);
         if (len <= 1e-12)
+        {
             return false;
-        double sx = dx / len, sy = dy / len;
-        Point2D a2{a.x + sx * eps, a.y + sy * eps};
-        Point2D b2{b.x - sx * eps, b.y - sy * eps};
-        double t0 = find_first_inside(a2, b2);
-        double t1 = find_last_inside(a2, b2);
+        }
+        double const sx = dx / len;
+        double const sy = dy / len;
+        Point2D const a2{a.x + sx * eps, a.y + sy * eps};
+        Point2D const b2{b.x - sx * eps, b.y - sy * eps};
+        double const t0 = find_first_inside(a2, b2);
+        double const t1 = find_last_inside(a2, b2);
         if (t1 <= t0)
+        {
             return false;
+        }
         aa = Point2D{a2.x + (b2.x - a2.x) * t0, a2.y + (b2.y - a2.y) * t0};
         bb = Point2D{a2.x + (b2.x - a2.x) * t1, a2.y + (b2.y - a2.y) * t1};
         return true;
@@ -995,15 +1182,18 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
     {
         auto& segs = rows[r];
         if (segs.empty())
+        {
             continue;
+        }
         if ((r & 1) == 0)
         {
             for (size_t i = 0; i < segs.size(); ++i)
             {
                 const auto& [a, b] = segs[i];
-                size_t idxSeg = segIndex[r][i];
-                int cid = compId[idxSeg];
-                Point2D aa, bb;
+                size_t const idxSeg = segIndex[r][i];
+                int const cid = compId[idxSeg];
+                Point2D aa;
+                Point2D bb;
                 if (!clamp_segment(a, b, aa, bb))
                 {
                     // no valid interior span; emit the real scan segment (a, b) rather
@@ -1016,32 +1206,33 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
                 {
                     polylines.emplace_back();
                     push_seg_to_current(polylines.back(), aa, bb);
-                    prev_row = (int)r;
-                    have_prev = true;
+                    prev_row = static_cast<int>(r);
                     prev_comp_local = cid;
                     continue;
                 }
 
                 // allow connect only if same row or adjacent row
-                if ((int)r == prev_row || (int)r == prev_row + 1)
+                if (std::cmp_equal(r, prev_row) || static_cast<int>(r) == prev_row + 1)
                 {
                     // if different component and adjacent row, attempt bridge; otherwise simple connect
-                    if (cid != prev_comp_local && (int)r == prev_row + 1)
+                    if (cid != prev_comp_local && static_cast<int>(r) == prev_row + 1)
                     {
                         auto bridge = build_bridge(polylines.back().back(), aa);
                         if (!bridge.empty())
                         {
                             // append bridge (skip duplicate start)
                             for (size_t k = 1; k < bridge.size(); ++k)
+                            {
                                 polylines.back().push_back(bridge[k]);
+                            }
                             // then append segment
                             push_seg_to_current(polylines.back(), aa, bb);
                         }
                         else
                         {
                             // fallback: only connect if midpoint inside
-                            Point2D mid{(polylines.back().back().x + aa.x) * 0.5,
-                                        (polylines.back().back().y + aa.y) * 0.5};
+                            Point2D const mid{(polylines.back().back().x + aa.x) * 0.5,
+                                              (polylines.back().back().y + aa.y) * 0.5};
                             if (point_inside(mid))
                             {
                                 push_seg_to_current(polylines.back(), aa, bb);
@@ -1051,10 +1242,10 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
                                 polylines.emplace_back();
                                 push_seg_to_current(polylines.back(), aa, bb);
                                 Polygon line;
-                                line.emplace_back(Point2{(int64_t)std::llround(aa.x * integerization),
-                                                         (int64_t)std::llround(aa.y * integerization)});
-                                line.emplace_back(Point2{(int64_t)std::llround(bb.x * integerization),
-                                                         (int64_t)std::llround(bb.y * integerization)});
+                                line.emplace_back(Point2{static_cast<int64_t>(std::llround(aa.x * integerization)),
+                                                         static_cast<int64_t>(std::llround(aa.y * integerization))});
+                                line.emplace_back(Point2{static_cast<int64_t>(std::llround(bb.x * integerization)),
+                                                         static_cast<int64_t>(std::llround(bb.y * integerization))});
                                 extraLines.push_back(std::move(line));
                             }
                         }
@@ -1063,18 +1254,16 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
                     {
                         push_seg_to_current(polylines.back(), aa, bb);
                     }
-                    prev_row = (int)r;
+                    prev_row = static_cast<int>(r);
                     prev_comp_local = cid;
-                    have_prev = true;
                 }
                 else
                 {
                     // start new polyline if rows are not adjacent
                     polylines.emplace_back();
                     push_seg_to_current(polylines.back(), aa, bb);
-                    prev_row = (int)r;
+                    prev_row = static_cast<int>(r);
                     prev_comp_local = cid;
-                    have_prev = true;
                 }
             }
         }
@@ -1082,11 +1271,12 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
         {
             for (size_t ii = 0; ii < segs.size(); ++ii)
             {
-                size_t i = segs.size() - 1 - ii;
+                size_t const i = segs.size() - 1 - ii;
                 const auto& [a, b] = segs[i];
-                size_t idxSeg = segIndex[r][i];
-                int cid = compId[idxSeg];
-                Point2D aa, bb;
+                size_t const idxSeg = segIndex[r][i];
+                int const cid = compId[idxSeg];
+                Point2D aa;
+                Point2D bb;
                 if (!clamp_segment(b, a, aa, bb))
                 {
                     // see the forward-row branch: emit the real segment, not unset aa/bb
@@ -1098,27 +1288,28 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
                 {
                     polylines.emplace_back();
                     push_seg_to_current(polylines.back(), aa, bb);
-                    prev_row = (int)r;
-                    have_prev = true;
+                    prev_row = static_cast<int>(r);
                     prev_comp_local = cid;
                     continue;
                 }
 
-                if ((int)r == prev_row || (int)r == prev_row + 1)
+                if (std::cmp_equal(r, prev_row) || static_cast<int>(r) == prev_row + 1)
                 {
-                    if (cid != prev_comp_local && (int)r == prev_row + 1)
+                    if (cid != prev_comp_local && static_cast<int>(r) == prev_row + 1)
                     {
                         auto bridge = build_bridge(polylines.back().back(), aa);
                         if (!bridge.empty())
                         {
                             for (size_t k = 1; k < bridge.size(); ++k)
+                            {
                                 polylines.back().push_back(bridge[k]);
+                            }
                             push_seg_to_current(polylines.back(), aa, bb);
                         }
                         else
                         {
-                            Point2D mid{(polylines.back().back().x + aa.x) * 0.5,
-                                        (polylines.back().back().y + aa.y) * 0.5};
+                            Point2D const mid{(polylines.back().back().x + aa.x) * 0.5,
+                                              (polylines.back().back().y + aa.y) * 0.5};
                             if (point_inside(mid))
                             {
                                 push_seg_to_current(polylines.back(), aa, bb);
@@ -1128,10 +1319,10 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
                                 polylines.emplace_back();
                                 push_seg_to_current(polylines.back(), aa, bb);
                                 Polygon line;
-                                line.emplace_back(Point2{(int64_t)std::llround(aa.x * integerization),
-                                                         (int64_t)std::llround(aa.y * integerization)});
-                                line.emplace_back(Point2{(int64_t)std::llround(bb.x * integerization),
-                                                         (int64_t)std::llround(bb.y * integerization)});
+                                line.emplace_back(Point2{static_cast<int64_t>(std::llround(aa.x * integerization)),
+                                                         static_cast<int64_t>(std::llround(aa.y * integerization))});
+                                line.emplace_back(Point2{static_cast<int64_t>(std::llround(bb.x * integerization)),
+                                                         static_cast<int64_t>(std::llround(bb.y * integerization))});
                                 extraLines.push_back(std::move(line));
                             }
                         }
@@ -1140,16 +1331,14 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
                     {
                         push_seg_to_current(polylines.back(), aa, bb);
                     }
-                    prev_row = (int)r;
+                    prev_row = static_cast<int>(r);
                     prev_comp_local = cid;
-                    have_prev = true;
                 }
                 else
                 {
                     push_seg_to_current(polylines.back(), aa, bb);
-                    prev_row = (int)r;
+                    prev_row = static_cast<int>(r);
                     prev_comp_local = cid;
-                    have_prev = true;
                 }
             }
         }
@@ -1159,18 +1348,24 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
     for (auto& pl : polylines)
     {
         if (pl.empty())
+        {
             continue;
+        }
         Polygon out;
         out.reserve(pl.size());
         for (auto& p : pl)
-            out.emplace_back(
-                Point2{(int64_t)std::llround(p.x * integerization), (int64_t)std::llround(p.y * integerization)});
+        {
+            out.emplace_back(Point2{static_cast<int64_t>(std::llround(p.x * integerization)),
+                                    static_cast<int64_t>(std::llround(p.y * integerization))});
+        }
         res.emplace_back(out);
     }
 
     // append any extra straight segments that failed to connect
     for (auto& ln : extraLines)
+    {
         res.push_back(ln);
+    }
     return res;
 }
 
@@ -1187,40 +1382,45 @@ Polygons CompositeOffsetFill(const Polygons& poly, double spacing, double offset
         case FillMode::SimpleZigzag:
             return SimpleZigzagFill(p, spacing, angle_deg, lineThickness);
         case FillMode::Zigzag:
-            return ZigzagFill(p, spacing, angle_deg, lineThickness);
         default:
             return ZigzagFill(p, spacing, angle_deg, lineThickness);
         }
     };
 
     // base polygon
-    Polygons base = fillOne(poly);
-    for (auto& b : base)
+    Polygons const base = fillOne(poly);
+    for (const auto& b : base)
+    {
         res.push_back(b);
+    }
 
     // outward offsets
     for (int i = 1; i <= outwardCount; ++i)
     {
-        double delta = offsetStep * i;
-        Polygons offs = Offset(poly, delta, join_type, Clipper2Lib::EndType::Polygon);
-        for (auto& op : offs)
+        double const delta = offsetStep * i;
+        Polygons const offs = Offset(poly, delta, join_type, Clipper2Lib::EndType::Polygon);
+        for (const auto& op : offs)
         {
-            Polygons f = fillOne(Polygons{op});
-            for (auto& q : f)
+            Polygons const f = fillOne(Polygons{op});
+            for (const auto& q : f)
+            {
                 res.push_back(q);
+            }
         }
     }
 
     // inward offsets
     for (int i = 1; i <= inwardCount; ++i)
     {
-        double delta = -offsetStep * i;
-        Polygons offs = Offset(poly, delta, join_type, Clipper2Lib::EndType::Polygon);
-        for (auto& op : offs)
+        double const delta = -offsetStep * i;
+        Polygons const offs = Offset(poly, delta, join_type, Clipper2Lib::EndType::Polygon);
+        for (const auto& op : offs)
         {
-            Polygons f = fillOne(Polygons{op});
-            for (auto& q : f)
+            Polygons const f = fillOne(Polygons{op});
+            for (const auto& q : f)
+            {
                 res.push_back(q);
+            }
         }
     }
 
@@ -1236,7 +1436,9 @@ Polygons HybridFill(const Polygons& poly, double spacing, double offsetStep, int
     {
         auto offs = Offset(poly, offsetStep * (i + 1), join_type, Clipper2Lib::EndType::Polygon);
         for (const auto& p : offs)
+        {
             res.emplace_back(ClosePath(p));
+        }
     }
 
     const auto minAreaInt64 = static_cast<int64_t>(std::pow(lineThickness, 2));
@@ -1245,16 +1447,22 @@ Polygons HybridFill(const Polygons& poly, double spacing, double offsetStep, int
     {
         auto offs = Offset(poly, -offsetStep * i, join_type, Clipper2Lib::EndType::Polygon);
         if (offs.empty())
+        {
             break;
+        }
         const auto& front = offs.front();
-        if (front.size() < 3 || std::abs(Clipper2Lib::Area(front)) < minAreaInt64)
+        if (front.size() < 3 || std::abs(Clipper2Lib::Area(front)) < static_cast<double>(minAreaInt64))
+        {
             break;
+        }
         for (const auto& p : offs)
+        {
             res.emplace_back(ClosePath(p));
+        }
         done = i;
     }
 
-    double finalDelta = -offsetStep * (done + 1);
+    double const finalDelta = -offsetStep * (done + 1);
     auto finalOffs = Offset(poly, finalDelta, join_type, Clipper2Lib::EndType::Polygon);
 
     auto fillOne = [&](const Polygons& p) -> Polygons
@@ -1272,8 +1480,10 @@ Polygons HybridFill(const Polygons& poly, double spacing, double offsetStep, int
 
     for (const auto& island : finalOffs)
     {
-        if (island.size() < 3 || Clipper2Lib::Area(island) < minAreaInt64)
+        if (island.size() < 3 || Clipper2Lib::Area(island) < static_cast<double>(minAreaInt64))
+        {
             continue;
+        }
         auto f = fillOne(Polygons{island});
         res.insert(res.end(), f.begin(), f.end());
     }
@@ -1282,7 +1492,7 @@ Polygons HybridFill(const Polygons& poly, double spacing, double offsetStep, int
 
 // LuaCustomFill: call Lua script function to generate table of polylines/polygons
 Polygons LuaCustomFill(const Polygons& poly, const std::string& scriptPath, const std::string& functionName,
-                       double lineThickness, const std::function<void(lua_State*)>& lua_reg)
+                       double /*lineThickness*/, const std::function<void(lua_State*)>& lua_reg)
 {
     Polygons res;
     // Convert integer polygon to float polygon for Lua
@@ -1290,14 +1500,18 @@ Polygons LuaCustomFill(const Polygons& poly, const std::string& scriptPath, cons
 
     auto L = MakeUniqueLuaState();
     if (!L)
+    {
         throw RuntimeError("Failed to create Lua state");
+    }
     luaL_openlibs(L.get());
 
     // load register functions
     RegisterLuaPolygonOperations(L.get());
     RegisterLuaPolygonFillFunctions(L.get());
     if (lua_reg)
+    {
         lua_reg(L.get());
+    }
 
     // load script
     if (luaL_loadfile(L.get(), scriptPath.c_str()) || lua_pcall(L.get(), 0, 0, 0))
@@ -1337,7 +1551,7 @@ Polygons LuaCustomFill(const Polygons& poly, const std::string& scriptPath, cons
         if (lua_istable(L.get(), -1))
         {
             PolygonD outpoly;
-            int n = (int)lua_rawlen(L.get(), -1);
+            int const n = static_cast<int>(lua_rawlen(L.get(), -1));
             for (int i = 1; i <= n; ++i)
             {
                 lua_rawgeti(L.get(), -1, i);
@@ -1345,8 +1559,8 @@ Polygons LuaCustomFill(const Polygons& poly, const std::string& scriptPath, cons
                 {
                     lua_getfield(L.get(), -1, "x");
                     lua_getfield(L.get(), -2, "y");
-                    double x = lua_isnumber(L.get(), -2) ? lua_tonumber(L.get(), -2) : 0.0;
-                    double y = lua_isnumber(L.get(), -1) ? lua_tonumber(L.get(), -1) : 0.0;
+                    double const x = lua_isnumber(L.get(), -2) ? lua_tonumber(L.get(), -2) : 0.0;
+                    double const y = lua_isnumber(L.get(), -1) ? lua_tonumber(L.get(), -1) : 0.0;
                     outpoly.emplace_back(Point2D{x, y});
                     lua_pop(L.get(), 2);
                 }
@@ -1355,7 +1569,7 @@ Polygons LuaCustomFill(const Polygons& poly, const std::string& scriptPath, cons
             if (!outpoly.empty())
             {
                 // convert to integer polygon and add
-                Polygon ip = Integerization(outpoly);
+                Polygon const ip = Integerization(outpoly);
                 allPieces.push_back(ip);
             }
         }
@@ -1364,33 +1578,39 @@ Polygons LuaCustomFill(const Polygons& poly, const std::string& scriptPath, cons
 
     // return collected pieces (do not union/merge; caller expects paths)
     for (auto& p : allPieces)
+    {
         res.push_back(p);
+    }
     return res;
 }
 
 Polygons LuaCustomFillString(const Polygons& poly, const std::string& luaScript, const std::string& functionName,
-                             double lineThickness, const std::function<void(lua_State*)>& lua_reg)
+                             double /*lineThickness*/, const std::function<void(lua_State*)>& lua_reg)
 {
     auto polyD = UnIntegerization(poly);
 
     auto L = MakeUniqueLuaState();
     if (!L)
+    {
         throw RuntimeError("Failed to create Lua state");
+    }
     luaL_openlibs(L.get());
 
     RegisterLuaPolygonOperations(L.get());
     RegisterLuaPolygonFillFunctions(L.get());
     if (lua_reg)
+    {
         lua_reg(L.get());
+    }
 
     if (luaL_loadstring(L.get(), luaScript.c_str()) != LUA_OK)
     {
-        std::string err = lua_tostring(L.get(), -1);
+        std::string const err = lua_tostring(L.get(), -1);
         throw RuntimeError("Failed to load Lua string: " + err);
     }
     if (lua_pcall(L.get(), 0, 0, 0) != LUA_OK)
     {
-        std::string err = lua_tostring(L.get(), -1);
+        std::string const err = lua_tostring(L.get(), -1);
         throw RuntimeError("Exec Lua string failed: " + err);
     }
 
@@ -1403,7 +1623,7 @@ Polygons LuaCustomFillString(const Polygons& poly, const std::string& luaScript,
     PushPolygonsDToLua(L.get(), polyD);
     if (lua_pcall(L.get(), 1, 1, 0) != LUA_OK)
     {
-        std::string err = lua_tostring(L.get(), -1);
+        std::string const err = lua_tostring(L.get(), -1);
         throw RuntimeError("Error calling Lua function: " + err);
     }
 
@@ -1419,7 +1639,7 @@ Polygons LuaCustomFillString(const Polygons& poly, const std::string& luaScript,
         if (lua_istable(L.get(), -1))
         {
             PolygonD outpoly;
-            int n = (int)lua_rawlen(L.get(), -1);
+            int const n = static_cast<int>(lua_rawlen(L.get(), -1));
             for (int i = 1; i <= n; ++i)
             {
                 lua_rawgeti(L.get(), -1, i);
@@ -1427,8 +1647,8 @@ Polygons LuaCustomFillString(const Polygons& poly, const std::string& luaScript,
                 {
                     lua_getfield(L.get(), -1, "x");
                     lua_getfield(L.get(), -2, "y");
-                    double x = lua_isnumber(L.get(), -2) ? lua_tonumber(L.get(), -2) : 0.0;
-                    double y = lua_isnumber(L.get(), -1) ? lua_tonumber(L.get(), -1) : 0.0;
+                    double const x = lua_isnumber(L.get(), -2) ? lua_tonumber(L.get(), -2) : 0.0;
+                    double const y = lua_isnumber(L.get(), -1) ? lua_tonumber(L.get(), -1) : 0.0;
                     outpoly.emplace_back(Point2D{x, y});
                     lua_pop(L.get(), 2);
                 }
@@ -1436,7 +1656,7 @@ Polygons LuaCustomFillString(const Polygons& poly, const std::string& luaScript,
             }
             if (!outpoly.empty())
             {
-                Polygon ip = Integerization(outpoly);
+                Polygon const ip = Integerization(outpoly);
                 allPieces.push_back(ip);
             }
         }

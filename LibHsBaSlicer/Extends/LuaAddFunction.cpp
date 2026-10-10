@@ -8,9 +8,15 @@
 
 namespace HsBa::Slicer
 {
+namespace
+{
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables) module Lua function registry
 std::vector<LuaRegFunc> g_2dFunctions;
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables) module Lua function registry
 std::vector<LuaRegFunc> g_3dFunctions;
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables) module Lua function registry
 std::vector<LuaRegFunc> g_fileFunctions;
+}  // namespace
 
 void Add2DFunctions(LuaRegFunc func)
 {
@@ -44,7 +50,11 @@ std::vector<LuaRegFunc>& GetFileFunctions()
 
 // ===== Event callbacks =====
 
-static std::map<std::string, std::vector<LuaRegFunc>> g_eventCallbacks;
+namespace
+{
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables,bugprone-throwing-static-initialization,cert-err58-cpp)
+std::map<std::string, std::vector<LuaRegFunc>> g_eventCallbacks;
+}  // namespace
 
 void AddEventCallback(const std::string& event_name, LuaRegFunc func)
 {
