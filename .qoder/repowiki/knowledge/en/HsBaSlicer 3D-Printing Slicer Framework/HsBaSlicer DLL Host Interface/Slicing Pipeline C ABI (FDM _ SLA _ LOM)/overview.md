@@ -1,1 +1,0 @@
-C ABI entry points that wrap the HsBa slicer's FDM, SLA, and LOM slicing pipelines as coroutine-driven tasks with progress callbacks and Lua-extendable stages.

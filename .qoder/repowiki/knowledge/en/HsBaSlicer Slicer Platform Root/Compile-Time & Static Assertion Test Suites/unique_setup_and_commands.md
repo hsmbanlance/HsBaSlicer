@@ -1,0 +1,1 @@
+Build each subproject independently via CMake (`base_static_tests` and `utils_static_tests`); success is indicated by successful compilation, not by test output. Coroutines are only compiled when the compiler advertises `__cpp_lib_coroutine` and `__cpp_impl_coroutine`.

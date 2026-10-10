@@ -1,1 +1,0 @@
-OpenCASCADE (OCCT) TopoDS_BRep kernel for native CAD geometry; optional Boost.DLL for runtime loading of user-provided CAD plugins; Eigen3 for vector/matrix math.

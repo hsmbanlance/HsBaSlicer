@@ -1,0 +1,1 @@
+Shared C++ foundation library for HsBaSlicer providing model interfaces, reflection-backed type-erased objects, delegates/events, memory pools, and cross-platform encoding/geometry utilities.

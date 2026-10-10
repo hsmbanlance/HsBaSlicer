@@ -1,5 +1,0 @@
-- Each pipeline pairs an internal `InternalXxxConfig` / `InternalXxxResult` struct with `BuildXxxConfig` and `ToCResult` helpers that marshal between C ABI types and C++ types.
-- Public entry points come in two flavours: a blocking `HsBaRunXxxPipeline` that calls `task.get_result()`, and an async `HsBaRunXxxPipelineAsync` that captures the config in a `shared_ptr` and attaches a `.then` callback to invoke the user-supplied result callback.
-- Heap-owned C strings crossing the boundary are produced by a per-file `OwnedCString` (or equivalent `DupToHeap`) helper that allocates via `std::malloc` and is released by a matching `HsBaFreeXxxResult` function using `std::free`.
-- Progress reporting goes through a user-supplied `progress_cb(percent, stage, user_data)` invoked at named stages inside the coroutine, with `ReportProgress` guarding against null callbacks.
-- Errors are caught as `RuntimeError` and re-emitted into the C result's `error_message` field prefixed with a pipeline-specific label (e.g. "Pipeline error:", "File transfer error:").

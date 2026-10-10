@@ -2,10 +2,11 @@
 
 <cite>
 **本文引用的文件**   
-- [README.md](file://README.md)
-- [HsBaSlicer.cpp](file://HsBaSlicer/HsBaSlicer.cpp)
-- [dllexport.h](file://DllHsBaSlicer/dllexport.h)
-- [encoding_convert.hpp](file://base/encoding_convert.hpp)
+- [game_engine_integration.md（英文）](file://docs/en/DllHsBaSlicer/game_engine_integration.md)
+- [game_engine_integration.md（中文）](file://docs/zh/DllHsBaSlicer/game_engine_integration.md)
+- [initialize.h](file://DllHsBaSlicer/initialize.h)
+- [fdm_pipeline.h](file://DllHsBaSlicer/fdm_pipeline.h)
+- [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
 </cite>
 
 ## 目录
@@ -15,228 +16,293 @@
 4. [架构总览](#架构总览)
 5. [详细组件分析](#详细组件分析)
 6. [依赖关系分析](#依赖关系分析)
-7. [性能考虑](#性能考虑)
-8. [故障排查指南](#故障排查指南)
+7. [性能与线程安全注意事项](#性能与线程安全注意事项)
+8. [故障排除指南](#故障排除指南)
 9. [结论](#结论)
-10. [附录](#附录)
+10. [附录：UE 集成清单](#附录ue-集成清单)
 
 ## 引言
-本指南面向在 Unreal Engine（UE）中集成 HsBaSlicer 的开发者，目标是提供从模块布局、构建配置到 C++ 包装器与 Blueprint 暴露的完整方案。文档基于仓库现有能力进行扩展说明：以 DllHsBaSlicer 提供的 C ABI 为桥接面，通过 UE 插件机制加载动态库，封装异步调用、GameThread 回调与 Blueprint 暴露；同时覆盖 UTF-16/UTF-8 编码转换、内存管理与线程安全等关键技术点，并给出 Windows/Linux/macOS 的构建与打包部署建议，以及常见问题排查方法。
+本文面向在 Unreal Engine 中集成 HsBaSlicer 的开发者，重点说明 ThirdParty 模块布局、Build.cs 构建脚本、头文件与库文件组织方式，以及 C++ 包装层如何基于 UGameInstanceSubsystem 暴露 Blueprint 可调用接口。文档还覆盖异步切片调用、UTF-8 编码转换、GameThread 调度、打包部署与延迟加载 DLL 的注意事项，并给出 Blueprint 订阅事件、更新 UI 进度条的实践路径。
+
+本指南以仓库中的引擎集成文档为权威来源，并结合 DllHsBaSlicer 的 C ABI 头文件进行交叉验证，确保 API 名称、回调签名和生命周期约束与实际源码一致。
+
+**章节来源**
+- [game_engine_integration.md（英文）:216-362](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L216-L362)
+- [game_engine_integration.md（中文）:214-360](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L214-L360)
 
 ## 项目结构
-HsBaSlicer 采用模块化设计，对外暴露两类主要接口：
-- DllHsBaSlicer：导出 C ABI 的动态库，适合跨语言调用（包括游戏引擎）。
-- LibHsBaSlicer：C++ 全流程切片能力封装，供 C++ 工程直接链接。
+Unreal Engine 集成采用“插件 + ThirdParty 第三方库模块”的方式：
 
-对于 UE 集成，推荐优先使用 DllHsBaSlicer 的 C ABI，避免 C++ ABI 差异带来的兼容性问题。
+- `Plugins/HsBaSlicer/HsBaSlicer.uplugin`：插件描述文件，声明插件名称、版本、依赖模块等。
+- `Plugins/HsBaSlicer/Source/HsBaSlicer`：包装模块，提供 UGameInstanceSubsystem 子类、UFUNCTION 蓝图接口、动态委托广播。
+- `Plugins/HsBaSlicer/Source/ThirdParty/DllHsBaSlicer`：第三方库模块，负责链接 DllHsBaSlicer 的头文件与平台二进制产物。
 
 ```mermaid
 graph TB
-subgraph "HsBaSlicer 核心"
-DLL["DllHsBaSlicer<br/>C ABI 动态库"]
-LIB["LibHsBaSlicer<br/>C++ 静态/共享库"]
-BASE["base<br/>基础类型与工具"]
-LOGGER["logger<br/>日志"]
-end
-subgraph "UE 集成层"
-PLUGIN["UE 插件模块<br/>ThirdParty/HsBaSlicer"]
-WRAPPER["C++ 包装器<br/>异步/回调/Blueprint"]
-end
-DLL --> LIB
-DLL --> BASE
-DLL --> LOGGER
-PLUGIN --> DLL
-WRAPPER --> PLUGIN
+UE["Unreal Engine 工程"] --> Plugin["HsBaSlicer 插件<br/>HsBaSlicer.uplugin"]
+Plugin --> Wrapper["包装模块<br/>UGameInstanceSubsystem / UFUNCTION"]
+Plugin --> ThirdParty["ThirdParty 模块<br/>DllHsBaSlicer.Build.cs"]
+ThirdParty --> Headers["include/<br/>DllHsBaSlicer 头文件"]
+ThirdParty --> Libs["lib/<br/>Win64/Linux/Mac 二进制"]
+Wrapper --> NativeAPI["DllHsBaSlicer C ABI<br/>initialize / fdm_pipeline"]
 ```
 
-图表来源
-- [README.md:104-124](file://README.md#L104-L124)
-- [README.md:126-151](file://README.md#L126-L151)
+**图示来源**
+- [game_engine_integration.md（英文）:218-234](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L218-L234)
+- [game_engine_integration.md（中文）:216-232](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L216-L232)
 
-章节来源
-- [README.md:25-39](file://README.md#L25-L39)
-- [README.md:104-124](file://README.md#L104-L124)
-- [README.md:126-151](file://README.md#L126-L151)
+**章节来源**
+- [game_engine_integration.md（英文）:218-234](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L218-L234)
+- [game_engine_integration.md（中文）:216-232](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L216-L232)
 
 ## 核心组件
-- DllHsBaSlicer：提供 C ABI 的流水线入口与结果对象，便于外部语言或引擎调用。
-- base/encoding_convert：提供系统检测与编码转换工具，是 UE 中处理 UTF-16/UTF-8 的关键支撑。
-- HsBaSlicer 示例程序：演示如何初始化、运行 FDM/SLA/SLS 流水线并释放结果内存。
+本节聚焦三个关键层面：
 
-章节来源
-- [README.md:104-124](file://README.md#L104-L124)
-- [HsBaSlicer.cpp:18-22](file://HsBaSlicer/HsBaSlicer.cpp#L18-L22)
-- [encoding_convert.hpp:20-39](file://base/encoding_convert.hpp#L20-L39)
+1. **ThirdParty 模块布局与 Build.cs**
+   - 将 DllHsBaSlicer 的头文件复制到 `include/`，供包装模块编译时引用。
+   - 将平台二进制产物放入 `lib/<Platform>/`，例如 Win64 下的 `.dll` 与 `.lib`、Linux 下的 `.so`、Mac 下的 `.dylib`。
+   - 通过 `PublicAdditionalLibraries` 链接静态导入库或共享库，并通过 `RuntimeDependencies` 将运行时 DLL/SO 打入包体。
+   - Windows 可使用 `PublicDelayLoadDLLs` 实现延迟加载，避免启动阶段直接失败。
+
+2. **C++ 包装器：UGameInstanceSubsystem 与 Blueprint 接口**
+   - 继承 `UGameInstanceSubsystem`，在 `Initialize` 中调用一次 `initialize()`。
+   - 使用 `UFUNCTION(BlueprintCallable)` 暴露 `SliceFdmAsync`。
+   - 定义 `DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSliceProgress, ...)` 与 `DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSliceFinished, ...)`，并以 `UPROPERTY(BlueprintAssignable)` 暴露给蓝图订阅。
+
+3. **异步调用与 GameThread 调度**
+   - 使用 `AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, ...)` 在后台线程执行切片。
+   - 原生回调中通过 `AsyncTask(ENamedThreads::GameThread, ...)` 把进度与结果广播到 GameThread。
+   - 使用 `FTCHARToUTF8` 将 UE 的 TCHAR 字符串转换为 UTF-8，再传给 C ABI；结果字符串再用 `UTF8_TO_TCHAR` 转回 FString。
+
+**章节来源**
+- [game_engine_integration.md（英文）:236-349](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L236-L349)
+- [game_engine_integration.md（中文）:234-347](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L234-L347)
 
 ## 架构总览
-下图展示 UE 插件如何通过动态加载 DllHsBaSlicer，并在包装器中将耗时任务调度到后台线程，完成后回调 GameThread 更新 UI 或触发 Blueprint 事件。
+下图展示从蓝图到原生切片的完整调用链：蓝图调用包装模块 → 包装模块进入后台线程 → 调用 DllHsBaSlicer 的 FDM 流水线 → 原生回调上报进度 → 包装模块调度到 GameThread → 触发蓝图事件。
 
 ```mermaid
 sequenceDiagram
-participant BP as "蓝图节点"
-participant Wrapper as "C++ 包装器"
-participant Loader as "动态库加载器"
-participant API as "DllHsBaSlicer C ABI"
-participant GT as "GameThread"
-BP->>Wrapper : "调用切片函数(参数)"
-Wrapper->>Loader : "加载 HsBaSlicer 动态库"
-Loader-->>Wrapper : "返回函数指针"
-Wrapper->>API : "异步执行流水线(回调)"
-API-->>Wrapper : "进度回调(非UI线程)"
-Wrapper->>GT : "调度到GameThread(进度/完成)"
-GT-->>BP : "触发蓝图事件(进度/完成)"
+participant BP as "蓝图"
+participant Subsys as "UHsBaSlicerSubsystem"
+participant Async as "后台线程"
+participant Native as "DllHsBaSlicer"
+participant GameThread as "GameThread"
+BP->>Subsys : "SliceFdmAsync(ModelPath)"
+Subsys->>Async : "AsyncTask(AnyBackgroundThreadNormalTask)"
+Async->>Native : "HsBaCreateDefaultConfig()"
+Async->>Native : "HsBaRunFdmPipeline(config, progressCallback, this)"
+Native-->>Async : "progressCallback(percent, stage)"
+Async->>GameThread : "AsyncTask(GameThread)"
+GameThread->>BP : "OnSliceProgress.Broadcast(percent, stage)"
+Native-->>Async : "result via callback"
+Async->>GameThread : "AsyncTask(GameThread)"
+GameThread->>BP : "OnSliceFinished.Broadcast(success, gcode, error)"
 ```
 
-图表来源
-- [HsBaSlicer.cpp:37-42](file://HsBaSlicer/HsBaSlicer.cpp#L37-L42)
-- [dllexport.h:9-20](file://DllHsBaSlicer/dllexport.h#L9-L20)
+**图示来源**
+- [game_engine_integration.md（英文）:272-349](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L272-L349)
+- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
 
 ## 详细组件分析
 
-### 动态库导出与平台宏
-- dllexport.h 定义了 HSBA_SLICER_API 宏，用于 Windows 下导出/导入符号，在非 Windows 平台为空宏。UE 插件侧应使用该宏声明导出的 C ABI 函数，确保跨平台一致性。
+### ThirdParty 模块布局与 Build.cs
+ThirdParty 模块的职责是告诉 Unreal Build Tool 如何找到头文件和平台二进制产物，并把运行时依赖复制到输出目录。
 
-章节来源
-- [dllexport.h:1-23](file://DllHsBaSlicer/dllexport.h#L1-L23)
+- 头文件路径：`PublicIncludePaths.Add(Path.Combine(ModuleDirectory, "include"))`
+- 平台库路径：`string LibDir = Path.Combine(ModuleDirectory, "lib", Target.Platform.ToString())`
+- Windows：链接 `DllHsBaSlicer.lib`，延迟加载 `DllHsBaSlicer.dll`，并通过 `RuntimeDependencies` 复制 DLL。
+- Linux：链接 `libDllHsBaSlicer.so`，并通过 `RuntimeDependencies` 复制 SO。
+- Mac：链接 `libDllHsBaSlicer.dylib`。
 
-### 示例程序的初始化与流水线调用
-- HsBaSlicer.cpp 展示了如何初始化日志、创建默认配置、设置模型路径与输出路径、同步调用流水线、处理结果与释放内存。该流程可直接映射到 UE 包装器的“同步/异步”两种模式：
-  - 同步模式：直接调用流水线函数并等待结果。
-  - 异步模式：在后台线程执行，通过回调上报进度与结果，最终在 GameThread 上触发蓝图事件。
+```mermaid
+flowchart TD
+Start(["构建开始"]) --> DetectPlatform["检测目标平台"]
+DetectPlatform --> Win{"Windows?"}
+Win --> |是| LinkWin["链接 .lib<br/>延迟加载 .dll<br/>RuntimeDependencies 复制 DLL"]
+Win --> |否| Lin{"Linux?"}
+Lin --> |是| LinkLin["链接 .so<br/>RuntimeDependencies 复制 SO"]
+Lin --> |否| Mac{"macOS?"}
+Mac --> |是| LinkMac["链接 .dylib"]
+Mac --> |否| Other["其他平台"]
+LinkWin --> End(["构建结束"])
+LinkLin --> End
+LinkMac --> End
+Other --> End
+```
 
-章节来源
-- [HsBaSlicer.cpp:49-106](file://HsBaSlicer/HsBaSlicer.cpp#L49-L106)
-- [HsBaSlicer.cpp:112-156](file://HsBaSlicer/HsBaSlicer.cpp#L112-L156)
-- [HsBaSlicer.cpp:162-207](file://HsBaSlicer/HsBaSlicer.cpp#L162-L207)
-- [HsBaSlicer.cpp:283-303](file://HsBaSlicer/HsBaSlicer.cpp#L283-L303)
+**图示来源**
+- [game_engine_integration.md（英文）:236-269](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L236-L269)
+- [game_engine_integration.md（中文）:234-267](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L234-L267)
 
-### 字符串编码转换（UTF-16/UTF-8）
-- base/encoding_convert.hpp 提供了 utf8_to_local/local_to_utf8 等函数，以及系统类型判断工具。在 UE 中，蓝图字符串通常为 UTF-16，而底层 C/C++ 接口多使用 UTF-8。建议在包装器中进行双向转换，避免路径与文件名乱码问题。
+**章节来源**
+- [game_engine_integration.md（英文）:236-269](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L236-L269)
+- [game_engine_integration.md（中文）:234-267](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L234-L267)
 
-章节来源
-- [encoding_convert.hpp:20-39](file://base/encoding_convert.hpp#L20-L39)
-- [encoding_convert.hpp:71-132](file://base/encoding_convert.hpp#L71-L132)
+### C++ 包装器：UGameInstanceSubsystem 与 Blueprint 接口
+包装类继承自 `UGameInstanceSubsystem`，并在初始化时调用 `initialize()`。它对外暴露：
 
-### 内存管理
-- 示例程序中明确调用了结果对象的释放函数（如 HsBaFreePipelineResult），表明 C ABI 返回的字符串与路径由底层分配，必须由调用方按约定释放。UE 包装器需严格遵循此约定，避免内存泄漏。
+- `SliceFdmAsync(const FString& ModelPath)`：蓝图可调用的异步切片入口。
+- `OnSliceProgress`：进度动态委托，参数为百分比与当前阶段描述。
+- `OnSliceFinished`：完成动态委托，参数为成功标志、G-code 内容与错误信息。
 
-章节来源
-- [HsBaSlicer.cpp:103-105](file://HsBaSlicer/HsBaSlicer.cpp#L103-L105)
-- [HsBaSlicer.cpp:153-155](file://HsBaSlicer/HsBaSlicer.cpp#L153-L155)
-- [HsBaSlicer.cpp:205-207](file://HsBaSlicer/HsBaSlicer.cpp#L205-L207)
+```mermaid
+classDiagram
+class UGameInstanceSubsystem {
++Initialize(Collection)
+}
+class UHsBaSlicerSubsystem {
++Initialize(Collection)
++SliceFdmAsync(ModelPath)
++OnSliceProgress
++OnSliceFinished
+}
+UHsBaSlicerSubsystem --|> UGameInstanceSubsystem : "继承"
+```
 
-### 线程安全与回调
-- 示例中的进度回调 OnProgress 在流水线内部被调用，可能不在主线程。UE 包装器应将回调调度至 GameThread，再触发蓝图事件，保证 UI 与蓝图逻辑的安全执行。
+**图示来源**
+- [game_engine_integration.md（英文）:272-295](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L272-L295)
+- [game_engine_integration.md（中文）:270-294](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L270-L294)
 
-章节来源
-- [HsBaSlicer.cpp:37-42](file://HsBaSlicer/HsBaSlicer.cpp#L37-L42)
+**章节来源**
+- [game_engine_integration.md（英文）:272-295](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L272-L295)
+- [game_engine_integration.md（中文）:270-294](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L270-L294)
 
-### Blueprint 暴露与委托处理
-- 在 UE 插件中，建议将包装器类暴露为蓝图可访问的 UBlueprintFunctionLibrary 或 UObject 子类，并提供：
-  - 启动切片任务（异步）
-  - 取消任务（可选）
-  - 进度事件（蓝图事件/委托）
-  - 完成事件（蓝图事件/委托）
-- 委托建议使用 TDelegate 或 BlueprintAssignable 事件，以便蓝图订阅与解绑。
+### 异步调用流程与 UTF-8 编码处理
+包装层的核心逻辑如下：
 
-[本节为概念性说明，不直接分析具体文件]
+1. 将 `FString` 模型路径通过 `FTCHARToUTF8` 转为 UTF-8 字节数组，并确保该数组在整个切片过程中存活。
+2. 使用 `AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, ...)` 切换到后台线程。
+3. 调用 `HsBaCreateDefaultConfig()` 设置默认配置，并将 UTF-8 路径写入 `model_path`。
+4. 调用 `HsBaRunFdmPipeline(...)`，传入进度回调与子对象指针作为 user_data。
+5. 在进度回调中，将 UTF-8 阶段字符串转换为 `FString`，再通过 `AsyncTask(ENamedThreads::GameThread, ...)` 广播 `OnSliceProgress`。
+6. 在结果回调中，读取 `gcode_content` 与 `error_message`，调用 `HsBaFreePipelineResult` 释放原生内存，再将结果调度到 GameThread 广播 `OnSliceFinished`。
+
+```mermaid
+flowchart TD
+Entry["SliceFdmAsync(ModelPath)"] --> Utf8["FTCHARToUTF8 转换 UTF-8"]
+Utf8 --> Background["AsyncTask(AnyBackgroundThreadNormalTask)"]
+Background --> Config["HsBaCreateDefaultConfig()"]
+Config --> Run["HsBaRunFdmPipeline(...)"]
+Run --> Progress["进度回调"]
+Progress --> ToGameThread["AsyncTask(GameThread)"]
+ToGameThread --> BroadcastProgress["OnSliceProgress.Broadcast"]
+Run --> Result["结果回调"]
+Result --> Free["HsBaFreePipelineResult"]
+Free --> ToGameThread2["AsyncTask(GameThread)"]
+ToGameThread2 --> BroadcastFinish["OnSliceFinished.Broadcast"]
+```
+
+**图示来源**
+- [game_engine_integration.md（英文）:298-349](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L298-L349)
+- [fdm_pipeline.h:23-61](file://DllHsBaSlicer/fdm_pipeline.h#L23-L61)
+
+**章节来源**
+- [game_engine_integration.md（英文）:298-349](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L298-L349)
+- [game_engine_integration.md（中文）:296-347](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L296-L347)
+
+### Blueprint 集成指南
+在蓝图中使用 HsBaSlicer 的典型步骤：
+
+1. 获取 `Get Game Instance Subsystem (HsBaSlicer Subsystem)`。
+2. 绑定 `OnSliceProgress` 与 `OnSliceFinished` 动态委托。
+3. 调用 `Slice Fdm Async`，在进度事件中更新 UI 进度条，在完成事件中保存 G-code 或提示用户。
+
+```mermaid
+sequenceDiagram
+participant LevelBP as "关卡蓝图"
+participant WidgetBP as "Widget 蓝图"
+participant Subsys as "HsBaSlicer Subsystem"
+LevelBP->>Subsys : "Get Game Instance Subsystem"
+WidgetBP->>Subsys : "Bind OnSliceProgress"
+WidgetBP->>Subsys : "Bind OnSliceFinished"
+LevelBP->>Subsys : "Slice Fdm Async"
+Subsys-->>WidgetBP : "OnSliceProgress(percent, stage)"
+Subsys-->>WidgetBP : "OnSliceFinished(success, gcode, error)"
+```
+
+**图示来源**
+- [game_engine_integration.md（英文）:351-355](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L351-L355)
+- [game_engine_integration.md（中文）:349-353](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L349-L353)
+
+**章节来源**
+- [game_engine_integration.md（英文）:351-355](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L351-L355)
+- [game_engine_integration.md（中文）:349-353](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L349-L353)
 
 ## 依赖关系分析
-- DllHsBaSlicer 依赖 base、logger 等基础模块，并通过 C ABI 暴露给外部。
-- UE 插件仅依赖 DllHsBaSlicer 的头文件与动态库，避免直接链接 LibHsBaSlicer 带来的复杂依赖。
+HsBaSlicer 在 UE 中的依赖关系可以概括为：
+
+- 包装模块依赖 Unreal Engine 子系统框架与异步任务工具。
+- 包装模块通过 ThirdParty 模块间接依赖 DllHsBaSlicer 的 C ABI。
+- DllHsBaSlicer 的 C ABI 由 `initialize.h` 与 `fdm_pipeline.h` 暴露，底层类型定义位于 `pipelinetypes/pipeline_types.h`。
 
 ```mermaid
 graph LR
-UEPlugin["UE 插件"] --> DLL["DllHsBaSlicer(C ABI)"]
-DLL --> Base["base"]
-DLL --> Logger["logger"]
+UE["Unreal Engine"] --> Wrapper["包装模块<br/>UGameInstanceSubsystem"]
+Wrapper --> ThirdParty["ThirdParty 模块"]
+ThirdParty --> ABI["DllHsBaSlicer C ABI"]
+ABI --> Types["pipeline_types.h"]
 ```
 
-图表来源
-- [README.md:104-124](file://README.md#L104-L124)
-- [README.md:126-151](file://README.md#L126-L151)
+**图示来源**
+- [initialize.h:1-22](file://DllHsBaSlicer/initialize.h#L1-L22)
+- [fdm_pipeline.h:1-68](file://DllHsBaSlicer/fdm_pipeline.h#L1-L68)
+- [pipeline_types.h:1-140](file://pipelinetypes/pipeline_types.h#L1-L140)
 
-章节来源
-- [README.md:104-124](file://README.md#L104-L124)
+**章节来源**
+- [initialize.h:1-22](file://DllHsBaSlicer/initialize.h#L1-L22)
+- [fdm_pipeline.h:1-68](file://DllHsBaSlicer/fdm_pipeline.h#L1-L68)
+- [pipeline_types.h:1-140](file://pipelinetypes/pipeline_types.h#L1-L140)
 
-## 性能考虑
-- 异步执行：将切片任务放在后台线程，避免阻塞 GameThread。
-- 批量进度上报：合并频繁进度回调，降低蓝图事件频率。
-- 内存复用：对中间数据尽量复用缓冲区，减少频繁分配与释放。
-- I/O 优化：大文件写入使用缓冲流，避免逐行写盘。
-- 资源卸载：在关卡切换或插件卸载时，显式释放动态库与缓存数据。
+## 性能与线程安全注意事项
+- **后台执行切片**：切片属于耗时操作，应放在 `AnyBackgroundThreadNormalTask` 中运行，避免阻塞 GameThread。
+- **GameThread 约束**：所有 `UFUNCTION` 调用与动态委托广播必须在 GameThread 上执行；原生回调中必须使用 `AsyncTask(ENamedThreads::GameThread, ...)` 调度。
+- **字符串编码**：UE 内部使用 TCHAR（Windows 下为 UTF-16），跨 C 边界前必须用 `FTCHARToUTF8` 转换为 UTF-8；返回的 UTF-8 字符串需用 `UTF8_TO_TCHAR` 转换为 `FString`。
+- **内存生命周期**：UTF-8 字节数组需在整个切片过程中存活，建议使用共享容器承载；结果中的 `gcode_content` 与 `error_message` 需在调用 `HsBaFreePipelineResult` 前拷贝到 UE 侧。
+- **打包与延迟加载**：Windows 上使用 `PublicDelayLoadDLLs` 可实现延迟加载，但需保证运行时能找到 DLL；`RuntimeDependencies` 用于将 DLL/SO 打入包体。
+- **专用服务器/主机平台**：若无切片需求，可在 Build.cs 中条件排除该模块，减少无用依赖。
 
-[本节为通用性能建议，不直接分析具体文件]
+**章节来源**
+- [game_engine_integration.md（英文）:357-362](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L357-L362)
+- [game_engine_integration.md（中文）:355-360](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L355-L360)
 
-## 故障排查指南
-- DLL 加载失败
-  - 检查动态库路径是否在 UE 插件的 ThirdParty 目录，并确保运行时能定位到依赖库。
-  - Windows 下确认依赖的 VC 运行库已安装；Linux/macOS 下确认 rpath 或 LD_LIBRARY_PATH 正确。
-- 线程调度问题
-  - 确保所有蓝图交互与 UI 更新都在 GameThread 执行；非 UI 线程仅做计算与数据准备。
-- 打包后找不到依赖库
-  - 在打包脚本中将动态库复制到目标平台的 RuntimeDependencies 目录。
-  - macOS 注意签名与代码完整性；Linux 注意库版本与 glibc 兼容性。
-- 字符串乱码
-  - 蓝图字符串（UTF-16）与底层 C/C++ 字符串（UTF-8）之间进行显式转换。
-- 内存泄漏
-  - 严格遵循 C ABI 的结果释放约定，确保每次成功调用后都调用对应的释放函数。
+## 故障排除指南
+常见问题与处理方式：
 
-章节来源
-- [HsBaSlicer.cpp:103-105](file://HsBaSlicer/HsBaSlicer.cpp#L103-L105)
-- [HsBaSlicer.cpp:153-155](file://HsBaSlicer/HsBaSlicer.cpp#L153-L155)
-- [HsBaSlicer.cpp:205-207](file://HsBaSlicer/HsBaSlicer.cpp#L205-L207)
-- [encoding_convert.hpp:20-39](file://base/encoding_convert.hpp#L20-L39)
+- **打包后找不到 DLL**：检查是否配置 `RuntimeDependencies`，确认 Binaries 目录中存在对应平台的二进制文件。
+- **Windows 延迟加载失败**：若使用 `PublicDelayLoadDLLs`，需在模块启动时确保 DLL 可被定位，例如通过 `FPlatformProcess::PushDllDirectory` 或将 DLL 放在 Binaries 目录。
+- **Server/Console 目标崩溃**：若目标平台不需要切片功能，应在 Build.cs 中条件排除该模块。
+- **蓝图回调未触发**：确认动态委托已正确绑定，且回调确实调度到了 GameThread。
+- **UTF-8 乱码或崩溃**：确认 `FTCHARToUTF8` 转换后的字节数组生命周期覆盖整个切片过程，且原生返回的 UTF-8 字符串在使用后调用了 `HsBaFreePipelineResult`。
+
+**章节来源**
+- [game_engine_integration.md（英文）:357-362](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L357-L362)
+- [game_engine_integration.md（中文）:355-360](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L355-L360)
 
 ## 结论
-通过将 DllHsBaSlicer 的 C ABI 作为桥接面，UE 插件可以稳定地集成 HsBaSlicer 的切片能力。配合异步执行、GameThread 回调与 Blueprint 暴露，可在保持引擎流畅性的同时提供丰富的用户交互。严格遵循内存管理、编码转换与线程安全规范，是确保生产级稳定性的关键。
+在 Unreal Engine 中集成 HsBaSlicer 的关键在于三点：
 
-[本节为总结性内容，不直接分析具体文件]
+1. **正确的 ThirdParty 模块布局与 Build.cs 配置**，确保头文件、静态导入库与运行时二进制都能被引擎找到。
+2. **可靠的 C++ 包装层**，继承 `UGameInstanceSubsystem`，暴露 Blueprint 可调用的异步接口，并通过动态委托将进度与结果推送给蓝图。
+3. **严格的线程与编码纪律**，后台线程执行切片，GameThread 广播事件；UTF-8 与 TCHAR 之间正确转换，并管理好原生内存生命周期。
 
-## 附录
+遵循上述实践，可以在蓝图中稳定地调用 HsBaSlicer 切片能力，同时保持游戏主线程流畅、UI 响应及时。
 
-### UE 插件 ThirdParty 模块布局建议
-- 目录结构
-  - ThirdParty/HsBaSlicer/Include：存放 DllHsBaSlicer 头文件（如 dllexport.h 及相关 C ABI 头）。
-  - ThirdParty/HsBaSlicer/Lib：存放各平台的动态库（Windows .dll，Linux .so，macOS .dylib）。
-  - ThirdParty/HsBaSlicer/Private：存放 UE 插件私有实现（包装器、加载器、蓝图绑定）。
-- Build.cs 要点
-  - IncludeDirectory 指向 ThirdParty/HsBaSlicer/Include。
-  - RuntimeDependencies 包含对应平台的动态库路径。
-  - 根据 Target.Platform 条件编译，区分 Windows/Linux/macOS 的库名与路径。
-  - 若需要自定义加载逻辑，可在 Private 中实现动态加载与函数指针解析。
+[无需章节来源，因为本节为总结性内容]
 
-[本节为概念性说明，不直接分析具体文件]
+## 附录：UE 集成清单
+- [ ] 创建 `Plugins/HsBaSlicer/HsBaSlicer.uplugin`。
+- [ ] 创建 `Plugins/HsBaSlicer/Source/HsBaSlicer` 包装模块，实现 `UHsBaSlicerSubsystem`。
+- [ ] 创建 `Plugins/HsBaSlicer/Source/ThirdParty/DllHsBaSlicer` 第三方模块，编写 `DllHsBaSlicer.Build.cs`。
+- [ ] 复制 DllHsBaSlicer 头文件到 `include/`。
+- [ ] 放置平台二进制到 `lib/<Platform>/`：Win64 的 `.dll` 与 `.lib`、Linux 的 `.so`、Mac 的 `.dylib`。
+- [ ] 在 Build.cs 中配置 `PublicIncludePaths`、`PublicAdditionalLibraries`、`RuntimeDependencies`，必要时启用 `PublicDelayLoadDLLs`。
+- [ ] 在 `Initialize` 中调用 `initialize()`。
+- [ ] 实现 `SliceFdmAsync`，使用 `FTCHARToUTF8` 转换路径，使用 `AsyncTask` 调度后台与 GameThread。
+- [ ] 在蓝图订阅 `OnSliceProgress` 与 `OnSliceFinished`，更新 UI 并保存结果。
+- [ ] 针对 Server/Console 目标条件排除模块。
+- [ ] 打包后验证 DLL/SO 是否存在于 Binaries 目录。
 
-### C++ 包装器实现要点
-- 异步调用封装
-  - 使用 std::thread 或 UE 的任务系统（FRunnable/FGraphTask）执行切片任务。
-  - 回调中收集进度与结果，并通过 TaskGraph 调度到 GameThread。
-- GameThread 回调处理
-  - 在 GameThread 上触发蓝图事件，传递进度百分比、阶段名称与最终结果。
-- Blueprint 暴露
-  - 使用 UFUNCTION(BlueprintCallable) 暴露启动/取消接口。
-  - 使用 UPROPERTY(BlueprintAssignable) 暴露进度/完成事件。
-- UTF-16/UTF-8 转换
-  - 蓝图输入字符串转换为 UTF-8 后再传给底层 C ABI。
-  - 底层返回的 UTF-8 字符串转换为 UTF-16 再返回蓝图。
-- 内存管理
-  - 对底层分配的字符串与路径，调用对应的释放函数。
-  - 包装器内部避免长期持有底层指针，必要时拷贝到 UE 管理的 FString。
-
-[本节为概念性说明，不直接分析具体文件]
-
-### 不同平台构建与打包部署
-- Windows
-  - 使用 Visual Studio 生成解决方案，确保链接器能找到 DllHsBaSlicer 的 .dll 与依赖。
-  - 打包时将 .dll 复制到游戏的 Binaries/Win64 目录，或通过 RuntimeDependencies 自动复制。
-- Linux
-  - 使用 CMake/Ninja 构建，确保 rpath 指向动态库所在目录。
-  - 打包时将 .so 复制到 RuntimeDependencies，并设置正确的权限。
-- macOS
-  - 使用 Xcode 或 CMake 构建，注意代码签名与库的架构（arm64/x86_64）。
-  - 打包时将 .dylib 复制到 RuntimeDependencies，并确保签名一致。
-
-章节来源
-- [README.md:57-98](file://README.md#L57-L98)
-- [README.md:187-191](file://README.md#L187-L191)
+**章节来源**
+- [game_engine_integration.md（英文）:218-362](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L218-L362)
+- [game_engine_integration.md（中文）:216-360](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L216-L360)

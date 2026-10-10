@@ -1,0 +1,1 @@
+Build target `HsBaSlicerBase` is a STATIC library; on Android/iOS/game-console builds Boost.Locale/Nowide are skipped and iconv is linked on iOS. Define `HSBA_SLICER_USE_TESTS=ON` at configure time to enable the mock registry in `AnyObject` (also auto-detected when any of BOOST_TEST/GTEST/CATCH/DOCTEST macros are visible).

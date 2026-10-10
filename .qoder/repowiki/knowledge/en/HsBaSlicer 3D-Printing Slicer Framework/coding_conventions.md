@@ -1,4 +1,0 @@
-- Cross-cutting feature flags are expressed as `HSBA_*` CMake options that add matching `HSBA_HAS_*` / `HSBA_NO_*` compile definitions, so library code branches on preprocessor macros rather than runtime checks.
-- Optional third-party backends (CGAL/OpenCASCADE, bit7z, OpenCV, coroutine thread pool, DLL loader) are gated by both a CMake option and a corresponding compile definition, keeping non-desktop platforms (Android/iOS/game console) cleanly excluded.
-- Public headers are installed under `<prefix>/include/HsBaSlicer/<subdir>` mirroring source layout, while generated protobuf headers go under `<prefix>/share/HsBaSlicer/proto/<lang>` when `HSBA_PROTOBUF_OUT` is enabled.
-- All targets are exported through the `HsBaSlicer::` CMake namespace via a single `HsBaSlicerTargets` export set, so consumers link by target name rather than include path.

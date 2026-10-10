@@ -1,0 +1,1 @@
+Abstract IPath interface and concrete output generators for points, layers, images, G-code, industrial robot programs (ABB/KUKA/FANUC), and welding-robot code.

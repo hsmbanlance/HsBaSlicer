@@ -1,0 +1,5 @@
+- Public APIs live in `.hpp` headers under namespace `HsBa::Slicer` with Doxygen-style `@file`/`@brief` comments describing each function's parameters and return values.
+- Double-precision geometry is represented by `Clipper2Lib` aliases (`Point2D`, `PolygonD`, `PolygonsD`) while algorithmic work uses the integer `Polygon`/`Polygons` types, with explicit `Integerization`/`UnIntegerization` conversions at the boundary.
+- Lua integration is decoupled from core headers by forward-declaring `struct lua_State` and exposing only `std::function<void(lua_State*)>` registration callbacks, keeping `<lua.hpp>` confined to `LuaAdapter.cpp`.
+- Boolean polygon operations come in paired single-polygon and multi-polygon overloads (e.g. `Union(const PolygonD&, const PolygonD&)` and `Union(const PolygonsD&, const PolygonsD&)`) sharing the same `FillRule` default of `EvenOdd`.
+- Optional features are gated by CMake-defined macros such as `HSBA_HAVE_FREETYPE` and `HSBA_POLYGON_DUMP`, wrapping extra functions behind `#ifdef` blocks in the public headers.

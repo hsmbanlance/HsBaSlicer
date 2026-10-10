@@ -1,0 +1,2 @@
+- Native library loading is centralized in a `static {}` initializer calling `System.loadLibrary("HsBaSlicer")`, keeping all JNI binding logic out of lifecycle methods.
+- JNI methods are declared as `private native` members of the Activity and invoked directly from `onCreate`, matching the generated C symbol name by convention.

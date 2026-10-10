@@ -1,1 +1,0 @@
-C++ with Eigen matrices, OpenVDB `Vec3fGrid` for storage and level-set meshing, Intel TBB for parallelism, Imath math types, Boost dll/iostreams for dynamic loading and serialization, and blosc+ZLIB when OpenVDB is present.

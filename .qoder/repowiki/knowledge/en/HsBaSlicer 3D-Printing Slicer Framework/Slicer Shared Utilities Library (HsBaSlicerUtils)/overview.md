@@ -1,1 +1,0 @@
-Static C++ utility library providing graph algorithms, Lua bridge helpers for AnyObject/DLL loading, application configuration, and reflection-based JSON/XML/YAML serialization.

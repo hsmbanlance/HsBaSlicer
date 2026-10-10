@@ -1,2 +1,0 @@
-- Native library loading is centralized in a static initializer block of the Activity, calling `System.loadLibrary` with the library name without the `lib` prefix or `.so` suffix.
-- JNI bindings are declared as `private native` methods on the Activity class whose names follow the standard `Java_<package>_<class>_<method>` convention.

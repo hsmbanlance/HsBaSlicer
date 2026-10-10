@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: native_app_entry
+title: HsBaSlicer Cross-Platform Application Entry & Pipeline Examples
+scope:
+    - HsBaSlicer/
+source_files: []
+depends_on: []
+related_to:
+    - path: android_binding
+    - path: dll_export_layer/dll_bootstrap
+    - path: dll_export_layer/fdm_slicing_engine

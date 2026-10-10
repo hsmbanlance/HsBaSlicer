@@ -1,6 +1,0 @@
-- Each geometric primitive pair (int vs. double) exposes an identical API surface — e.g. `MakeSimple`, `Union`, `Difference`, `Intersection`, `Xor`, `Area` are declared in both `IntPolygon.hpp` and `FloatPolygons.hpp` with matching signatures over their respective coordinate types.
-- Lua interop functions come in paired push/pop forms (`PushPolygon*ToLua` / `LuaTableToPolygon`) for both integer and double polygon types, keeping the Lua binding layer symmetric across coordinate systems.
-- Optional Lua-driven functionality is exposed as a file-path variant plus an inline-string variant (e.g. `LuaToImage`/`LuaToImageString`, `LuaCustomFill`/`LuaCustomFillString`), each accepting an optional `std::function<void(lua_State*)>` registration callback.
-- Conditional compilation gates optional features behind macros defined at build time (`#ifdef HSBA_HAVE_FREETYPE`, `#ifdef HSBA_POLYGON_DUMP`) rather than runtime checks.
-- Public headers use `#pragma once` together with a unique include guard macro named after the header file (e.g. `HSBA_SLICER_INTPOLYGON_HPP`, `HSBA_SLICER_FLOATPOLYGONS_HPP`).
-- All public symbols live in the `HsBa::Slicer` namespace, while external type aliases (`Point2`, `Polygon`, `Polygons`, `Point2D`, `PolygonD`, `PolygonsD`) are provided as `using` declarations over `Clipper2Lib::*`.

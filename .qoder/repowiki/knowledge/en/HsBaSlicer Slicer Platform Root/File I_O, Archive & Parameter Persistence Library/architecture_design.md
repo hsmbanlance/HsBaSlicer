@@ -1,0 +1,8 @@
+Built as a single CMake STATIC library `HsBaSlicerFileOperator` (see `CMakeLists.txt`) with four internal layers:
+
+- Archive layer: abstract interfaces `IZipper` / `IUnzipper` (`IZipper.hpp`, `IUnzipper.hpp`) plus two concrete backends — miniz-based `Zipper`/`Unzipper` (`zipper.*`, `unzipper.*`) and optional bit7z-based `Bit7zZipper`/`Bit7zUnzipper` (`bit7z_zipper.*`, `bit7z_unzipper.*`, gated by `HSBA_HSBA_USE_BIT7Z`). The unzipper uses CRTP (`IUnzipper<Derived>`) and exposes files through an `UnzipperStream` that wraps either an in-memory buffer or a temp file.
+- SQL layer: `sql_adapter.hpp` defines `SQL::ISQLAdapter` and three implementations (`SQLiteAdapter`, `MySQLAdapter`, `PostgreSQLAdapter`) behind PIMPL `Impl` classes; each is wrapped in `Utils::EventSource` for progress callbacks. Conditional compilation (`HSBA_USE_MYSQL`, `HSBA_USE_PGSQL`) gates MySQL/PostgreSQL code.
+- Parameter persistence pipeline: `param_store.{hpp,cpp}` orchestrates `AnyObject`-based schema reflection (`param_reflect.*`), type coercion (`param_convert.*`), and DDL generation (`param_schema.*`) against an `ISQLAdapter`; exposed to Lua via `RegisterLuaParamStore`.
+- Bindings & transport: `LuaAdapter.{hpp,cpp}` registers zipper/unzipper, SQL adapters, and ParamStore into Lua; `RemoteExecutor.{hpp,cpp}` provides a connection pool for sending files to a remote executor service.
+
+Dependency direction is one-way: LuaAdapter → (bit7z | miniz) + sql_adapter + param_store → ISQLAdapter; higher layers never depend on lower-layer implementation details beyond their public interfaces.

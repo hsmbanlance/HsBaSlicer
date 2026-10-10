@@ -1,6 +1,0 @@
-Three sibling files each implement one pipeline's C ABI under namespace `HsBa::Slicer::Pipeline`:
-- `waam_pipeline.cpp` — builds an `InternalWaamConfig`, runs a staged async coroutine (load model → build slice topology → parallel `SliceLayer` via `ParallelForLayers` → `SaveWaamRobotPath`), and exposes `HsBaRunWaamPipeline` / `HsBaRunWaamPipelineAsync` / `HsBaFreeWaamPipelineResult`.
-- `file_transfer_pipeline.cpp` — wraps `LibHsBaSlicer/Transfer/file_transfer.hpp`'s `TransferFiles`, exposing `HsBaRunFileTransferPipeline*` with progress callbacks.
-- `param_store_pipeline.cpp` — thin sync wrapper around `SavePipelineParams` / `LoadPipelineParams` from `LibHsBaSlicer/ParamStore/param_store_ops.hpp`, plus enum converters (`ToLibKind`, `ToLibBackend`) and connection marshalling.
-
-Dependency direction is one-way: these files depend on `LibHsBaSlicer/*` core libraries and on `base/coroutine.hpp`, `base/error.hpp`, and `pipeline_parallel.hpp`; they are not depended on by the library core. Each file separates internal structs (`InternalXxxConfig`, `InternalXxxResult`) from the `HSBA_SLICER_API`-exported C entry points, and uses a local `OwnedCString` helper to hand off heap-allocated `char*` strings across the boundary.

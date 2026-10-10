@@ -1,1 +1,0 @@
-C ABI shim layer exposing model loading, transform, query, and boolean operations of LibHsBaSlicer as a stable DLL interface consumed by Slicer.

@@ -1,21 +1,19 @@
-# C ABI Interface
+# C ABI Interface / C接口
 
 <cite>
-**Referenced Files in This Document**
+**Referenced Files in This Document**   
 - [dllexport.h](file://DllHsBaSlicer/dllexport.h)
 - [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
 - [fdm_pipeline.h](file://DllHsBaSlicer/fdm_pipeline.h)
 - [fdm_pipeline.cpp](file://DllHsBaSlicer/fdm_pipeline.cpp)
-- [slm_pipeline.h](file://DllHsBaSlicer/slm_pipeline.h)
-- [slm_pipeline.cpp](file://DllHsBaSlicer/slm_pipeline.cpp)
+- [sla_pipeline.h](file://DllHsBaSlicer/sla_pipeline.h)
 - [sls_pipeline.h](file://DllHsBaSlicer/sls_pipeline.h)
-- [sls_pipeline.cpp](file://DllHsBaSlicer/sls_pipeline.cpp)
+- [slm_pipeline.h](file://DllHsBaSlicer/slm_pipeline.h)
 - [lom_pipeline.h](file://DllHsBaSlicer/lom_pipeline.h)
-- [lom_pipeline.cpp](file://DllHsBaSlicer/lom_pipeline.cpp)
 - [tdp_pipeline.h](file://DllHsBaSlicer/tdp_pipeline.h)
-- [tdp_pipeline.cpp](file://DllHsBaSlicer/tdp_pipeline.cpp)
 - [waam_pipeline.h](file://DllHsBaSlicer/waam_pipeline.h)
-- [waam_pipeline.cpp](file://DllHsBaSlicer/waam_pipeline.cpp)
+- [custom_pipeline.h](file://DllHsBaSlicer/custom_pipeline.h)
+- [file_transfer_pipeline.h](file://DllHsBaSlicer/file_transfer_pipeline.h)
 </cite>
 
 ## Table of Contents
@@ -31,417 +29,414 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document describes the C ABI exposed by DllHsBaSlicer for running slicing and export pipelines across multiple manufacturing technologies. It documents the exported functions HsBaRunFdmPipeline, HsBaRunSlmPipeline, HsBaRunSlsPipeline, HsBaRunLomPipeline, HsBaRunTdpPipeline, and HsBaRunWaamPipeline, including their signatures, parameters, return values, error handling, memory ownership, thread-safety considerations, and resource cleanup procedures. It also explains HSBA_SLICER_API macro usage and platform-specific behavior, and provides guidance for integrating from Java, Python, and C#.
+This document describes the stable C ABI surface exposed by HsBaSlicer for external integration. It focuses on:
+- The HSBA_SLICER_API export/import macro and its platform behavior.
+- All exported pipeline functions, including synchronous and asynchronous variants.
+- Configuration structures, result structures, callback signatures, and memory ownership rules.
+- Error handling patterns through result structs and error messages.
+- Thread safety considerations and recommended usage patterns.
+- Integration guidance for different programming languages.
+
+The ABI is defined in a standalone header without DLL visibility macros so that downstream modules can reference the types without linking the shared library. The actual exported symbols are declared in per-pipeline headers under DllHsBaSlicer.
 
 ## Project Structure
-The C ABI is defined in per-pipeline headers under DllHsBaSlicer and shared C-compatible types are declared in pipelinetypes/pipeline_types.h. Each pipeline header declares:
-- A default configuration creator
-- A synchronous run function
-- An asynchronous run function
-- A result-free function
+The C ABI is split into two layers:
+- Type layer: `pipelinetypes/pipeline_types.h` defines all configuration and result structs, enums, and default initializers. It does not depend on the shared library.
+- Export layer: `DllHsBaSlicer/*_pipeline.h` declare the exported C functions using `HSBA_SLICER_API`. Implementations live in corresponding `.cpp` files.
 
 ```mermaid
 graph TB
-subgraph "C ABI Headers"
-FDM["fdm_pipeline.h"]
-SLM["slm_pipeline.h"]
-SLS["sls_pipeline.h"]
-LOM["lom_pipeline.h"]
-TDP["tdp_pipeline.h"]
-WAAM["waam_pipeline.h"]
-end
-Types["pipelinetypes/pipeline_types.h"]
-Export["DllHsBaSlicer/dllexport.h"]
-FDM --> Types
-SLM --> Types
-SLS --> Types
-LOM --> Types
-TDP --> Types
-WAAM --> Types
-FDM --> Export
-SLM --> Export
-SLS --> Export
-LOM --> Export
-TDP --> Export
-WAAM --> Export
+Types["Type Layer<br/>pipelinetypes/pipeline_types.h"]
+FDM["FDM ABI<br/>DllHsBaSlicer/fdm_pipeline.h"]
+SLA["SLA ABI<br/>DllHsBaSlicer/sla_pipeline.h"]
+SLS["SLS ABI<br/>DllHsBaSlicer/sls_pipeline.h"]
+SLM["SLM ABI<br/>DllHsBaSlicer/slm_pipeline.h"]
+LOM["LOM ABI<br/>DllHsBaSlicer/lom_pipeline.h"]
+TDP["3DP ABI<br/>DllHsBaSlicer/tdp_pipeline.h"]
+WAAM["WAAM ABI<br/>DllHsBaSlicer/waam_pipeline.h"]
+Custom["Custom Lua ABI<br/>DllHsBaSlicer/custom_pipeline.h"]
+FileXfer["File Transfer ABI<br/>DllHsBaSlicer/file_transfer_pipeline.h"]
+Macro["Export Macro<br/>DllHsBaSlicer/dllexport.h"]
+Macro --> FDM
+Macro --> SLA
+Macro --> SLS
+Macro --> SLM
+Macro --> LOM
+Macro --> TDP
+Macro --> WAAM
+Macro --> Custom
+Macro --> FileXfer
+Types --> FDM
+Types --> SLA
+Types --> SLS
+Types --> SLM
+Types --> LOM
+Types --> TDP
+Types --> WAAM
+Types --> Custom
+Types --> FileXfer
 ```
 
 **Diagram sources**
+- [pipeline_types.h:1-12](file://pipelinetypes/pipeline_types.h#L1-L12)
+- [dllexport.h:1-23](file://DllHsBaSlicer/dllexport.h#L1-L23)
 - [fdm_pipeline.h:1-68](file://DllHsBaSlicer/fdm_pipeline.h#L1-L68)
-- [slm_pipeline.h:1-63](file://DllHsBaSlicer/slm_pipeline.h#L1-L63)
+- [sla_pipeline.h:1-63](file://DllHsBaSlicer/sla_pipeline.h#L1-L63)
 - [sls_pipeline.h:1-63](file://DllHsBaSlicer/sls_pipeline.h#L1-L63)
+- [slm_pipeline.h:1-63](file://DllHsBaSlicer/slm_pipeline.h#L1-L63)
 - [lom_pipeline.h:1-63](file://DllHsBaSlicer/lom_pipeline.h#L1-L63)
 - [tdp_pipeline.h:1-63](file://DllHsBaSlicer/tdp_pipeline.h#L1-L63)
 - [waam_pipeline.h:1-64](file://DllHsBaSlicer/waam_pipeline.h#L1-L64)
-- [pipeline_types.h:1-12](file://pipelinetypes/pipeline_types.h#L1-L12)
-- [dllexport.h:1-23](file://DllHsBaSlicer/dllexport.h#L1-L23)
+- [custom_pipeline.h:1-69](file://DllHsBaSlicer/custom_pipeline.h#L1-L69)
+- [file_transfer_pipeline.h:1-67](file://DllHsBaSlicer/file_transfer_pipeline.h#L1-L67)
 
 **Section sources**
-- [dllexport.h:1-23](file://DllHsBaSlicer/dllexport.h#L1-L23)
 - [pipeline_types.h:1-12](file://pipelinetypes/pipeline_types.h#L1-L12)
+- [dllexport.h:1-23](file://DllHsBaSlicer/dllexport.h#L1-L23)
 
 ## Core Components
-- Pipeline configuration structs define model inputs, process parameters, Lua script hooks, and output paths.
-- Pipeline result structs contain success flags, layer counts, output paths or content, error messages, and elapsed time.
-- Progress callbacks report percentage and stage text; result callbacks deliver completed results asynchronously.
-- Free functions release memory owned by the library.
+This section summarizes the core ABI components:
+- Export macro: `HSBA_SLICER_API` controls symbol visibility across platforms.
+- Pipeline families: FDM, SLA, SLS, SLM, LOM, 3DP (TDP), WAAM, custom Lua-driven pipeline, and file transfer.
+- Common pattern per family:
+  - Default config initializer: `HsBaCreateDefault*Config()`
+  - Synchronous run: `HsBaRun*Pipeline(config, progress_callback, user_data)`
+  - Asynchronous run: `HsBaRun*PipelineAsync(...)` with completion callback
+  - Result free: `HsBaFree*PipelineResult(result)`
 
 Key responsibilities:
-- Create default configs via dedicated creators (e.g., HsBaCreateDefaultConfig).
-- Run pipelines synchronously or asynchronously.
-- Free results to avoid leaks.
+- Callers own strings returned inside result structs and must use the matching free function.
+- Progress callbacks may be NULL; they are optional.
+- Asynchronous APIs require a non-NULL result callback to receive the final result.
 
 **Section sources**
-- [pipeline_types.h:23-140](file://pipelinetypes/pipeline_types.h#L23-L140)
-- [pipeline_types.h:146-245](file://pipelinetypes/pipeline_types.h#L146-L245)
-- [pipeline_types.h:251-310](file://pipelinetypes/pipeline_types.h#L251-L310)
-- [pipeline_types.h:319-401](file://pipelinetypes/pipeline_types.h#L319-L401)
-- [pipeline_types.h:417-461](file://pipelinetypes/pipeline_types.h#L417-L461)
-- [pipeline_types.h:477-521](file://pipelinetypes/pipeline_types.h#L477-L521)
-- [pipeline_types.h:573-625](file://pipelinetypes/pipeline_types.h#L573-L625)
+- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
+- [sla_pipeline.h:17-56](file://DllHsBaSlicer/sla_pipeline.h#L17-L56)
+- [sls_pipeline.h:17-56](file://DllHsBaSlicer/sls_pipeline.h#L17-L56)
+- [slm_pipeline.h:17-56](file://DllHsBaSlicer/slm_pipeline.h#L17-L56)
+- [lom_pipeline.h:17-56](file://DllHsBaSlicer/lom_pipeline.h#L17-L56)
+- [tdp_pipeline.h:17-56](file://DllHsBaSlicer/tdp_pipeline.h#L17-L56)
+- [waam_pipeline.h:17-57](file://DllHsBaSlicer/waam_pipeline.h#L17-L57)
+- [custom_pipeline.h:17-62](file://DllHsBaSlicer/custom_pipeline.h#L17-L62)
+- [file_transfer_pipeline.h:17-60](file://DllHsBaSlicer/file_transfer_pipeline.h#L17-L60)
 
 ## Architecture Overview
-Each pipeline follows a consistent pattern:
-- Build an internal config from the C ABI config.
-- Execute a coroutine-based pipeline that performs preprocessing, slicing, support/fill/export steps.
-- Convert internal results to C ABI results with allocated strings.
-- Provide async variants that schedule work and invoke completion callbacks.
+The C ABI is a thin, stable boundary over internal C++ pipelines. Each pipeline follows a consistent flow:
+- Preprocess model
+- Slice geometry
+- Generate support/floor/path as applicable
+- Export via built-in logic or Lua script
+- Return structured results with timing and status
 
 ```mermaid
 sequenceDiagram
 participant Caller as "Caller"
-participant API as "HsBaRun*Pipeline"
-participant Builder as "BuildConfig"
-participant Runner as "RunPipelineAsync"
-participant Converter as "ToCResult"
-Caller->>API : "Run(config, progress_cb, user_data)"
-API->>Builder : "BuildConfig(C config, cb, ud)"
-Builder-->>API : "InternalConfig"
-API->>Runner : "RunPipelineAsync(internal)"
-Runner-->>API : "Task<InternalResult>"
-API->>Converter : "ToCResult(internal_result)"
-Converter-->>Caller : "C ABI Result"
+participant ABI as "C ABI Function"
+participant Internal as "Internal Pipeline"
+participant Lua as "Lua Export (optional)"
+participant Callback as "Progress/Result Callbacks"
+Caller->>ABI : Run*Pipeline(config, progress_cb, user_data)
+ABI->>Internal : Build config and run pipeline
+Internal-->>Callback : Progress(percent, stage, user_data)
+alt Built-in export
+Internal-->>ABI : InternalResult
+else Lua export
+Internal->>Lua : Execute export script/function
+Lua-->>Internal : Exported path/data
+Internal-->>ABI : InternalResult
+end
+ABI-->>Caller : Result struct (success, paths, messages, elapsed)
+Caller->>ABI : Free*PipelineResult(result)
 ```
 
 **Diagram sources**
-- [fdm_pipeline.cpp:445-452](file://DllHsBaSlicer/fdm_pipeline.cpp#L445-L452)
-- [fdm_pipeline.cpp:454-471](file://DllHsBaSlicer/fdm_pipeline.cpp#L454-L471)
-
-**Section sources**
-- [fdm_pipeline.cpp:438-480](file://DllHsBaSlicer/fdm_pipeline.cpp#L438-L480)
+- [fdm_pipeline.h:23-35](file://DllHsBaSlicer/fdm_pipeline.h#L23-L35)
+- [custom_pipeline.h:23-40](file://DllHsBaSlicer/custom_pipeline.h#L23-L40)
+- [file_transfer_pipeline.h:23-35](file://DllHsBaSlicer/file_transfer_pipeline.h#L23-L35)
 
 ## Detailed Component Analysis
 
-### HSBA_SLICER_API Macro and Platform Behavior
-- On Windows:
-  - When building the DLL (HSBA_SLICER_EXPORTS defined), HSBA_SLICER_API expands to __declspec(dllexport).
-  - When consuming the DLL, it expands to __declspec(dllimport).
-- On non-Windows platforms:
-  - HSBA_SLICER_API is empty; default visibility applies.
+### Export Macro HSBA_SLICER_API
+- Purpose: Mark exported symbols for the HsBaSlicer shared library C ABI.
+- Windows: Uses `__declspec(dllexport)` when building the library (`HSBA_SLICER_EXPORTS`) and `__declspec(dllimport)` when consuming it.
+- Non-Windows: No annotation required.
 
-Usage: All exported C ABI functions are annotated with HSBA_SLICER_API and wrapped in extern "C" blocks to ensure stable symbol names.
+```mermaid
+flowchart TD
+Start(["Build/Consume"]) --> Win{"Windows?"}
+Win --> |Yes| ExportDef{"Defined HSBA_SLICER_EXPORTS?"}
+ExportDef --> |Yes| Dllexport["Use __declspec(dllexport)"]
+ExportDef --> |No| Dllimport["Use __declspec(dllimport)"]
+Win --> |No| Default["No annotation"]
+Dllexport --> End(["Symbol visible"])
+Dllimport --> End
+Default --> End
+```
 
-**Section sources**
+**Diagram sources**
 - [dllexport.h:9-20](file://DllHsBaSlicer/dllexport.h#L9-L20)
 
-### FDM Pipeline (Fused Deposition Modeling)
+**Section sources**
+- [dllexport.h:1-23](file://DllHsBaSlicer/dllexport.h#L1-L23)
+
+### FDM Pipeline API
+- Config: `HsBaFdmPipelineConfig_t`
+- Results: `HsBaFdmPipelineResult_t`
+- Callbacks:
+  - `HsBaProgressCallback(percent, stage, user_data)`
+  - `HsBaResultCallback(result, user_data)`
 - Functions:
-  - HsBaCreateDefaultConfig: returns default HsBaFdmPipelineConfig_t.
-  - HsBaRunFdmPipeline: synchronous execution returning HsBaFdmPipelineResult_t.
-  - HsBaRunFdmPipelineAsync: asynchronous execution invoking HsBaResultCallback on completion.
-  - HsBaFreePipelineResult: frees gcode_content and error_message.
-- Config fields include model path/name, slice settings, fill/support/path parameters, G-code firmware options, optional Lua scripts for support/infill, and output path.
-- Result fields include success flag, total layers, UTF-8 gcode_content, UTF-8 error_message, and elapsed_seconds.
+  - `HsBaCreateDefaultConfig()`
+  - `HsBaRunFdmPipeline(config, callback, user_data)`
+  - `HsBaRunFdmPipelineAsync(config, callback, user_data, result_callback, result_user_data)`
+  - `HsBaFreePipelineResult(result)`
+
+Memory management:
+- `gcode_content` and `error_message` in `HsBaFdmPipelineResult_t` are UTF-8 strings allocated by the library; callers must call `HsBaFreePipelineResult`.
+
+Thread safety:
+- Async execution uses coroutines internally; the implementation heap-allocates the internal config to keep it valid during coroutine execution.
 
 ```mermaid
-flowchart TD
-Start(["Call HsBaRunFdmPipeline"]) --> Build["Build internal config"]
-Build --> Run["Run pipeline coroutine"]
-Run --> Convert["Convert to C result"]
-Convert --> Return(["Return HsBaFdmPipelineResult_t"])
-Return --> Free["Call HsBaFreePipelineResult when done"]
+sequenceDiagram
+participant App as "Application"
+participant FDM as "HsBaRunFdmPipelineAsync"
+participant Task as "Internal Task"
+participant CB as "Result Callback"
+App->>FDM : config, progress_cb, user_data, result_cb, result_user_data
+FDM->>Task : RunPipelineAsync(build_config)
+Task-->>CB : ToCResult(ir)
+CB-->>App : result.success, gcode_content, error_message, elapsed_seconds
+App->>FDM : HsBaFreePipelineResult(&result)
 ```
 
 **Diagram sources**
-- [fdm_pipeline.cpp:445-452](file://DllHsBaSlicer/fdm_pipeline.cpp#L445-L452)
-- [fdm_pipeline.cpp:473-479](file://DllHsBaSlicer/fdm_pipeline.cpp#L473-L479)
+- [fdm_pipeline.h:37-61](file://DllHsBaSlicer/fdm_pipeline.h#L37-L61)
+- [fdm_pipeline.cpp:469-496](file://DllHsBaSlicer/fdm_pipeline.cpp#L469-L496)
 
 **Section sources**
-- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
 - [pipeline_types.h:23-140](file://pipelinetypes/pipeline_types.h#L23-L140)
-- [fdm_pipeline.cpp:440-479](file://DllHsBaSlicer/fdm_pipeline.cpp#L440-L479)
+- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
+- [fdm_pipeline.cpp:464-496](file://DllHsBaSlicer/fdm_pipeline.cpp#L464-L496)
 
-### SLM Pipeline (Selective Laser Melting)
+### SLA Pipeline API
+- Config: `HsBaSlaPipelineConfig_t`
+- Results: `HsBaSlaPipelineResult_t`
+- Callbacks:
+  - `HsBaSlaProgressCallback(percent, stage, user_data)`
+  - `HsBaSlaResultCallback(result, user_data)`
 - Functions:
-  - HsBaCreateDefaultSlmConfig: returns default HsBaSlmPipelineConfig_t.
-  - HsBaRunSlmPipeline: synchronous execution returning HsBaSlmPipelineResult_t.
-  - HsBaRunSlmPipelineAsync: asynchronous execution invoking HsBaSlmResultCallback.
-  - HsBaFreeSlmPipelineResult: frees export_path and error_message.
-- Config includes model info, slice parameters, laser/power/scanning parameters, bed temperature, material/light/gas enums, required export_lua_script/export_lua_func, and output path.
-- Result includes success flag, total layers, UTF-8 export_path, UTF-8 error_message, and elapsed_seconds.
+  - `HsBaCreateDefaultSlaConfig()`
+  - `HsBaRunSlaPipeline(config, callback, user_data)`
+  - `HsBaRunSlaPipelineAsync(config, callback, user_data, result_callback, result_user_data)`
+  - `HsBaFreeSlaPipelineResult(result)`
 
-```mermaid
-classDiagram
-class HsBaSlmPipelineConfig {
-+model_name
-+model_path
-+layer_height
-+first_layer_height
-+laser_power
-+scan_speed
-+hatch_spacing
-+hatch_rotation
-+bed_temperature
-+material
-+light_source
-+protect_gas
-+export_lua_script
-+export_lua_func
-+output_path
-}
-class HsBaSlmPipelineResult {
-+success
-+total_layers
-+export_path
-+error_message
-+elapsed_seconds
-}
-```
-
-**Diagram sources**
-- [pipeline_types.h:319-401](file://pipelinetypes/pipeline_types.h#L319-L401)
+Notes:
+- Output is typically a zip containing layer images and metadata.
+- Image format and dimensions are configurable.
 
 **Section sources**
-- [slm_pipeline.h:17-56](file://DllHsBaSlicer/slm_pipeline.h#L17-L56)
-- [pipeline_types.h:319-401](file://pipelinetypes/pipeline_types.h#L319-L401)
-- [slm_pipeline.cpp:193-200](file://DllHsBaSlicer/slm_pipeline.cpp#L193-L200)
+- [pipeline_types.h:145-245](file://pipelinetypes/pipeline_types.h#L145-L245)
+- [sla_pipeline.h:17-56](file://DllHsBaSlicer/sla_pipeline.h#L17-L56)
 
-### SLS Pipeline (Selective Laser Sintering)
+### SLS Pipeline API
+- Config: `HsBaSlsPipelineConfig_t`
+- Results: `HsBaSlsPipelineResult_t`
+- Callbacks:
+  - `HsBaSlsProgressCallback(percent, stage, user_data)`
+  - `HsBaSlsResultCallback(result, user_data)`
 - Functions:
-  - HsBaCreateDefaultSlsConfig: returns default HsBaSlsPipelineConfig_t.
-  - HsBaRunSlsPipeline: synchronous execution returning HsBaSlsPipelineResult_t.
-  - HsBaRunSlsPipelineAsync: asynchronous execution invoking HsBaSlsResultCallback.
-  - HsBaFreeSlsPipelineResult: frees export_path and error_message.
-- Config includes model info, slice parameters, laser/scanning parameters, bed temperature, required export_lua_script/export_lua_func, and output path.
-- Result includes success flag, total layers, UTF-8 export_path, UTF-8 error_message, and elapsed_seconds.
+  - `HsBaCreateDefaultSlsConfig()`
+  - `HsBaRunSlsPipeline(config, callback, user_data)`
+  - `HsBaRunSlsPipelineAsync(config, callback, user_data, result_callback, result_user_data)`
+  - `HsBaFreeSlsPipelineResult(result)`
 
-```mermaid
-flowchart TD
-Start(["Call HsBaRunSlsPipeline"]) --> Build["Build internal config"]
-Build --> Run["Run pipeline coroutine"]
-Run --> Convert["Convert to C result"]
-Convert --> Return(["Return HsBaSlsPipelineResult_t"])
-Return --> Free["Call HsBaFreeSlsPipelineResult when done"]
-```
-
-**Diagram sources**
-- [sls_pipeline.cpp:162-174](file://DllHsBaSlicer/sls_pipeline.cpp#L162-L174)
+Notes:
+- Requires an export Lua script; no standard output format.
 
 **Section sources**
+- [pipeline_types.h:247-310](file://pipelinetypes/pipeline_types.h#L247-L310)
 - [sls_pipeline.h:17-56](file://DllHsBaSlicer/sls_pipeline.h#L17-L56)
-- [pipeline_types.h:251-310](file://pipelinetypes/pipeline_types.h#L251-L310)
-- [sls_pipeline.cpp:142-174](file://DllHsBaSlicer/sls_pipeline.cpp#L142-L174)
 
-### LOM Pipeline (Laminated Object Manufacturing)
+### SLM Pipeline API
+- Config: `HsBaSlmPipelineConfig_t`
+- Results: `HsBaSlmPipelineResult_t`
+- Callbacks:
+  - `HsBaSlmProgressCallback(percent, stage, user_data)`
+  - `HsBaSlmResultCallback(result, user_data)`
 - Functions:
-  - HsBaCreateDefaultLomConfig: returns default HsBaLomPipelineConfig_t.
-  - HsBaRunLomPipeline: synchronous execution returning HsBaLomPipelineResult_t.
-  - HsBaRunLomPipelineAsync: asynchronous execution invoking HsBaLomResultCallback.
-  - HsBaFreeLomPipelineResult: frees export_path and error_message.
-- Config includes model info, sheet thickness, cut/bond parameters, cutting mode, required export_lua_script/export_lua_func, and output path.
-- Result includes success flag, total layers, UTF-8 export_path, UTF-8 error_message, and elapsed_seconds.
+  - `HsBaCreateDefaultSlmConfig()`
+  - `HsBaRunSlmPipeline(config, callback, user_data)`
+  - `HsBaRunSlmPipelineAsync(config, callback, user_data, result_callback, result_user_data)`
+  - `HsBaFreeSlmPipelineResult(result)`
 
-```mermaid
-classDiagram
-class HsBaLomPipelineConfig {
-+model_name
-+model_path
-+layer_height
-+first_layer_height
-+cut_speed
-+cut_margin
-+cut_power
-+bond_temperature
-+bond_pressure
-+bond_time
-+seal_contour
-+cut_mode
-+export_lua_script
-+export_lua_func
-+output_path
-}
-class HsBaLomPipelineResult {
-+success
-+total_layers
-+export_path
-+error_message
-+elapsed_seconds
-}
-```
-
-**Diagram sources**
-- [pipeline_types.h:417-461](file://pipelinetypes/pipeline_types.h#L417-L461)
+Notes:
+- Mirrors SLS flow; metal-specific parameters are included in the config JSON passed to the export script.
 
 **Section sources**
+- [pipeline_types.h:312-401](file://pipelinetypes/pipeline_types.h#L312-L401)
+- [slm_pipeline.h:17-56](file://DllHsBaSlicer/slm_pipeline.h#L17-L56)
+
+### LOM Pipeline API
+- Config: `HsBaLomPipelineConfig_t`
+- Results: `HsBaLomPipelineResult_t`
+- Callbacks:
+  - `HsBaLomProgressCallback(percent, stage, user_data)`
+  - `HsBaLomResultCallback(result, user_data)`
+- Functions:
+  - `HsBaCreateDefaultLomConfig()`
+  - `HsBaRunLomPipeline(config, callback, user_data)`
+  - `HsBaRunLomPipelineAsync(config, callback, user_data, result_callback, result_user_data)`
+  - `HsBaFreeLomPipelineResult(result)`
+
+Notes:
+- Slices per sheet thickness; contour outlines plus cut/bond parameters are handed to the Lua export script.
+
+**Section sources**
+- [pipeline_types.h:403-461](file://pipelinetypes/pipeline_types.h#L403-L461)
 - [lom_pipeline.h:17-56](file://DllHsBaSlicer/lom_pipeline.h#L17-L56)
-- [pipeline_types.h:417-461](file://pipelinetypes/pipeline_types.h#L417-L461)
-- [lom_pipeline.cpp:150-185](file://DllHsBaSlicer/lom_pipeline.cpp#L150-L185)
 
-### TDP Pipeline (Binder Jetting / 3DP)
+### 3DP (TDP) Pipeline API
+- Config: `HsBaTdpPipelineConfig_t`
+- Results: `HsBaTdpPipelineResult_t`
+- Callbacks:
+  - `HsBaTdpProgressCallback(percent, stage, user_data)`
+  - `HsBaTdpResultCallback(result, user_data)`
 - Functions:
-  - HsBaCreateDefaultTdpConfig: returns default HsBaTdpPipelineConfig_t.
-  - HsBaRunTdpPipeline: synchronous execution returning HsBaTdpPipelineResult_t.
-  - HsBaRunTdpPipelineAsync: asynchronous execution invoking HsBaTdpResultCallback.
-  - HsBaFreeTdpPipelineResult: frees export_path and error_message.
-- Config includes model info, slice parameters, binder head/drop/saturation/curing parameters, bed temperature, binder mode, required export_lua_script/export_lua_func, spiral_mode, and output path.
-- Result includes success flag, total layers, UTF-8 export_path, UTF-8 error_message, and elapsed_seconds.
+  - `HsBaCreateDefaultTdpConfig()`
+  - `HsBaRunTdpPipeline(config, callback, user_data)`
+  - `HsBaRunTdpPipelineAsync(config, callback, user_data, result_callback, result_user_data)`
+  - `HsBaFreeTdpPipelineResult(result)`
 
-```mermaid
-flowchart TD
-Start(["Call HsBaRunTdpPipeline"]) --> Build["Build internal config"]
-Build --> Run["Run pipeline coroutine"]
-Run --> Convert["Convert to C result"]
-Convert --> Return(["Return HsBaTdpPipelineResult_t"])
-Return --> Free["Call HsBaFreeTdpPipelineResult when done"]
-```
-
-**Diagram sources**
-- [tdp_pipeline.cpp:183-195](file://DllHsBaSlicer/tdp_pipeline.cpp#L183-L195)
+Notes:
+- Binder jetting process; outlines and head/curing parameters are passed to the Lua export script.
 
 **Section sources**
+- [pipeline_types.h:463-521](file://pipelinetypes/pipeline_types.h#L463-L521)
 - [tdp_pipeline.h:17-56](file://DllHsBaSlicer/tdp_pipeline.h#L17-L56)
-- [pipeline_types.h:477-521](file://pipelinetypes/pipeline_types.h#L477-L521)
-- [tdp_pipeline.cpp:161-195](file://DllHsBaSlicer/tdp_pipeline.cpp#L161-L195)
 
-### WAAM Pipeline (Wire Arc Additive Manufacturing)
+### WAAM Pipeline API
+- Config: `HsBaWaamPipelineConfig_t`
+- Results: `HsBaWaamPipelineResult_t`
+- Callbacks:
+  - `HsBaWaamProgressCallback(percent, stage, user_data)`
+  - `HsBaWaamResultCallback(result, user_data)`
 - Functions:
-  - HsBaCreateDefaultWaamConfig: returns default HsBaWaamPipelineConfig_t.
-  - HsBaRunWaamPipeline: synchronous execution returning HsBaWaamPipelineResult_t.
-  - HsBaRunWaamPipelineAsync: asynchronous execution invoking HsBaWaamResultCallback.
-  - HsBaFreeWaamPipelineResult: frees output_path and error_message.
-- Config includes model info, bead/layer height, travel/wire/electrical parameters, gas flow, material/process/protection/gas enums, interpass temperature, robot controller type, optional path_lua_script/path_lua_func, spiral_mode, and output path.
-- Result includes success flag, total layers, UTF-8 output_path (robot program), UTF-8 error_message, and elapsed_seconds.
+  - `HsBaCreateDefaultWaamConfig()`
+  - `HsBaRunWaamPipeline(config, callback, user_data)`
+  - `HsBaRunWaamPipelineAsync(config, callback, user_data, result_callback, result_user_data)`
+  - `HsBaFreeWaamPipelineResult(result)`
 
-```mermaid
-classDiagram
-class HsBaWaamPipelineConfig {
-+model_name
-+model_path
-+layer_height
-+first_layer_height
-+bead_width
-+travel_speed
-+wire_feed_speed
-+arc_current
-+arc_voltage
-+gas_flow_rate
-+material
-+welding_process
-+protection
-+protect_gas
-+interpass_temperature
-+robot_type
-+path_lua_script
-+path_lua_func
-+output_path
-+spiral_mode
-}
-class HsBaWaamPipelineResult {
-+success
-+total_layers
-+output_path
-+error_message
-+elapsed_seconds
-}
-```
-
-**Diagram sources**
-- [pipeline_types.h:573-625](file://pipelinetypes/pipeline_types.h#L573-L625)
+Notes:
+- Output is a robot language program (ABB/KUKA/FANUC), not a layer zip.
 
 **Section sources**
+- [pipeline_types.h:523-625](file://pipelinetypes/pipeline_types.h#L523-L625)
 - [waam_pipeline.h:17-57](file://DllHsBaSlicer/waam_pipeline.h#L17-L57)
-- [pipeline_types.h:573-625](file://pipelinetypes/pipeline_types.h#L573-L625)
-- [waam_pipeline.cpp:126-166](file://DllHsBaSlicer/waam_pipeline.cpp#L126-L166)
+
+### Custom Lua Pipeline API
+- Config: `HsBaCustomPipelineConfig_t`
+- Results: `HsBaCustomPipelineResult_t`
+- Callbacks:
+  - `HsBaCustomProgressCallback(percent, stage, user_data)`
+  - `HsBaCustomResultCallback(result, user_data)`
+- Functions:
+  - `HsBaCreateDefaultCustomConfig()`
+  - `HsBaRunCustomPipeline(config, callback, user_data)`
+  - `HsBaRunCustomPipelineAsync(config, callback, user_data, result_callback, result_user_data)`
+  - `HsBaFreeCustomPipelineResult(result)`
+
+Notes:
+- Entire workflow is defined by the Lua entry function (default "run_pipeline").
+- The Lua environment exposes pipeline building blocks through the global `HsBa` table.
+
+**Section sources**
+- [pipeline_types.h:676-732](file://pipelinetypes/pipeline_types.h#L676-L732)
+- [custom_pipeline.h:17-62](file://DllHsBaSlicer/custom_pipeline.h#L17-L62)
+
+### File Transfer Pipeline API
+- Config: `HsBaFileTransferPipelineConfig_t`
+- Results: `HsBaFileTransferPipelineResult_t`
+- Callbacks:
+  - `HsBaFileTransferProgressCallback(percent, stage, user_data)`
+  - `HsBaFileTransferResultCallback(result, user_data)`
+- Functions:
+  - `HsBaCreateDefaultFileTransferConfig()`
+  - `HsBaRunFileTransferPipeline(config, callback, user_data)`
+  - `HsBaRunFileTransferPipelineAsync(config, callback, user_data, result_callback, result_user_data)`
+  - `HsBaFreeFileTransferPipelineResult(result)`
+
+Notes:
+- Uses a connection pool to send files to a remote service.
+
+**Section sources**
+- [pipeline_types.h:627-674](file://pipelinetypes/pipeline_types.h#L627-L674)
+- [file_transfer_pipeline.h:17-60](file://DllHsBaSlicer/file_transfer_pipeline.h#L17-L60)
 
 ## Dependency Analysis
-- All pipeline headers depend on:
-  - dllexport.h for HSBA_SLICER_API.
-  - pipelinetypes/pipeline_types.h for C ABI struct and callback definitions.
-- Implementations depend on internal pipeline modules (preprocess, slice, export) and coroutines.
+- Type definitions are independent of the shared library to allow downstream modules to reference them without linking.
+- All exported functions are declared in per-pipeline headers and decorated with `HSBA_SLICER_API`.
+- The FDM async implementation demonstrates how internal configs are managed safely across coroutine boundaries.
 
 ```mermaid
 graph LR
-Types["pipeline_types.h"] --> FDM_H["fdm_pipeline.h"]
-Types --> SLM_H["slm_pipeline.h"]
-Types --> SLS_H["sls_pipeline.h"]
-Types --> LOM_H["lom_pipeline.h"]
-Types --> TDP_H["tdp_pipeline.h"]
-Types --> WAAM_H["waam_pipeline.h"]
-Export["dllexport.h"] --> FDM_H
-Export --> SLM_H
-Export --> SLS_H
-Export --> LOM_H
-Export --> TDP_H
-Export --> WAAM_H
+Types["Types<br/>pipeline_types.h"] --> ABI_FDM["FDM ABI<br/>fdm_pipeline.h"]
+Types --> ABI_SLA["SLA ABI<br/>sla_pipeline.h"]
+Types --> ABI_SLS["SLS ABI<br/>sls_pipeline.h"]
+Types --> ABI_SLM["SLM ABI<br/>slm_pipeline.h"]
+Types --> ABI_LOM["LOM ABI<br/>lom_pipeline.h"]
+Types --> ABI_TDP["3DP ABI<br/>tdp_pipeline.h"]
+Types --> ABI_WAAM["WAAM ABI<br/>waam_pipeline.h"]
+Types --> ABI_CUSTOM["Custom ABI<br/>custom_pipeline.h"]
+Types --> ABI_XFER["File Transfer ABI<br/>file_transfer_pipeline.h"]
+Macro["Export Macro<br/>dllexport.h"] --> ABI_FDM
+Macro --> ABI_SLA
+Macro --> ABI_SLS
+Macro --> ABI_SLM
+Macro --> ABI_LOM
+Macro --> ABI_TDP
+Macro --> ABI_WAAM
+Macro --> ABI_CUSTOM
+Macro --> ABI_XFER
 ```
 
 **Diagram sources**
 - [pipeline_types.h:1-12](file://pipelinetypes/pipeline_types.h#L1-L12)
 - [dllexport.h:1-23](file://DllHsBaSlicer/dllexport.h#L1-L23)
-- [fdm_pipeline.h:1-10](file://DllHsBaSlicer/fdm_pipeline.h#L1-L10)
-- [slm_pipeline.h:1-10](file://DllHsBaSlicer/slm_pipeline.h#L1-L10)
-- [sls_pipeline.h:1-10](file://DllHsBaSlicer/sls_pipeline.h#L1-L10)
-- [lom_pipeline.h:1-10](file://DllHsBaSlicer/lom_pipeline.h#L1-L10)
-- [tdp_pipeline.h:1-10](file://DllHsBaSlicer/tdp_pipeline.h#L1-L10)
-- [waam_pipeline.h:1-10](file://DllHsBaSlicer/waam_pipeline.h#L1-L10)
+- [fdm_pipeline.h:1-68](file://DllHsBaSlicer/fdm_pipeline.h#L1-L68)
+- [sla_pipeline.h:1-63](file://DllHsBaSlicer/sla_pipeline.h#L1-L63)
+- [sls_pipeline.h:1-63](file://DllHsBaSlicer/sls_pipeline.h#L1-L63)
+- [slm_pipeline.h:1-63](file://DllHsBaSlicer/slm_pipeline.h#L1-L63)
+- [lom_pipeline.h:1-63](file://DllHsBaSlicer/lom_pipeline.h#L1-L63)
+- [tdp_pipeline.h:1-63](file://DllHsBaSlicer/tdp_pipeline.h#L1-L63)
+- [waam_pipeline.h:1-64](file://DllHsBaSlicer/waam_pipeline.h#L1-L64)
+- [custom_pipeline.h:1-69](file://DllHsBaSlicer/custom_pipeline.h#L1-L69)
+- [file_transfer_pipeline.h:1-67](file://DllHsBaSlicer/file_transfer_pipeline.h#L1-L67)
 
 **Section sources**
 - [pipeline_types.h:1-12](file://pipelinetypes/pipeline_types.h#L1-L12)
 - [dllexport.h:1-23](file://DllHsBaSlicer/dllexport.h#L1-L23)
 
 ## Performance Considerations
-- Synchronous calls block until the pipeline completes; prefer asynchronous APIs for UI responsiveness.
-- Progress callbacks are invoked during processing; keep them lightweight to avoid blocking the pipeline.
-- Coroutines are used internally; avoid heavy work inside callbacks.
-- For large models, expect longer preprocessing and slicing times; consider preloading models if supported by your integration.
+- Use asynchronous APIs for long-running operations to avoid blocking the caller thread.
+- Provide progress callbacks to update UI or logging without polling.
+- Avoid frequent small allocations in progress callbacks; reuse buffers where possible.
+- For batch file transfers, tune the connection pool size according to network conditions.
 
 [No sources needed since this section provides general guidance]
 
 ## Troubleshooting Guide
 Common issues and resolutions:
-- Null pointers in config:
-  - Ensure model_name/model_path are set appropriately.
-  - For SLS/SLM/LOM/TDP, export_lua_script must not be NULL.
-- Memory leaks:
-  - Always call the corresponding free function after using the result (e.g., HsBaFreePipelineResult, HsBaFreeSlsPipelineResult, etc.).
-- Error messages:
-  - Check error_message in results; it is UTF-8 encoded and must be freed by the caller.
-- Callback safety:
-  - Progress/result callbacks may be invoked from background threads; ensure thread-safe access to shared state.
+- Memory leaks: Always call the matching `HsBaFree*PipelineResult` after processing the result.
+- Invalid pointers: Ensure config pointers are valid for the duration of synchronous calls; for async calls, ensure the config remains valid until the result callback completes.
+- Missing Lua scripts: SLS/SLM/LOM/3DP/custom pipelines require export Lua scripts; verify paths and function names.
+- Empty outputs: Check `result.success`, `total_layers`, and `error_message` fields.
+- Platform symbol resolution: On Windows, ensure the consumer links against the correct DLL and that `HSBA_SLICER_EXPORTS` is defined only when building the library.
 
-**Section sources**
-- [fdm_pipeline.cpp:473-479](file://DllHsBaSlicer/fdm_pipeline.cpp#L473-L479)
-- [slm_pipeline.h:52-56](file://DllHsBaSlicer/slm_pipeline.h#L52-L56)
-- [sls_pipeline.h:49-56](file://DllHsBaSlicer/sls_pipeline.h#L49-L56)
-- [lom_pipeline.h:52-56](file://DllHsBaSlicer/lom_pipeline.h#L52-L56)
-- [tdp_pipeline.h:52-56](file://DllHsBaSlicer/tdp_pipeline.h#L52-L56)
-- [waam_pipeline.h:53-57](file://DllHsBaSlicer/waam_pipeline.h#L53-L57)
-
-## Conclusion
-The DllHsBaSlicer C ABI provides a consistent interface for running slicing and export pipelines across FDM, SLA/SLS/SLM/LOM/TDP, and WAAM workflows. Use the default config creators, configure parameters, and call either synchronous or asynchronous run functions. Always free returned results to prevent memory leaks, and implement lightweight progress callbacks for responsive applications.
-
-[No sources needed since this section summarizes without analyzing specific files]
-
-## Appendices
-
-### Memory Management Guidelines
-- Ownership:
-  - The library allocates string fields in result structs (e.g., gcode_content, export_path, output_path, error_message).
-  - Call the matching free function to release these allocations.
-- String encoding:
-  - All returned strings are UTF-8.
-- Asynchronous results:
-  - Result callbacks receive a copy of the result struct; still free it after use.
+Error handling patterns:
+- Success flag: `success` indicates overall outcome.
+- Error message: `error_message` contains UTF-8 diagnostic text when available.
+- Timing: `elapsed_seconds` helps diagnose performance regressions.
 
 **Section sources**
 - [pipeline_types.h:115-140](file://pipelinetypes/pipeline_types.h#L115-L140)
@@ -451,71 +446,64 @@ The DllHsBaSlicer C ABI provides a consistent interface for running slicing and 
 - [pipeline_types.h:438-461](file://pipelinetypes/pipeline_types.h#L438-L461)
 - [pipeline_types.h:498-521](file://pipelinetypes/pipeline_types.h#L498-L521)
 - [pipeline_types.h:602-625](file://pipelinetypes/pipeline_types.h#L602-L625)
-- [fdm_pipeline.cpp:473-479](file://DllHsBaSlicer/fdm_pipeline.cpp#L473-L479)
+- [pipeline_types.h:706-732](file://pipelinetypes/pipeline_types.h#L706-L732)
+- [pipeline_types.h:649-674](file://pipelinetypes/pipeline_types.h#L649-L674)
+- [fdm_pipeline.cpp:488-496](file://DllHsBaSlicer/fdm_pipeline.cpp#L488-L496)
 
-### Thread Safety Considerations
-- Progress callbacks:
-  - May be called from worker threads; protect shared data with appropriate synchronization.
-- Result callbacks:
-  - Delivered after pipeline completion; still treat as potentially off-main-thread unless you marshal to your UI thread.
-- Reentrancy:
-  - Avoid calling back into the same pipeline from within callbacks to prevent recursion.
+## Conclusion
+The HsBaSlicer C ABI provides a consistent, cross-platform interface for slicing and exporting models across multiple manufacturing technologies. By following the documented initialization, execution, and cleanup patterns, integrators can reliably embed HsBaSlicer functionality in applications written in C, C++, or other languages that can interoperate with C ABIs.
 
-**Section sources**
-- [fdm_pipeline.cpp:454-471](file://DllHsBaSlicer/fdm_pipeline.cpp#L454-L471)
+[No sources needed since this section summarizes without analyzing specific files]
 
-### Resource Cleanup Procedures
-- After each successful or failed run:
-  - Read success flag and any error_message.
-  - Copy or process output data (gcode_content, export_path, output_path) as needed.
-  - Call the corresponding free function immediately after you no longer need the result.
+## Appendices
 
-**Section sources**
-- [fdm_pipeline.cpp:473-479](file://DllHsBaSlicer/fdm_pipeline.cpp#L473-L479)
-- [slm_pipeline.h:52-56](file://DllHsBaSlicer/slm_pipeline.h#L52-L56)
-- [sls_pipeline.h:49-56](file://DllHsBaSlicer/sls_pipeline.h#L49-L56)
-- [lom_pipeline.h:52-56](file://DllHsBaSlicer/lom_pipeline.h#L52-L56)
-- [tdp_pipeline.h:52-56](file://DllHsBaSlicer/tdp_pipeline.h#L52-L56)
-- [waam_pipeline.h:53-57](file://DllHsBaSlicer/waam_pipeline.h#L53-L57)
-
-### Integration Examples
-
-#### Calling from C/C++
-- Include the relevant pipeline header.
-- Initialize config via the default creator.
-- Set required fields (model_path, export_lua_script where applicable).
-- Call the synchronous or asynchronous run function.
-- Handle result.success and error_message.
-- Free the result.
-
-**Section sources**
-- [fdm_pipeline.h:21-61](file://DllHsBaSlicer/fdm_pipeline.h#L21-L61)
-- [slm_pipeline.h:21-56](file://DllHsBaSlicer/slm_pipeline.h#L21-L56)
-- [sls_pipeline.h:21-56](file://DllHsBaSlicer/sls_pipeline.h#L21-L56)
-- [lom_pipeline.h:21-56](file://DllHsBaSlicer/lom_pipeline.h#L21-L56)
-- [tdp_pipeline.h:21-56](file://DllHsBaSlicer/tdp_pipeline.h#L21-L56)
-- [waam_pipeline.h:21-57](file://DllHsBaSlicer/waam_pipeline.h#L21-L57)
-
-#### Calling from Java (JNA/JNI)
-- Map HSBA_SLICER_API functions to native methods.
-- Represent char* as direct byte buffers or Strings with explicit UTF-8 encoding.
-- For callbacks, map function pointers to Java interfaces and marshal data safely.
-- Ensure to call the free functions to release native memory.
+### A. Stable ABI Guarantees and Versioning Strategy
+- Stability guarantees:
+  - Struct layouts and function signatures in the C ABI are intended to remain stable across releases.
+  - New fields should be appended to existing structs rather than inserted in the middle to preserve binary compatibility.
+- Versioning strategy:
+  - Prefer additive changes to the ABI.
+  - Deprecate old fields/functions gradually before removal.
+  - Maintain separate headers for type definitions and exports to decouple consumers from the shared library.
 
 [No sources needed since this section provides general guidance]
 
-#### Calling from Python (ctypes)
-- Load the shared library and set restype/argtypes for each function.
-- Use ctypes.c_char_p for UTF-8 strings.
-- Define callback prototypes for progress and result callbacks.
-- Call free functions to release memory.
+### B. Compatibility Matrix Across Platforms
+- Windows:
+  - Library build defines `HSBA_SLICER_EXPORTS`; consumers import symbols via `HSBA_SLICER_API`.
+- Linux/macOS:
+  - Symbols are exported with default visibility; no decoration required.
+- Android/iOS:
+  - Same ABI principles apply; ensure proper linking and symbol visibility settings for the target platform.
+
+**Section sources**
+- [dllexport.h:9-20](file://DllHsBaSlicer/dllexport.h#L9-L20)
+
+### C. Integration Patterns for Different Programming Languages
+- C/C++:
+  - Include the relevant pipeline header and link against the shared library.
+  - Initialize configs with default initializers, set required fields, and call run functions.
+- Python (ctypes):
+  - Load the shared library, define function prototypes matching the C ABI, and pass null-terminated UTF-8 strings for string fields.
+- C#:
+  - Use P/Invoke with `[DllImport]` and marshal `char*` to/from `string` with appropriate encoding.
+- Java (JNI):
+  - Expose native methods that wrap the C ABI; manage string lifetimes carefully.
+- Rust:
+  - Define `extern "C"` bindings and handle owned strings via safe wrappers.
 
 [No sources needed since this section provides general guidance]
 
-#### Calling from C# (P/Invoke)
-- Declare DllImport for each function with CharSet.Ansi and CallingConvention.Cdecl.
-- Marshal char* to System.String with Encoding.UTF8.
-- Define delegate types for callbacks and pass them to async run functions.
-- Invoke free functions to release native resources.
+### D. Example Usage Flow (Conceptual)
+```mermaid
+flowchart TD
+Init["Initialize config with HsBaCreateDefault*Config()"] --> SetFields["Set required fields (model_path, output_path, etc.)"]
+SetFields --> RunSync["Call HsBaRun*Pipeline(...)"]
+SetFields --> RunAsync["Call HsBaRun*PipelineAsync(...)"]
+RunSync --> ProcessResult["Check success, read output, log error_message"]
+RunAsync --> WaitCallback["Receive result in result_callback"]
+ProcessResult --> FreeResult["Call HsBaFree*PipelineResult(...)"]
+WaitCallback --> FreeResult
+```
 
-[No sources needed since this section provides general guidance]
+[No sources needed since this diagram shows conceptual workflow, not actual code structure]

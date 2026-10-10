@@ -1,0 +1,22 @@
+schema_version: 1
+module_path: ""
+title: HsBaSlicer 切片引擎根工程
+scope:
+    - README.md
+    - LICENSE.txt
+    - CMakeLists.txt
+    - CMakePresets.json
+    - vcpkg.json
+    - vcpkg-configuration.json
+    - .clang-format
+    - .clang-tidy
+    - .clangd
+    - .gitignore
+    - .gitattributes
+    - .luarc.json
+    - cpp.hint
+    - skills-lock.json
+    - .qoderignore
+source_files: []
+depends_on: []
+related_to: []

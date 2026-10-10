@@ -1,0 +1,1 @@
+C++17 library built via CMake; uses Google Protocol Buffers for wire format, Eigen3 for geometry, and links against generated `HsBaSlicerProto` targets.

@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: file_operator
+title: 文件与参数持久化支撑库（FileOperator）
+scope:
+    - fileoperator/
+source_files: []
+depends_on: []
+related_to:
+    - path: dll_export_layer/lo_and_support_pipelines
+    - path: dll_export_layer/other_manufacturing_pipelines

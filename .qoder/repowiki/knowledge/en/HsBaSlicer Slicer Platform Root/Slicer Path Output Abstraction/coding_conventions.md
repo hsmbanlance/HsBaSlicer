@@ -1,0 +1,4 @@
+- Every path type implements the full family of `Save(path)` and `ToString(...)` overloads — native file save, inline Lua script, inline script with named function, and script-file with named function — so callers can pick the desired post-processing mode uniformly.
+- Lua state exposure is opt-in: each Save/ToString overload takes an optional `std::function<void(lua_State*)>& lua_reg` callback that implementations invoke to push additional bindings onto the Lua stack before running the user script.
+- Brand-specific code generation is isolated into private `Generate*Code()` helper methods (e.g. `GenerateAbbCode`/`GenerateKukaCode`/`GenerateFanucCode` in `RobotPath`, mirrored in `WeldRobotPath`), keeping the public API free of switch-on-brand dispatch.
+- Headers use `#pragma once` together with an `HSBA_SLICER_<NAME>__HPP` include guard, and forward-declare `lua_State` rather than including `lua.hpp` to keep the public interface Lua-free.

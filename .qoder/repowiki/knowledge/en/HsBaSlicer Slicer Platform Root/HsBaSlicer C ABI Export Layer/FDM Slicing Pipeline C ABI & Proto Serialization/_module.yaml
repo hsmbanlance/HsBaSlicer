@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: dll_export_layer/fdm_slicing_engine
+title: FDM Slicing Pipeline C ABI & Proto Serialization
+scope:
+    - DllHsBaSlicer/fdm_pipeline.cpp
+    - DllHsBaSlicer/fdm_pipeline.h
+    - DllHsBaSlicer/pipeline_convert.cpp
+    - DllHsBaSlicer/pipeline_convert.h
+source_files: []
+depends_on: []
+related_to:
+    - path: native_app_entry
+    - path: pipeline_types
+    - path: samples

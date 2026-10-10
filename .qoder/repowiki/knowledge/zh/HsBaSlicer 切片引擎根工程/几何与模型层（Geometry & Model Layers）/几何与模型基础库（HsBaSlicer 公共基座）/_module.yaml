@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: geometry_and_model_layers/geometry_base
+title: 几何与模型基础库（HsBaSlicer 公共基座）
+scope:
+    - base/
+source_files: []
+depends_on: []
+related_to: []

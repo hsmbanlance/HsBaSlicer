@@ -1,6 +1,0 @@
-- Public headers use `#pragma once` paired with a `HSBA_SLICER_<NAME>_HPP` include guard double-check.
-- All public APIs live in the `HsBa::Slicer` (or `HsBa::Slicer::Utils` / `HsBa::Slicer::Log`) namespace rather than global scope.
-- Custom exceptions derive from `RuntimeError` (which itself derives from `std::runtime_error`) instead of throwing raw `std::exception` or `std::runtime_error` directly.
-- Cross-library symbols are annotated with the `HSBA_SLICER_LOG_API` macro (from `logger/export.h`) so Windows builds can dllexport/dllimport them.
-- Singleton-style singletons are implemented via the reusable `Utils::Singleton<T>` template using `std::call_once` + `std::shared_mutex`, with constructors taking a private `Protected` tag to restrict instantiation.
-- Type registration follows the `GetTypeInfo<T>()` template pattern: a static `TypeInfo` instance holding function pointers for destroy/copy/move and a `methods` map of name-to-callback entries.

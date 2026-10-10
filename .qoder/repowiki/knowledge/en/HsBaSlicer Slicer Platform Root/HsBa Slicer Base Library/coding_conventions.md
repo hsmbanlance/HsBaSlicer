@@ -1,0 +1,6 @@
+- Public headers use include guards of the form `#ifndef HSBA_SLICER_<NAME>_HPP / #define ... / #endif` matching the file path.
+- Cross-cutting utilities live under `HsBa::Slicer::Utils` while domain/runtime primitives stay directly in `HsBa::Slicer`.
+- Type registration for the reflection system is done by specializing `GetTypeInfo<T>()` and populating its `TypeInfo` struct (destroy/copy/move function pointers plus method maps).
+- Thread-safety is expressed with `std::shared_mutex` for read-heavy shared state (e.g. `Delegate::empty`/`size`/`begin`/`end` use `shared_lock`, mutating methods use `lock_guard`).
+- Global/shared state is exposed through a `Singleton<T>` base class whose constructor takes a private `Protected` tag, preventing arbitrary construction outside the class hierarchy.
+- Custom allocators (`MemoryPool`, `StaticMemoryPool`) implement the full STL allocator interface (`value_type`, `rebind`, `construct`, `destroy`, `is_always_equal`) so they can be plugged into standard containers.

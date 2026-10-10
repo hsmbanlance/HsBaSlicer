@@ -1,0 +1,1 @@
+Build requires PNG, JPEG, and Lua packages found via CMake's `find_package`; optional OpenCV and FreeType are conditionally linked — when `Freetype_FOUND` the target defines `HSBA_HAVE_FREETYPE` and links `Freetype::Freetype`. The `HSBA_POLYGON_DUMP` CMake option enables SVG debug dumping of polygons via `DumpPolygon`/`DumpPolygons`.

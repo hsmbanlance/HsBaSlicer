@@ -1,0 +1,7 @@
+Flat collection of `.proto` files under `proto/`, all declaring `package HsbaProto` and consumed by C++ via a static library target `HsBaSlicerProto`. The build is driven by `CMakeLists.txt`: it locates every `*.proto`, generates C++/C#/Java/Python/PHP bindings into `HSBA_PROTO_OUT_DIRECTORY` (controlled by `HSBA_PROTOBUF_OUT`), and also compiles the generated sources into a static protobuf library linked against `protobuf::libprotobuf`. Internal layout:
+- Shared primitives: `point.proto`, `vector.proto`, `mesh.proto` (triangles with normals, indexed trimeshes).
+- Core config: `base_config.proto` defines technology/material/support enums (`msg_technology_type`, `msg_fff_material`, `msg_sla_material`, …) plus `msg_base_config`.
+- Slicing layer: `slice_config.proto` (`msg_slice_config`, `msg_slice_type`) and `boolean_operation.proto`, `transform.proto`, `path.proto` describe geometric operations.
+- Technology pipelines: one file per process — `fdm_pipeline.proto`, `sla_pipeline.proto`, `slm_pipeline.proto`, `sls_pipeline.proto`, `lom_pipeline.proto`, `waam_pipeline.proto`, `tdp_pipeline.proto`, `file_transfer_pipeline.proto` — each pairing a `*_pipeline_config` message with a `*_pipe_result` message.
+- Extensibility: `custom_pipeline.proto` exposes a Lua-driven pipeline entry point (`pipeline_lua_script`, `pipeline_lua_source`, `entry_func`, `config_json`).
+Dependency direction is strictly inward: pipeline schemas import only the shared primitives; there are no cross-imports between technology-specific files.

@@ -1,0 +1,1 @@
+The C ABI is consumed as a header-only INTERFACE library named `HsBaPipelineTypes` — link against it or include its install prefix rather than linking a compiled binary. The Lua type definitions are picked up automatically when `.luarc.json` references `types/hsba_pipeline.d.lua` (as documented at the top of the file).

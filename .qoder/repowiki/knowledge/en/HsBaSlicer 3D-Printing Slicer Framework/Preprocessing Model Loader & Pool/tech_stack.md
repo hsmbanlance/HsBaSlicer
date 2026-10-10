@@ -1,1 +1,0 @@
-C++17 STL (`std::filesystem`, `std::format`, `std::string_view`); Eigen matrices used for CGAL/OpenVDB APIs; optional OpenCASCADE (OCCT) for BRep/boolean ops and OpenVDB for point clouds, both conditionally compiled.

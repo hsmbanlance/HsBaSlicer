@@ -1,0 +1,5 @@
+- Optional backend functionality is isolated behind `#ifdef USE_CGAL` / `#ifdef USE_OPENVDB` / `#ifdef USE_OCCT` guards in both the header declarations and the implementation bodies.
+- Public methods return `std::shared_ptr<IModel>` and store results through `pool_.insert(name, std::static_pointer_cast<IModel>(...))`, keeping concrete kernel types hidden behind the abstract interface.
+- Kernel-specific accessors use a local helper (`ToIglModel`, `AsOpenVdbModel`) that performs a `dynamic_cast` and throws `RuntimeError` when the source model is not the expected concrete type.
+- Errors are reported via typed exceptions from `base/error.hpp` — `InvalidArgumentError` for bad names/null inputs and `RuntimeError` for format/kernel mismatches — rather than error codes or optional returns.
+- All new models produced by preprocessing operations are inserted into the same `NamedObjectPool` with an explicit result name, making the pool the single source of truth for model identity.

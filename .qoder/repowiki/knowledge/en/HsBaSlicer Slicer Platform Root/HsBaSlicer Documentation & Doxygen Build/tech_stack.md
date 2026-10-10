@@ -1,0 +1,1 @@
+Markdown authoring for user-facing docs; Doxygen 1.17.0 (with Graphviz `dot`) for auto-generated C++ API reference, driven by a full `Doxyfile` configuration.

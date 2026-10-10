@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: file_operator_library
+title: File I/O, Archive & Parameter Persistence Library
+scope:
+    - fileoperator/
+source_files: []
+depends_on: []
+related_to: []

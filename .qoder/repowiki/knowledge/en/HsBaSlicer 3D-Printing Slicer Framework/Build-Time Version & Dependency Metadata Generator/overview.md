@@ -1,1 +1,0 @@
-CMake + PowerShell build step that generates a version.cpp exposing runtime version, build configuration, and an inventory of third-party dependencies with their licenses.

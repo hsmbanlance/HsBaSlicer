@@ -1,3 +1,0 @@
-- Public registration functions are declared with `HSBA_SLICER_API` and wrapped in `extern "C"` blocks to expose a C-compatible ABI to the host.
-- Each exported registration function validates its pointer arguments before forwarding to the underlying `HsBa::Slicer::*` helper.
-- Event-source callbacks are registered via lambda wrappers that filter on the string-valued `event_name` parameter to dispatch to the correct handler.

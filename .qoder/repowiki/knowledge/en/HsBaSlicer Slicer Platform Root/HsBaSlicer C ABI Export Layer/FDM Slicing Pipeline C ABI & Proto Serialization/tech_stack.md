@@ -1,0 +1,1 @@
+C ABI exported from a C++ DLL (`extern "C"`, `HSBA_SLICER_API`); C++20 coroutines (`co_return`, `std::chrono::steady_clock`) for async execution; protobuf wire format for cross-language serialization; Lua scripting integration for custom support and infill algorithms.

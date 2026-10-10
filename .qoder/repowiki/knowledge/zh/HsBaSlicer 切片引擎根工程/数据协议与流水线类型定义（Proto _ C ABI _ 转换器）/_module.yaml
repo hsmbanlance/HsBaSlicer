@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: data_types_and_proto
+title: 数据协议与流水线类型定义（Proto / C ABI / 转换器）
+scope:
+    - proto/
+    - pipelinetypes/
+    - convert/
+source_files: []
+depends_on: []
+related_to:
+    - path: dll_export_layer/pipeline_infrastructure

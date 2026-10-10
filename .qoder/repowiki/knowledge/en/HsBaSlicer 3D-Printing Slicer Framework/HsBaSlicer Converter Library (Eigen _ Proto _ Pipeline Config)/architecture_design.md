@@ -1,6 +1,0 @@
-Built as a static library `HsBaSlicerConverter` (see `CMakeLists.txt`) with no runtime dependencies beyond its linked targets. The module is organized into four symmetric converter pairs, each split into a `.hpp` declaration and `.cpp` implementation:
-- `Eigen2Msg.*` / `Msg2Eigen.*`: convert between Eigen vectors/quaternions/transforms/matrix/path types and the corresponding `msg_vector*`, `msg_point*`, `msg_transform*`, `msg_path*` protobuf messages.
-- `FullTopoModel2Msg.*` / `Msg2FullTopoModel.*`: serialize/deserialize triangulated mesh topology (`msg_topo_trimeshes`) to/from `HsBa::Mesh::FullTopoModel`.
-- `PipelineConfig2Msg.*` / `Msg2PipelineConfig.*`: translate native C pipeline config/result structs (`HsBaFdmPipelineConfig_t`, `HsBaSlaPipelineConfig_t`, etc.) to their per-pipeline protobuf messages (`msg_fdm_pipeline_config`, `sla_pipe_config`, …).
-
-Dependency direction is one-way outward: this module depends on `HsBaSlicerProto` (generated `.pb.h` headers), `Eigen3::Eigen`, `HsBaSlicerMesh`, and `HsBaPipelineTypes`; it does not depend on any higher-level slicer components. All public APIs live in the `HsBa::Slicer` namespace and are exposed purely through header files — there is no shared state or singleton.

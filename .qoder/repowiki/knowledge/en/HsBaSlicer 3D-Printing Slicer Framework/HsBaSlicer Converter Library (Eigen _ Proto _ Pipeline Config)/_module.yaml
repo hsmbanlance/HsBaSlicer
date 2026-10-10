@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: convert_lib
-title: HsBaSlicer Converter Library (Eigen / Proto / Pipeline Config)
-scope:
-    - convert/
-source_files: []
-depends_on: []
-related_to:
-    - path: pipelinetypes_proto

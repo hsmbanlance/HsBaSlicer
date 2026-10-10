@@ -1,0 +1,1 @@
+Android Gradle Plugin 8.3.2, compileSdk 34, minSdk 21, NDK ABI filter `arm64-v8a`; relies on prebuilt CMake-generated `.so` files rather than building native code here.

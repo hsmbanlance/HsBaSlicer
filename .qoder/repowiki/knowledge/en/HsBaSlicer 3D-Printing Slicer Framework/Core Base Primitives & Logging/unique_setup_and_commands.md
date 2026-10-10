@@ -1,1 +1,0 @@
-Mock support for `AnyObject` is opt-in: define `HSBA_ANY_OBJECT_ENABLE_MOCK` or compile with any of Boost.Test / GoogleTest / Catch2 / Doctest macros enabled so the `MockRegistry` compiles in; without it, `AnyObject::Invoke` has zero mock overhead.

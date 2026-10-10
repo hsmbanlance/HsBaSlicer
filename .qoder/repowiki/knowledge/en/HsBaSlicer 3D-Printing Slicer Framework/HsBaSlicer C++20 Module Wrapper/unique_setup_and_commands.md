@@ -1,1 +1,0 @@
-The module must be built as part of the parent CMake tree; the static archive target requires both `module_anchor.cpp` and the `.cppm` file set. On MSVC, consumer projects need the same `/fp:strict /fp:except _SCL_SECURE_NO_DEPRECATE _SCL_SECURE_NO_WARNINGS` flags or importing the BMI will trigger C2572 std redefinition errors.

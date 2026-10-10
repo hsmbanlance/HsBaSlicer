@@ -1,0 +1,306 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: en-US
+branch: dev
+nodes_managed: true
+exported_at: "2026-10-10T17:25:14Z"
+modules:
+    "":
+        dir_name: HsBaSlicer Slicer Platform Root
+        title: HsBaSlicer Slicer Platform Root
+        scope:
+            - README.md
+            - LICENSE.txt
+            - CMakeLists.txt
+            - CMakePresets.json
+            - vcpkg.json
+            - vcpkg-configuration.json
+            - .clang-format
+            - .clang-tidy
+            - .clangd
+            - .gitignore
+            - .luarc.json
+            - .qoderignore
+            - cpp.hint
+            - skills-lock.json
+            - .gitattributes
+        source_files: []
+        children:
+            - android_binding
+            - base_library
+            - build_tooling
+            - cipher_library
+            - convert_layer
+            - cpp_module_layer
+            - dll_export_layer
+            - documentation
+            - file_operator_library
+            - filling_system
+            - logger_library
+            - model_processing
+            - native_app_entry
+            - path_planning
+            - pipeline_types
+            - preprocess_layer
+            - protobuf_schema
+            - samples
+            - static_tests
+            - support_system
+            - tests
+            - utils_library
+        depends_on: []
+        related_to: []
+    android_binding:
+        dir_name: Android APK Wrapper for HsBaSlicer Native Libraries
+        title: Android APK Wrapper for HsBaSlicer Native Libraries
+        scope:
+            - android/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: native_app_entry
+    base_library:
+        dir_name: HsBa Slicer Base Library
+        title: HsBa Slicer Base Library
+        scope:
+            - base/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    build_tooling:
+        dir_name: Build, Packaging & Static-Check Tooling
+        title: Build, Packaging & Static-Check Tooling
+        scope:
+            - cmake/
+            - version/
+            - scripts/
+            - static_check/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    cipher_library:
+        dir_name: Cryptographic Cipher Library
+        title: Cryptographic Cipher Library
+        scope:
+            - cipher/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    convert_layer:
+        dir_name: HsBaSlicer Converter Library (Eigen_Topology_Pipeline ↔ Protobuf)
+        title: HsBaSlicer Converter Library (Eigen/Topology/Pipeline ↔ Protobuf)
+        scope:
+            - convert/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: pipeline_types
+            - path: protobuf_schema
+    cpp_module_layer:
+        dir_name: C++20 Module Wrapper for LibHsBaSlicer
+        title: C++20 Module Wrapper for LibHsBaSlicer
+        scope:
+            - ModuleHsBaSlicer/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: pipeline_types
+            - path: samples
+    dll_export_layer:
+        dir_name: HsBaSlicer C ABI Export Layer
+        title: HsBaSlicer C ABI Export Layer
+        scope:
+            - DllHsBaSlicer/
+        source_files: []
+        children:
+            - dll_export_layer/dll_bootstrap
+            - dll_export_layer/fdm_slicing_engine
+        depends_on: []
+        related_to: []
+    dll_export_layer/dll_bootstrap:
+        dir_name: HsBaSlicer C ABI Export Layer & DLL Bootstrap
+        title: HsBaSlicer C ABI Export Layer & DLL Bootstrap
+        scope:
+            - DllHsBaSlicer/event_source_register.cpp
+            - DllHsBaSlicer/event_source_register.h
+            - DllHsBaSlicer/initialize.cpp
+            - DllHsBaSlicer/initialize.h
+            - DllHsBaSlicer/version_info.cpp
+            - DllHsBaSlicer/version_info.h
+            - DllHsBaSlicer/dllexport.h
+            - DllHsBaSlicer/CMakeLists.txt
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: native_app_entry
+            - path: pipeline_types
+    dll_export_layer/fdm_slicing_engine:
+        dir_name: FDM Slicing Pipeline C ABI & Proto Serialization
+        title: FDM Slicing Pipeline C ABI & Proto Serialization
+        scope:
+            - DllHsBaSlicer/fdm_pipeline.cpp
+            - DllHsBaSlicer/fdm_pipeline.h
+            - DllHsBaSlicer/pipeline_convert.cpp
+            - DllHsBaSlicer/pipeline_convert.h
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: native_app_entry
+            - path: pipeline_types
+            - path: samples
+    documentation:
+        dir_name: HsBaSlicer Documentation & Doxygen Build
+        title: HsBaSlicer Documentation & Doxygen Build
+        scope:
+            - docs/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    file_operator_library:
+        dir_name: File I_O, Archive & Parameter Persistence Library
+        title: File I/O, Archive & Parameter Persistence Library
+        scope:
+            - fileoperator/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    filling_system:
+        dir_name: 2D Polygon Geometry & Filling Engine
+        title: 2D Polygon Geometry & Filling Engine
+        scope:
+            - 2D/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    logger_library:
+        dir_name: Cross-Platform Logger Library
+        title: Cross-Platform Logger Library
+        scope:
+            - logger/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    model_processing:
+        dir_name: Model Processing Backends (CAD _ Mesh _ Point Cloud)
+        title: Model Processing Backends (CAD / Mesh / Point Cloud)
+        scope:
+            - cadmodel/
+            - meshmodel/
+            - pointcloud/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    native_app_entry:
+        dir_name: HsBaSlicer Cross-Platform Application Entry & Pipeline Examples
+        title: HsBaSlicer Cross-Platform Application Entry & Pipeline Examples
+        scope:
+            - HsBaSlicer/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: android_binding
+            - path: dll_export_layer/dll_bootstrap
+            - path: dll_export_layer/fdm_slicing_engine
+    path_planning:
+        dir_name: Slicer Path Output Abstraction
+        title: Slicer Path Output Abstraction
+        scope:
+            - paths/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    pipeline_types:
+        dir_name: Pipeline C ABI & Lua IDE Type Definitions
+        title: Pipeline C ABI & Lua IDE Type Definitions
+        scope:
+            - pipelinetypes/
+            - types/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: convert_layer
+            - path: cpp_module_layer
+            - path: dll_export_layer/dll_bootstrap
+            - path: dll_export_layer/fdm_slicing_engine
+    preprocess_layer:
+        dir_name: Model Loading & Preprocessing Pool
+        title: Model Loading & Preprocessing Pool
+        scope:
+            - preprocess/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    protobuf_schema:
+        dir_name: HsBaSlicer Protobuf Schema Definitions
+        title: HsBaSlicer Protobuf Schema Definitions
+        scope:
+            - proto/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: convert_layer
+    samples:
+        dir_name: HsBaSlicer API & Pipeline Samples
+        title: HsBaSlicer API & Pipeline Samples
+        scope:
+            - samples/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: cpp_module_layer
+            - path: dll_export_layer/fdm_slicing_engine
+    static_tests:
+        dir_name: Compile-Time & Static Assertion Test Suites
+        title: Compile-Time & Static Assertion Test Suites
+        scope:
+            - static_tests/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    support_system:
+        dir_name: Support Generation System
+        title: Support Generation System
+        scope:
+            - support/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    tests:
+        dir_name: Boost.UnitTest Test Suite
+        title: Boost.UnitTest Test Suite
+        scope:
+            - tests/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    utils_library:
+        dir_name: Slicer Utilities Library (HsBaSlicerUtils)
+        title: Slicer Utilities Library (HsBaSlicerUtils)
+        scope:
+            - utils/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []

@@ -1,0 +1,1 @@
+Boost.Test (included mode, `BOOST_TEST_DYN_LINK`), Eigen3, Clipper2, Lua (via `${LUA_LIBRARIES}`/`${LUA_INCLUDE_DIR}`), SQLite, zlib (zipper), CGAL (optional via `HSBA_COPL`), OpenCASCADE (optional when `HsBaSlicerCADModel` target exists), IGL/OpenVDB for mesh model tests.

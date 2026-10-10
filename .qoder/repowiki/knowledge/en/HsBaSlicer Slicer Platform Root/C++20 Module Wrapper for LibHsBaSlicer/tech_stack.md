@@ -1,0 +1,1 @@
+C++20 modules (`export module`), CMake `FILE_SET CXX_MODULES`, static linking against LibHsBaSlicer/HsBaPipelineTypes/Eigen3/Clipper2/Lua; MSVC-specific `/fp:strict /fp:except-` and `_SCL_SECURE_NO_WARNINGS` propagated to consumers to match CGAL's ABI.

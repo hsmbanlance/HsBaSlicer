@@ -1,0 +1,1 @@
+miniz for ZIP I/O; optional bit7z (`bit7z::bit7z`, `bit7z::bit7z64`) for 7z support; sqlpp11-backed SQLite/MySQL/PostgreSQL adapters; Lua C API for scripting bindings; rapidjson for JSON where used; Boost.Log when available.

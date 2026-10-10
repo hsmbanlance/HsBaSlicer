@@ -1,0 +1,6 @@
+- Each test file defines its own `BOOST_TEST_MODULE` macro and includes `<boost/test/included/unit_test.hpp>`, producing a self-contained executable.
+- Test cases are grouped with `BOOST_AUTO_TEST_SUITE(name)` / `BOOST_AUTO_TEST_CASE(...)` naming the suite after the feature under test.
+- Lua-backed tests bootstrap a fresh `lua_State*` inside the test, register needed types via `RegisterAnyObject(L, types)`, execute inline scripts with `luaL_dostring`, and read results from globals on the Lua stack.
+- Mocking of C++ methods invoked through `AnyObject::Invoke` goes through `Mock::MockRegistry::ScopedStubs` (or `ScopedEnable`) so stub state is automatically restored at scope exit.
+- Cross-DLL boundary contracts are exercised by compiling small mock DLLs (e.g. `mock_cad_dll.cpp`, `mock_point_cloud_dll.cpp`, `mock_dll_loader_dll.cpp`) that export `extern "C"` functions with a stable prefix (`mockcad_*`) and loading them at runtime.
+- Optional dependencies are gated behind CMake conditionals (`if(HSBA_COPL)`, `if(TARGET HsBaSlicerCADModel)`, `if(HSBA_POLYGON_DUMP)`) so the test suite builds without those third-party components.

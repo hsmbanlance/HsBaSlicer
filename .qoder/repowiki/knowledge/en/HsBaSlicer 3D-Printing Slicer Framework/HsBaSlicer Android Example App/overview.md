@@ -1,1 +1,0 @@
-Minimal Android example app that loads the HsBaSlicer native library and invokes its FDM/SLA/SLS pipeline examples via JNI.

@@ -1,5 +1,0 @@
-- Optional backend functionality is isolated behind `#ifdef USE_CGAL` / `#ifdef USE_OPENVDB` / `#ifdef USE_OCCT` guards at both declaration and definition sites.
-- Runtime capability checks throw `NotSupportedError` when a feature's required backend (e.g. OCCT for ThickSolid) is absent at build time.
-- Named model lookup throws `InvalidArgumentError` for missing/duplicate names and `RuntimeError` for type mismatches (e.g. source not an `OcctModel`/`OpenVdbModel`), using `std::format` for message construction.
-- All results from preprocessing operations are inserted back into the pool via `pool_.insert(resultName, std::static_pointer_cast<IModel>(...))` rather than returned directly.
-- Backend-specific helpers (`ToIglModel`, `ToOcctModel`, `AsOpenVdbModel`) perform `dynamic_cast` checks and convert between model types via `TriangleMesh()` when needed.

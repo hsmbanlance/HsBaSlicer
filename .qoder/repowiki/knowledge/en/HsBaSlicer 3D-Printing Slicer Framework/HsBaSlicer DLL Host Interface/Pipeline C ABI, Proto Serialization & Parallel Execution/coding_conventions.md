@@ -1,5 +1,0 @@
-- Public C entry points are wrapped in `extern "C" { ... }` blocks guarded by `#ifdef __cplusplus` and exported through the `HSBA_SLICER_API` macro from `dllexport.h`.
-- Each pipeline family (FDM, SLA, SLS, FileTransfer, CustomLua, SLM, LOM, 3DP, WAAM) gets a symmetric quartet of conversion functions: `*ConfigFromProtoBytes`, `*ConfigToProtoBytes`, `*ResultFromProtoBytes`, `*ResultToProtoBytes`, plus a `HsBaFree*ConfigStrings` cleanup helper.
-- All `*_ToProtoBytes` functions allocate output buffers with `malloc` and hand ownership to the caller, who must free them; similarly, result structs containing strings are freed via dedicated `HsBaFree*` functions rather than destructors.
-- Conversion functions return `int` success flags (1 = ok, 0 = parse/serialize failure) instead of throwing exceptions, keeping the C ABI exception-free.
-- Per-layer hot-path parallelization goes through `ParallelForLayers` rather than direct thread creation, batching futures so progress callbacks fire once per block on the calling thread.

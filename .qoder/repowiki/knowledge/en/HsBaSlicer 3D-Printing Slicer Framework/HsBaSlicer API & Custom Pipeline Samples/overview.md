@@ -1,1 +1,0 @@
-Standalone C++ sample executables demonstrating the FDM/SLA/SLM/SLS/TDP/WLAM/LAM slicing pipelines, the fully Lua-driven Custom pipeline, and direct LibHsBaSlicer usage via headers or C++20 modules.

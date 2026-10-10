@@ -1,0 +1,1 @@
+C++20 concepts + CRTP; Boost.Graph (adjacency_list, Dijkstra, Bellman-Ford, Boykov-Kolmogorov, Kruskal, Prim, A*, connected/strong components, topological_sort), Boost.PFR for aggregate reflection, Boost.DLL for runtime symbol loading, RapidJSON, tinyxml2, yaml-cpp, and the project's Lua binding layer.

@@ -1,1 +1,0 @@
-Per-layer support generation library providing FDM plane/tree/honeycomb, SLA sacrificial, and Lua-scriptable strategies over 2D polygon contours.

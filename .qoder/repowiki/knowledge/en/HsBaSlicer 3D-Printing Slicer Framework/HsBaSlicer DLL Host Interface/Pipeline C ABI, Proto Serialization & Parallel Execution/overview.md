@@ -1,1 +1,0 @@
-C ABI and serialization layer for HsBaSlicer's FDM/SLA/SLS/SLM/LOM/3DP/WAAM/custom Lua pipelines, plus a header-only parallel-for helper for per-layer hot paths.

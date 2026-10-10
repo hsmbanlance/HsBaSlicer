@@ -1,1 +1,0 @@
-Requires OpenCASCADE installed and discoverable via `find_package(OpenCASCADE CONFIG REQUIRED)` in CMake; linking against `Boost::dll` is conditional on `HSBA_DESKTOP` and disabled on Android/iOS/game-console builds.

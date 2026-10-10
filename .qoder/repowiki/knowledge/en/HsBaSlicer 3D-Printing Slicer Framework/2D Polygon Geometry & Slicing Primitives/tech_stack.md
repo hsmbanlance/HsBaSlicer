@@ -1,1 +1,0 @@
-C++ library built on Clipper2 (`clipper.h`, `clipper.offset.h`) for exact integer arithmetic; libpng + libjpeg-turbo for raster I/O; optional Freetype for TTF/OTF text-to-polygon conversion; Lua C API for scripting integration; OpenCV conditionally linked when available.

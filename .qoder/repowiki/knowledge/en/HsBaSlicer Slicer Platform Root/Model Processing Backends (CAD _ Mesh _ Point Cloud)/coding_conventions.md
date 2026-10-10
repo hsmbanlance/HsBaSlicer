@@ -1,0 +1,6 @@
+- Every model class implements the `base/IModel` interface, providing identical signatures for `Load`/`Save`, `Translate`/`Rotate`/`Scale`/`Transform`, `BoundingBox`, `Volume`, and `TriangleMesh` so callers treat CAD/mesh/point-cloud models uniformly.
+- Primitive factories follow a static `CreateBox`/`CreateSphere`/`CreateCylinder`/`CreateCone`/`CreateTorus`/`CreatePrime` naming pattern on both `OcctModel` and `IglModel`, giving parallel construction APIs across backends.
+- Boolean operations are exposed as free functions (`Union`/`Intersection`/`Difference`/`Xor`) declared as `friend`s of the model class, keeping the operation logic outside the class while granting access to private geometry.
+- User-supplied kernels are modeled as a three-layer pair: an abstract `IUserCustom...` interface of function-pointer typedefs, a `UserCustom...Dll` loader resolving symbols from a shared library, and a `UserCustom...Model` `IModel` adapter delegating calls — duplicated for both CAD and point cloud backends.
+- Plugin-loader code is wrapped in `#ifndef HSBA_NO_DLL_LOADER` guards so the entire dynamic-loading path compiles out when the build defines that macro.
+- Headers use include guards named after the class (e.g. `HSBA_SLICER_OCCTMODEL_HPP`, `HSBA_FULLTOPOMODEL_HPP`, `HSBA_SLICER_OPENVDB_MODEL_HPP`) and place all public types inside the `HsBa::Slicer` namespace.

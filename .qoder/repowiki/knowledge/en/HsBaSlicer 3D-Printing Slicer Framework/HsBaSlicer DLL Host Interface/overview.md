@@ -1,1 +1,0 @@
-DLL boundary that exposes HsBaSlicer's slicing pipelines to a host application through a shared C ABI, with per-process-type wrappers and Lua/event registration shims.

@@ -1,0 +1,1 @@
+C++ compiled to a platform-dependent shared library (Windows DLL / macOS dylib / Linux .so); iOS builds it as static because iOS apps cannot load arbitrary dylibs. Cross-language consumers reach it through the `HSBA_SLICER_API` export macro and protobuf-based config/result structs.

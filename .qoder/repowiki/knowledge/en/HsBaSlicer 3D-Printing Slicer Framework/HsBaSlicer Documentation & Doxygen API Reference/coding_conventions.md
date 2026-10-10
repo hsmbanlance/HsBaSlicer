@@ -1,2 +1,0 @@
-- Every documented public header has a matching Doxygen-generated page set: an HTML page, a `_source.html` view, an include graph PNG, and a `.map`/`.md5` fingerprint.
-- Documentation is maintained as paired language trees under `en/` and `zh/` with identical folder structure (base/, utils/, logger/, cipher/, fileoperator/, DllHsBaSlicer/, LibHsBaSlicer/) so translations stay synchronized.

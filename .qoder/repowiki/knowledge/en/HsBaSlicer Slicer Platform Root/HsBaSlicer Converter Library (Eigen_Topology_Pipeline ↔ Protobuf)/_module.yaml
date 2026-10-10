@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: convert_layer
+title: HsBaSlicer Converter Library (Eigen/Topology/Pipeline ↔ Protobuf)
+scope:
+    - convert/
+source_files: []
+depends_on: []
+related_to:
+    - path: pipeline_types
+    - path: protobuf_schema

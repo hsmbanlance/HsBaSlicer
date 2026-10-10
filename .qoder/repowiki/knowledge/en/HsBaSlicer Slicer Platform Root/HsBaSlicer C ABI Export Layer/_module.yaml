@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: dll_export_layer
+title: HsBaSlicer C ABI Export Layer
+scope:
+    - DllHsBaSlicer/
+source_files: []
+depends_on: []
+related_to: []

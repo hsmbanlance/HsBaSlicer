@@ -1,8 +1,0 @@
-Three sibling files (`sls_pipeline.cpp`, `slm_pipeline.cpp`, `tdp_pipeline.cpp`) implement a uniform three-stage pipeline under namespace `HsBa::Slicer::Pipeline`:
-- Stage 1 Preprocess: resolve/load model via `GetModel`/`LoadModel` and compute bounding-box-derived layer count.
-- Stage 2 Slicing: build a shared `BuildSliceTopology` once, then drive per-layer `SliceLayer` calls through `ParallelForLayers` from `pipeline_parallel.hpp`, reporting progress at fixed milestones (0/10/15/50/60/100%).
-- Stage 3 Export: serialize process-specific config into a JSON string via `Build*SlsConfigJson`/`BuildSlmConfigJson`/`BuildTdpConfigJson`, pack it with `layer_outlines`, `layer_z_heights`, and (for 3DP) `spiral_mode` into an `SlsPackage`, then hand it off to `SaveSlsPackageLua` from `LibHsBaSlicer/Path/sls_export.hpp` so a user-supplied Lua script performs zip/archive creation.
-
-Each file exposes a thin C ABI layer (`HSBA_SLICER_API` functions: `HsBaCreateDefault*Config`, `HsBaRun*Pipeline`, `HsBaRun*PipelineAsync`, `HsBaFree*PipelineResult`) that translates between opaque C structs (`HsBaSlsPipelineConfig_t`, etc.) and internal `Internal*SlsConfig`/`Internal*SlmConfig`/`Internal*TdpConfig` PODs. The async path wraps the config in `std::shared_ptr` and chains `.then(...)` on the `Utils::Task` returned by the coroutine-based `Run*SlsPipelineAsync` function; the sync path blocks on `task.get_result()`.
-
-Dependency direction is one-way outward: this module depends on `LibHsBaSlicer` (model loading, mesh slicing, Lua export), `base/coroutine.hpp`, `base/error.hpp`, and `pipeline_parallel.hpp`; nothing inside `LibHsBaSlicer` depends back on these files.

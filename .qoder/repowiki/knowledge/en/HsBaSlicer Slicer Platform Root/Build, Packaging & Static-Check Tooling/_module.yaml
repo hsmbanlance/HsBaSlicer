@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: build_tooling
+title: Build, Packaging & Static-Check Tooling
+scope:
+    - cmake/
+    - version/
+    - scripts/
+    - static_check/
+source_files: []
+depends_on: []
+related_to: []

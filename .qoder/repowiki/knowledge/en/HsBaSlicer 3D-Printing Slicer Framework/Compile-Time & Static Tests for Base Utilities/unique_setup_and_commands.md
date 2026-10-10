@@ -1,1 +1,0 @@
-Tests are built as part of the normal CMake configuration through `static_tests/CMakeLists.txt` — they have no separate runner, since success is defined as successful compilation.

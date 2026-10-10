@@ -1,0 +1,1 @@
+Top-level CMake orchestrator that wires the HsBaSlicer slicing platform — from shared base libraries through CAD/mesh/point-cloud backends, 2D geometry, support and path layers, to per-technology pipeline exports and cross-language bindings.

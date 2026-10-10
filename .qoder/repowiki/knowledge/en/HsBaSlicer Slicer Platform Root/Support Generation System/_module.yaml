@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: support_system
+title: Support Generation System
+scope:
+    - support/
+source_files: []
+depends_on: []
+related_to: []

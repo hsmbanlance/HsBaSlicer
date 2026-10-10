@@ -1,0 +1,1 @@
+C99-style `typedef struct` + `extern "C"` ABI for cross-language FFI; CMake INTERFACE library with `$<BUILD_INTERFACE>`/`$<INSTALL_INTERFACE>` generator expressions; EmmyLua annotations (`---@class`, `---@field`, `---@alias`) consumed by sumneko-lua/LuaLS via `.luarc.json`.

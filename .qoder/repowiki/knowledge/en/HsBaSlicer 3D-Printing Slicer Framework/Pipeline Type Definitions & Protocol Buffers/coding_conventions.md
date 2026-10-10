@@ -1,5 +1,0 @@
-- Every pipeline technology exposes a paired `HsBa<Tech>PipelineConfig_t` / `HsBa<Tech>PipelineResult_t` struct pair plus matching `HsBa<Tech>ProgressCallback` and `HsBa<Tech>ResultCallback` function-pointer types, keeping sync/async entry points uniform.
-- Each config struct ships a `static inline HsBa<Tech>ConfigDefault()` initializer that zeroes all pointer fields and assigns documented defaults, so callers never construct configs manually.
-- All public structs and enums are wrapped in `extern "C" { ... }` and avoid any `HSBA_SLICER_API` / `dllexport.h` decoration, guaranteeing a stable C ABI independent of the shared library.
-- Shared enumerations (technology type, support pattern, materials, light source, shielding gas, output type, profile format) are declared once in `base_config.proto` and reused by every technology-specific `.proto` file rather than redefined.
-- Result structs consistently carry `success`, `total_layers`, a UTF-8 `char*` output field, a UTF-8 `error_message`, and `elapsed_seconds`, with comments directing callers to the matching `HsBaFree*PipelineResult` destructor.

@@ -1,1 +1,0 @@
-C++ static library built with CMake; bridges Eigen (Core + Geometry) and Google Protobuf-generated messages via `target_link_libraries` against `Eigen3::Eigen` and `HsBaSlicerProto`.

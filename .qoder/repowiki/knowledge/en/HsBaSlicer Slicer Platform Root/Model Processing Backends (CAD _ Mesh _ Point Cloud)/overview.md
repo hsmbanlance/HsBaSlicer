@@ -1,0 +1,1 @@
+Provides pluggable IModel backends for CAD B-Rep, triangle meshes, and point clouds, plus a topology-reconstructed slicing helper and user-supplied plugin loaders.

@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: support_lib
-title: Support Generation Library (FDM/SLA/Lua)
-scope:
-    - support/
-source_files: []
-depends_on: []
-related_to: []

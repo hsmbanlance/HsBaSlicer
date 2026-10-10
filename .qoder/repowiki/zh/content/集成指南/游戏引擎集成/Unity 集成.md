@@ -2,292 +2,287 @@
 
 <cite>
 **本文引用的文件**   
-- [README.md](file://README.md)
-- [DllHsBaSlicer/README（英文）](file://docs/en/DllHsBaSlicer/README.md)
-- [DllHsBaSlicer/README（中文）](file://docs/zh/DllHsBaSlicer/README.md)
-- [游戏引擎集成指南（英文）](file://docs/en/DllHsBaSlicer/game_engine_integration.md)
-- [游戏引擎集成指南（中文）](file://docs/zh/DllHsBaSlicer/game_engine_integration.md)
-- [DllHsBaSlicer/CMakeLists.txt](file://DllHsBaSlicer/CMakeLists.txt)
-- [导出宏头：dllexport.h](file://DllHsBaSlicer/dllexport.h)
-- [LibHsBaSlicer 导出宏头：export.h](file://LibHsBaSlicer/export.h)
-- [初始化接口头：initialize.h](file://DllHsBaSlicer/initialize.h)
-- [流水线协议转换头：pipeline_convert.h](file://DllHsBaSlicer/pipeline_convert.h)
-- [版本信息头：version_info.h](file://DllHsBaSlicer/version_info.h)
-- [编码与系统类型工具头：encoding_convert.hpp](file://base/encoding_convert.hpp)
+- [game_engine_integration.md（英文）](file://docs/en/DllHsBaSlicer/game_engine_integration.md)
+- [game_engine_integration.md（中文）](file://docs/zh/DllHsBaSlicer/game_engine_integration.md)
+- [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
+- [fdm_pipeline.h](file://DllHsBaSlicer/fdm_pipeline.h)
+- [initialize.h](file://DllHsBaSlicer/initialize.h)
 </cite>
 
 ## 目录
-1. [简介](#简介)
-2. [项目结构与定位](#项目结构与定位)
+1. [引言](#引言)
+2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
 4. [架构总览](#架构总览)
 5. [详细组件分析](#详细组件分析)
 6. [依赖关系分析](#依赖关系分析)
-7. [性能与 IL2CPP 注意事项](#性能与-il2cpp-注意事项)
-8. [Unity 集成步骤](#unity-集成步骤)
-9. [常见问题排查](#常见问题排查)
-10. [结论](#结论)
+7. [性能与内存注意事项](#性能与内存注意事项)
+8. [故障排除指南](#故障排除指南)
+9. [结论](#结论)
+10. [附录：平台库放置与 API 对照表](#附录平台库放置与-api-对照表)
 
-## 简介
-本指南面向在 Unity 中集成 HsBaSlicer 的开发者，重点说明如何通过 C# P/Invoke 调用 DllHsBaSlicer 提供的纯 C ABI 接口，完成 FDM/SLA/SLS 等切片流水线的配置、执行、异步回调与结果释放。文档同时覆盖不同平台的库文件放置位置、IL2CPP 兼容性要求、字符串编码转换、内存管理、委托生命周期管理，以及 MonoBehaviour 使用示例和进度回调处理建议。
+## 引言
+本文面向在 Unity 中集成 HsBaSlicer 的开发者，重点说明如何通过 C# P/Invoke 调用 DllHsBaSlicer 提供的切片流水线。文档覆盖以下关键主题：
+- C# 绑定声明：结构体、委托、DllImport 映射；
+- 平台特定的库放置位置，特别是 iOS 静态库使用 `"__Internal"`；
+- 从 MonoBehaviour 发起异步调用的完整封装流程；
+- 跨语言调用的关键约束：委托生命周期、主线程调度、UTF-8 字符串编码、IL2CPP 兼容性；
+- 错误处理与调试技巧，包括 `DllNotFoundException` 排查。
 
-## 项目结构与定位
-HsBaSlicer 提供两层对外能力：
-- LibHsBaSlicer：C++ 全流程切片能力封装，包含预处理、切片、支撑、填充、路径生成等模块。
-- DllHsBaSlicer：上层 C 导出动态库，将 LibHsBaSlicer 的能力包装为纯 C ABI，供 Qt、wxWidgets、Unity、Unreal Engine、C#、Java、Python、Swift 等宿主语言跨平台调用。
+本指南以仓库中的官方集成文档和 C ABI 头文件为依据，不臆造 API 或默认值。
+
+## 项目结构
+Unity 集成主要涉及三类内容：
+- C# 侧绑定与高层封装：定义结构体、委托、DllImport，并封装异步调用；
+- C/C++ 侧导出接口：FDM 流水线的创建配置、同步/异步运行、结果释放；
+- 类型定义头文件：所有流水线配置与回调的原生类型定义。
 
 ```mermaid
 graph TB
-Host["宿主应用<br/>Unity / Unreal / Qt / Java / Python"] --> |纯 C ABI| Dll["DllHsBaSlicer<br/>C 导出层"]
-Dll --> Lib["LibHsBaSlicer<br/>C++ 静态库"]
-Lib --> Core["底层能力<br/>预处理 / 切片 / 支撑 / 填充 / 路径"]
+subgraph "Unity / C#"
+CS_Native["C# 绑定类<br/>HsBaSlicerNative"]
+CS_Service["C# 服务封装<br/>HsBaSlicerService"]
+CS_Mono["Unity MonoBehaviour<br/>SliceDemo"]
+end
+subgraph "原生层"
+DLL["DllHsBaSlicer.dll / .so / .dylib / .a"]
+FDM_API["FDM 导出接口<br/>fdm_pipeline.h"]
+TYPES["类型定义<br/>pipeline_types.h"]
+INIT["初始化入口<br/>initialize.h"]
+end
+CS_Mono --> CS_Service
+CS_Service --> CS_Native
+CS_Native --> DLL
+DLL --> FDM_API
+FDM_API --> TYPES
+DLL --> INIT
 ```
 
-图表来源
-- [游戏引擎集成指南（英文）:9-19](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L9-L19)
-- [游戏引擎集成指南（中文）:9-19](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L9-L19)
+**图表来源**
+- [game_engine_integration.md（英文）:21-212](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L21-L212)
+- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
+- [initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
+- [pipeline_types.h:56-140](file://pipelinetypes/pipeline_types.h#L56-L140)
 
-章节来源
-- [README.md:21-39](file://README.md#L21-L39)
-- [README.md:104-124](file://README.md#L104-L124)
-- [DllHsBaSlicer/README（英文）:1-19](file://docs/en/DllHsBaSlicer/README.md#L1-L19)
-- [DllHsBaSlicer/README（中文）:1-19](file://docs/zh/DllHsBaSlicer/README.md#L1-L19)
+**章节来源**
+- [game_engine_integration.md（英文）:21-212](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L21-L212)
+- [game_engine_integration.md（中文）:21-210](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L21-L210)
 
 ## 核心组件
-- 导出宏与 ABI 边界
-  - DllHsBaSlicer 使用 HSBA_SLICER_API 标记 C ABI 导出符号。
-  - LibHsBaSlicer 使用 HSBA_SLICER_LIB_API 标记 C++ API 导出符号。
-- 初始化入口
-  - initialize()：注册 Lua 函数、流水线及一次性运行时设置；可安全重复调用。
-- 协议转换与内存管理
-  - pipeline_convert.h 提供大量 FromProtoBytes/ToProtoBytes 方法，用于序列化字节与 C 结构体之间的互转。
-  - 所有输出缓冲区由内部 malloc 分配，调用方必须按对应 Free* 函数释放。
-- 版本信息
-  - version_info.h 提供 JSON/XML 版本查询，返回字符串需通过 HsBaFreeVersionString 释放。
+本节聚焦 Unity 集成的三个核心部分：C# 绑定声明、C/C++ 导出函数、以及原生类型定义。
 
-章节来源
-- [导出宏头：dllexport.h:9-20](file://DllHsBaSlicer/dllexport.h#L9-L20)
-- [LibHsBaSlicer 导出宏头：export.h:9-20](file://LibHsBaSlicer/export.h#L9-L20)
-- [初始化接口头：initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
-- [流水线协议转换头：pipeline_convert.h:17-22](file://DllHsBaSlicer/pipeline_convert.h#L17-L22)
-- [流水线协议转换头：pipeline_convert.h:336-390](file://DllHsBaSlicer/pipeline_convert.h#L336-L390)
-- [版本信息头：version_info.h:16-41](file://DllHsBaSlicer/version_info.h#L16-L41)
+### C# 绑定声明
+C# 侧通过 `HsBaSlicerNative` 暴露原生函数，包含：
+- 结构体：`FdmPipelineConfig`、`FdmPipelineResult`；
+- 委托：`ProgressCallback`、`ResultCallback`；
+- DllImport 函数：`initialize`、`HsBaCreateDefaultConfig`、`HsBaRunFdmPipeline`、`HsBaRunFdmPipelineAsync`、`HsBaFreePipelineResult`；
+- Lua 扩展注册相关函数：`HsBaAdd2DFunction`、`HsBaAdd3DFunction`、`HsBaAddFileFunction`、`HsBaAddEventCallback`。
+
+iOS 平台下，动态库名称为 `"__Internal"`，其他平台为 `"DllHsBaSlicer"`。
+
+**章节来源**
+- [game_engine_integration.md（英文）:30-123](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L30-L123)
+- [game_engine_integration.md（中文）:30-123](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L30-L123)
+
+### C/C++ 导出函数
+FDM 流水线的 C ABI 由 `fdm_pipeline.h` 提供，包括：
+- `HsBaCreateDefaultConfig`：返回默认配置结构体；
+- `HsBaRunFdmPipeline`：同步执行流水线；
+- `HsBaRunFdmPipelineAsync`：异步执行流水线，通过回调返回结果；
+- `HsBaFreePipelineResult`：释放流水线结果中的非托管内存。
+
+此外，`initialize.h` 提供进程级初始化入口 `initialize()`，用于注册 Lua 函数、流水线及一次性运行时设置。
+
+**章节来源**
+- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
+- [initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
+
+### 原生类型定义
+所有流水线配置与回调的原生类型定义集中在 `pipeline_types.h`。FDM 相关类型包括：
+- `HsBaFdmPipelineConfig_t`：模型、切片、填充、支撑、路径、G-code 输出、Lua 自定义脚本、输出路径等字段；
+- `HsBaFdmPipelineResult_t`：成功标志、总层数、G-code 内容、错误消息、耗时；
+- `HsBaProgressCallback`：进度回调签名；
+- `HsBaResultCallback`：异步结果回调签名。
+
+C# 结构体必须与这些原生结构体逐字段对齐，枚举用 `int`，字符串指针用 `IntPtr`。
+
+**章节来源**
+- [pipeline_types.h:56-140](file://pipelinetypes/pipeline_types.h#L56-L140)
 
 ## 架构总览
-下图展示 Unity 通过 C# P/Invoke 调用 DllHsBaSlicer，再由 DllHsBaSlicer 调用 LibHsBaSlicer 的完整链路。
+下图展示 Unity 中从 MonoBehaviour 到原生流水线的调用链，以及异步回调如何回到 Unity 主线程。
 
 ```mermaid
 sequenceDiagram
-participant U as "Unity 脚本"
-participant CS as "C# 绑定层"
-participant DLL as "DllHsBaSlicer(C ABI)"
-participant LIB as "LibHsBaSlicer(C++)"
-U->>CS : "初始化并准备配置"
-CS->>DLL : "initialize()"
-CS->>DLL : "HsBaRunFdmPipelineAsync(..., ProgressCallback, ResultCallback)"
-DLL->>LIB : "执行切片流水线"
-LIB-->>DLL : "进度事件"
-DLL-->>CS : "ProgressCallback(percent, stage, userData)"
-CS-->>U : "主线程回调 onProgress"
-LIB-->>DLL : "最终结果"
-DLL-->>CS : "ResultCallback(result, resultUserData)"
-CS->>DLL : "HsBaFreePipelineResult(ref result)"
-CS-->>U : "Task/SetResult(ok, gcode, error)"
+participant Mono as "Unity MonoBehaviour"
+participant Service as "HsBaSlicerService"
+participant Native as "HsBaSlicerNative"
+participant DLL as "DllHsBaSlicer"
+participant Pipeline as "FDM 流水线"
+Mono->>Service : "SliceFdmAsync(modelPath, onProgress)"
+Service->>Native : "HsBaCreateDefaultConfig()"
+Service->>Native : "HsBaRunFdmPipelineAsync(config, progressCb, resultCb)"
+Native->>DLL : "HsBaRunFdmPipelineAsync(...)"
+DLL->>Pipeline : "开始异步切片"
+Pipeline-->>DLL : "进度回调 ProgressCallback"
+DLL-->>Native : "ProgressCallback(percent, stage, userData)"
+Native-->>Service : "ProgressCallback 委托"
+Service->>Mono : "UnityMainThread.Post(onProgress)"
+Pipeline-->>DLL : "完成 ResultCallback"
+DLL-->>Native : "ResultCallback(result, userData)"
+Native-->>Service : "ResultCallback 委托"
+Service->>Native : "HsBaFreePipelineResult(ref result)"
+Service->>Mono : "UnityMainThread.Post(SetResult)"
 ```
 
-图表来源
-- [游戏引擎集成指南（英文）:21-123](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L21-L123)
-- [游戏引擎集成指南（中文）:21-123](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L21-L123)
-- [初始化接口头：initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
+**图表来源**
+- [game_engine_integration.md（英文）:146-182](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L146-L182)
+- [fdm_pipeline.h:37-51](file://DllHsBaSlicer/fdm_pipeline.h#L37-L51)
 
 ## 详细组件分析
 
-### C# P/Invoke 绑定声明
-- 结构体定义
-  - 使用 Sequential 布局，字段顺序与 pipeline_types.h 保持一致。
-  - const char* 映射为 IntPtr，枚举映射为 int。
-- 回调委托
-  - ProgressCallback：进度回调，参数为百分比、阶段名指针、用户数据指针。
-  - ResultCallback：结果回调，参数为结果结构体、用户数据指针。
-- 导出函数
-  - initialize：初始化 DLL。
-  - HsBaCreateDefaultConfig：创建默认配置。
-  - HsBaRunFdmPipeline：同步执行 FDM 流水线。
-  - HsBaRunFdmPipelineAsync：异步执行 FDM 流水线。
-  - HsBaFreePipelineResult：释放流水线结果中的非托管内存。
-  - Lua 扩展函数注册相关接口：HsBaAdd2DFunction、HsBaAdd3DFunction、HsBaAddFileFunction、HsBaAddEventCallback。
+### C# 绑定类：HsBaSlicerNative
+职责：
+- 定义平台相关的库名常量；
+- 映射原生结构体与委托；
+- 暴露 DllImport 函数供上层调用。
 
-章节来源
-- [游戏引擎集成指南（英文）:21-123](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L21-L123)
-- [游戏引擎集成指南（中文）:21-123](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L21-L123)
+关键点：
+- iOS 使用 `"__Internal"` 加载静态库；
+- 结构体使用 `[StructLayout(LayoutKind.Sequential)]` 保证内存布局一致；
+- 委托使用 `[UnmanagedFunctionPointer(CallingConvention.Cdecl)]` 匹配 C 调用约定。
 
-### 异步调用封装与主线程回调
-- 高层服务类负责：
-  - 持有委托引用，防止 GC 回收导致原生回调崩溃。
-  - 将 UTF-8 字符串转换为非托管内存，并在调用结束后释放。
-  - 在 ProgressCallback 中将回调调度到 Unity 主线程。
-  - 在 ResultCallback 中复制结果字符串，调用 HsBaFreePipelineResult 释放原生内存，再回传 Task 结果。
+**章节来源**
+- [game_engine_integration.md（英文）:30-123](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L30-L123)
+- [game_engine_integration.md（中文）:30-123](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L30-L123)
+
+### 高层封装：HsBaSlicerService
+职责：
+- 封装异步切片调用；
+- 管理 UTF-8 字符串的非托管内存；
+- 持有委托引用防止 GC 回收；
+- 将原生回调调度回 Unity 主线程。
+
+关键流程：
+1. 调用 `HsBaCreateDefaultConfig` 获取默认配置；
+2. 使用 `Marshal.StringToCoTaskMemUTF8` 分配 UTF-8 字符串；
+3. 设置 `model_name`、`model_path`；
+4. 注册进度回调与结果回调；
+5. 调用 `HsBaRunFdmPipelineAsync`；
+6. 在结果回调中复制字符串、释放原生内存、释放 UTF-8 字符串；
+7. 通过主线程调度更新 UI 或完成任务。
 
 ```mermaid
 flowchart TD
-Start(["开始 SliceFdmAsync"]) --> CreateCfg["创建默认配置<br/>设置 model_name/model_path"]
-CreateCfg --> SetDelegates["设置 s_progress 与 s_result<br/>保持委托引用存活"]
-SetDelegates --> CallAsync["调用 HsBaRunFdmPipelineAsync"]
-CallAsync --> NativeWork["原生工作线程执行流水线"]
-NativeWork --> OnProgress["ProgressCallback<br/>拷贝阶段名并 Post 到主线程"]
-NativeWork --> OnResult["ResultCallback<br/>拷贝结果并释放原生内存"]
-OnProgress --> MainThread["Unity 主线程更新 UI"]
-OnResult --> FreeMem["释放 namePtr/pathPtr<br/>Post 到主线程 SetResult"]
-MainThread --> End(["结束"])
-FreeMem --> End
+Start(["开始 SliceFdmAsync"]) --> CreateCfg["创建默认配置"]
+CreateCfg --> AllocStrings["分配 UTF-8 字符串内存"]
+AllocStrings --> SetFields["设置 model_name / model_path"]
+SetFields --> RegisterCallbacks["注册进度与结果回调"]
+RegisterCallbacks --> RunAsync["调用 HsBaRunFdmPipelineAsync"]
+RunAsync --> ProgressCB{"收到进度回调?"}
+ProgressCB --> |是| PostProgress["主线程调度 onProgress"]
+ProgressCB --> |否| WaitResult["等待结果回调"]
+PostProgress --> WaitResult
+WaitResult --> ResultCB["处理结果回调"]
+ResultCB --> CopyStrings["复制 gcode_content / error_message"]
+CopyStrings --> FreeNative["调用 HsBaFreePipelineResult"]
+FreeNative --> FreeManaged["释放 UTF-8 字符串内存"]
+FreeManaged --> PostResult["主线程调度 SetResult"]
+PostResult --> End(["结束"])
 ```
 
-图表来源
-- [游戏引擎集成指南（英文）:128-184](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L128-L184)
-- [游戏引擎集成指南（中文）:128-182](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L128-L182)
+**图表来源**
+- [game_engine_integration.md（英文）:146-182](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L146-L182)
+- [game_engine_integration.md（中文）:145-180](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L145-L180)
 
-章节来源
-- [游戏引擎集成指南（英文）:128-184](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L128-L184)
-- [游戏引擎集成指南（中文）:128-182](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L128-L182)
+**章节来源**
+- [game_engine_integration.md（英文）:146-182](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L146-L182)
+- [game_engine_integration.md（中文）:145-180](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L145-L180)
 
-### 字符串编码转换与内存管理
-- 字符串编码
-  - C# 侧使用 Marshal.StringToCoTaskMemUTF8 将托管字符串转为 UTF-8 非托管内存。
-  - 读取阶段名或结果时，使用 Marshal.PtrToStringUTF8 进行解码。
-- 内存管理
-  - 配置结构体中的字符串指针仅在调用期间被读取，可在异步调用返回后释放。
-  - 结果结构体中的字符串需先拷贝到托管字符串，再调用 HsBaFreePipelineResult 释放原生内存。
-  - 版本信息查询返回的字符串需通过 HsBaFreeVersionString 释放。
+### MonoBehaviour 使用示例
+典型用法：
+- 在 `Start` 中调用 `HsBaSlicerService.Init()`；
+- 调用 `SliceFdmAsync` 并传入模型路径与进度回调；
+- 在回调中更新 UI 或记录日志。
 
-章节来源
-- [游戏引擎集成指南（英文）:146-181](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L146-L181)
-- [游戏引擎集成指南（中文）:145-181](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L145-L181)
-- [版本信息头：version_info.h:16-41](file://DllHsBaSlicer/version_info.h#L16-L41)
+注意：
+- 不要直接在原生回调中操作 `UnityEngine.Object`；
+- 使用主线程调度机制（如 `UnityMainThread.Post`）更新 UI。
 
-### 委托生命周期管理
-- 关键风险
-  - 若委托被 GC 回收，原生回调会访问无效地址，导致崩溃。
-- 解决方案
-  - 在高层服务类中以静态字段保存 ProgressCallback 与 ResultCallback 引用。
-  - 确保委托在整个异步任务生命周期内不被销毁。
-
-章节来源
-- [游戏引擎集成指南（英文）:139-143](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L139-L143)
-- [游戏引擎集成指南（中文）:139-143](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L139-L143)
-
-### 不同平台的库文件放置与 IL2CPP 兼容性
-- 库产物
-  - Windows：DllHsBaSlicer.dll + .lib 导入库。
-  - Linux：libDllHsBaSlicer.so。
-  - macOS：libDllHsBaSlicer.dylib。
-  - Android：libDllHsBaSlicer.so（经 JNI 调用）。
-  - iOS：libDllHsBaSlicer.a（静态库，iOS 禁止加载任意 dylib）。
-- Unity 放置位置
-  - Windows x64：Assets/Plugins/x86_64/。
-  - Linux：Assets/Plugins/x86_64/。
-  - macOS：Assets/Plugins/。
-  - Android：Assets/Plugins/Android/libs/<abi>/。
-  - iOS：Assets/Plugins/iOS/。
-- IL2CPP 兼容性
-  - iOS 使用静态库，C# 侧 DllImport 必须写 "__Internal"。
-  - 其他平台使用共享库，C# 侧 DllImport 写 "DllHsBaSlicer"。
-
-章节来源
-- [DllHsBaSlicer/README（英文）:21-31](file://docs/en/DllHsBaSlicer/README.md#L21-L31)
-- [DllHsBaSlicer/README（中文）:21-31](file://docs/zh/DllHsBaSlicer/README.md#L21-L31)
-- [游戏引擎集成指南（英文）:21-36](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L21-L36)
-- [游戏引擎集成指南（中文）:7-18](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L7-L18)
-
-### MonoBehaviour 使用示例与进度回调处理
-- 推荐模式
-  - 在 MonoBehaviour 中调用 HsBaSlicerService.SliceFdmAsync。
-  - 通过 Action<int, string> onProgress 接收进度回调。
-  - 在回调中使用 UnityMainThread.Post 确保在主线程更新 UI。
-- 注意要点
-  - 避免在子线程直接访问 Unity API。
-  - 在任务完成后清理资源，避免长时间持有大对象。
-
-章节来源
-- [游戏引擎集成指南（英文）:146-181](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L146-L181)
-- [游戏引擎集成指南（中文）:145-181](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L145-L181)
+**章节来源**
+- [game_engine_integration.md（英文）:186-204](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L186-L204)
+- [game_engine_integration.md（中文）:184-202](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L184-L202)
 
 ## 依赖关系分析
-DllHsBaSlicer 仅允许调用 LibHsBaSlicer 的导出接口，不直接触碰更底层模块，保证 ABI 边界清晰。构建产物与链接依赖如下：
+C# 绑定依赖原生导出的 FDM 流水线接口，而原生接口又依赖统一的类型定义。
 
 ```mermaid
 graph LR
-Dll["DllHsBaSlicer"] --> Lib["LibHsBaSlicer"]
-Dll --> Types["HsBaPipelineTypes"]
-Dll --> Base["HsBaSlicerBase"]
-Dll --> Utils["HsBaSlicerUtils"]
-Dll --> Mesh["HsBaSlicerMesh"]
-Dll --> TwoD["HsBaSlicer2D"]
-Dll --> Preprocess["HsBaPreprocess"]
-Dll --> Support["HsBaSupport"]
-Dll --> Paths["HsBaPaths"]
-Dll --> FileOp["HsBaSlicerFileOperator"]
-Dll --> Version["HsBaVersion"]
-Dll --> Converter["HsBaSlicerConverter"]
-Dll --> Proto["HsBaSlicerProto"]
+CS_Native["C# HsBaSlicerNative"] --> FDM_H["fdm_pipeline.h"]
+FDM_H --> TYPES["pipeline_types.h"]
+CS_Service["C# HsBaSlicerService"] --> CS_Native
+CS_Mono["Unity MonoBehaviour"] --> CS_Service
 ```
 
-图表来源
-- [DllHsBaSlicer/CMakeLists.txt:82-100](file://DllHsBaSlicer/CMakeLists.txt#L82-L100)
-- [游戏引擎集成指南（英文）:9-19](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L9-L19)
-- [游戏引擎集成指南（中文）:9-19](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L9-L19)
+**图表来源**
+- [fdm_pipeline.h:1-10](file://DllHsBaSlicer/fdm_pipeline.h#L1-L10)
+- [pipeline_types.h:1-12](file://pipelinetypes/pipeline_types.h#L1-L12)
 
-章节来源
-- [DllHsBaSlicer/CMakeLists.txt:82-100](file://DllHsBaSlicer/CMakeLists.txt#L82-L100)
+**章节来源**
+- [fdm_pipeline.h:1-10](file://DllHsBaSlicer/fdm_pipeline.h#L1-L10)
+- [pipeline_types.h:1-12](file://pipelinetypes/pipeline_types.h#L1-L12)
 
-## 性能与 IL2CPP 注意事项
-- 减少跨边界拷贝
-  - 尽量批量处理结果，避免频繁在 C# 与 C++ 之间复制大字符串。
-- 控制并发度
-  - 根据设备性能限制并行切片任务数量，避免阻塞主线程或耗尽 CPU。
-- IL2CPP 编译
-  - iOS 静态库模式需确保 "__Internal" 正确配置。
-  - 避免在 IL2CPP 下使用反射访问未导出的符号。
-- 内存泄漏防护
-  - 每次调用 HsBaFreePipelineResult 前确保已拷贝所需数据。
-  - 对 HsBaGetVersionJson/HsBaGetVersionXml 返回的字符串及时释放。
+## 性能与内存注意事项
+- **委托生命周期**：传给原生的委托必须保存为静态或成员变量，避免被 GC 回收导致崩溃；
+- **主线程调度**：原生回调不在 Unity 主线程，需通过主线程队列更新 UI；
+- **UTF-8 字符串**：使用 `Marshal.StringToCoTaskMemUTF8` 分配，`Marshal.PtrToStringUTF8` 读取，`Marshal.FreeCoTaskMem` 释放；
+- **IL2CPP 兼容性**：结构体按值传递在 IL2CPP 下正常工作，但必须保持 `LayoutKind.Sequential` 且字段类型严格匹配；
+- **结果释放**：每次调用 `HsBaRunFdmPipeline` 或 `HsBaRunFdmPipelineAsync` 后，必须在结果回调中调用 `HsBaFreePipelineResult`。
 
-[本节为通用指导，不直接分析具体文件]
+**章节来源**
+- [game_engine_integration.md（英文）:206-212](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L206-L212)
+- [game_engine_integration.md（中文）:204-210](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L204-L210)
+- [fdm_pipeline.h:53-61](file://DllHsBaSlicer/fdm_pipeline.h#L53-L61)
 
-## Unity 集成步骤
-- 准备库文件
-  - 根据目标平台将对应的 DllHsBaSlicer 库文件放入 Unity Assets/Plugins 相应目录。
-- 编写 C# 绑定
-  - 定义结构体、委托与 DllImport 函数。
-  - iOS 平台使用 "__Internal"，其他平台使用 "DllHsBaSlicer"。
-- 实现高层服务
-  - 封装异步调用、进度回调与结果释放逻辑。
-  - 使用 TaskCompletionSource 返回统一的任务接口。
-- 在 MonoBehaviour 中调用
-  - 初始化服务，发起切片任务，订阅进度回调。
-  - 在主线程更新 UI，显示进度与结果。
+## 故障排除指南
+常见问题与处理方法：
+- `DllNotFoundException`：检查插件是否放在正确目录，Inspector 中是否勾选当前平台；编辑器与真机目录不同；
+- 回调后 Unity 崩溃：委托被 GC 回收，需保存强引用；
+- iOS 链接失败：必须使用静态库 `.a` 且 `DllImport("__Internal")`，不能加载 dylib；
+- 结构体字段错位或随机崩溃：P/Invoke 结构体字段顺序或类型与 `pipeline_types.h` 不一致；
+- UE 打包后找不到 DLL：未配置 `RuntimeDependencies`，检查 Binaries 目录。
 
-章节来源
-- [游戏引擎集成指南（英文）:21-184](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L21-L184)
-- [游戏引擎集成指南（中文）:7-182](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L7-L182)
-
-## 常见问题排查
-- DllNotFoundException
-  - 检查库文件是否放置在正确的平台目录。
-  - iOS 平台确认使用 "__Internal" 而非 "DllHsBaSlicer"。
-- 委托 GC 回收
-  - 确保在高层服务类中保存委托引用，避免被垃圾回收。
-- 主线程访问限制
-  - 在 ProgressCallback 中通过 UnityMainThread.Post 调度到主线程。
-- 内存泄漏
-  - 确保调用 HsBaFreePipelineResult 释放结果中的非托管内存。
-  - 对 HsBaGetVersionJson/HsBaGetVersionXml 返回的字符串调用 HsBaFreeVersionString。
-- 字符串乱码
-  - 确保 C# 侧使用 UTF-8 编解码，避免本地编码不一致。
-
-章节来源
-- [游戏引擎集成指南（英文）:139-181](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L139-L181)
-- [游戏引擎集成指南（中文）:139-181](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L139-L181)
-- [版本信息头：version_info.h:16-41](file://DllHsBaSlicer/version_info.h#L16-L41)
+**章节来源**
+- [game_engine_integration.md（英文）:453-462](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L453-L462)
+- [game_engine_integration.md（中文）:451-460](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L451-L460)
 
 ## 结论
-通过在 Unity 中正确使用 C# P/Invoke 绑定 DllHsBaSlicer 的 C ABI 接口，并结合高层异步封装与主线程回调机制，可以稳定地调用 HsBaSlicer 的切片流水线。遵循本文的平台库放置、IL2CPP 兼容性、字符串编码与内存管理规范，能有效避免常见错误并提升整体性能。建议在项目中引入统一的 HsBaSlicerService 抽象，集中管理初始化、任务调度与资源释放，从而简化 MonoBehaviour 的使用复杂度。
+在 Unity 中集成 HsBaSlicer 的关键在于正确声明 C# 绑定、遵循平台库放置规则、管理委托生命周期与主线程调度，并严格匹配原生类型定义。通过 `HsBaSlicerService` 的异步封装，开发者可以安全地从 MonoBehaviour 调用切片流水线，并在原生回调中更新 UI。遇到问题时，优先检查库路径、委托保活、UTF-8 内存释放与结构体对齐。
+
+## 附录：平台库放置与 API 对照表
+
+### 平台库放置
+| 平台 | 产物 | Unity 放置位置 |
+| --- | --- | --- |
+| Windows x64 | `DllHsBaSlicer.dll` | `Assets/Plugins/x86_64/` |
+| Linux | `libDllHsBaSlicer.so` | `Assets/Plugins/x86_64/` |
+| macOS | `libDllHsBaSlicer.dylib` | `Assets/Plugins/` |
+| Android | `libDllHsBaSlicer.so` | `Assets/Plugins/Android/libs/<abi>/` |
+| iOS | `libDllHsBaSlicer.a`（静态库） | `Assets/Plugins/iOS/` |
+
+**章节来源**
+- [game_engine_integration.md（英文）:7-17](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L7-L17)
+- [game_engine_integration.md（中文）:7-17](file://docs/zh/DllHsBaSlicer/game_engine_integration.md#L7-L17)
+
+### FDM API 对照
+| 功能 | C# 方法 | 原生函数 |
+| --- | --- | --- |
+| 初始化 | `initialize()` | `initialize()` |
+| 创建默认配置 | `HsBaCreateDefaultConfig()` | `HsBaCreateDefaultConfig()` |
+| 同步运行 | `HsBaRunFdmPipeline(...)` | `HsBaRunFdmPipeline(...)` |
+| 异步运行 | `HsBaRunFdmPipelineAsync(...)` | `HsBaRunFdmPipelineAsync(...)` |
+| 释放结果 | `HsBaFreePipelineResult(...)` | `HsBaFreePipelineResult(...)` |
+
+**章节来源**
+- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
+- [initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)

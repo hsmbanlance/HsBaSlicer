@@ -1,0 +1,4 @@
+- Each capability is exposed as a stateless class in namespace `HsBa::Slicer::Cipher` whose members are all `static` functions operating on `std::vector<unsigned char>` and `std::string_view`.
+- Overloaded convenience wrappers accepting `std::string_view` are provided as `inline static` helpers that delegate to the core `std::vector<unsigned char>` overload by constructing a temporary vector.
+- Public headers use Doxygen-style `@file` / `@brief` / `@class` comments followed by `#pragma once` guards.
+- Algorithm constants (key sizes, IV sizes, default RSA bits) are declared as `inline constexpr size_t` at the top of the header rather than magic numbers.

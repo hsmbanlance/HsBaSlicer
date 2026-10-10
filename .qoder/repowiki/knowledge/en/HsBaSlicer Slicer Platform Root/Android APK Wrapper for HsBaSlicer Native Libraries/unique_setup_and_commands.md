@@ -1,0 +1,1 @@
+Native libraries must be built separately via CMake (see `README.md`) and copied into `android/app/src/main/jniLibs/arm64-v8a/` before opening the project in Android Studio or running `./gradlew assembleDebug`.

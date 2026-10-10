@@ -1,0 +1,1 @@
+CMake helper modules and scripts that generate version info, package the HsBaSlicer install config, drive coverage gates, format code, and run static analysis.

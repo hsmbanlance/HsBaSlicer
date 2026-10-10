@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: base
-title: HsBaSlicer 基础库（HsBaSlicerBase）
-scope:
-    - base/
-source_files: []
-depends_on: []
-related_to: []

@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: dll_export_layer/model_preprocess_layer
+title: 模型预处理与自定义流水线 C ABI 层
+scope:
+    - DllHsBaSlicer/model_preprocess.cpp
+    - DllHsBaSlicer/model_preprocess.h
+    - DllHsBaSlicer/custom_pipeline.cpp
+source_files: []
+depends_on: []
+related_to:
+    - path: preprocess
+    - path: samples

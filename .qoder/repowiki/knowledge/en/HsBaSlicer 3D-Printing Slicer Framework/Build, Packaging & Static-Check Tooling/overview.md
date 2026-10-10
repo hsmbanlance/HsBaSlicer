@@ -1,1 +1,0 @@
-CMake helpers and Python utilities that configure HsBaSlicer builds, enforce coverage thresholds, run static analysis / formatting, and publish documentation to GitHub Wiki.

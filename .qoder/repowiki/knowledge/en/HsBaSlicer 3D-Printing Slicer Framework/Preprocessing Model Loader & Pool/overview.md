@@ -1,1 +1,0 @@
-Unified model loader that dispatches files to IglModel, OcctModel, or OpenVdbModel kernels and manages a named, capacity-limited pool of loaded models.

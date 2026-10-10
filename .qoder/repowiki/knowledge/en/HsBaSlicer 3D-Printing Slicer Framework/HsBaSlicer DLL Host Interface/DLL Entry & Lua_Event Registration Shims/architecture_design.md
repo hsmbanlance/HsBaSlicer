@@ -1,5 +1,0 @@
-Three small translation units form the DLL's outward-facing registration surface:
-- `initialize.cpp` exposes a single `HSBA_SLICER_API void initialize()` entry point (currently empty, reserved for one-time runtime setup).
-- `lua_register.cpp` wraps `HsBa::Slicer::Add2DFunctions`, `Add3DFunctions`, `AddFileFunctions`, and `AddEventCallback` behind `extern "C"` symbols (`HsBaAdd2DFunction`, `HsBaAdd3DFunction`, `HsBaAddFileFunction`, `HsBaAddEventCallback`) so the host can plug in Lua bindings.
-- `event_source_register.cpp` provides non-exported helpers `HsBaAddZipperEventCallback` and `HsBaAddDBEventCallback` that translate between the host's raw C function pointers and the library's typed lambdas, filtering by event name (`zipper.on_add`, `db.on_query`).
-Dependency direction is strictly inward: this module depends on `LibHsBaSlicer/Extends/LuaAddFunction.hpp` and `EventSourceFunction.hpp` but exposes no internal types — only C ABI symbols consumed by the host. The `initialize.h` header defines the exported `initialize` symbol used as the DLL's initialization hook.

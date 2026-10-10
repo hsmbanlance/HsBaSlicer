@@ -1,0 +1,1 @@
+C ABI boundary and one-time bootstrap for the HsBaSlicer shared library, exposing initialization, event-source registration, and version queries to C#/Java/Python consumers.

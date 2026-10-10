@@ -1,1 +1,0 @@
-Defines the C-compatible pipeline configuration/result structs and enums for every HSBA slicer technology, plus the protobuf schema used to serialize those configs across language boundaries.

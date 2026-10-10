@@ -1,0 +1,1 @@
+Google Protocol Buffers v3 (`syntax = "proto3"`); code generation via `protoc` invoked from CMake (`--cpp_out`, `--csharp_out`, `--java_out`, `--python_out`, `--php_out`).

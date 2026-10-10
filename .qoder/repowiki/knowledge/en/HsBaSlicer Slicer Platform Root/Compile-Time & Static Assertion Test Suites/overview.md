@@ -1,0 +1,1 @@
+Compile-only test suites that validate constexpr, template, coroutine, reflection, and serialization facilities of the base/utils layers via static_assert and compile-time checks.

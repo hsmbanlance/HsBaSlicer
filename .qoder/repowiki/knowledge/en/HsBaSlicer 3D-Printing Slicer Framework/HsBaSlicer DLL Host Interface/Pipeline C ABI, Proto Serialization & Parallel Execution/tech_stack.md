@@ -1,1 +1,0 @@
-C ABI over C++ with protobuf wire-format serialization; C++20 coroutines used for the async custom-pipeline entry point; `std::future`/`std::thread` backed by an internal `base::ThreadPool` for layer-level parallelism.

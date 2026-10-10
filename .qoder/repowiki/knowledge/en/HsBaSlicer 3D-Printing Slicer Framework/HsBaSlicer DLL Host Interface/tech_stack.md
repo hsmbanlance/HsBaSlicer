@@ -1,1 +1,0 @@
-C ABI over Rust-backed HsBaSlicer/LibHsBaSlicer, with protobuf-based message passing between the DLL and its host; header-only parallel-for loop used across all pipeline hot paths.

@@ -1,5 +1,0 @@
-- Every path class implements the full `IPath` surface: virtual destructor, `Save(path)` plus four Save overloads (inline script, inline script + funcName, script file + funcName), and matching `ToString` overloads.
-- Lua integration is uniformly exposed through optional parameters — a script string/file and a `const std::function<void(lua_State*)>& lua_reg = {}` callback — rather than separate methods.
-- Headers use `#pragma once` together with a `HSBA_SLICER_<NAME>__HPP` include guard, and forward-declare `struct lua_State` instead of including `lua.hpp`.
-- Brand/format dispatch is done via `enum class` values (e.g. `RLType` for ABB/KUKA/FANUC, `GCodeFirmware` for Marlin/RepRap/Klipper) driving private `Generate*` helper methods.
-- Public mutation APIs append data through `push_back` / `AddImage` / `setContinuousWall` while keeping internal storage private, exposing only read accessors like `operator[]` or getters.

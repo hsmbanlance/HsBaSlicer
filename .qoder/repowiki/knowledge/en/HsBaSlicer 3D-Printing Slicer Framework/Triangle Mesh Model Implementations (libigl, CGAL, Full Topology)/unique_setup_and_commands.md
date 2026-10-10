@@ -1,1 +1,0 @@
-The CGAL-backed `CgalModel` is excluded from the build unless the CMake option `HSBA_COPL` is enabled, because CGAL is copyleft; without it the library compiles only `IglModel` + `FullTopoModel`.

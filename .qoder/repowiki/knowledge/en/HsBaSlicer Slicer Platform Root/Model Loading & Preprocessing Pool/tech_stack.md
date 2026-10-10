@@ -1,0 +1,1 @@
+C++ with Eigen/Core (conditionally included when CGAL/OpenVDB is enabled); optional OCCT for BRep/Boolean operations and OpenVDB for point-cloud processing, both disabled at build time on mobile/console targets.

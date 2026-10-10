@@ -1,5 +1,0 @@
-- Type-specific Lua adapters follow a CRTP chain: a base interface (`LuaAnyObjectNewCastBase`) is implemented by an abstract helper (`LuaAnyObjectNewCastAbstract<Derived>`) which is then specialized per native type via `LuaAnyObjectNewCastImpl<T, "typename">`, each pair producing `new_<type>` and `cast_<type>` registration entries.
-- All Lua-bound C functions validate their userdata argument via `lua_topointer`, push an error string with `std::format`, and call `lua_error` rather than returning normally on invalid input.
-- Serialization dispatch is driven by C++20 concepts (`Aggregte`, `Reflectable`, `RapidJsonValueConvertible`, `OptionalLike`) with `if constexpr` chains selecting between Boost.PFR field iteration, StaticReflect iteration, and primitive/string handling.
-- Public APIs throw domain exceptions from `base/error.hpp` (`RuntimeError`, `InvalidArgumentError`, `IOError`) instead of using return codes or optional values for error paths.
-- Header-only algorithmic code is organized into nested namespaces (`graph::concepts`, `graph::detail`, `graph::algorithm`) separating traits, storage helpers, and public algorithms.

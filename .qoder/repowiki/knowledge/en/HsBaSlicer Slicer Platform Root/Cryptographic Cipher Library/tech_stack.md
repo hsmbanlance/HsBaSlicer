@@ -1,0 +1,1 @@
+OpenSSL for AES/3DES/RSA and MD5/SHA1/SHA256; Lua C API for scripting integration; built as a CMake STATIC library linked against `OpenSSL::SSL`, `OpenSSL::Crypto`, `${LUA_LIBRARIES}`, and `HsBaSlicerBase`.

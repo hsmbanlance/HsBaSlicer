@@ -1,0 +1,1 @@
+Pure C++ with `static_assert` and `constexpr` as the assertion mechanism; optional coroutine tests gated by `__cpp_lib_coroutine && __cpp_impl_coroutine`; uses `magic_enum::customize::enum_range` for enum metadata and `std::any`-based `AnyObject` introspection.

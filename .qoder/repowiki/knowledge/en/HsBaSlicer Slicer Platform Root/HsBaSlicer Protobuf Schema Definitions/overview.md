@@ -1,0 +1,1 @@
+Protocol buffer definitions for HsBaSlicer's cross-language serialization of geometry, slice configuration, and per-technology pipeline configs/results.

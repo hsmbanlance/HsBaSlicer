@@ -1,0 +1,1 @@
+C++17 with `<filesystem>`; Lua scripting engine (header via `${LUA_INCLUDE_DIR}`, runtime via `${LUA_LIBRARIES}`) used as an optional post-processing step for every Save/ToString overload.

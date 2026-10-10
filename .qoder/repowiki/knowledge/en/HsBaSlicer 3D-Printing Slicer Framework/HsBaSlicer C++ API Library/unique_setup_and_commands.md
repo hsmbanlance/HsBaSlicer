@@ -1,1 +1,0 @@
-Build as either static or shared via the standard `BUILD_SHARED_LIBS` CMake flag. Optional features are gated by CMake defines: `HSBA_COPL` enables OCCT/CAD linking (disabled on Android/iOS/game consoles); `USE_CGAL` exposes the advanced boolean/thick-solid APIs in `model_preprocess.hpp`.

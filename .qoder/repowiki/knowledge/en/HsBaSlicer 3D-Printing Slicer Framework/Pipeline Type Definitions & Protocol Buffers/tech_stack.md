@@ -1,1 +1,0 @@
-Protocol Buffers proto3 (`protobuf::libprotobuf`) for cross-language serialization; C++17 `static inline` functions for zero-dependency default initializers; C ABI (`extern "C"`) for the public struct layout.

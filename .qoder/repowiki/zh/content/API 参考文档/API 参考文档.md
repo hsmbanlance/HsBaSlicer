@@ -4,17 +4,14 @@
 **本文引用的文件**   
 - [README.md](file://README.md)
 - [dllexport.h](file://DllHsBaSlicer/dllexport.h)
+- [export.h](file://LibHsBaSlicer/export.h)
 - [initialize.h](file://DllHsBaSlicer/initialize.h)
 - [version_info.h](file://DllHsBaSlicer/version_info.h)
 - [fdm_pipeline.h](file://DllHsBaSlicer/fdm_pipeline.h)
 - [sla_pipeline.h](file://DllHsBaSlicer/sla_pipeline.h)
-- [sls_pipeline.h](file://DllHsBaSlicer/sls_pipeline.h)
-- [slm_pipeline.h](file://DllHsBaSlicer/slm_pipeline.h)
-- [lom_pipeline.h](file://DllHsBaSlicer/lom_pipeline.h)
-- [tdp_pipeline.h](file://DllHsBaSlicer/tdp_pipeline.h)
-- [export.h](file://LibHsBaSlicer/export.h)
-- [version_info.hpp](file://LibHsBaSlicer/version_info.hpp)
-- [hsba_slicer.cppm](file://ModuleHsBaSlicer/hsba_slicer.cppm)
+- [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
+- [base_config.proto](file://proto/base_config.proto)
+- [fdm_pipeline.proto](file://proto/fdm_pipeline.proto)
 </cite>
 
 ## 目录
@@ -25,370 +22,459 @@
 5. [详细组件分析](#详细组件分析)
 6. [依赖关系分析](#依赖关系分析)
 7. [性能与线程安全](#性能与线程安全)
-8. [故障排查指南](#故障排查指南)
+8. [故障排除指南](#故障排除指南)
 9. [结论](#结论)
-10. [附录：迁移与集成指南](#附录迁移与集成指南)
+10. [附录：API 速查表](#附录api-速查表)
 
 ## 简介
-本文件为 HsBaSlicer 的完整 API 参考，覆盖三类接口：
-- C ABI 接口（动态库 DllHsBaSlicer）：面向外部语言（Java/C#/Python 等）的稳定 ABI。
-- C++ API（静态/共享库 LibHsBaSlicer）：面向 C++ 开发者的全流程切片能力封装。
-- C++20 模块接口（ModuleHsBaSlicer）：基于 hsba.slicer 模块的现代 C++ 类式 API。
+本 API 参考文档面向集成开发者，覆盖 HsBaSlicer 的 C ABI、C++ 库导出宏、Protobuf 消息定义以及 Lua 脚本扩展点。文档按功能模块组织，包含函数签名、参数说明、返回值、错误处理、线程安全性、性能特征与版本兼容性信息，并提供可操作的代码示例路径与最佳实践。
 
-目标读者包括后端开发者、跨语言集成工程师以及需要高性能切片能力的研究者与生产环境用户。
+- 动态库 DllHsBaSlicer 提供 C ABI，供外部语言（Java/C#/Python 等）调用。
+- 静态库 LibHsBaSlicer 暴露 C++ 全流程切片能力封装。
+- Protobuf 定义位于 proto 目录，用于跨语言配置与结果序列化。
+- Lua 脚本系统通过全局 HsBa 表暴露流水线构建块，支持自定义填充、支撑、层板与导出逻辑。
+
+**章节来源**
+- [README.md:100-150](file://README.md#L100-L150)
 
 ## 项目结构
-HsBaSlicer 提供三种对外暴露方式：
-- DllHsBaSlicer：导出 C ABI，包含初始化、版本查询与各工艺流水线（FDM/SLA/SLS/SLM/LOM/TDP/WAAM 等）。
-- LibHsBaSlicer：C++ 全流程封装，提供模型加载、切片、支撑、填充、路径生成、打包等函数。
-- ModuleHsBaSlicer：C++20 module，以类式 API 包装 LibHsBaSlicer，提供更易用的现代 C++ 体验。
+HsBaSlicer 采用模块化设计，主要对外接口集中在以下位置：
+- DllHsBaSlicer：C ABI 导出头与实现，包括初始化、版本查询、FDM/SLA 流水线入口。
+- pipelinetypes：纯 C 兼容的结构体与枚举，描述所有流水线配置与结果。
+- proto：Protobuf 消息定义，对应各技术栈的配置与结果。
+- LibHsBaSlicer：C++ 库导出宏与内部模块头（如 Slice、Preprocess、Support、Fill、Path、Floor）。
 
 ```mermaid
 graph TB
 subgraph "对外接口"
 DLL["DllHsBaSlicer<br/>C ABI"]
-LIB["LibHsBaSlicer<br/>C++ API"]
-MOD["ModuleHsBaSlicer<br/>C++20 模块"]
+LIB["LibHsBaSlicer<br/>C++ 库"]
+PROTO["Proto<br/>消息定义"]
 end
-subgraph "核心能力"
-PRE["预处理/模型加载"]
-SLICE["切片"]
-SUP["支撑"]
-FIL["填充"]
-PATH["路径生成/输出"]
-PKG["打包/传输"]
+subgraph "运行时"
+INIT["initialize()"]
+FDM["FDM 流水线"]
+SLA["SLA 流水线"]
+VER["版本查询"]
 end
-DLL --> LIB
-MOD --> LIB
-LIB --> PRE
-LIB --> SLICE
-LIB --> SUP
-LIB --> FIL
-LIB --> PATH
-LIB --> PKG
+DLL --> FDM
+DLL --> SLA
+DLL --> VER
+DLL --> INIT
+LIB --> FDM
+LIB --> SLA
+PROTO --> FDM
+PROTO --> SLA
 ```
 
-图表来源
-- [README.md:104-124](file://README.md#L104-L124)
-- [dll.h:1-23](file://DllHsBaSlicer/dllexport.h#L1-L23)
-- [export.h:1-22](file://LibHsBaSlicer/export.h#L1-L22)
-- [hsba_slicer.cppm:1-65](file://ModuleHsBaSlicer/hsba_slicer.cppm#L1-L65)
+**图表来源**
+- [initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
+- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
+- [sla_pipeline.h:17-56](file://DllHsBaSlicer/sla_pipeline.h#L17-L56)
+- [version_info.h:16-41](file://DllHsBaSlicer/version_info.h#L16-L41)
 
-章节来源
-- [README.md:104-124](file://README.md#L104-L124)
+**章节来源**
+- [README.md:100-150](file://README.md#L100-L150)
 
 ## 核心组件
-本节概述三类接口的职责与适用场景：
-- C ABI（DllHsBaSlicer）
-  - 适用场景：跨语言调用、脚本语言绑定、Android/iOS 原生桥接、游戏引擎集成。
-  - 特点：ABI 稳定、同步/异步执行、回调进度、结果需显式释放。
-- C++ API（LibHsBaSlicer）
-  - 适用场景：C++ 应用直接链接、二次封装、内部工具链。
-  - 特点：函数式 API、返回 std::string 等类型、无需手动释放字符串。
-- C++20 模块（ModuleHsBaSlicer）
-  - 适用场景：现代 C++ 工程、希望使用 RAII 与类式 API。
-  - 特点：类封装（Model/FdmPipeline/SlaPipeline 等）、异常 SlicerError、默认配置工厂函数。
-
-章节来源
-- [README.md:104-124](file://README.md#L104-L124)
-- [hsba_slicer.cppm:65-146](file://ModuleHsBaSlicer/hsba_slicer.cppm#L65-L146)
-
-## 架构总览
-下图展示从入口到各阶段的数据流与控制流。
+本节概述对外 API 的核心组成：
+- C ABI 导出宏：HSBA_SLICER_API（DLL）、HSBA_SLICER_LIB_API（LIB）。
+- 初始化与版本查询：initialize、HsBaGetVersionJson/XML、HsBaFreeVersionString。
+- 流水线类型定义：FDM/SLA/SLS/SLM/LOM/TDP/WAAM/FileTransfer/Custom 的配置与结果结构体。
+- 流水线入口：FDM/SLA 同步与异步运行函数，以及结果释放函数。
 
 ```mermaid
-sequenceDiagram
-participant Caller as "调用方"
-participant DLL as "DllHsBaSlicer(C ABI)"
-participant LIB as "LibHsBaSlicer(C++ API)"
-participant Core as "核心算法(切片/支撑/填充/路径)"
-participant IO as "IO/打包/传输"
-Caller->>DLL : 调用 Run*Pipeline(...)
-DLL->>LIB : 构造配置/转换参数
-LIB->>Core : 预处理 -> 切片 -> 支撑 -> 填充 -> 路径
-Core-->>LIB : 中间数据(层轮廓/路径)
-LIB->>IO : 生成 GCode/图像/ZIP/数据库
-IO-->>LIB : 结果对象
-LIB-->>DLL : 结果对象
-DLL-->>Caller : 返回结果(需释放)
+classDiagram
+class HSBA_SLICER_API {
+<<macro>>
+"Windows 导出/导入标记"
+}
+class HSBA_SLICER_LIB_API {
+<<macro>>
+"C++ 库导出/导入标记"
+}
+class Initialize {
++initialize() void
+}
+class VersionInfo {
++HsBaGetVersionJson() char*
++HsBaGetVersionXml() char*
++HsBaFreeVersionString(str) void
+}
+class PipelineTypes {
+<<structs/enums>>
+"FDM/SLA/SLS/SLM/LOM/TDP/WAAM/FileTransfer/Custom"
+}
+class FDM_API {
++HsBaCreateDefaultConfig() HsBaFdmPipelineConfig_t
++HsBaRunFdmPipeline(config, callback, user_data) HsBaFdmPipelineResult_t
++HsBaRunFdmPipelineAsync(...)
++HsBaFreePipelineResult(result) void
+}
+class SLA_API {
++HsBaCreateDefaultSlaConfig() HsBaSlaPipelineConfig_t
++HsBaRunSlaPipeline(config, callback, user_data) HsBaSlaPipelineResult_t
++HsBaRunSlaPipelineAsync(...)
++HsBaFreeSlaPipelineResult(result) void
+}
+HSBA_SLICER_API <.. FDM_API : "导出"
+HSBA_SLICER_API <.. SLA_API : "导出"
+HSBA_SLICER_LIB_API <.. PipelineTypes : "C++ 使用"
+Initialize --> FDM_API : "初始化后调用"
+VersionInfo --> FDM_API : "版本检查"
 ```
 
-图表来源
+**图表来源**
+- [dllexport.h:9-20](file://DllHsBaSlicer/dllexport.h#L9-L20)
+- [export.h:9-20](file://LibHsBaSlicer/export.h#L9-L20)
+- [initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
+- [version_info.h:16-41](file://DllHsBaSlicer/version_info.h#L16-L41)
 - [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
 - [sla_pipeline.h:17-56](file://DllHsBaSlicer/sla_pipeline.h#L17-L56)
-- [hsba_slicer.cppm:617-751](file://ModuleHsBaSlicer/hsba_slicer.cppm#L617-L751)
+- [pipeline_types.h:23-127](file://pipelinetypes/pipeline_types.h#L23-L127)
 
-## 详细组件分析
-
-### C ABI 接口（DllHsBaSlicer）
-- 公共头文件与宏
-  - dllexport.h：定义 HSBA_SLICER_API 导出宏，Windows 下区分 dllimport/dllexport，非 Windows 无装饰。
-  - initialize.h：提供 initialize()，用于一次性注册 Lua 函数、流水线与运行时设置；可重复调用且幂等。
-  - version_info.h：提供 HsBaGetVersionJson/HsBaGetVersionXml/HsBaFreeVersionString，返回 UTF-8 字符串，必须由调用方释放。
-
-- FDM 流水线（fdm_pipeline.h）
-  - HsBaCreateDefaultConfig：创建默认配置。
-  - HsBaRunFdmPipeline：同步运行，内部使用协程阻塞等待结果；流水线顺序：预处理 -> 切片 -> 支撑 -> 填充 -> 路径生成。
-  - HsBaRunFdmPipelineAsync：异步运行，通过回调返回结果。
-  - HsBaFreePipelineResult：释放 gcode_content 与 error_message 等内部分配内存。
-
-- SLA 流水线（sla_pipeline.h）
-  - HsBaCreateDefaultSlaConfig：创建默认配置。
-  - HsBaRunSlaPipeline：同步运行；流水线顺序：预处理 -> 切片 -> 底板 -> 支撑 -> 导出(zip)。
-  - HsBaRunSlaPipelineAsync：异步运行。
-  - HsBaFreeSlaPipelineResult：释放结果内存。
-
-- SLS/SLM/LOM/TDP 流水线（sls_pipeline.h / slm_pipeline.h / lom_pipeline.h / tdp_pipeline.h）
-  - 统一模式：CreateDefault*Config + Run*Pipeline(同步/异步) + Free*PipelineResult。
-  - 共同点：导出阶段由 Lua 脚本驱动（zip + 数据库），config.export_lua_script 不可为空。
-  - 差异点：工艺参数与语义不同（如 SLM 金属粉末床、LOM 层压制造、TDP 粘结剂喷射）。
-
-- 版本信息（version_info.h）
-  - HsBaGetVersionJson/HsBaGetVersionXml：返回 JSON/XML 字符串。
-  - HsBaFreeVersionString：释放上述函数分配的字符串。
-
-```mermaid
-flowchart TD
-Start(["进入 C ABI 调用"]) --> CreateCfg["创建默认配置"]
-CreateCfg --> RunSync{"同步还是异步?"}
-RunSync --> |同步| ExecSync["执行流水线(阻塞)"]
-RunSync --> |异步| ExecAsync["启动任务(回调)"]
-ExecSync --> BuildRes["构建结果对象"]
-ExecAsync --> Callback["回调中接收结果"]
-BuildRes --> ReturnRes["返回给调用方"]
-Callback --> ReturnRes
-ReturnRes --> FreeRes["调用 Free*PipelineResult 释放"]
-FreeRes --> End(["结束"])
-```
-
-图表来源
-- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
-- [sla_pipeline.h:17-56](file://DllHsBaSlicer/sla_pipeline.h#L17-L56)
-- [sls_pipeline.h:17-56](file://DllHsBaSlicer/sls_pipeline.h#L17-L56)
-- [slm_pipeline.h:17-56](file://DllHsBaSlicer/slm_pipeline.h#L17-L56)
-- [lom_pipeline.h:17-56](file://DllHsBaSlicer/lom_pipeline.h#L17-L56)
-- [tdp_pipeline.h:17-56](file://DllHsBaSlicer/tdp_pipeline.h#L17-L56)
-
-章节来源
+**章节来源**
 - [dllexport.h:1-23](file://DllHsBaSlicer/dllexport.h#L1-L23)
+- [export.h:1-22](file://LibHsBaSlicer/export.h#L1-L22)
 - [initialize.h:1-22](file://DllHsBaSlicer/initialize.h#L1-L22)
 - [version_info.h:1-48](file://DllHsBaSlicer/version_info.h#L1-L48)
 - [fdm_pipeline.h:1-68](file://DllHsBaSlicer/fdm_pipeline.h#L1-L68)
 - [sla_pipeline.h:1-63](file://DllHsBaSlicer/sla_pipeline.h#L1-L63)
-- [sls_pipeline.h:1-63](file://DllHsBaSlicer/sls_pipeline.h#L1-L63)
-- [slm_pipeline.h:1-63](file://DllHsBaSlicer/slm_pipeline.h#L1-L63)
-- [lom_pipeline.h:1-63](file://DllHsBaSlicer/lom_pipeline.h#L1-L63)
-- [tdp_pipeline.h:1-63](file://DllHsBaSlicer/tdp_pipeline.h#L1-L63)
+- [pipeline_types.h:1-127](file://pipelinetypes/pipeline_types.h#L1-L127)
 
-### C++ API（LibHsBaSlicer）
-- 导出宏
-  - export.h：定义 HSBA_SLICER_LIB_API，Windows 下区分 dllimport/dllexport，非 Windows 无装饰。
-
-- 版本信息
-  - version_info.hpp：命名空间 HsBa::Slicer 下提供 GetVersionJson()/GetVersionXml()，返回 std::string。
-
-- 典型能力（在模块层有类式封装，底层对应 Lib 层自由函数）
-  - 模型加载/变换/切片：LoadModel/RemoveModel/TranslateModel/RotateModel/ScaleModel/Slice 等。
-  - 支撑/填充/路径：GenerateAllFdmSupport/LuaCustomSupport/FillWithBorder/GenerateGCodePathV2 等。
-  - 打包/传输：SaveSlaPackage/RenderPolygonsToImage/FileTransfer 相关函数。
-
-说明：LibHsBaSlicer 的具体函数签名较多，模块层已将其封装为类与便捷函数。建议优先使用模块层 API；若需更细粒度控制，可直接链接 LibHsBaSlicer 并调用其自由函数。
-
-章节来源
-- [export.h:1-22](file://LibHsBaSlicer/export.h#L1-L22)
-- [version_info.hpp:1-30](file://LibHsBaSlicer/version_info.hpp#L1-L30)
-- [hsba_slicer.cppm:37-62](file://ModuleHsBaSlicer/hsba_slicer.cppm#L37-L62)
-
-### C++20 模块接口（ModuleHsBaSlicer）
-- 模块声明
-  - hsba_slicer.cppm：module; 全局片段引入标准库与第三方库，随后 export module hsba.slicer; 暴露命名空间 HsBa::Slicer。
-
-- 类型与异常
-  - SlicerError：继承 std::runtime_error，作为所有切片错误的基类。
-  - 重导出常用类型：Point2/Polygon/Polygons、Point2D/PolygonD/PolygonsD、各 PipelineConfig/Result、SupportConfig 等。
-
-- 默认配置工厂
-  - defaultFdmConfig/defaultSlaConfig/defaultSlsConfig/defaultFileTransferConfig/defaultCustomConfig/defaultSlmConfig/defaultLomConfig/defaultTdpConfig/defaultWaamConfig。
-
-- 模型 RAII 包装
-  - Model：构造时加载模型，析构时移除；提供 info/translate/rotate/scale/slice/sliceD/raw/name 等方法。
-
-- 流水线类
-  - FdmPipeline：run(sliceAll/generateSupports/fill/generatePath)，最终生成 GCode。
-  - SlaPipeline：run(generateFloor/renderLayer/savePackage)，最终输出 zip。
-  - SlsPipeline/SlmPipeline/LomPipeline/TdpPipeline/WaamPipeline：run(model) 由 Lua 脚本驱动导出。
-  - FileTransferPipeline：run()/run(progress) 支持进度回调。
-  - ParamStorePipeline：save/load/freeLoaded，持久化/恢复流程参数。
-  - CustomLuaPipeline：setProgressFunc/run，完全由 Lua 编排。
-
-- 扩展与事件
-  - add2DFunction/add3DFunction/addFileFunction：注册外部 Lua 函数。
-  - addEventCallback/addZipperEventCallback/addDBEventCallback：注册事件回调。
-
-- 工具函数
-  - toDouble/toInt：整数/双精度多边形互转。
-  - versionJson/versionXml：获取版本信息。
+## 架构总览
+HsBaSlicer 的对外架构由三层构成：
+- 应用层：调用方（C/C++/Lua/其他语言）通过 C ABI 或 C++ 库接口发起请求。
+- 流水线层：根据技术类型（FDM/SLA/SLS/SLM/LOM/TDP/WAAM）执行预处理、切片、支撑、填充、路径生成与导出。
+- 数据层：模型加载、网格/CAD 模型、路径输出、文件传输、参数存储等。
 
 ```mermaid
-classDiagram
-class Model {
-+info() ModelInfo
-+translate(t) void
-+rotate(r) void
-+scale(s) void
-+slice(height) Polygons
-+sliceD(height) PolygonsD
-+raw() IModel
-+name() string
-}
-class FdmPipeline {
-+run(model) FdmResult
-+sliceAll(model) vector<Polygons>
-+generateSupports(layers) vector<PolygonsD>
-+fill(contour) Polygons
-+generatePath(data) unique_ptr<GCodePath>
-}
-class SlaPipeline {
-+run(model, output_zip) SlaResult
-+generateFloor(bottom_layer) Polygons
-+renderLayer(polys, w, h, out_path) bool
-+savePackage(pkg, output_zip) bool
-}
-class SlsPipeline
-class SlmPipeline
-class LomPipeline
-class TdpPipeline
-class WaamPipeline
-class FileTransferPipeline {
-+run() FileTransferOutcome
-+run(progress) FileTransferOutcome
-}
-class ParamStorePipeline {
-+save(kind, cfg, key, table) long long
-+load(kind, key, outCfg, table) long long
-+freeLoaded(kind, cfg) void
-}
-class CustomLuaPipeline {
-+setProgressFunc(func) void
-+run() CustomLuaResult
-}
-FdmPipeline --> Model : "使用"
-SlaPipeline --> Model : "使用"
-SlsPipeline --> Model : "使用"
-SlmPipeline --> Model : "使用"
-LomPipeline --> Model : "使用"
-TdpPipeline --> Model : "使用"
-WaamPipeline --> Model : "使用"
+sequenceDiagram
+participant App as "应用层"
+participant DLL as "DllHsBaSlicer(C ABI)"
+participant Core as "流水线核心"
+participant Proto as "Proto 消息"
+participant Lua as "Lua 脚本"
+App->>DLL : initialize()
+DLL-->>App : 就绪
+App->>DLL : HsBaRunFdmPipeline / HsBaRunSlaPipeline
+DLL->>Core : 解析配置 (pipeline_types.h)
+Core->>Proto : 可选转换/校验
+Core->>Lua : 调用自定义脚本(支撑/填充/导出)
+Core-->>DLL : 返回结果结构体
+DLL-->>App : 结果 + 进度回调
 ```
 
-图表来源
-- [hsba_slicer.cppm:129-146](file://ModuleHsBaSlicer/hsba_slicer.cppm#L129-L146)
-- [hsba_slicer.cppm:152-191](file://ModuleHsBaSlicer/hsba_slicer.cppm#L152-L191)
-- [hsba_slicer.cppm:197-225](file://ModuleHsBaSlicer/hsba_slicer.cppm#L197-L225)
-- [hsba_slicer.cppm:231-258](file://ModuleHsBaSlicer/hsba_slicer.cppm#L231-L258)
-- [hsba_slicer.cppm:264-348](file://ModuleHsBaSlicer/hsba_slicer.cppm#L264-L348)
-- [hsba_slicer.cppm:354-445](file://ModuleHsBaSlicer/hsba_slicer.cppm#L354-L445)
-- [hsba_slicer.cppm:451-479](file://ModuleHsBaSlicer/hsba_slicer.cppm#L451-L479)
+**图表来源**
+- [initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
+- [fdm_pipeline.h:23-51](file://DllHsBaSlicer/fdm_pipeline.h#L23-L51)
+- [sla_pipeline.h:23-47](file://DllHsBaSlicer/sla_pipeline.h#L23-L47)
+- [pipeline_types.h:53-127](file://pipelinetypes/pipeline_types.h#L53-L127)
 
-章节来源
-- [hsba_slicer.cppm:1-65](file://ModuleHsBaSlicer/hsba_slicer.cppm#L1-L65)
-- [hsba_slicer.cppm:67-146](file://ModuleHsBaSlicer/hsba_slicer.cppm#L67-L146)
-- [hsba_slicer.cppm:152-191](file://ModuleHsBaSlicer/hsba_slicer.cppm#L152-L191)
-- [hsba_slicer.cppm:197-225](file://ModuleHsBaSlicer/hsba_slicer.cppm#L197-L225)
-- [hsba_slicer.cppm:231-258](file://ModuleHsBaSlicer/hsba_slicer.cppm#L231-L258)
-- [hsba_slicer.cppm:264-348](file://ModuleHsBaSlicer/hsba_slicer.cppm#L264-L348)
-- [hsba_slicer.cppm:354-445](file://ModuleHsBaSlicer/hsba_slicer.cppm#L354-L445)
-- [hsba_slicer.cppm:451-479](file://ModuleHsBaSlicer/hsba_slicer.cppm#L451-L479)
+## 详细组件分析
+
+### C ABI 初始化与版本查询
+- initialize：一次性初始化 DLL，注册 Lua 函数与流水线；重复调用无副作用。
+- HsBaGetVersionJson/HsBaGetVersionXml：返回 UTF-8 JSON/XML 字符串，需调用 HsBaFreeVersionString 释放。
+- 线程安全性：初始化应在单线程启动阶段完成；版本查询为只读操作，可并发访问。
+
+```mermaid
+flowchart TD
+Start(["进程启动"]) --> Init["调用 initialize()"]
+Init --> Ready{"是否已初始化?"}
+Ready --> |是| Skip["跳过重复初始化"]
+Ready --> |否| Register["注册 Lua 函数与流水线"]
+Register --> Done(["就绪"])
+Skip --> Done
+```
+
+**图表来源**
+- [initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
+
+**章节来源**
+- [initialize.h:1-22](file://DllHsBaSlicer/initialize.h#L1-L22)
+- [version_info.h:1-48](file://DllHsBaSlicer/version_info.h#L1-L48)
+
+### FDM 流水线 C ABI
+- HsBaCreateDefaultConfig：创建默认 FDM 配置。
+- HsBaRunFdmPipeline：同步执行，内部使用协程阻塞直到结果就绪；流水线顺序：预处理 -> 切片 -> 支撑 -> 填充 -> 路径生成。
+- HsBaRunFdmPipelineAsync：异步执行，通过回调返回结果。
+- HsBaFreePipelineResult：释放 gcode_content 与 error_message 内存。
+
+```mermaid
+sequenceDiagram
+participant Client as "调用方"
+participant FDM as "HsBaRunFdmPipeline"
+participant Proc as "预处理"
+participant Slice as "切片"
+participant Support as "支撑"
+participant Fill as "填充"
+participant Path as "路径生成"
+Client->>FDM : 传入 HsBaFdmPipelineConfig_t
+FDM->>Proc : 加载模型
+Proc-->>FDM : 模型对象
+FDM->>Slice : 切片
+Slice-->>FDM : 层数据
+FDM->>Support : 生成支撑
+Support-->>FDM : 支撑数据
+FDM->>Fill : 生成填充
+Fill-->>FDM : 填充数据
+FDM->>Path : 生成 G-code
+Path-->>FDM : G-code 内容
+FDM-->>Client : HsBaFdmPipelineResult_t
+```
+
+**图表来源**
+- [fdm_pipeline.h:23-61](file://DllHsBaSlicer/fdm_pipeline.h#L23-L61)
+- [pipeline_types.h:53-127](file://pipelinetypes/pipeline_types.h#L53-L127)
+
+**章节来源**
+- [fdm_pipeline.h:1-68](file://DllHsBaSlicer/fdm_pipeline.h#L1-L68)
+- [pipeline_types.h:23-127](file://pipelinetypes/pipeline_types.h#L23-L127)
+
+### SLA 流水线 C ABI
+- HsBaCreateDefaultSlaConfig：创建默认 SLA 配置。
+- HsBaRunSlaPipeline：同步执行；流水线顺序：预处理 -> 切片 -> 层板 -> 支撑 -> 导出（zip）。
+- HsBaRunSlaPipelineAsync：异步执行，通过回调返回结果。
+- HsBaFreeSlaPipelineResult：释放 export_path 与 error_message 内存。
+
+```mermaid
+sequenceDiagram
+participant Client as "调用方"
+participant SLA as "HsBaRunSlaPipeline"
+participant Proc as "预处理"
+participant Slice as "切片"
+participant Floor as "层板"
+participant Support as "支撑"
+participant Export as "导出(zip)"
+Client->>SLA : 传入 HsBaSlaPipelineConfig_t
+SLA->>Proc : 加载模型
+Proc-->>SLA : 模型对象
+SLA->>Slice : 切片
+Slice-->>SLA : 层数据
+SLA->>Floor : 生成层板
+Floor-->>SLA : 层板数据
+SLA->>Support : 生成支撑
+Support-->>SLA : 支撑数据
+SLA->>Export : 打包导出
+Export-->>SLA : zip 路径
+SLA-->>Client : HsBaSlaPipelineResult_t
+```
+
+**图表来源**
+- [sla_pipeline.h:23-56](file://DllHsBaSlicer/sla_pipeline.h#L23-L56)
+- [pipeline_types.h:165-232](file://pipelinetypes/pipeline_types.h#L165-L232)
+
+**章节来源**
+- [sla_pipeline.h:1-63](file://DllHsBaSlicer/sla_pipeline.h#L1-L63)
+- [pipeline_types.h:145-232](file://pipelinetypes/pipeline_types.h#L145-L232)
+
+### Protobuf 消息定义
+- base_config.proto：通用基础配置，包含技术类型、配置文件格式、输出类型与文件名。
+- fdm_pipeline.proto：FDM 流水线配置与结果消息，字段与 pipeline_types.h 中的 C 结构体一一对应。
+
+```mermaid
+erDiagram
+MSG_BASE_CONFIG {
+int32 version
+msg_technology_type technology_type
+msg_profiles_format profiles_format
+msg_output_type output_type
+string output_filename
+}
+MSG_FDM_PIPELINE_CONFIG {
+string fdm_pipe_config_model_name
+string fdm_pipe_config_model_path
+float fdm_pipe_config_layer_height
+float fdm_pipe_config_first_layer_height
+double fdm_pipe_config_fill_space
+msg_fdm_filltype fdm_pipe_config_fill_type
+double fdm_pipe_config_fill_angle
+int32 fdm_pipe_config_wall_count
+int32 fdm_pipe_config_top_layer_count
+int32 fdm_pipe_config_bottom_layer_count
+bool fdm_pipe_config_support_enable
+float fdm_pipe_config_support_angle
+float fdm_pipe_config_support_gap
+float fdm_pipe_config_support_support_diameter
+float fdm_pipe_config_support_density
+msg_fdm_support_pattern fdm_pipe_config_support_pattern
+int32 fdm_pipe_config_interface_layers
+float fdm_pipe_config_interface_density
+float fdm_pipe_config_line_width
+float fdm_pipe_config_print_speed
+float fdm_pipe_config_travel_speed
+float fdm_pipe_config_extrusion_multiplier
+msg_fdm_gcode_firmware fdm_pipe_config_gcode_firmware
+float fdm_pipe_config_nozzle_diameter
+float fdm_pipe_config_filament_diameter
+float fdm_pipe_config_nozzle_temp
+float fdm_pipe_config_bed_temp
+float fdm_pipe_config_retract_length
+float fdm_pipe_config_retract_speed
+float fdm_pipe_config_first_layer_speed
+string fdm_pipe_config_support_lua_script
+string fdm_pipe_config_support_lua_func
+string fdm_pipe_config_infill_lua_script
+string fdm_pipe_config_infill_lua_func
+string fdm_pipe_config_output_path
+bool fdm_pipe_config_spiral_mode
+}
+MSG_FDM_PIPE_RESULT {
+bool fdm_pipe_result_success
+int32 fdm_pipe_result_total_layers
+string fdm_pipe_result_gcode_content
+string fdm_pipe_result_error_message
+double fdm_pipe_result_elapsed_seconds
+}
+MSG_BASE_CONFIG ||--o{ MSG_FDM_PIPELINE_CONFIG : "作为顶层配置"
+```
+
+**图表来源**
+- [base_config.proto:1-132](file://proto/base_config.proto#L1-L132)
+- [fdm_pipeline.proto:1-81](file://proto/fdm_pipeline.proto#L1-L81)
+
+**章节来源**
+- [base_config.proto:1-132](file://proto/base_config.proto#L1-L132)
+- [fdm_pipeline.proto:1-81](file://proto/fdm_pipeline.proto#L1-L81)
+
+### Lua 脚本扩展点
+- 自定义流水线：HsBaCustomPipelineConfig_t 允许完全由 Lua 驱动整个流程，C++ 侧仅暴露构建块（模型加载、切片、支撑、填充、层板、G-code 路径输出、SLA/SLS 打包）。
+- 内置脚本钩子：FDM/SLA 等流水线支持通过 support_lua_script/support_lua_func、infill_lua_script/infill_lua_func、floor_lua_script/floor_lua_func、export_lua_script/export_lua_func 指定自定义脚本与函数名。
+- 线程安全性：Lua 脚本在流水线内部执行，应避免长时间阻塞主线程；建议使用异步流水线并在回调中处理结果。
+
+```mermaid
+flowchart TD
+Entry["Lua 入口函数"] --> LoadModel["加载模型"]
+LoadModel --> Slice["切片"]
+Slice --> CustomSupport{"自定义支撑?"}
+CustomSupport --> |是| CallSupport["调用 support_lua_func"]
+CustomSupport --> |否| BuiltInSupport["内置支撑算法"]
+CallSupport --> Fill["填充"]
+BuiltInSupport --> Fill
+Fill --> CustomFloor{"自定义层板?"}
+CustomFloor --> |是| CallFloor["调用 floor_lua_func"]
+CustomFloor --> |否| BuiltInFloor["内置层板算法"]
+CallFloor --> Export["导出(由 export_lua_func 决定)"]
+BuiltInFloor --> Export
+Export --> Result["返回结果字符串/路径"]
+```
+
+**图表来源**
+- [pipeline_types.h:676-732](file://pipelinetypes/pipeline_types.h#L676-L732)
+- [pipeline_types.h:53-127](file://pipelinetypes/pipeline_types.h#L53-L127)
+- [pipeline_types.h:165-232](file://pipelinetypes/pipeline_types.h#L165-L232)
+
+**章节来源**
+- [pipeline_types.h:676-732](file://pipelinetypes/pipeline_types.h#L676-L732)
+- [pipeline_types.h:53-127](file://pipelinetypes/pipeline_types.h#L53-L127)
+- [pipeline_types.h:165-232](file://pipelinetypes/pipeline_types.h#L165-L232)
 
 ## 依赖关系分析
-- DllHsBaSlicer 依赖 LibHsBaSlicer 的核心能力，并通过 C ABI 暴露给外部语言。
-- ModuleHsBaSlicer 依赖 LibHsBaSlicer，并以类式 API 包装自由函数。
-- 公共类型（pipeline_types.h）在各层复用，保证 ABI 与 C++ 侧一致性。
+- DllHsBaSlicer 依赖 pipelinetypes 提供的 C 兼容结构体与枚举。
+- LibHsBaSlicer 通过 HSBA_SLICER_LIB_API 导出 C++ 接口，内部模块（Slice、Preprocess、Support、Fill、Path、Floor）被流水线调用。
+- Proto 定义与 C 结构体保持语义一致，便于跨语言转换。
 
 ```mermaid
 graph LR
-DLL["DllHsBaSlicer"] --> LIB["LibHsBaSlicer"]
-MOD["ModuleHsBaSlicer"] --> LIB
-TYPES["pipelinetypes/pipeline_types.h"] --> DLL
-TYPES --> MOD
+DLL["DllHsBaSlicer"] --> PT["pipelinetypes/pipeline_types.h"]
+DLL --> FDM_H["fdm_pipeline.h"]
+DLL --> SLA_H["sla_pipeline.h"]
+LIB["LibHsBaSlicer"] --> CORE["内部模块(Slice/Preprocess/Support/Fill/Path/Floor)"]
+CORE --> PT
+PROTO["proto/*.proto"] --> CORE
 ```
 
-图表来源
-- [README.md:104-124](file://README.md#L104-L124)
-- [hsba_slicer.cppm:37-62](file://ModuleHsBaSlicer/hsba_slicer.cppm#L37-L62)
+**图表来源**
+- [fdm_pipeline.h:9-10](file://DllHsBaSlicer/fdm_pipeline.h#L9-L10)
+- [sla_pipeline.h:9-10](file://DllHsBaSlicer/sla_pipeline.h#L9-L10)
+- [pipeline_types.h:1-12](file://pipelinetypes/pipeline_types.h#L1-L12)
 
-章节来源
-- [README.md:104-124](file://README.md#L104-L124)
+**章节来源**
+- [fdm_pipeline.h:1-68](file://DllHsBaSlicer/fdm_pipeline.h#L1-L68)
+- [sla_pipeline.h:1-63](file://DllHsBaSlicer/sla_pipeline.h#L1-L63)
+- [pipeline_types.h:1-12](file://pipelinetypes/pipeline_types.h#L1-L12)
 
 ## 性能与线程安全
-- 性能特性
-  - 内部大量使用 C++20 协程进行异步流水线调度，避免阻塞主线程。
-  - 模块化设计允许按需启用功能（如仅 FDM 或仅 SLA），减少编译与运行开销。
-  - 多边形处理与几何计算集中在 2D/meshmodel 等子模块，利于优化与缓存局部性。
+- 同步流水线：HsBaRunFdmPipeline/HsBaRunSlaPipeline 内部使用协程阻塞直到结果就绪，适合简单调用场景。
+- 异步流水线：HsBaRunFdmPipelineAsync/HsBaRunSlaPipelineAsync 非阻塞，通过回调返回结果，适合 UI 或高并发场景。
+- 进度回调：所有流水线均支持进度回调，便于更新 UI 或记录日志。
+- 线程安全：
+  - initialize 应在单线程启动阶段调用一次。
+  - 流水线函数本身可多线程调用，但需注意共享资源（如 Lua 状态、文件 I/O）的并发访问控制。
+  - 结果结构体中的字符串指针必须由调用方在适当时机释放。
 
-- 线程安全
-  - C ABI 的 initialize() 是幂等的，适合在进程加载时调用一次。
-  - 流水线函数本身不持有全局可变状态（配置由调用方传入），可在多线程中并发调用不同实例。
-  - 回调函数（进度/结果）的执行上下文取决于实现，应避免在回调中进行耗时操作；必要时将任务投递到工作线程。
+[本节为一般性指导，不直接分析具体文件]
 
-- 优化建议
-  - 批量处理：对多个模型采用批处理策略，复用配置与资源。
-  - 预取与缓存：对频繁使用的配置与脚本进行缓存。
-  - 合理选择精度：整数多边形（Clipper2 Path64）性能优于双精度（PathD），仅在必要处转换。
-  - 避免不必要的序列化：仅在最终输出时生成 GCode/ZIP，中间过程尽量保持二进制结构。
+## 故障排除指南
+- 常见错误：
+  - 未调用 initialize：导致 Lua 函数未注册，自定义脚本无法加载。
+  - 忘记释放结果：gcode_content、error_message、export_path 等字符串需调用对应释放函数。
+  - 配置字段为空：model_path、output_path、host/port 等必填字段为空将导致失败。
+- 调试建议：
+  - 使用 HsBaGetVersionJson/XML 检查版本与许可证信息。
+  - 启用进度回调，观察流水线阶段耗时与错误阶段。
+  - 对 Lua 脚本进行单元测试，确保函数名与脚本路径正确。
 
-[本节为通用指导，不直接分析具体文件]
-
-## 故障排查指南
-- 常见问题
-  - 未调用 initialize()：可能导致 Lua 函数或流水线未注册。应在进程启动时调用一次。
-  - 忘记释放结果：C ABI 返回的字符串与结果对象必须调用对应的 Free 函数释放，否则会导致内存泄漏。
-  - Lua 脚本路径错误：SLS/SLM/LOM/TDP 等导出阶段依赖 Lua 脚本，请确保 export_lua_script 指向有效路径。
-  - 配置字段缺失或不合法：检查 config 中的必填字段（如 layer_height、line_width、nozzle_diameter 等）。
-
-- 诊断手段
-  - 使用 HsBaGetVersionJson/HsBaGetVersionXml 确认当前库版本与许可证信息。
-  - 在回调中记录进度与错误消息，便于定位失败阶段。
-  - 对于 C++ 模块 API，捕获 SlicerError 并打印异常信息。
-
-章节来源
-- [initialize.h:1-22](file://DllHsBaSlicer/initialize.h#L1-L22)
+**章节来源**
 - [version_info.h:16-41](file://DllHsBaSlicer/version_info.h#L16-L41)
 - [fdm_pipeline.h:53-61](file://DllHsBaSlicer/fdm_pipeline.h#L53-L61)
-- [hsba_slicer.cppm:74-79](file://ModuleHsBaSlicer/hsba_slicer.cppm#L74-L79)
+- [sla_pipeline.h:49-56](file://DllHsBaSlicer/sla_pipeline.h#L49-L56)
 
 ## 结论
-HsBaSlicer 提供了三层接口以满足不同集成需求：
-- C ABI（DllHsBaSlicer）适合跨语言与平台集成，具备稳定的 ABI 与完善的异步/回调机制。
-- C++ API（LibHsBaSlicer）适合 C++ 应用直接链接，提供丰富的自由函数。
-- C++20 模块（ModuleHsBaSlicer）提供现代、安全的类式 API，推荐在新工程中优先使用。
-
-根据业务场景选择合适的接口，并结合性能与线程安全建议进行集成与优化。
+HsBaSlicer 提供了完整的 C ABI、C++ 库与 Protobuf 定义，支持多技术栈的切片流水线。通过 Lua 脚本扩展点，开发者可以灵活定制支撑、填充、层板与导出逻辑。建议在集成时优先使用异步流水线与进度回调，并严格遵循内存释放与初始化规范，以确保稳定与高性能。
 
 [本节为总结性内容，不直接分析具体文件]
 
-## 附录：迁移与集成指南
+## 附录：API 速查表
 
-### 从 C ABI 迁移到 C++20 模块
-- 替换入口：不再需要 initialize() 与显式 Free 系列函数（模块层自动管理资源）。
-- 使用类式 API：用 Model/FdmPipeline/SlaPipeline 等替代 Run*Pipeline 函数。
-- 异常处理：使用 try/catch 捕获 SlicerError。
-- 配置对象：使用 default*Config 工厂函数创建配置，再修改字段。
+### C ABI 函数速查
+- 初始化与版本
+  - initialize：初始化 DLL，注册 Lua 与流水线。
+  - HsBaGetVersionJson/HsBaGetVersionXml：获取版本信息（JSON/XML），需 HsBaFreeVersionString 释放。
+- FDM 流水线
+  - HsBaCreateDefaultConfig：创建默认配置。
+  - HsBaRunFdmPipeline：同步执行。
+  - HsBaRunFdmPipelineAsync：异步执行。
+  - HsBaFreePipelineResult：释放结果内存。
+- SLA 流水线
+  - HsBaCreateDefaultSlaConfig：创建默认配置。
+  - HsBaRunSlaPipeline：同步执行。
+  - HsBaRunSlaPipelineAsync：异步执行。
+  - HsBaFreeSlaPipelineResult：释放结果内存。
 
-示例步骤（概念性）：
-- 旧：调用 HsBaCreateDefaultConfig -> HsBaRunFdmPipeline -> HsBaFreePipelineResult。
-- 新：defaultFdmConfig() -> FdmPipeline(cfg).run(Model(...))。
-
-[本节为概念性指导，不直接分析具体文件]
-
-### 跨语言集成要点（Java/C#/Python 等）
-- 加载动态库后首先调用 initialize()。
-- 使用 HsBaGetVersionJson/HsBaGetVersionXml 验证版本。
-- 调用 Run*Pipeline 同步或异步执行，注意在回调中处理结果。
-- 务必调用对应的 Free*PipelineResult 与 HsBaFreeVersionString 释放内存。
-
-章节来源
-- [initialize.h:1-22](file://DllHsBaSlicer/initialize.h#L1-L22)
+**章节来源**
+- [initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
 - [version_info.h:16-41](file://DllHsBaSlicer/version_info.h#L16-L41)
 - [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
 - [sla_pipeline.h:17-56](file://DllHsBaSlicer/sla_pipeline.h#L17-L56)
+
+### 配置与结果结构体速查
+- FDM：HsBaFdmPipelineConfig_t、HsBaFdmPipelineResult_t
+- SLA：HsBaSlaPipelineConfig_t、HsBaSlaPipelineResult_t
+- SLS：HsBaSlsPipelineConfig_t、HsBaSlsPipelineResult_t
+- SLM：HsBaSlmPipelineConfig_t、HsBaSlmPipelineResult_t
+- LOM：HsBaLomPipelineConfig_t、HsBaLomPipelineResult_t
+- TDP：HsBaTdpPipelineConfig_t、HsBaTdpPipelineResult_t
+- WAAM：HsBaWaamPipelineConfig_t、HsBaWaamPipelineResult_t
+- FileTransfer：HsBaFileTransferPipelineConfig_t、HsBaFileTransferPipelineResult_t
+- Custom：HsBaCustomPipelineConfig_t、HsBaCustomPipelineResult_t
+
+**章节来源**
+- [pipeline_types.h:53-127](file://pipelinetypes/pipeline_types.h#L53-L127)
+- [pipeline_types.h:165-232](file://pipelinetypes/pipeline_types.h#L165-L232)
+- [pipeline_types.h:247-310](file://pipelinetypes/pipeline_types.h#L247-L310)
+- [pipeline_types.h:312-401](file://pipelinetypes/pipeline_types.h#L312-L401)
+- [pipeline_types.h:403-461](file://pipelinetypes/pipeline_types.h#L403-L461)
+- [pipeline_types.h:463-521](file://pipelinetypes/pipeline_types.h#L463-L521)
+- [pipeline_types.h:523-625](file://pipelinetypes/pipeline_types.h#L523-L625)
+- [pipeline_types.h:627-674](file://pipelinetypes/pipeline_types.h#L627-L674)
+- [pipeline_types.h:676-732](file://pipelinetypes/pipeline_types.h#L676-L732)
+
+### Protobuf 消息速查
+- base_config.proto：msg_base_config（版本、技术类型、配置文件格式、输出类型、输出文件名）
+- fdm_pipeline.proto：msg_fdm_pipeline_config、msg_fdm_pipe_result
+
+**章节来源**
+- [base_config.proto:125-132](file://proto/base_config.proto#L125-L132)
+- [fdm_pipeline.proto:26-81](file://proto/fdm_pipeline.proto#L26-L81)

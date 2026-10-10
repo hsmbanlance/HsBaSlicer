@@ -1,0 +1,1 @@
+C++20 (uses concepts, `requires`, `std::span`, `std::shared_mutex`, `std::call_once`); links against Eigen3, Boost.Locale/Boost.Nowide, and magic_enum (for `ModelFormat` stringification). Conditional iconv linkage on iOS.

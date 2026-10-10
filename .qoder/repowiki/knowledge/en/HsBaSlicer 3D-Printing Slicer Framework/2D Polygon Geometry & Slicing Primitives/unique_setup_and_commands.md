@@ -1,1 +1,0 @@
-Build requires finding PNG, JPEG, and Lua packages via CMake's `find_package`; Freetype is optional and gated by `HSBA_HAVE_FREETYPE`; enabling `HSBA_POLYGON_DUMP` compiles in SVG debug dump helpers; non-IOS/non-game-console builds additionally require OpenCV.

@@ -1,0 +1,1 @@
+C++17 (`std::filesystem`, `std::format`) built with CMake; Android build produces a JNI-exported `Java_com_hsmbanlance_hsbaslicer_example_MainActivity_runPipelineExamples`; iOS exports `HsBaRunPipelineExamples` for Swift/Objective-C; Windows post-build deploys PDBs via `cmake/deploy_dlls.cmake`.

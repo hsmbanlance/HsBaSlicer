@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: support
-title: 支撑生成器支持库 (HsBaSupport)
-scope:
-    - support/
-source_files: []
-depends_on: []
-related_to:
-    - path: libhsbaslicer

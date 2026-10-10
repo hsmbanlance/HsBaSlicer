@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: build_tooling
+title: 构建工具链与静态检查
+scope:
+    - cmake/
+    - scripts/
+    - static_check/
+    - overlay-ports/
+    - triplets/
+    - .github/
+    - .agents/
+source_files: []
+depends_on: []
+related_to: []

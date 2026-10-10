@@ -1,1 +1,0 @@
-C++20 (concepts, std::format) built as a static library; Boost (graph, dll, pfr, date_time, container_hash), RapidJSON, tinyxml2, yaml-cpp, and Lua C API. Precompiled headers are enabled via `target_precompile_headers(... pch_headers.hpp)` in the CMake file.

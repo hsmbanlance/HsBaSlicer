@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: dll_export_layer/other_manufacturing_pipelines
+title: SLS/3DP/WAAM 其他增材制造切片管线 C ABI
+scope:
+    - DllHsBaSlicer/sls_pipeline.cpp
+    - DllHsBaSlicer/tdp_pipeline.cpp
+    - DllHsBaSlicer/waam_pipeline.cpp
+source_files: []
+depends_on: []
+related_to:
+    - path: file_operator

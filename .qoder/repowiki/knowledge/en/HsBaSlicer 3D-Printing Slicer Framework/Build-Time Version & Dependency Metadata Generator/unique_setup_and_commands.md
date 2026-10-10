@@ -1,1 +1,0 @@
-A working PowerShell installation (`pwsh` preferred, falls back to `powershell`) is required during CMake configure; the build fails with `FATAL_ERROR` if neither is found. The copyleft feature flag `-DHSBA_COPL=ON` toggles inclusion of CGAL/OpenCascade-style dependencies and switches the emitted project license to GPL.

@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: samples
+title: HsBaSlicer API & Pipeline Samples
+scope:
+    - samples/
+source_files: []
+depends_on: []
+related_to:
+    - path: cpp_module_layer
+    - path: dll_export_layer/fdm_slicing_engine

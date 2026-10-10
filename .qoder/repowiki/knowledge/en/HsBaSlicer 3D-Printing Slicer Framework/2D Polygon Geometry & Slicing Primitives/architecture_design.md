@@ -1,9 +1,0 @@
-The module is a static CMake library `HsBaSlicer2D` built from flat `.cpp`/`.hpp` pairs under `2D/`, with a clear internal dependency direction:
-- `IntPolygon.hpp/.cpp` defines the canonical integer-coordinate types (`Point2=Clipper2Lib::Point64`, `Polygon=Path64`, `Polygons=Paths64`) plus all Clipper2-backed primitives (MakeSimple, Union/Difference/Intersection/Xor, Offset, Area, PointInPolygons) — this is the foundational layer.
-- `FloatPolygons.hpp/.cpp` aliases double-precision counterparts (`Point2D/PolygonD/PolygonsD`), re-exposes the same boolean/area API over doubles, adds shape constructors (`MakeRectangle`, `MakeCircle`, `MakeEllipse`, `MakeRegularPolygon`, `TextToPolygons` via FreeType), and provides `Integerization`/`UnIntegerization` to bridge between the two coordinate spaces. It depends on `IntPolygon`.
-- `ImageToPolygons.hpp/.cpp` sits above both layers, converting PNG/JPEG bitmaps to `PolygonsD` (thresholding) and rendering polygons back to images; it also exposes Lua-driven variants (`LuaToImage`, `LuaToImageString`).
-- `PolygonFill.hpp/.cpp` consumes `Polygons` (integer) to generate infill patterns (OffsetFill, LineFill, SimpleZigzagFill, ZigzagFill, CompositeOffsetFill, HybridFill) and delegates custom fills to Lua scripts.
-- `LuaAdapter.hpp/.cpp` is the only Lua-facing boundary: it converts between Lua tables and both int/double polygon types and registers all polygon/fill operations into a `lua_State`.
-- `2Dhull.hpp/.cpp` provides convex hull utilities using the same integer types.
-
-External dependencies are wired in `CMakeLists.txt`: Clipper2 for core geometry, libpng/libjpeg-turbo for image I/O, optional Freetype for text outlines, and Lua for scripting. Non-IOS/non-game-console builds additionally link OpenCV. Conditional compile flags `HSBA_HAVE_FREETYPE` and `HSBA_POLYGON_DUMP` gate optional features.

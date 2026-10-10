@@ -1,0 +1,1 @@
+Unified model loader that dispatches file formats to IGL mesh, OCCT BRep, or OpenVDB point-cloud kernels and manages a named, pooled registry of loaded models.

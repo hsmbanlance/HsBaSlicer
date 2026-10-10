@@ -1,1 +1,0 @@
-Provides AES/3DES/RSA encryption, MD5/SHA1/SHA256 hashing, Base64/hex encoding, and a Lua binding layer exposing these primitives to the scripting host.

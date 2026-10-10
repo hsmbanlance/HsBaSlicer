@@ -1,18 +1,21 @@
 # Lua Scripting System
 
 <cite>
-**Referenced Files in This Document**
+**Referenced Files in This Document**   
 - [lua_pipeline.hpp](file://LibHsBaSlicer/Extends/lua_pipeline.hpp)
 - [lua_pipeline.cpp](file://LibHsBaSlicer/Extends/lua_pipeline.cpp)
 - [LuaAddFunction.hpp](file://LibHsBaSlicer/Extends/LuaAddFunction.hpp)
-- [LuaCommonTypes.hpp](file://LibHsBaSlicer/Extends/LuaCommonTypes.hpp)
+- [LuaSupport.hpp](file://support/LuaSupport.hpp)
+- [LuaSupport.cpp](file://support/LuaSupport.cpp)
 - [LuaAdapter.hpp](file://2D/LuaAdapter.hpp)
 - [LuaAdapter.cpp](file://2D/LuaAdapter.cpp)
+- [lua_pipeline_api.md](file://docs/en/lua_pipeline_api.md)
+- [hsba_pipeline.d.lua](file://types/hsba_pipeline.d.lua)
+- [custom_pipeline.proto](file://proto/custom_pipeline.proto)
 - [my_fdm_pipeline.lua](file://samples/Custom/scripts/my_fdm_pipeline.lua)
 - [my_sla_pipeline.lua](file://samples/Custom/scripts/my_sla_pipeline.lua)
-- [my_infill.lua](file://samples/FDM/scripts/my_infill.lua)
 - [my_support.lua](file://samples/FDM/scripts/my_support.lua)
-- [custom_pipeline.proto](file://proto/custom_pipeline.proto)
+- [my_infill.lua](file://samples/FDM/scripts/my_infill.lua)
 </cite>
 
 ## Table of Contents
@@ -28,203 +31,227 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document explains HsBaSlicer’s Lua scripting system: how the Lua environment is created, how scripts are registered and executed, what built-in functions are available, and how to build custom slicing algorithms, support structures, export handlers, and fully Lua-driven pipelines. It also covers data type conversions between C++ and Lua, error handling strategies, performance considerations, debugging techniques, and best practices.
+This document explains HsBaSlicer’s Lua scripting system that enables runtime customization and extension of slicing pipelines. It covers the two Lua environments (fully custom pipeline vs built-in stage hooks), environment initialization, global variables, the `HsBa` operation table, shared libraries, type binding between C++ and Lua, memory and performance considerations, debugging/testing strategies, and practical examples for FDM, SLA, support, fill, path output, packaging, and database/file operations.
 
-The system supports two main usage patterns:
-- Fully Lua-driven custom pipeline: a single Lua entry function orchestrates model loading, slicing, support, fill, path generation, packaging, and file output.
-- Stage-level customization: existing C++ pipelines (FDM, SLA, SLS, etc.) expose registration points for 2D, 3D, and File-stage Lua functions, plus event callbacks.
+The goal is to help both new and experienced users author robust Lua scripts inside HsBaSlicer while understanding how the C++ core exposes slicing capabilities through a stable Lua API.
 
 ## Project Structure
 The Lua scripting system spans several modules:
-- `LibHsBaSlicer/Extends`: pipeline context, environment setup, and the global `HsBa` operations table.
-- `2D`: polygon conversion helpers and the `PolygonOperations` library.
-- `samples/Custom/scripts`: complete Lua-driven FDM and SLA pipeline examples.
-- `samples/FDM/scripts`: stage-level custom fill and support examples.
-- `proto/custom_pipeline.proto`: protobuf configuration for the fully Lua-driven pipeline.
+
+- Custom pipeline driver and environment setup: `LibHsBaSlicer/Extends/lua_pipeline.*`
+- External function/event registration framework: `LibHsBaSlicer/Extends/LuaAddFunction.hpp`
+- Support-stage Lua script execution: `support/LuaSupport.*`
+- Polygon data conversion and `PolygonOperations`: `2D/LuaAdapter.*`
+- Public Lua API documentation: `docs/en/lua_pipeline_api.md`
+- IDE type definitions: `types/hsba_pipeline.d.lua`
+- Protocol definition for fully Lua-driven custom pipelines: `proto/custom_pipeline.proto`
+- Example scripts: `samples/Custom/scripts/*`, `samples/FDM/scripts/*`, `samples/SLA/scripts/*`
 
 ```mermaid
 graph TB
-subgraph "LibHsBaSlicer"
-LPH["lua_pipeline.hpp"]
-LPC["lua_pipeline.cpp"]
-LAF["LuaAddFunction.hpp"]
-LCT["LuaCommonTypes.hpp"]
-end
-subgraph "2D"
-LAH["LuaAdapter.hpp"]
-LAC["LuaAdapter.cpp"]
-end
-subgraph "Samples"
-FDM["my_fdm_pipeline.lua"]
-SLA["my_sla_pipeline.lua"]
-INFILL["my_infill.lua"]
-SUPPORT["my_support.lua"]
-end
-subgraph "Proto"
-CPP["custom_pipeline.proto"]
-end
-LPH --> LPC
-LPH --> LAF
-LPH --> LCT
-LPC --> LAH
-LPC --> LAC
-FDM --> LPC
-SLA --> LPC
-INFILL --> LAC
-SUPPORT --> LAC
-CPP --> LPC
+Driver["Custom Pipeline Driver<br/>RunLuaPipeline"] --> Env["SetupLuaPipelineEnvironment"]
+Env --> HsBa["Global HsBa Table"]
+Env --> SharedLibs["Shared Libraries"]
+SharedLibs --> PolyOps["PolygonOperations"]
+SharedLibs --> SupportMod["Support Module"]
+SharedLibs --> FillMod["PolygonFill Functions"]
+SharedLibs --> PathOpt["PathOptimize"]
+SharedLibs --> Zip["Zipper / Bit7zZipper"]
+SharedLibs --> Cipher["Cipher"]
+SharedLibs --> DB["SQLite / MySQL / PostgreSQL Adapters"]
+SharedLibs --> ParamStore["ParamStore"]
+Driver --> Script["Lua Entry Function<br/>run_pipeline()"]
+Script --> HsBa
+Script --> SharedLibs
 ```
 
 **Diagram sources**
-- [lua_pipeline.hpp:1-88](file://LibHsBaSlicer/Extends/lua_pipeline.hpp#L1-L88)
-- [lua_pipeline.cpp:819-894](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L819-L894)
-- [LuaAddFunction.hpp:1-78](file://LibHsBaSlicer/Extends/LuaAddFunction.hpp#L1-L78)
-- [LuaCommonTypes.hpp:1-187](file://LibHsBaSlicer/Extends/LuaCommonTypes.hpp#L1-L187)
-- [LuaAdapter.hpp:1-84](file://2D/LuaAdapter.hpp#L1-L84)
-- [LuaAdapter.cpp:251-419](file://2D/LuaAdapter.cpp#L251-L419)
-- [my_fdm_pipeline.lua:1-172](file://samples/Custom/scripts/my_fdm_pipeline.lua#L1-L172)
-- [my_sla_pipeline.lua:1-105](file://samples/Custom/scripts/my_sla_pipeline.lua#L1-L105)
-- [my_infill.lua:1-89](file://samples/FDM/scripts/my_infill.lua#L1-L89)
-- [my_support.lua:1-83](file://samples/FDM/scripts/my_support.lua#L1-L83)
-- [custom_pipeline.proto:1-25](file://proto/custom_pipeline.proto#L1-L25)
-
-**Section sources**
-- [lua_pipeline.hpp:1-88](file://LibHsBaSlicer/Extends/lua_pipeline.hpp#L1-L88)
-- [lua_pipeline.cpp:819-894](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L819-L894)
-- [LuaAddFunction.hpp:1-78](file://LibHsBaSlicer/Extends/LuaAddFunction.hpp#L1-L78)
-- [LuaCommonTypes.hpp:1-187](file://LibHsBaSlicer/Extends/LuaCommonTypes.hpp#L1-L187)
-- [LuaAdapter.hpp:1-84](file://2D/LuaAdapter.hpp#L1-L84)
-- [LuaAdapter.cpp:251-419](file://2D/LuaAdapter.cpp#L251-L419)
-- [my_fdm_pipeline.lua:1-172](file://samples/Custom/scripts/my_fdm_pipeline.lua#L1-L172)
-- [my_sla_pipeline.lua:1-105](file://samples/Custom/scripts/my_sla_pipeline.lua#L1-L105)
-- [my_infill.lua:1-89](file://samples/FDM/scripts/my_infill.lua#L1-L89)
-- [my_support.lua:1-83](file://samples/FDM/scripts/my_support.lua#L1-L83)
-- [custom_pipeline.proto:1-25](file://proto/custom_pipeline.proto#L1-L25)
-
-## Core Components
-- `LuaPipelineContext`: describes the Lua script source or file, entry function name, JSON config, default output path, model name/path, and progress callback.
-- `LuaPipelineOutput`: captures success flag, total layers, output path, result string, and error message from a Lua run.
-- Environment setup: opens standard libraries, installs common types, registers 2D/3D/File Lua functions, polygon operations, support, fill, path optimization, zipper, cipher, database adapters, and creates the global `HsBa` table.
-- Global `HsBa` API: model management, slicing, coordinate conversion, fill, support, floor, spiralization, G-code generation, packaging/export, image rendering, and file I/O.
-- Registration hooks: `Add2DFunctions`, `Add3DFunctions`, `AddFileFunctions`, and event callback registration for extensibility.
-- Common types: reflection and Lua adapters for Eigen vectors/matrices/quaternions and Clipper2 polygons/points.
+- [lua_pipeline.cpp:903-958](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L903-L958)
+- [lua_pipeline.cpp:830-872](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L830-L872)
+- [lua_pipeline_api.md:136-213](file://docs/en/lua_pipeline_api.md#L136-L213)
 
 **Section sources**
 - [lua_pipeline.hpp:19-83](file://LibHsBaSlicer/Extends/lua_pipeline.hpp#L19-L83)
-- [lua_pipeline.cpp:819-894](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L819-L894)
-- [LuaAddFunction.hpp:21-74](file://LibHsBaSlicer/Extends/LuaAddFunction.hpp#L21-L74)
-- [LuaCommonTypes.hpp:20-45](file://LibHsBaSlicer/Extends/LuaCommonTypes.hpp#L20-L45)
-- [LuaCommonTypes.hpp:148-183](file://LibHsBaSlicer/Extends/LuaCommonTypes.hpp#L148-L183)
+- [lua_pipeline.cpp:903-1046](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L903-L1046)
+- [lua_pipeline_api.md:1-16](file://docs/en/lua_pipeline_api.md#L1-L16)
+
+## Core Components
+HsBaSlicer provides two distinct Lua scripting contexts:
+
+| Context | Purpose | Trigger | Main API Surface |
+|---|---|---|---|
+| **Custom Pipeline** | The script decides the full workflow order: load model, slice, support, fill, floor, path generation, packaging, file I/O. | C++ calls the entry function defined by `pipeline_entry`, default `run_pipeline`. | Global `HsBa` table + context globals (`pipeline_config`, `model_name`, `model_path`, `output_path`). |
+| **Built-in Stage Hook** | Replace only one algorithm inside a fixed C++ pipeline: support, fill, floor, or export. | Built-in pipeline loads a user script at the appropriate stage and calls the agreed function. | Stage-specific globals plus shared libraries; no `HsBa` table. |
+
+Both environments share common geometry types and shared libraries such as `PolygonOperations`, `Support`, `PolygonFill`, `PathOptimize`, `Cipher`, `Zipper`, database adapters, and `ParamStore`.
+
+Key responsibilities:
+
+- `LuaPipelineContext` carries script source, script file, entry function name, JSON config, model metadata, output path, and progress callback.
+- `LuaPipelineOutput` collects success flag, total layers, output path, result string, and error message.
+- `SetupLuaPipelineEnvironment` opens Lua standard libraries, installs common types, registers external functions, installs shared libraries, binds run state, creates `HsBa`, and injects context globals.
+- `RunLuaPipeline` creates a Lua state, sets up the environment, executes prelude and script file, calls the entry function, and maps Lua results into `LuaPipelineOutput`.
+
+**Section sources**
+- [lua_pipeline.hpp:19-83](file://LibHsBaSlicer/Extends/lua_pipeline.hpp#L19-L83)
+- [lua_pipeline.cpp:903-1046](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L903-L1046)
+- [lua_pipeline_api.md:19-28](file://docs/en/lua_pipeline_api.md#L19-L28)
 
 ## Architecture Overview
-The fully Lua-driven pipeline follows this flow:
-1. C++ constructs `LuaPipelineContext`.
-2. `SetupLuaPipelineEnvironment` initializes Lua, installs libraries, and binds the `HsBa` table.
-3. The Lua script defines `run_pipeline()` (or another entry).
-4. `RunLuaPipeline` executes the script and calls the entry function.
-5. The script uses `HsBa.*` to orchestrate slicing, support, fill, path generation, packaging, and file writing.
-6. Output is captured into `LuaPipelineOutput`.
+The custom pipeline architecture separates orchestration from implementation:
+
+- C++ owns lifecycle, safety, performance-critical geometry algorithms, and persistence.
+- Lua owns process logic, parameter decisions, conditional stages, and presentation/export choices.
+- Type binding converts Lua tables representing points, polygons, layers, and configuration objects into C++ structures.
 
 ```mermaid
 sequenceDiagram
-participant App as "Application"
+participant Host as "Host Application"
 participant Driver as "RunLuaPipeline"
+participant State as "LuaState"
 participant Env as "SetupLuaPipelineEnvironment"
-participant Lua as "Lua State"
-participant Script as "run_pipeline()"
+participant Script as "Lua Script"
 participant Ops as "HsBa Operations"
-App->>Driver : Create LuaPipelineContext
-Driver->>Env : Initialize Lua + register libs
-Env-->>Driver : HsBa table ready
-Driver->>Lua : Execute script source/file
-Driver->>Script : Call entry function
-Script->>Ops : loadModel/slice/fill/support/toGcode/save*
-Ops-->>Script : Results (polygons, strings, booleans)
-Script-->>Driver : Return status/result string
-Driver-->>App : LuaPipelineOutput
+participant Core as "C++ Slicing Core"
+Host->>Driver : "Create LuaPipelineContext"
+Driver->>State : "MakeUniqueLuaState()"
+Driver->>Env : "SetupLuaPipelineEnvironment(L, ctx, out)"
+Env->>State : "Open libs, register types"
+Env->>State : "Register shared libraries"
+Env->>State : "Install HsBa table"
+Env->>State : "Inject context globals"
+Driver->>Script : "Execute prelude + script file"
+Driver->>Script : "Call entry_func"
+Script->>Ops : "loadModel / slice / fill / support / toGcode"
+Ops->>Core : "LoadModel / Slice / Fill / GenerateGCode"
+Core-->>Ops : "Polygons / Paths / G-code"
+Ops-->>Script : "Results"
+Script-->>Driver : "Return value"
+Driver-->>Host : "LuaPipelineOutput"
 ```
 
 **Diagram sources**
-- [lua_pipeline.hpp:53-83](file://LibHsBaSlicer/Extends/lua_pipeline.hpp#L53-L83)
-- [lua_pipeline.cpp:857-894](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L857-L894)
+- [lua_pipeline.cpp:960-1046](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L960-L1046)
+- [lua_pipeline.cpp:903-958](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L903-L958)
+- [lua_pipeline.cpp:830-872](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L830-L872)
 
 ## Detailed Component Analysis
 
-### Lua Environment Setup and Lifecycle
-- Environment initialization:
-  - Opens standard Lua libraries.
-  - Installs common AnyObject types via `InstallCommonAnyObjectTypes`.
-  - Consumes external registration pools (`Get2DFunctions`, `Get3DFunctions`, `GetFileFunctions`).
-  - Registers core libraries: polygon operations, support, fill, path optimization, zipper, cipher, SQLite/MySQL/PostgreSQL adapters, parameter store.
-  - Binds `HsBa` table and injects globals: `pipeline_config`, `output_path`, `model_name`, `model_path`, `pipeline_entry`.
-- Run lifecycle:
-  - Executes inline script first, then optional script file.
-  - Calls entry function (default `run_pipeline`).
-  - Captures errors and returns structured output.
+### Custom Pipeline Environment and Control Flow
+The custom pipeline is driven by a Lua entry function. By default it is `run_pipeline`, but it can be overridden via `pipeline_entry`. The script may return:
+
+- A non-empty string: success with result text.
+- `true`: success without result text.
+- `false`, `nil`, or an uncaught Lua error: failure.
+
+Control and file IO exposed by `HsBa`:
+
+| Call | Returns | Meaning |
+|---|---|---|
+| `HsBa.progress(percent[, stage])` | — | Report progress percentage and optional stage name. |
+| `HsBa.setLayers(n)` | — | Report total layer count. |
+| `HsBa.setOutputPath(path)` | — | Report actual output path. |
+| `HsBa.readFile(path)` | string or nil | Read binary file content; returns nil on failure. |
+| `HsBa.writeFile(path, content)` | boolean | Overwrite file in binary mode; raises Lua error if open fails. |
+
+Model management:
+
+| Call | Returns | Meaning |
+|---|---|---|
+| `HsBa.loadModel(name, path)` | boolean | Load model into pool; reuse existing same-name model; raises error on failure. |
+| `HsBa.modelInfo(name)` | table | Bounding box and volume info. |
+| `HsBa.translateModel(name, {x,y,z})` | — | Translate model. |
+| `HsBa.rotateModel(name, {x,y,z,w})` | — | Rotate model by quaternion. |
+| `HsBa.scaleModel(name, s or {x,y,z})` | — | Scale uniformly or per axis. |
+| `HsBa.removeModel(name)` | — | Remove model from pool. |
+| `HsBa.modelNames()` | array | List model names in pool. |
+
+Slicing and coordinate conversion:
+
+| Call | Returns | Meaning |
+|---|---|---|
+| `HsBa.layerCount(name, layerHeight, firstLayerHeight)` | integer | Compute total layers. |
+| `HsBa.layerZ(index0based, layerHeight, firstLayerHeight)` | number | Z height for 0-based index. |
+| `HsBa.slice(name, z)` | polygons | Safe slice returning closed contours. |
+| `HsBa.sliceUnsafe(name, z)` | polygons | Normalized unsafe slice; may drop open contours. |
+| `HsBa.toInt(polygons)` | polygons | Float polygons to integer polygons. |
+| `HsBa.toDouble(intPolygons)` | polygons | Integer polygons to float polygons. |
+
+Fill, support, floor, path, and packaging are also exposed under `HsBa`; see the next sections.
 
 ```mermaid
 flowchart TD
-Start([Start]) --> OpenLibs["Open Lua standard libraries"]
-OpenLibs --> InstallTypes["Install common AnyObject types"]
-InstallTypes --> RegPools["Register 2D/3D/File Lua functions"]
-RegPools --> RegCore["Register core libs<br/>PolygonOperations, Support, Fill, PathOptimize,<br/>Zipper, Cipher, DB adapters, ParamStore"]
-RegCore --> BindHsBa["Bind HsBa table"]
-BindHsBa --> InjectGlobals["Inject pipeline_config, output_path,<br/>model_name, model_path, pipeline_entry"]
-InjectGlobals --> ExecScript["Execute inline script / script file"]
-ExecScript --> CallEntry["Call entry function"]
-CallEntry --> End([End])
+Start(["Entry Function"]) --> Progress["Report Initial Progress"]
+Progress --> Load["Load Model"]
+Load --> Info["Get Model Info"]
+Info --> Count["Compute Layer Count"]
+Count --> Loop{"For Each Layer"}
+Loop --> |Yes| Slice["Slice at Z Height"]
+Slice --> FillStep["Generate Fill"]
+FillStep --> NextLayer["Next Layer"]
+NextLayer --> Loop
+Loop --> |No| SupportCheck{"Enable Support?"}
+SupportCheck --> |Yes| Support["Generate Support"]
+SupportCheck --> |No| SkipSupport["Skip Support"]
+Support --> BuildPaths["Build Layer Path Data"]
+SkipSupport --> BuildPaths
+BuildPaths --> Gcode["Generate G-code or Robot Path"]
+Gcode --> Write["Write Output File"]
+Write --> SetOut["Set Output Path and Layers"]
+SetOut --> Done(["Return Success String"])
 ```
 
 **Diagram sources**
-- [lua_pipeline.cpp:857-894](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L857-L894)
+- [my_fdm_pipeline.lua:52-171](file://samples/Custom/scripts/my_fdm_pipeline.lua#L52-L171)
+- [lua_pipeline.cpp:228-288](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L228-L288)
+- [lua_pipeline.cpp:290-397](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L290-L397)
+- [lua_pipeline.cpp:401-461](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L401-L461)
 
 **Section sources**
-- [lua_pipeline.cpp:819-894](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L819-L894)
-- [LuaAddFunction.hpp:21-74](file://LibHsBaSlicer/Extends/LuaAddFunction.hpp#L21-L74)
-- [LuaCommonTypes.hpp:148-183](file://LibHsBaSlicer/Extends/LuaCommonTypes.hpp#L148-L183)
+- [lua_pipeline.cpp:228-288](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L228-L288)
+- [lua_pipeline.cpp:290-397](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L290-L397)
+- [lua_pipeline.cpp:401-461](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L401-L461)
+- [lua_pipeline_api.md:48-66](file://docs/en/lua_pipeline_api.md#L48-L66)
 
-### Global HsBa API Surface
-The `HsBa` table exposes these operations:
-- Progress and state:
-  - `progress(percent[, stage])`
-  - `setLayers(n)`
-  - `setOutputPath(path)`
-- File I/O:
-  - `readFile(path)`
-  - `writeFile(path, content)`
-- Model management:
-  - `loadModel(name, path)`
-  - `modelInfo(name)`
-  - `translateModel(name, {x,y,z})`
-  - `rotateModel(name, {x,y,z,w})`
-  - `scaleModel(name, s | {x,y,z})`
-  - `removeModel(name)`
-  - `modelNames()`
-- Slicing and coordinates:
-  - `layerCount(name, layerHeight, firstLayerHeight)`
-  - `layerZ(index0based, layerHeight, firstLayerHeight)`
-  - `slice(name, z)`
-  - `sliceUnsafe(name, z)`
-  - `toInt(polygons)`
-  - `toDouble(intPolygons)`
-- Fill:
-  - `fill(polygons[, {spacing, mode, angle, borderCount}])`
-- Support:
-  - `fdmSupport(layers, cfg)`
-  - `slaSupport(layers, cfg)`
-- Floor:
-  - `floor(bottomPolygons, cfg)`
-- Path and packaging:
-  - `spiralize(sections[, {layerHeight, startZ, zHeights}])`
-  - `toGcode(layers, cfg)`
-  - `saveSlsPackage({outlines, zHeights, config, output, script, func})`
-  - `saveWaamPackage({outlines, zHeights, weld, robotType, beadWidth, config, output, script, func})`
-  - `saveSlaPackage({outlines, supports, floor, config, output, imageWidth, imageHeight, imageExtension})`
-  - `renderImage(polygons, width, height, path)`
+### Built-in Functions: Model, Slicing, Fill, Support, Floor, Path, Packaging
+The `HsBa` table exposes the complete slicing toolkit used by custom pipelines.
+
+#### Model Operations
+- Loading reuses models by name.
+- Transformation supports translation, rotation via quaternion, uniform scaling, and per-axis scaling.
+- Model info includes bounding box minimum/maximum and volume.
+
+#### Slicing Operations
+- `layerCount` computes layers from model height, regular layer height, and first-layer height.
+- `layerZ` computes Z heights for 0-based indices.
+- `slice` returns safe closed contours.
+- `sliceUnsafe` returns normalized unsafe slices.
+
+#### Coordinate Conversion
+- Boolean and fill operations internally use integer precision.
+- `toInt` and `toDouble` convert between floating-point and integer polygon representations.
+
+#### Fill
+- `HsBa.fill` accepts polygons and optional configuration including spacing, mode, angle, and border count.
+- When `borderCount > 0`, it generates perimeters plus fill.
+
+#### Support and Floor
+- `fdmSupport` and `slaSupport` generate per-layer support based on configuration fields such as overhang angle, layer height, gap, diameter, density, pattern, tree parameters, and honeycomb cell size.
+- `floor` generates SLA bottom floor or raft with raft offset, border width, fill spacing, fill angle, border count, convex hull options, and concave hull point count.
+
+#### Path and G-code
+- `spiralize` turns per-layer closed contours into a continuous 3D spiral path suitable for extrusion processes like FDM, WAAM, or 3DP.
+- `toGcode` generates G-code from layered outlines, fills, supports, and Z heights with printer and firmware settings.
+
+#### Packaging and Export
+- `saveSlsPackage` packages SLS-style exports with outlines, Z heights, JSON config, output zip, export script, and export function name.
+- `saveWaamPackage` packages WAAM robot program output with welding parameters, robot type, bead width, and optional custom generator script.
+- `saveSlaPackage` packages SLA images with outlines, supports, floor, image dimensions, extension, and JSON config.
+- `renderImage` renders polygons to an image file.
 
 ```mermaid
 classDiagram
-class HsBa_Operations {
+class HsBa {
 +progress(percent, stage)
 +setLayers(n)
 +setOutputPath(path)
@@ -232,278 +259,352 @@ class HsBa_Operations {
 +writeFile(path, content)
 +loadModel(name, path)
 +modelInfo(name)
-+translateModel(name, vec3)
-+rotateModel(name, quat)
-+scaleModel(name, scalar_or_vec3)
++translateModel(name, offset)
++rotateModel(name, quaternion)
++scaleModel(name, scale)
 +removeModel(name)
 +modelNames()
-+layerCount(name, lh, flh)
-+layerZ(idx, lh, flh)
++layerCount(name, layerHeight, firstLayerHeight)
++layerZ(index, layerHeight, firstLayerHeight)
 +slice(name, z)
 +sliceUnsafe(name, z)
-+toInt(polygons)
-+toDouble(intPolygons)
-+fill(polygons, cfg)
-+fdmSupport(layers, cfg)
-+slaSupport(layers, cfg)
-+floor(bottomPolygons, cfg)
-+spiralize(sections, cfg)
-+toGcode(layers, cfg)
-+saveSlsPackage(pkg)
-+saveWaamPackage(pkg)
-+saveSlaPackage(pkg)
-+renderImage(polys, w, h, path)
++toInt(polys)
++toDouble(polys)
++fill(polys, options)
++fdmSupport(layers, config)
++slaSupport(layers, config)
++floor(bottomPolygons, config)
++spiralize(sections, options)
++toGcode(layers, config)
++saveSlsPackage(input)
++saveWaamPackage(input)
++saveSlaPackage(input)
++renderImage(polys, width, height, path)
 }
 ```
 
 **Diagram sources**
-- [lua_pipeline.cpp:212-783](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L212-L783)
+- [lua_pipeline.cpp:830-872](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L830-L872)
+- [lua_pipeline.cpp:480-691](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L480-L691)
+- [lua_pipeline.cpp:693-828](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L693-L828)
 
 **Section sources**
-- [lua_pipeline.cpp:212-783](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L212-L783)
+- [lua_pipeline.cpp:480-691](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L480-L691)
+- [lua_pipeline.cpp:693-828](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L693-L828)
+- [lua_pipeline_api.md:77-133](file://docs/en/lua_pipeline_api.md#L77-L133)
 
-### Data Type Conversions Between C++ and Lua
-- Polygon tables:
-  - Double-precision polygons: sequence of `{x,y}` point tables; used by slicing and most APIs.
-  - Integer polygons: internal representation; converted via `toInt`/`toDouble`.
-- Layer lists:
-  - Array of polygon arrays per layer; read/written through helper functions.
-- Config tables:
-  - Numeric fields with defaults; vector/matrix fields parsed from nested tables.
-- Common types:
-  - Eigen vectors/matrices/quaternions and Clipper2 points/polygons exposed via AnyObject reflection and Lua adapters.
+### Shared Libraries Available in Every Environment
+Shared libraries are available in both custom pipeline and built-in stage scripts.
+
+| Library | Purpose | Key Capabilities |
+|---|---|---|
+| `PolygonOperations` | 2D boolean and construction | union, intersection, difference, xor, offset, convex/concave hull, area, rectangle/circle/ellipse/regular polygon creation, text-to-polygons. |
+| `PolygonFill` | Fill algorithms | offset fill, line fill, zigzag variants, composite/hybrid fill, offset-only. |
+| `PathOptimize` | Path ordering optimization | region/polygon optimization, route cost, reordered paths. |
+| `Support` | Support generators | plane/tree/honeycomb/SLA generators, overhang detection, default config, Lua-based custom generator. |
+| `Cipher` | Encoding | base64 and hex encode/decode. |
+| `Zipper` / `Bit7zZipper` | Compression | archive creation, adding files and byte content, saving archives. |
+| Database adapters | Persistence | SQLite, MySQL, PostgreSQL adapters with connect, execute, query, insert, update, delete, create table. |
+| `ParamStore` | Parameter persistence | reflection-based storage with schema, save/load/list/update/delete. |
+
+Important availability notes:
+
+- MySQL adapter requires `HSBA_USE_MYSQL`.
+- PostgreSQL adapter requires `HSBA_USE_PGSQL`.
+- `Bit7zZipper` requires `HSBA_USE_BIT7Z`.
+
+**Section sources**
+- [lua_pipeline_api.md:136-213](file://docs/en/lua_pipeline_api.md#L136-L213)
+- [lua_pipeline.cpp:924-941](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L924-L941)
+
+### Built-in Pipeline Stage Hooks
+Built-in pipelines allow replacing specific algorithms without changing the overall stage order.
+
+#### Support Stage
+Globals injected:
+
+| Global | Type | Meaning |
+|---|---|---|
+| `current_layer` | polygons | Current-layer polygons. |
+| `prev_layer` | polygons | Previous-layer polygons; empty on first layer. |
+| `layer_height` | number | Layer height in mm. |
+| `config` | table | Support configuration. |
+
+Agreed entry function: `generate_support()`, returning support cross-section polygons. Result can also be returned via the global `support_polys`.
+
+Available libraries: `PolygonOperations`, `Support`, plus external 2D/3D functions registered by C++.
+
+#### Fill Stage
+Agreed entry function: `generate_fill(current_layer)`, receiving current-layer polygons after perimeter subtraction. No globals are injected; use defaults inside the script. The script should define the function but not self-invoke at the end.
+
+Available libraries: `PolygonOperations`, `PolygonFill`, `PathOptimize`.
+
+#### Floor Stage (SLA)
+Used to customize SLA bottom floor or raft generation.
+
+Available libraries: `PolygonOperations`, `PolygonFill`.
+
+#### Export Stage
+Export scripts run at packaging stage with globals:
+
+| Global | Type | Meaning |
+|---|---|---|
+| `config` | table | `{ path="config.json", configStr="<JSON>" }`. |
+| `images` | array | `{ path="layers/N.json", data="<polygon JSON>" }`. |
+| `output_path` | string | Output file path. |
+
+Agreed entry functions vary by process: `export_sls`, `export_waam`, etc. Return value should be a table with `success` and `export_path`, except WAAM which returns robot program text.
+
+Common pitfall: returning a wrong value type from an export script can overwrite or write an empty zip file. Always return the expected structure and keep object method names consistent with C++ bindings.
+
+**Section sources**
+- [lua_pipeline_api.md:215-261](file://docs/en/lua_pipeline_api.md#L215-L261)
+- [LuaSupport.hpp:21-39](file://support/LuaSupport.hpp#L21-L39)
+- [LuaSupport.cpp:67-90](file://support/LuaSupport.cpp#L67-L90)
+
+### Type Binding System: C++ Objects to Lua Variables
+HsBaSlicer uses Lua tables as the universal representation for geometry:
+
+| Type | Lua Representation | Notes |
+|---|---|---|
+| Point | `{ x = number, y = number }` | Fields fixed as `x` and `y`; units in mm; double precision. |
+| Polygon | Array of points | Ordered closed contour. |
+| Polygons | Array of polygons | One layer; holes exist as separate polygons. |
+| Layers | Array of polygon arrays | Per-layer collection. |
+| 3D point | `{ x = number, y = number, z = number }` | Used by spiral path output. |
+
+Conversion helpers:
+
+- `PushPolygonDToLua`, `PushPolygonsDToLua`, `PushPolygonToLua`, `PushPolygonsToLua` push C++ polygons onto the Lua stack.
+- `LuaTableToPolygonD`, `LuaTableToPolygonsD`, `LuaTableToPolygon`, `LuaTableToPolygons` read Lua tables into C++ polygons.
+- Integerization converts between floating-point and integer polygon representations for stability in boolean/fill operations.
+
+Memory and lifetime considerations:
+
+- Geometry data is copied across the C++/Lua boundary using table serialization.
+- Large layers and many polygons increase allocation and GC pressure.
+- Scripts should avoid retaining large intermediate polygon tables longer than necessary.
+- Use `HsBa.removeModel` after processing to release model resources.
 
 ```mermaid
 flowchart TD
-A["Lua table {x,y}"] --> B["PolygonD / Polygon"]
-B --> C["PolygonsD / Polygons"]
-C --> D["Slice / Fill / Support / Path APIs"]
-D --> E["Back to Lua tables"]
+LuaIn["Lua Table Input"] --> Convert["LuaTableToPolygonsD / LuaTableToPolygons"]
+Convert --> CoreAlg["C++ Algorithm"]
+CoreAlg --> IntConv["Integerization / UnIntegerization"]
+IntConv --> Push["PushPolygonsToLua / PushPolygonsDToLua"]
+Push --> LuaOut["Lua Table Output"]
 ```
 
 **Diagram sources**
-- [LuaAdapter.cpp:272-419](file://2D/LuaAdapter.cpp#L272-L419)
-- [LuaCommonTypes.hpp:110-140](file://LibHsBaSlicer/Extends/LuaCommonTypes.hpp#L110-L140)
+- [LuaAdapter.cpp:332-491](file://2D/LuaAdapter.cpp#L332-L491)
+- [lua_pipeline.cpp:185-222](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L185-L222)
+- [lua_pipeline.cpp:463-478](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L463-L478)
 
 **Section sources**
-- [LuaAdapter.cpp:272-419](file://2D/LuaAdapter.cpp#L272-L419)
-- [LuaCommonTypes.hpp:110-140](file://LibHsBaSlicer/Extends/LuaCommonTypes.hpp#L110-L140)
+- [LuaAdapter.hpp:16-81](file://2D/LuaAdapter.hpp#L16-L81)
+- [LuaAdapter.cpp:332-491](file://2D/LuaAdapter.cpp#L332-L491)
+- [lua_pipeline_api.md:32-45](file://docs/en/lua_pipeline_api.md#L32-L45)
 
-### Custom Algorithm Development Patterns
+### Event Handling, Progress Reporting, and Error Handling
+Progress reporting:
 
-#### Custom Fill Algorithm
-- Entry function: `generate_fill(current_layer)` receives current-layer polygons and returns fill polygons.
-- Available tools: `PolygonOperations` (union, intersection, difference, xor, offset, hulls, area, shape generators).
-- Typical pattern: compute bounding box, generate parallel lines at an angle, intersect with current layer.
+- `HsBa.progress(percent, stage)` forwards percentage and stage name to the C++ progress callback stored in `LuaPipelineContext.progress_cb`.
+- Scripts should call progress at meaningful boundaries: model loading, slicing loops, support generation, path generation, and file writing.
 
-```mermaid
-flowchart TD
-Start(["generate_fill(current_layer)"]) --> CheckEmpty{"current_layer empty?"}
-CheckEmpty --> |Yes| ReturnEmpty["Return {}"]
-CheckEmpty --> |No| ComputeBB["Compute bounding box"]
-ComputeBB --> GenerateLines["Generate parallel lines"]
-GenerateLines --> Intersect["Intersect lines with current_layer"]
-Intersect --> ReturnResult["Return filled polygons"]
-```
+Error handling:
 
-**Diagram sources**
-- [my_infill.lua:20-87](file://samples/FDM/scripts/my_infill.lua#L20-L87)
-- [LuaAdapter.cpp:251-269](file://2D/LuaAdapter.cpp#L251-L269)
+- `RunLuaSource` wraps Lua errors with chunk names and throws `RuntimeError`.
+- `RunLuaPipeline` catches `RuntimeError`, sets `success = false`, and populates `error_message`.
+- Missing entry function produces a clear error message.
+- File write failures raise Lua errors with the failing path.
+- Export scripts must return the expected structure; otherwise packaging may fail silently or produce invalid output.
+
+Event callbacks:
+
+- The registration framework supports registering Lua event callbacks under named events such as zipper or database events.
+- This allows external extensions to intercept or observe operations during compression, database access, or other pipeline stages.
 
 **Section sources**
-- [my_infill.lua:1-89](file://samples/FDM/scripts/my_infill.lua#L1-L89)
-- [LuaAdapter.cpp:251-269](file://2D/LuaAdapter.cpp#L251-L269)
+- [lua_pipeline.cpp:228-238](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L228-L238)
+- [lua_pipeline.cpp:888-899](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L888-L899)
+- [lua_pipeline.cpp:995-1040](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L995-L1040)
+- [LuaAddFunction.hpp:60-74](file://LibHsBaSlicer/Extends/LuaAddFunction.hpp#L60-L74)
+
+### Custom Pipeline Development Process
+Recommended script structure:
+
+1. Define helper functions for machine parameters and geometry utilities.
+2. Resolve input model name/path and output path from context globals or defaults.
+3. Report initial progress.
+4. Load model and compute layer count; report total layers.
+5. Iterate layers: slice, compute Z height, generate fill, optionally rotate fill angle or apply strategy.
+6. Optionally generate support based on configuration.
+7. Assemble layer path data with outlines, fills, supports, and Z heights.
+8. Generate G-code or robot path.
+9. Write output file and set output path.
+10. Remove model from pool and report final progress.
+11. Return a success string.
+
+Example patterns:
+
+- FDM custom pipeline: full control over load, slice, fill, support, G-code generation, and file output.
+- SLA custom pipeline: load, slice, SLA support, floor/raft, render and package images into zip.
+- Built-in support script: detect overhangs, choose generator, generate support, optionally refine polygons.
+- Built-in fill script: define `generate_fill` and return fill polygons without side effects.
+
+**Section sources**
+- [my_fdm_pipeline.lua:24-171](file://samples/Custom/scripts/my_fdm_pipeline.lua#L24-L171)
+- [my_sla_pipeline.lua:20-104](file://samples/Custom/scripts/my_sla_pipeline.lua#L20-L104)
+- [my_support.lua:30-82](file://samples/FDM/scripts/my_support.lua#L30-L82)
+- [my_infill.lua:18-88](file://samples/FDM/scripts/my_infill.lua#L18-L88)
+
+### Practical Examples
+
+#### Complete FDM Custom Pipeline
+The FDM example demonstrates:
+
+- Reading machine parameters from a preinjected `machine` table or fallback defaults.
+- Computing XY extent of layers.
+- Loading model, computing layers, slicing, rotating fill angle every few layers.
+- Conditional support generation.
+- Building path layers and generating G-code.
+- Writing header and G-code to file.
+- Returning a human-readable result.
+
+**Section sources**
+- [my_fdm_pipeline.lua:24-171](file://samples/Custom/scripts/my_fdm_pipeline.lua#L24-L171)
+
+#### Complete SLA Custom Pipeline
+The SLA example demonstrates:
+
+- Loading model and computing layers.
+- Slicing with model bottom as Z origin.
+- Generating SLA support with tip diameter and raft thickness.
+- Generating floor/raft with convex hull option.
+- Rendering and packaging layers, supports, floor, and config into zip.
+- Cleaning up model and reporting output path.
+
+**Section sources**
+- [my_sla_pipeline.lua:20-104](file://samples/Custom/scripts/my_sla_pipeline.lua#L20-L104)
 
 #### Custom Support Algorithm
-- Entry function: `generate_support()` receives `current_layer`, `prev_layer`, `layer_height`, and `config`.
-- Uses `Support` module to detect overhangs and generate plane/tree/honeycomb/SLA supports.
-- Can refine results using `PolygonOperations.offsetOperation`.
+The FDM support example demonstrates:
 
-```mermaid
-flowchart TD
-Start(["generate_support()"]) --> FirstLayer{"First layer?"}
-FirstLayer --> |Yes| ReturnEmpty["Return {}"]
-FirstLayer --> |No| DetectOverhang["Detect overhang regions"]
-DetectOverhang --> HasOverhang{"Any overhang?"}
-HasOverhang --> |No| ReturnEmpty
-HasOverhang --> |Yes| ChooseGenerator["Choose generator by config.support_pattern"]
-ChooseGenerator --> ApplyConfig["Apply support_cfg"]
-ApplyConfig --> Generate["Support.generate(...)"]
-Generate --> Refine["Optional offset refinement"]
-Refine --> ReturnResult["Return support polygons"]
-```
-
-**Diagram sources**
-- [my_support.lua:32-79](file://samples/FDM/scripts/my_support.lua#L32-L79)
+- Skipping first layer.
+- Detecting overhang regions.
+- Selecting generator by pattern: plane, tree, honeycomb.
+- Using default config and overriding key fields.
+- Calling `Support.generate`.
+- Optionally refining support contact area with offset.
 
 **Section sources**
-- [my_support.lua:1-83](file://samples/FDM/scripts/my_support.lua#L1-L83)
+- [my_support.lua:30-82](file://samples/FDM/scripts/my_support.lua#L30-L82)
 
-### Full Lua-Driven Pipeline Creation
+#### Custom Fill Algorithm
+The FDM fill example demonstrates:
 
-#### FDM Pipeline Example
-- Orchestrates: load model, compute layers, slice per layer, fill with rotating angles, optionally generate supports, assemble path layers, generate G-code, write file, set output path, remove model, report progress.
-- Demonstrates reading machine parameters from injected `machine` table and using `pipeline_config`.
-
-```mermaid
-sequenceDiagram
-participant Script as "my_fdm_pipeline.lua"
-participant HsBa as "HsBa"
-Script->>HsBa : loadModel(model.name, model.path)
-Script->>HsBa : modelInfo(model.name)
-Script->>HsBa : layerCount(...)
-Script->>HsBa : setLayers(n)
-loop For each layer
-Script->>HsBa : layerZ(i, ...)
-Script->>HsBa : slice(model.name, z)
-Script->>HsBa : fill(outlines[i], cfg)
-end
-Script->>HsBa : fdmSupport(outlines, cfg)
-Script->>HsBa : toGcode(path_layers, cfg)
-Script->>HsBa : writeFile(output, header..gcode)
-Script->>HsBa : setOutputPath(output)
-Script->>HsBa : removeModel(model.name)
-```
-
-**Diagram sources**
-- [my_fdm_pipeline.lua:52-170](file://samples/Custom/scripts/my_fdm_pipeline.lua#L52-L170)
-- [lua_pipeline.cpp:272-654](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L272-L654)
+- Defining `generate_fill(current_layer)`.
+- Computing bounding box and scan range.
+- Generating parallel lines at a given angle.
+- Creating thin rectangular polygons as fill lines.
+- Intersecting fill lines with current layer to clip to valid regions.
 
 **Section sources**
-- [my_fdm_pipeline.lua:1-172](file://samples/Custom/scripts/my_fdm_pipeline.lua#L1-L172)
-- [lua_pipeline.cpp:272-654](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L272-L654)
-
-#### SLA Pipeline Example
-- Orchestrates: load model, slice, generate SLA supports, generate floor/raft, render and package images with config JSON.
-
-```mermaid
-sequenceDiagram
-participant Script as "my_sla_pipeline.lua"
-participant HsBa as "HsBa"
-Script->>HsBa : loadModel(model.name, model.path)
-Script->>HsBa : modelInfo(model.name)
-Script->>HsBa : layerCount(...)
-Script->>HsBa : setLayers(n)
-loop For each layer
-Script->>HsBa : slice(model.name, z)
-end
-Script->>HsBa : slaSupport(outlines, cfg)
-Script->>HsBa : floor(outlines[1], cfg)
-Script->>HsBa : saveSlaPackage({outlines, supports, floor, config, output, ...})
-Script->>HsBa : setOutputPath(output)
-Script->>HsBa : removeModel(model.name)
-```
-
-**Diagram sources**
-- [my_sla_pipeline.lua:27-103](file://samples/Custom/scripts/my_sla_pipeline.lua#L27-L103)
-- [lua_pipeline.cpp:492-518](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L492-L518)
-- [lua_pipeline.cpp:746-771](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L746-L771)
-
-**Section sources**
-- [my_sla_pipeline.lua:1-105](file://samples/Custom/scripts/my_sla_pipeline.lua#L1-L105)
-- [lua_pipeline.cpp:492-518](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L492-L518)
-- [lua_pipeline.cpp:746-771](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L746-L771)
-
-### Event Handling Mechanisms and Callback Patterns
-- External Lua functions can be registered for pipeline stages:
-  - `Add2DFunctions(func)`: 2D stage functions.
-  - `Add3DFunctions(func)`: 3D stage functions.
-  - `AddFileFunctions(func)`: File stage functions.
-- Event callbacks:
-  - `AddEventCallback(event_name, func)` registers named events (e.g., zipper or DB events).
-  - `GetEventCallbacks(event_name)` retrieves callbacks for an event.
-
-```mermaid
-flowchart TD
-Init["Initialize Lua state"] --> Pools["Consume 2D/3D/File registration pools"]
-Pools --> RegisterStage["Register stage-specific Lua functions"]
-RegisterStage --> Events["Register event callbacks"]
-Events --> Runtime["Runtime invokes callbacks on events"]
-```
-
-**Diagram sources**
-- [LuaAddFunction.hpp:21-74](file://LibHsBaSlicer/Extends/LuaAddFunction.hpp#L21-L74)
-- [lua_pipeline.cpp:857-894](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L857-L894)
-
-**Section sources**
-- [LuaAddFunction.hpp:21-74](file://LibHsBaSlicer/Extends/LuaAddFunction.hpp#L21-L74)
-- [lua_pipeline.cpp:857-894](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L857-L894)
+- [my_infill.lua:18-88](file://samples/FDM/scripts/my_infill.lua#L18-L88)
 
 ## Dependency Analysis
-The Lua scripting system composes multiple subsystems:
-- Core pipeline driver depends on `lua_pipeline.cpp` for environment setup and operation bindings.
-- Polygon operations depend on `2D/LuaAdapter.cpp` for conversion and boolean operations.
-- Support and fill rely on LibHsBaSlicer modules (support, fill, path generation).
-- Packaging/export depends on SLS/WAAM/SLA exporters.
-- Configuration flows through protobuf messages for the fully Lua-driven pipeline.
+The Lua scripting system depends on multiple layers:
+
+- Protocol layer defines the minimal configuration for fully Lua-driven pipelines.
+- Driver layer constructs Lua state, environment, and runs scripts.
+- Operation layer binds `HsBa` methods to C++ slicing core.
+- Shared library layer provides reusable tools for geometry, support, fill, path optimization, compression, encoding, database access, and parameter persistence.
+- Sample layer provides reference scripts for different manufacturing processes.
 
 ```mermaid
-graph TB
-Driver["lua_pipeline.cpp"] --> Ops["HsBa operations"]
-Ops --> Slice["Mesh slicing"]
-Ops --> Fill["Polygon fill"]
-Ops --> Support["Support generation"]
-Ops --> Path["Path generation"]
-Ops --> Export["Packaging/export"]
-Driver --> Types["Common types & AnyObject"]
-Driver --> Ext["External 2D/3D/File registrations"]
-Driver --> Proto["custom_pipeline.proto"]
+graph LR
+Proto["custom_pipeline.proto"] --> Driver["lua_pipeline.cpp"]
+Driver --> Ops["HsBa Operations"]
+Ops --> Core["Slicing Core"]
+Driver --> Shared["Shared Libraries"]
+Shared --> PolyOps["PolygonOperations"]
+Shared --> SupportMod["Support"]
+Shared --> FillMod["PolygonFill"]
+Shared --> PathOpt["PathOptimize"]
+Shared --> Zip["Zipper / Bit7zZipper"]
+Shared --> Cipher["Cipher"]
+Shared --> DB["Database Adapters"]
+Samples["Sample Scripts"] --> Driver
+Samples --> Ops
 ```
 
 **Diagram sources**
-- [lua_pipeline.cpp:1-39](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L1-L39)
-- [lua_pipeline.cpp:819-894](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L819-L894)
 - [custom_pipeline.proto:1-25](file://proto/custom_pipeline.proto#L1-L25)
+- [lua_pipeline.cpp:903-1046](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L903-L1046)
+- [lua_pipeline_api.md:136-213](file://docs/en/lua_pipeline_api.md#L136-L213)
 
 **Section sources**
-- [lua_pipeline.cpp:1-39](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L1-L39)
-- [lua_pipeline.cpp:819-894](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L819-L894)
 - [custom_pipeline.proto:1-25](file://proto/custom_pipeline.proto#L1-L25)
+- [lua_pipeline.cpp:903-1046](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L903-L1046)
 
 ## Performance Considerations
-- Prefer integer polygon operations where possible; use `toInt`/`toDouble` judiciously to avoid unnecessary conversions.
-- Batch layer processing: accumulate outlines/fills/supports and process in loops, updating progress periodically to keep UI responsive.
-- Avoid excessive Lua-to-C++ conversions inside tight loops; minimize table allocations when possible.
-- Use `HsBa.progress` to report incremental progress for long-running tasks.
-- Reuse models and remove them after use to free resources.
-- For large datasets, consider generating paths and exporting incrementally if supported by your workflow.
+- Prefer integer polygon operations for boolean and fill steps; use `HsBa.toInt` before heavy geometry work and `HsBa.toDouble` when returning floating-point results.
+- Avoid keeping large polygon arrays in Lua globals longer than needed; prefer local variables and explicit cleanup.
+- Call `HsBa.removeModel` after processing to free model resources.
+- Batch progress updates rather than calling progress on every tiny step.
+- For very large models, consider reducing fill density, increasing spacing, or limiting support density to reduce computation and memory usage.
+- Use `PathOptimize` to reduce travel distance and improve toolpath efficiency.
+- Be cautious with image rendering and zip packaging for high-resolution layers; adjust image width/height and extension appropriately.
 
 [No sources needed since this section provides general guidance]
 
 ## Troubleshooting Guide
-- Lua errors:
-  - Errors during script execution are wrapped into `RuntimeError` and surfaced in `LuaPipelineOutput.error_message`.
-  - Check chunk names (inline vs file) to locate problematic code.
-- Model not found:
-  - Ensure `loadModel` succeeded before calling `modelInfo`, `slice`, etc.
-- Invalid parameters:
-  - Validate numeric inputs (layer heights, line widths, speeds) and enum-like strings (firmware, fill modes).
-- File I/O failures:
-  - Verify paths exist and are writable; handle nil returns from `readFile`.
-- Packaging/export failures:
-  - Required fields like `output` must be present; check returned booleans and second error values where applicable.
+Common issues and resolutions:
+
+| Symptom | Likely Cause | Resolution |
+|---|---|---|
+| Lua entry function not found | Wrong `pipeline_entry` or missing function in script. | Ensure the script defines the function named by `pipeline_entry`, default `run_pipeline`. |
+| Script raises Lua error | Syntax error, missing global, or invalid argument. | Check error message from `LuaPipelineOutput.error_message`; validate arguments passed to `HsBa` functions. |
+| File write fails | Path not writable or permission denied. | Verify output path and permissions; handle `writeFile` return value. |
+| Export zip is empty or overwritten | Export script returned wrong type. | Return `{ success = true/false, export_path = "..." }` for SLS/SLM/LOM/TDP; return string for WAAM. |
+| Support or fill produces unexpected shapes | Incorrect polygon format or precision loss. | Use `HsBa.toInt`/`HsBa.toDouble` correctly; verify polygon orientation and closure. |
+| Too much memory usage | Retaining large polygon tables or models. | Release models with `removeModel`; avoid global retention of intermediate layers. |
+
+Debugging techniques:
+
+- Print intermediate values using Lua `print` where acceptable.
+- Use `HsBa.renderImage` to visualize polygons before packaging.
+- Inspect `LuaPipelineOutput.success`, `total_layers`, `output_path`, `result_string`, and `error_message`.
+- Validate JSON config strings passed via `pipeline_config`.
+- Test small models first, then scale up.
+
+Testing strategies:
+
+- Create minimal scripts that exercise one `HsBa` operation at a time.
+- Use sample scripts as templates and gradually add complexity.
+- Add unit-like checks inside scripts for expected layer counts and output paths.
+- Keep export scripts deterministic and idempotent.
 
 **Section sources**
-- [lua_pipeline.cpp:843-853](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L843-L853)
-- [lua_pipeline.cpp:240-268](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L240-L268)
-- [lua_pipeline.cpp:660-771](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L660-L771)
+- [lua_pipeline.cpp:995-1040](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L995-L1040)
+- [lua_pipeline_api.md:246-261](file://docs/en/lua_pipeline_api.md#L246-L261)
 
 ## Conclusion
-HsBaSlicer’s Lua scripting system provides a powerful, flexible interface for building bespoke slicing workflows. The fully Lua-driven pipeline lets you orchestrate every stage, while stage-level registration hooks allow targeted customization. With robust polygon operations, support and fill utilities, path generation, and packaging/export capabilities, developers can implement complex algorithms efficiently. Proper error handling, careful data conversions, and thoughtful performance practices ensure reliable and high-performing scripts.
+HsBaSlicer’s Lua scripting system provides a powerful separation between process orchestration and core slicing algorithms. The custom pipeline gives full control over workflow order and parameters, while built-in stage hooks allow targeted algorithm replacement. The `HsBa` table and shared libraries expose model management, slicing, fill, support, floor, path generation, packaging, compression, encoding, database access, and parameter persistence. With careful type binding, memory management, progress reporting, and error handling, developers can build robust, extensible manufacturing pipelines for FDM, SLA, SLS, SLM, LOM, TDP, and WAAM processes.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
 ## Appendices
 
-### Lua-Driven Pipeline Configuration (Protobuf)
-- Fields:
-  - `custom_pipe_config_pipeline_lua_script`: path to the Lua script file.
-  - `custom_pipe_config_pipeline_lua_source`: inline Lua source executed before the script file.
-  - `custom_pipe_config_entry_func`: Lua entry function name (default `run_pipeline`).
-  - `custom_pipe_config_config_json`: free-form JSON exposed as `pipeline_config`.
-  - `custom_pipe_config_model_name`: model name exposed as `model_name`.
-  - `custom_pipe_config_model_path`: model file path exposed as `model_path`.
-  - `custom_pipe_config_output_path`: default output path exposed as `output_path`.
+### Lua API Reference Summary
+The public Lua API is documented in `docs/en/lua_pipeline_api.md` and typed in `types/hsba_pipeline.d.lua`. Key categories include:
+
+- Common geometry types: point, polygon, polygons, layers, 3D point.
+- Custom pipeline environment: `HsBa` table and context globals.
+- Shared libraries: `PolygonOperations`, `PolygonFill`, `PathOptimize`, `Support`, `Cipher`, `Zipper`, `Bit7zZipper`, database adapters, `ParamStore`.
+- Built-in stage hooks: support, fill, floor, export.
+- Full example: minimal runnable custom pipeline.
 
 **Section sources**
-- [custom_pipeline.proto:1-25](file://proto/custom_pipeline.proto#L1-L25)
+- [lua_pipeline_api.md:1-332](file://docs/en/lua_pipeline_api.md#L1-L332)
+- [hsba_pipeline.d.lua:1-663](file://types/hsba_pipeline.d.lua#L1-L663)

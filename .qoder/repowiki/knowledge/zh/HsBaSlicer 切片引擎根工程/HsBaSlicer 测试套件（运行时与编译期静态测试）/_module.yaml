@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: tests
+title: HsBaSlicer 测试套件（运行时与编译期静态测试）
+scope:
+    - tests/
+    - static_tests/
+source_files: []
+depends_on: []
+related_to: []

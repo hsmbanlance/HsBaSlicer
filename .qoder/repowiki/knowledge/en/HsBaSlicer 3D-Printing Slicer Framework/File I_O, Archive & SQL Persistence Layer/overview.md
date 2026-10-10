@@ -1,1 +1,0 @@
-Provides ZIP compression/extraction, SQL database adapters (SQLite/MySQL/PostgreSQL), process-parameter persistence via ParamStore, Lua bindings, and remote file transfer for the Slicer pipeline.

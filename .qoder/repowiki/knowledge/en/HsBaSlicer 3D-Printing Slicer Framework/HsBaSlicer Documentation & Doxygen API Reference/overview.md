@@ -1,1 +1,0 @@
-User-facing documentation (English/Chinese Markdown guides) and generated Doxygen HTML/LaTeX API reference for the HsBaSlicer slicing framework.

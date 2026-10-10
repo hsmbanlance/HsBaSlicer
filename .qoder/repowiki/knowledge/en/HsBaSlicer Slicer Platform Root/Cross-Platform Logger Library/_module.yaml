@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: logger_library
+title: Cross-Platform Logger Library
+scope:
+    - logger/
+source_files: []
+depends_on: []
+related_to: []

@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: dll_export_layer/additive_manufacturing_pipelines
+title: 增材制造切片管线 C ABI 导出层
+scope:
+    - DllHsBaSlicer/fdm_pipeline.cpp
+    - DllHsBaSlicer/sla_pipeline.cpp
+    - DllHsBaSlicer/slm_pipeline.cpp
+source_files: []
+depends_on: []
+related_to:
+    - path: geometry_core
+    - path: samples
+    - path: support_system

@@ -1,4 +1,0 @@
-- Generated source files are written UTF-8 without BOM via `[System.IO.File]::WriteAllText(..., $utf8NoBom)` rather than relying on default encoding.
-- Platform detection is centralized in a single mapping function (`Get-PlatformFromTriplet`) keyed off vcpkg triplet substrings, with a separate `$buildPlatform` derived from `$IsWindows/$IsLinux/$IsMacOS` for the host machine.
-- Third-party library metadata is maintained as a hand-edited hashtable (`libInfoMap`) pairing package name → {license, homepage}, which drives both the emitted dependency list and the copyleft-license decision.
-- The public API surface lives in `version.hpp` under namespace `HsBa::Slicer::Version`, exposing only `VersionInfo`, `ThirdLibraries`, and the `GetVersionInfo()` accessor — implementation details stay in the generated `.cpp`.

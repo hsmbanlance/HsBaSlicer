@@ -143,3 +143,33 @@ foreach ($l in 'en','zh') {
   }
 }
 ```
+
+## 7. `/knowledge` intervention playbook (fix the current wiki WITHOUT regenerating)
+
+`/knowledge` supports four operations — **generate / modify / supplement / rewrite** — and manual edits are
+marked and protected from being overwritten by the next automatic update. Invoke `/knowledge` in the input box,
+paste the prompts below, and optionally attach `.qoder/repowiki/wiki_plan.yaml` or this guide as a reference file.
+
+> **Strategy correction**: the EN category-name Chinese pollution and root loose pages are **already fixed**
+> (EN is now 128 clean English-only pages, content intact). Going forward we use **neutral merge**: keep the more
+> complete side per category, **delete neither side**, and bring the weaker side up to one unified structure.
+
+### A. Use the stronger side as baseline, enrich the weaker side
+
+- **ZH-stronger categories** (Core Concepts 22, Lua 32, API 36, Extension 8): enrich **en** —
+  > Using the corresponding zh category's page list as baseline, supplement/rewrite substantive English pages missing
+  > in en so this category's leaf pages pair one-to-one across languages.
+- **EN-stronger categories** (Core Modules 40, Examples 18, Advanced 9, Integration 14): enrich **zh** —
+  > Using the corresponding en category as baseline, supplement/rewrite substantive Chinese pages missing in zh.
+- **Both-single-page categories** (Overview/Architecture/Dev-Test/Deployment/Appendix): keep concise; do not force-split.
+
+### B. Merge only genuinely thin pages (not "delete just because a side has more pages")
+
+> Merge or delete a page only when it is < ~30 meaningful lines and largely overlaps a sibling. If ZH's API/Lua pages
+> are substantive and more complete, they are the **baseline side** and should be used to enrich EN — not trimmed away.
+
+### C. Shared constraints to append to every `/knowledge` call
+
+- Each page starts with a single `# H1`; body is code-grounded; at least one diagram/table per page; footer cross-links
+  the sibling-language page.
+- After all fixes, re-run the section 6 comparison script; expect `en count == zh count`, symmetric categories, no root loose pages.

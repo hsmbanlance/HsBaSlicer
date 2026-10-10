@@ -1,0 +1,4 @@
+- Every exported symbol is declared with the `HSBA_SLICER_API` macro rather than platform-specific annotations directly at the declaration site.
+- Public headers wrap their C API in `#ifdef __cplusplus extern "C" { ... }` blocks so the same header can be included from both C and C++ callers.
+- Each public header guards its contents with an include guard named after the file (e.g. `HSBA_SLICER_INITIALIZE_H`, `HSBA_SLICER_EVENT_SOURCE_REGISTER_H`, `HSBA_SLICER_VERSION_INFO_H`).
+- Functions returning heap-allocated strings follow a paired allocate/free convention: a getter returns a dynamically allocated `char*` and a corresponding `HsBaFreeVersionString` frees it from the same allocator.

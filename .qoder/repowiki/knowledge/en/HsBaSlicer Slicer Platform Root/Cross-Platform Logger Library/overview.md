@@ -1,0 +1,1 @@
+Thread-safe singleton logger providing leveled output (debug/info/warning/error) with Boost.Log on desktop, Android logcat, and iOS os_log backends.

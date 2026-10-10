@@ -1,5 +1,0 @@
-Three thin translation units sit between the C++ core (`LibHsBaSlicer/Preprocess/model_preprocess.hpp`, `LibHsBaSlicer/version_info.hpp`) and the Slicer host:
-- `model_preprocess.cpp` implements the full C ABI (`HsBaLoadModel`, `HsBaTranslateModel`, `HsBaBooleanUnion`, …). Opaque handles are heap-allocated `std::shared_ptr<IModel>` pointers returned as `void*`, with `HsBaReleaseModelHandle` freeing them. CGAL-backed operations (`ThickSolidModel`, Boolean ops) are gated behind `#ifdef USE_CGAL` and return `nullptr` when disabled.
-- `version_info.cpp` exposes `HsBaGetVersionJson` / `HsBaGetVersionXml` plus a matching `HsBaFreeVersionString` allocator, duplicating strings via `malloc` so callers own the memory.
-- `initialize.cpp` is the DLL entry point placeholder for future Lua/pipeline registration.
-Dependency direction is strictly one-way: this module depends on `LibHsBaSlicer` and `base/error.hpp`; nothing inside `LibHsBaSlicer` knows about these shims. All public symbols are marked `HSBA_SLICER_API` to form the exported ABI surface.

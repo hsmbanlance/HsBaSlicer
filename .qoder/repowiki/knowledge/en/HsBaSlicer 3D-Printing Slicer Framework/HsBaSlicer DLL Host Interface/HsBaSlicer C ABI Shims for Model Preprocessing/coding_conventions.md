@@ -1,5 +1,0 @@
-- Every exported function is prefixed with `HsBa` and decorated with the `HSBA_SLICER_API` macro to mark the DLL export surface.
-- C ABI functions wrap their core calls in `try { ... } catch (const HsBa::Slicer::RuntimeError&)` blocks that translate exceptions into error return values (0 or nullptr).
-- Opaque object handles are represented as `void*` pointing to a heap-allocated `std::shared_ptr<IModel>`, paired with a dedicated release function (`HsBaReleaseModelHandle`).
-- Strings crossing the C boundary are duplicated with `malloc` and the caller is responsible for freeing them via the matching free function (`HsBaFreeVersionString`).
-- Optional CGAL-dependent features are compiled out via `#ifdef USE_CGAL` with an explicit `#else` branch returning a safe default (null pointer).

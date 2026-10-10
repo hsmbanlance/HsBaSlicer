@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: dll_export_layer/lua_and_version
+title: Lua 与版本信息 C ABI 导出层
+scope:
+    - DllHsBaSlicer/lua_register.cpp
+    - DllHsBaSlicer/version_info.cpp
+    - DllHsBaSlicer/CMakeLists.txt
+source_files: []
+depends_on: []
+related_to:
+    - path: dll_export_layer/dll_export_core

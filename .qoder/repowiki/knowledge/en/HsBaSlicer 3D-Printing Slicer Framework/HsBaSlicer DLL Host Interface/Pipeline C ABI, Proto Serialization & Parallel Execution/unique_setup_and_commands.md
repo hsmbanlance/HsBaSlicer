@@ -1,1 +1,0 @@
-Set `HSBA_PIPELINE_THREADS=N` before running to force N worker threads (or `1` to disable parallelism and compare against the serial path); all `*_ToProtoBytes` outputs and custom-pipeline results require explicit freeing via the matching `HsBaFree*` helpers.

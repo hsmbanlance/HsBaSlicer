@@ -1,1 +1,0 @@
-C++17 STL (`<filesystem>`, `<string_view>`, `<functional>`) plus embedded Lua scripting for optional post-processing of serialized outputs; built as a CMake static library linked against sibling Slicer modules and `${LUA_LIBRARIES}`.

@@ -1,0 +1,4 @@
+- Tests are expressed as `static_assert` expressions at file scope or inside small free functions, with no runtime logic executed beyond forcing template instantiation.
+- Type introspection for `AnyObject` is registered by specializing `HsBa::Slicer::Utils::GetTypeInfo<T>()` in the `HsBa::Slicer::Utils` namespace and populating `info.methods` / `info.fields`.
+- Serialization targets define a `FieldList` tuple of `StaticReflect::FieldInfo` entries plus an optional `MethodList` and a `ClassName` constant to opt into JSON/XML/YAML reflection.
+- Enum-to-string round-tripping is validated through both the `EnumName`/`EnumFromName` helpers and explicit `magic_enum::customize::enum_range` specializations for enums with sentinel values.

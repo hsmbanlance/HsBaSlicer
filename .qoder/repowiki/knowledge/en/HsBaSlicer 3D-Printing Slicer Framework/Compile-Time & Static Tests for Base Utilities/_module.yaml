@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: static_tests
-title: Compile-Time & Static Tests for Base Utilities
-scope:
-    - static_tests/
-source_files: []
-depends_on: []
-related_to: []

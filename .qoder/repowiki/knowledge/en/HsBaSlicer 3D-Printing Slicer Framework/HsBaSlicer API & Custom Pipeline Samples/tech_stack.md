@@ -1,1 +1,0 @@
-C++17/20 (uses `<format>`, `<filesystem>`, `<bit_cast>`), Lua scripting engine for pipeline customization, Protobuf wire format (hand-rolled varint/fixed64/delimited encoder/decoder in `Custom/main.cpp` to avoid linking protobuf runtime), CMake as the only build system.

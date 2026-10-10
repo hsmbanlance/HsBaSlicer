@@ -1,0 +1,1 @@
+Configure via CMake presets in `CMakePresets.json`; enable copyleft kernels with `-DHSBA_COPL=ON` (or let AUTO probe CGAL/OpenCASCADE); toggle C++20 module wrapper with `HSBA_SLICER_MODULE`; build samples/tests/docs with `HSBA_SLICER_BUILD_SAMPLES` / `HSBA_SLICER_USE_TESTS` / `HSBA_SLICER_BUILD_DOCS`; run coverage with `-DHSBA_COVERAGE=ON` and the generated `coverage` target.

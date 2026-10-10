@@ -1,4 +1,0 @@
-- Each generator is a class deriving from `ISupport` and overriding `Generate(const PolygonsD&, const PolygonsD&, float, const SupportConfig&)` returning per-layer `PolygonsD`.
-- Configuration structs use inheritance from a common `SupportConfig` base, with technology-specific fields added via derived structs (`FdmSupportConfig`, `SlaSupportConfig`).
-- Public headers use include guards of the form `#ifndef HSBA_SLICER_<NAME>_HPP` matching the file name, paired with `pragma once`.
-- All public types live in the `HsBa::Slicer::Support` namespace, keeping the support subsystem isolated from the rest of the slicer.

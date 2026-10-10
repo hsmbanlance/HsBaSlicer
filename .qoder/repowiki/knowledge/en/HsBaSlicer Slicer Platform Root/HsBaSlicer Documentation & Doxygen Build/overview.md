@@ -1,0 +1,1 @@
+Bilingual (English/Chinese) Markdown documentation for HsBaSlicer modules plus a Doxygen-driven API docs build target wired into the project CMake.

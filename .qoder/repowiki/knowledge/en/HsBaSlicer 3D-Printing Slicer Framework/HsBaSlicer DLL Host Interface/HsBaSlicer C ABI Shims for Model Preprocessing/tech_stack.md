@@ -1,1 +1,0 @@
-C ABI over C++17; Eigen3 vectors/quaternions for transforms; optional CGAL geometry kernel (gated by `USE_CGAL`); raw `malloc`/`free` for cross-language string ownership.
