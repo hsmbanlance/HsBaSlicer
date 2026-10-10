@@ -1,0 +1,72 @@
+# Repo Wiki 前置干预配置 / pre-generation guidance
+# 官方机制: https://help.aliyun.com/zh/lingma/repo-wiki （见「干预 Wiki 生成 → wiki_plan.yaml」）
+# 修改本文件后，需在 Qoder IDE 手动触发「生成 / 重新生成」才会生效；本文件随 Git 提交共享给团队。
+# 目标：让 en / zh 两套 Wiki 结构对照一致（1:1）、去重、并最大化有效内容。基准为「中立合并」。
+# Goal: make the en / zh wikis parallel (1:1), de-duplicated, and content-dense, using a neutral-merge baseline.
+
+version: 1
+
+repowiki:
+  # architecture = 全面分析技术架构；product_requirement = 按产品需求格式输出
+  template: "architecture"
+
+  # 注入规划阶段的引导提示：引导 AI 关注指定重点（不强制限定页面，避免裁剪有效内容）
+  notes:
+    - text: >-
+        中英文 Wiki 必须使用完全相同的顶层分类与相同的叶子页面集合，页面数量一一对应，仅标题与正文语言不同。
+        统一采用以下 13 个顶层分类（EN 名 / 中文名）：Overview & Getting Started / 项目概述与快速开始、
+        Architecture Overview / 架构总览、Core Concepts / 核心概念、Core Modules / 核心模块详解、
+        Advanced Features / 高级主题、Lua Scripting System / Lua 脚本系统、API Reference / API 参考文档、
+        Integration Guide / 集成指南、Development, Testing & Contribution / 开发·测试与贡献、
+        Extension Development / 扩展开发指南、Examples & Samples / 示例与教程、
+        Deployment, Troubleshooting & FAQ / 部署·故障排除与FAQ、Appendix / 附录。
+        每个分类文件夹内含一个索引页，其一级标题与文件夹名一致。
+      author: "HsBaSlicer docs"
+    - text: >-
+        采用中立合并：当现状中英不一致时，偏向任一侧的现有结构；同一主题以内容更完整、更贴合源码的一侧为基准，
+        再改写对齐到另一语言。EN 现有 96 页、ZH 现有 116 页、分类骨架不同，需向上述统一分类收敛。
+      author: "HsBaSlicer docs"
+    - text: >-
+        去重：同一概念只归入一个分类。网格模型实现（IglModel / CgalModel / FullTopoModel）仅出现在
+        「核心模块详解 / 模型处理」一次，不得同时出现在「核心概念 / 模型抽象接口」；填充算法仅出现在
+        「核心模块详解 / 填充系统」一次，不得同时出现在「2D 几何算法 / 填充算法」。所有根级散页
+        （项目概述、快速开始、贡献指南、附录）必须归入上述分类，不得游离于分类之外。
+      author: "HsBaSlicer docs"
+    - text: >-
+        最大化有效内容：每个页面以一个一级标题（# H1）开头；正文必须基于源码实证——真实函数签名、配置字段与默认值，
+        取自 pipelinetypes/pipeline_types.h、各 *_pipeline.h、LuaSupport.cpp、PolygonFill.cpp 等，严禁臆造 API 或默认值；
+        每页至少包含一张 mermaid 图或一个信息表；有效行少于约 30 行的薄页应合并到上级页面，不单独立页。
+      author: "HsBaSlicer docs"
+    - text: >-
+        每页页脚提供指向另一语言对应页面的链接。源码中保留 repowiki 自带的 <cite>、Section sources、Diagram sources、
+        file:// 标记（发布脚本 repowiki_to_github_wiki.py::clean_content 会在发布时剥离），不要新增其他无法被清理器识别的噪声。
+      author: "HsBaSlicer docs"
+
+  # documents 为页面白名单：一旦提供，生成器严格按列表输出。
+  # 为「最大化有效内容」，此处留空，让生成器保留完整页面；notes 已注入对照/去重/质量标准作为软约束。
+  # 若需要强制中英严格 1:1（可能牺牲部分页面），再在此填入统一叶子页清单。
+  documents: []
+
+knowledgecard:
+  notes:
+    - text: >-
+        知识卡模块划分与上述 13 个分类对齐，尤其将模型处理、切片引擎、填充系统、支撑系统、路径规划作为独立核心模块建卡；
+        不要为重名的页面（如重复的网格模型实现、填充算法）重复建卡。
+      author: "HsBaSlicer docs"
+
+scope:
+  include: []
+  # 排除构建产物、依赖与生成物，聚焦源码，提升 Wiki 与知识卡的有效信息密度
+  exclude:
+    - "vcpkg_installed/**"
+    - "third_parts_without_vcpkg/**"
+    - "out/**"
+    - "build/**"
+    - ".cache/**"
+    - "**/__pycache__/**"
+    - "**/*.obj"
+    - "**/*.pdb"
+    - "android/.gradle/**"
+    - "android/.idea/**"
+    - "android/build/**"
+    - "docs/doxygen/**"
