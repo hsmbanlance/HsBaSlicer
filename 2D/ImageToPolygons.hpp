@@ -9,6 +9,7 @@
 #include "FloatPolygons.hpp"
 #include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // forward-declare lua state to avoid including lua.hpp in this header
@@ -51,6 +52,25 @@ std::vector<PolygonsD> FromImageMulti(const std::string& path, const std::vector
  */
 bool ToImage(const PolygonsD& polys, int width, int height, double pixelSize, const std::string& outPath,
              uint8_t foreground = MAX_GRAY_VALUE, uint8_t background = MIN_GRAY_VALUE);
+
+/**
+ * @brief Render polygons to an encoded image held in memory (no intermediate file).
+ *
+ * Behaves like ToImage but returns the encoded bytes directly, avoiding a temp-file
+ * round-trip. The output format is selected by @p ext (".png", ".jpg"/".jpeg", ".svg";
+ * a missing leading dot is added and the check is case-insensitive; empty defaults to PNG).
+ * @param polys Input polygons to render.
+ * @param width Width of the output image in pixels.
+ * @param height Height of the output image in pixels.
+ * @param pixelSize Size mapping from polygon coordinates to pixels.
+ * @param ext Output format extension selecting the encoder.
+ * @param outBuffer Receives the encoded image bytes on success (cleared first).
+ * @param foreground Foreground color value (default: 255 - white).
+ * @param background Background color value (default: 0 - black).
+ * @return true if rendering succeeded, false otherwise.
+ */
+bool ToImageBuffer(const PolygonsD& polys, int width, int height, double pixelSize, std::string_view ext,
+                   std::string& outBuffer, uint8_t foreground = MAX_GRAY_VALUE, uint8_t background = MIN_GRAY_VALUE);
 
 /**
  * @brief Render polygons to an image using a Lua script for customization.

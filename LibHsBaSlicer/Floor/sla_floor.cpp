@@ -5,8 +5,13 @@
 #include "sla_floor.hpp"
 
 #include <algorithm>
+#include <atomic>
+#include <cstdlib>
 #include <filesystem>
-#include <fstream>
+#include <functional>
+#include <future>
+#include <thread>
+#include <vector>
 
 #include <lua.hpp>
 
@@ -17,6 +22,7 @@
 #include "LibHsBaSlicer/Extends/EventSourceFunction.hpp"
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
 #include "base/error.hpp"
+#include "base/thread_pool.hpp"
 #include "paths/imagespath.hpp"
 #include "utils/LuaNewObject.hpp"
 
@@ -311,14 +317,12 @@ HSBA_SLICER_LIB_API Polygons LuaCustomFloorByString(const Polygons& bottom_layer
 // SLA image rendering
 // ============================================================
 
-HSBA_SLICER_LIB_API bool RenderPolygonsToImage(const PolygonsD& polys, int width, int height,
-                                               const std::string& outPath)
+namespace
 {
-    if (polys.empty())
-    {
-        return false;
-    }
-
+// Fits `polys` into the requested width x height, returning the pixel size (world units
+// per pixel) and the effective dimensions (defaults 800 x 600 when a dimension is <= 0).
+double FitPixelSize(const PolygonsD& polys, int width, int height, int& w, int& h)
+{
     double min_x = 1e18;
     double min_y = 1e18;
     double max_x = -1e18;
@@ -334,8 +338,8 @@ HSBA_SLICER_LIB_API bool RenderPolygonsToImage(const PolygonsD& polys, int width
         }
     }
 
-    int const w = width > 0 ? width : 800;
-    int const h = height > 0 ? height : 600;
+    w = width > 0 ? width : 800;
+    h = height > 0 ? height : 600;
     double range_x = max_x - min_x;
     double range_y = max_y - min_y;
     if (range_x < 1e-6)
@@ -346,9 +350,34 @@ HSBA_SLICER_LIB_API bool RenderPolygonsToImage(const PolygonsD& polys, int width
     {
         range_y = 1.0;
     }
-    double const pixel_size = std::max(range_x / w, range_y / h);
+    return std::max(range_x / w, range_y / h);
+}
+}  // namespace
 
+HSBA_SLICER_LIB_API bool RenderPolygonsToImage(const PolygonsD& polys, int width, int height,
+                                               const std::string& outPath)
+{
+    if (polys.empty())
+    {
+        return false;
+    }
+    int w = 0;
+    int h = 0;
+    double const pixel_size = FitPixelSize(polys, width, height, w, h);
     return ToImage(polys, w, h, pixel_size, outPath);
+}
+
+HSBA_SLICER_LIB_API bool RenderPolygonsToImageBuffer(const PolygonsD& polys, int width, int height,
+                                                     const std::string& ext, std::string& outBuffer)
+{
+    if (polys.empty())
+    {
+        return false;
+    }
+    int w = 0;
+    int h = 0;
+    double const pixel_size = FitPixelSize(polys, width, height, w, h);
+    return ToImageBuffer(polys, w, h, pixel_size, ext, outBuffer);
 }
 
 // ============================================================
@@ -357,28 +386,82 @@ HSBA_SLICER_LIB_API bool RenderPolygonsToImage(const PolygonsD& polys, int width
 
 namespace
 {
+// Encodes a single layer polygon set straight into an in-memory image buffer (no temp file).
 std::string RenderToBuffer(const PolygonsD& polys, int width, int height, const std::string& ext)
 {
-    if (polys.empty())
+    std::string data;
+    if (!RenderPolygonsToImageBuffer(polys, width, height, ext, data))
     {
         return {};
     }
-
-    auto tmp_path = std::filesystem::temp_directory_path() / ("hsba_sla_tmp" + ext);
-    if (!RenderPolygonsToImage(polys, width, height, tmp_path.string()))
-    {
-        return {};
-    }
-
-    std::ifstream ifs(tmp_path, std::ios::binary);
-    if (!ifs)
-    {
-        return {};
-    }
-    std::string data((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-    ifs.close();
-    std::filesystem::remove(tmp_path);
     return data;
+}
+
+// Runs per-layer functors in parallel across a thread pool on the desktop export hot path.
+// Each layer is independent and work() MUST only touch its own output slot. Honors the
+// HSBA_PIPELINE_THREADS override and degrades to a serial loop for a single worker or a
+// single layer, keeping behavior identical on constrained platforms. Exceptions thrown
+// inside work() are rethrown to the caller via the futures.
+void ForLayersParallel(int total, const std::function<void(int)>& work)
+{
+    if (total <= 0)
+    {
+        return;
+    }
+
+    size_t requested = 0;
+    if (const char* env = std::getenv("HSBA_PIPELINE_THREADS"))
+    {
+        long v = std::strtol(env, nullptr, 10);
+        if (v > 0)
+        {
+            requested = static_cast<size_t>(v);
+        }
+    }
+
+    const unsigned hw = std::thread::hardware_concurrency();
+    size_t nthreads = (hw == 0) ? 2U : hw;
+    if (requested > 0)
+    {
+        nthreads = std::min(requested, static_cast<size_t>(total));
+    }
+    else
+    {
+        nthreads = std::min(nthreads, static_cast<size_t>(total));
+    }
+
+    if (nthreads <= 1 || total <= 1)
+    {
+        for (int i = 0; i < total; ++i)
+        {
+            work(i);
+        }
+        return;
+    }
+
+    // Dynamic scheduling: each worker pulls the next layer index from a shared atomic
+    // counter, so uneven per-layer costs do not stall the pool behind a fixed barrier.
+    ThreadPool pool(nthreads);
+    std::atomic<int> next{0};
+    std::vector<std::future<void>> futures;
+    futures.reserve(nthreads);
+    for (size_t t = 0; t < nthreads; ++t)
+    {
+        futures.push_back(pool.submit(
+            [&]
+            {
+                int idx = next.fetch_add(1, std::memory_order_relaxed);
+                while (idx < total)
+                {
+                    work(idx);
+                    idx = next.fetch_add(1, std::memory_order_relaxed);
+                }
+            }));
+    }
+    for (auto& f : futures)
+    {
+        f.get();  // blocks on completion; rethrows any worker exception
+    }
 }
 }  // anonymous namespace
 
@@ -390,13 +473,16 @@ HSBA_SLICER_LIB_API bool SaveSlaPackage(const SlaPackage& pkg, const std::string
         const int total_layers = static_cast<int>(pkg.layer_outlines.size());
         const std::string& ext = pkg.image_extension;
 
-        // Layer images
+        // Layer images (rendered in parallel on desktop, then inserted serially)
+        std::vector<std::string> layer_images(total_layers);
+        ForLayersParallel(
+            total_layers, [&](int i)
+            { layer_images[i] = RenderToBuffer(pkg.layer_outlines[i], pkg.image_width, pkg.image_height, ext); });
         for (int i = 0; i < total_layers; ++i)
         {
-            std::string const img_data = RenderToBuffer(pkg.layer_outlines[i], pkg.image_width, pkg.image_height, ext);
-            if (!img_data.empty())
+            if (!layer_images[i].empty())
             {
-                images_path.AddImage("layers/layer_" + std::to_string(i) + ext, img_data);
+                images_path.AddImage("layers/layer_" + std::to_string(i) + ext, layer_images[i]);
             }
         }
 
@@ -414,16 +500,21 @@ HSBA_SLICER_LIB_API bool SaveSlaPackage(const SlaPackage& pkg, const std::string
         if (pkg.include_support_images)
         {
             const int support_count = std::min(static_cast<int>(pkg.layer_supports.size()), total_layers);
+            std::vector<std::string> support_images(support_count);
+            ForLayersParallel(support_count,
+                              [&](int i)
+                              {
+                                  if (!pkg.layer_supports[i].empty())
+                                  {
+                                      support_images[i] =
+                                          RenderToBuffer(pkg.layer_supports[i], pkg.image_width, pkg.image_height, ext);
+                                  }
+                              });
             for (int i = 0; i < support_count; ++i)
             {
-                if (!pkg.layer_supports[i].empty())
+                if (!support_images[i].empty())
                 {
-                    std::string const img_data =
-                        RenderToBuffer(pkg.layer_supports[i], pkg.image_width, pkg.image_height, ext);
-                    if (!img_data.empty())
-                    {
-                        images_path.AddImage("supports/layer_" + std::to_string(i) + ext, img_data);
-                    }
+                    images_path.AddImage("supports/layer_" + std::to_string(i) + ext, support_images[i]);
                 }
             }
         }
@@ -446,13 +537,16 @@ HSBA_SLICER_LIB_API bool SaveSlaPackageLua(const SlaPackage& pkg, const std::str
         const int total_layers = static_cast<int>(pkg.layer_outlines.size());
         const std::string& ext = pkg.image_extension;
 
-        // Layer images
+        // Layer images (rendered in parallel on desktop, then inserted serially)
+        std::vector<std::string> layer_images(total_layers);
+        ForLayersParallel(
+            total_layers, [&](int i)
+            { layer_images[i] = RenderToBuffer(pkg.layer_outlines[i], pkg.image_width, pkg.image_height, ext); });
         for (int i = 0; i < total_layers; ++i)
         {
-            std::string const img_data = RenderToBuffer(pkg.layer_outlines[i], pkg.image_width, pkg.image_height, ext);
-            if (!img_data.empty())
+            if (!layer_images[i].empty())
             {
-                images_path.AddImage("layers/layer_" + std::to_string(i) + ext, img_data);
+                images_path.AddImage("layers/layer_" + std::to_string(i) + ext, layer_images[i]);
             }
         }
 
@@ -470,16 +564,21 @@ HSBA_SLICER_LIB_API bool SaveSlaPackageLua(const SlaPackage& pkg, const std::str
         if (pkg.include_support_images)
         {
             const int support_count = std::min(static_cast<int>(pkg.layer_supports.size()), total_layers);
+            std::vector<std::string> support_images(support_count);
+            ForLayersParallel(support_count,
+                              [&](int i)
+                              {
+                                  if (!pkg.layer_supports[i].empty())
+                                  {
+                                      support_images[i] =
+                                          RenderToBuffer(pkg.layer_supports[i], pkg.image_width, pkg.image_height, ext);
+                                  }
+                              });
             for (int i = 0; i < support_count; ++i)
             {
-                if (!pkg.layer_supports[i].empty())
+                if (!support_images[i].empty())
                 {
-                    std::string const img_data =
-                        RenderToBuffer(pkg.layer_supports[i], pkg.image_width, pkg.image_height, ext);
-                    if (!img_data.empty())
-                    {
-                        images_path.AddImage("supports/layer_" + std::to_string(i) + ext, img_data);
-                    }
+                    images_path.AddImage("supports/layer_" + std::to_string(i) + ext, support_images[i]);
                 }
             }
         }

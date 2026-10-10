@@ -16,6 +16,9 @@
 #if !defined(__ANDROID__) && !(defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
 #include <boost/locale.hpp>
 #if _WIN32
+// <Windows.h> must precede <VersionHelpers.h>: the version-helper inline functions
+// rely on types and macros (BOOL, OSVERSIONINFOEX, VerSetConditionMask, _WIN32_WINNT_*)
+// declared by the base Windows headers pulled in by <Windows.h>.
 #include <VersionHelpers.h>
 #include <Windows.h>
 

@@ -10,7 +10,9 @@
 #include <filesystem>
 #include <fstream>
 #include <queue>
+#include <sstream>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 // use OpenCV for image IO and simple raster operations
@@ -217,33 +219,39 @@ bool pointInPolygon(const PolygonD& poly, double x, double y)
     return inside;
 }
 
-bool SavePNG(const std::string& path, const std::vector<uint8_t>& img, int w, int h)
+// libpng memory sink: appends produced bytes to the std::string passed as io pointer.
+void PngWriteSink(png_structp png, png_bytep data, png_size_t length)
 {
-    FILE* fp = fopen(path.c_str(), "wb");
-    if (!fp)
-    {
-        return false;
-    }
+    auto* buf = static_cast<std::string*>(png_get_io_ptr(png));
+    buf->append(reinterpret_cast<const char*>(data), length);
+}
+
+// In-memory sink has nothing to flush.
+void PngFlushSink([[maybe_unused]] png_structp png)
+{
+}
+
+// Encode a grayscale bitmap into a PNG byte buffer held in memory.
+bool EncodePngBuffer(const std::vector<uint8_t>& img, int w, int h, std::string& out)
+{
+    out.clear();
     png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
     if (!png)
     {
-        (void)fclose(fp);
         return false;
     }
     png_infop info = png_create_info_struct(png);
     if (!info)
     {
         png_destroy_write_struct(&png, nullptr);
-        (void)fclose(fp);
         return false;
     }
     if (setjmp(png_jmpbuf(png)))
     {
         png_destroy_write_struct(&png, &info);
-        (void)fclose(fp);
         return false;
     }
-    png_init_io(png, fp);
+    png_set_write_fn(png, &out, PngWriteSink, PngFlushSink);
     png_set_IHDR(png, info, w, h, 8, PNG_COLOR_TYPE_GRAY, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
                  PNG_FILTER_TYPE_DEFAULT);
     png_write_info(png, info);
@@ -253,12 +261,13 @@ bool SavePNG(const std::string& path, const std::vector<uint8_t>& img, int w, in
     }
     png_write_end(png, nullptr);
     png_destroy_write_struct(&png, &info);
-    (void)fclose(fp);
     return true;
 }
 
-bool SaveJPG(const std::string& path, const std::vector<uint8_t>& img, int w, int h, int quality = 90)
+// Encode a grayscale bitmap into a JPEG byte buffer held in memory (via libjpeg-turbo).
+bool EncodeJpgBuffer(const std::vector<uint8_t>& img, int w, int h, int quality, std::string& out)
 {
+    out.clear();
     tjhandle handle = tjInitCompress();
     if (!handle)
     {
@@ -266,25 +275,120 @@ bool SaveJPG(const std::string& path, const std::vector<uint8_t>& img, int w, in
     }
     unsigned char* jpegBuf = nullptr;
     unsigned long jpegSize = 0;
-    int const ret =
-        tjCompress2(handle, img.data(), w, 0, h, TJPF_GRAY, &jpegBuf, &jpegSize, TJSAMP_GRAY, quality, TJFLAG_FASTDCT);
+    int const ret = tjCompress2(handle, const_cast<unsigned char*>(img.data()), w, 0, h, TJPF_GRAY, &jpegBuf, &jpegSize,
+                                TJSAMP_GRAY, quality, TJFLAG_FASTDCT);
     if (ret != 0)
     {
         tjDestroy(handle);
         return false;
     }
-    FILE* fp = fopen(path.c_str(), "wb");
-    if (!fp)
-    {
-        tjFree(jpegBuf);
-        tjDestroy(handle);
-        return false;
-    }
-    (void)fwrite(jpegBuf, 1, jpegSize, fp);
-    (void)fclose(fp);
+    out.assign(reinterpret_cast<const char*>(jpegBuf), jpegSize);
     tjFree(jpegBuf);
     tjDestroy(handle);
     return true;
+}
+
+// Collect the minimum x/y corner of the polygon bounding box; has_bounds is false for an empty set.
+void ComputeBounds(const PolygonsD& polys, double& min_x, double& min_y, bool& has_bounds)
+{
+    min_x = 0.0;
+    min_y = 0.0;
+    has_bounds = false;
+    for (const auto& poly : polys)
+    {
+        for (const auto& pt : poly)
+        {
+            if (!has_bounds)
+            {
+                min_x = pt.x;
+                min_y = pt.y;
+                has_bounds = true;
+            }
+            else
+            {
+                min_x = std::min(min_x, pt.x);
+                min_y = std::min(min_y, pt.y);
+            }
+        }
+    }
+}
+
+// Lowercase the extension and ensure a single leading dot (accepts "png" or ".png").
+std::string NormalizeExt(std::string_view ext)
+{
+    std::string low = Utils::to_lower(std::string(ext));
+    if (!low.empty() && low.front() != '.')
+    {
+        low.insert(low.begin(), '.');
+    }
+    return low;
+}
+
+// Render polygons into a standalone SVG document string (each polygon as a <polygon> element).
+bool BuildSvg(const PolygonsD& polys, int width, int height, double pixelSize, double min_x, double min_y,
+              uint8_t foreground, uint8_t background, std::string& out)
+{
+    std::ostringstream ofs;
+    ofs << "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
+    ofs << R"(<svg xmlns="http://www.w3.org/2000/svg" width=")" << width << "\" height=\"" << height
+        << "\" viewBox=\"0 0 " << width << " " << height << "\">\n";
+    // background
+    ofs << "<rect width=\"" << SVG_PERCENT_VALUE << "%\" height=\"" << SVG_PERCENT_VALUE << "%\" fill=\"rgb("
+        << static_cast<int>(background) << "," << static_cast<int>(background) << "," << static_cast<int>(background)
+        << ")\"/>\n";
+    for (const auto& poly : polys)
+    {
+        if (poly.empty())
+        {
+            continue;
+        }
+        // build point list in pixel coordinates
+        std::ostringstream pts;
+        for (const auto& pt : poly)
+        {
+            double const px = (pt.x - min_x) / pixelSize + 0.5;  // center sample
+            double const py = (pt.y - min_y) / pixelSize + 0.5;
+            pts << px << "," << py << " ";
+        }
+        ofs << "<polygon points=\"" << pts.str() << "\" fill=\"rgb(" << static_cast<int>(foreground) << ","
+            << static_cast<int>(foreground) << "," << static_cast<int>(foreground) << ")\" stroke=\"none\" />\n";
+    }
+    ofs << "</svg>\n";
+    out = ofs.str();
+    return true;
+}
+
+// Write a raw byte buffer to disk (binary), returning false if the file cannot be opened/written.
+bool WriteAllBytes(const std::string& path, const std::string_view data)
+{
+    std::ofstream ofs(std::filesystem::path(path), std::ios::binary);
+    if (!ofs)
+    {
+        return false;
+    }
+    ofs.write(data.data(), static_cast<std::streamsize>(data.size()));
+    ofs.close();
+    return static_cast<bool>(ofs);
+}
+
+bool SavePNG(const std::string& path, const std::vector<uint8_t>& img, int w, int h)
+{
+    std::string buffer;
+    if (!EncodePngBuffer(img, w, h, buffer))
+    {
+        return false;
+    }
+    return WriteAllBytes(path, buffer);
+}
+
+bool SaveJPG(const std::string& path, const std::vector<uint8_t>& img, int w, int h, int quality = 90)
+{
+    std::string buffer;
+    if (!EncodeJpgBuffer(img, w, h, quality, buffer))
+    {
+        return false;
+    }
+    return WriteAllBytes(path, buffer);
 }
 
 void RasterizePolygons(const PolygonsD& polys, std::vector<uint8_t>& img, int width, int height, double pixelSize,
@@ -319,10 +423,11 @@ PolygonsD FromImage(const std::string& path, int threshold, double pixelSize)
     return layers.front();
 }
 
-// rasterize polygons to grayscale image and save as PNG
-bool ToImage(const PolygonsD& polys, int width, int height, double pixelSize, const std::string& outPath,
-             uint8_t foreground, uint8_t background)
+// rasterize polygons into an in-memory encoded buffer (PNG/JPEG/SVG chosen by ext)
+bool ToImageBuffer(const PolygonsD& polys, int width, int height, double pixelSize, std::string_view ext,
+                   std::string& outBuffer, uint8_t foreground, uint8_t background)
 {
+    outBuffer.clear();
     if (width <= 0 || height <= 0)
     {
         return false;
@@ -330,109 +435,82 @@ bool ToImage(const PolygonsD& polys, int width, int height, double pixelSize, co
 
     double min_x = 0.0;
     double min_y = 0.0;
-    double max_x = 0.0;
-    double max_y = 0.0;
     bool has_bounds = false;
-    for (const auto& poly : polys)
-    {
-        for (const auto& pt : poly)
-        {
-            if (!has_bounds)
-            {
-                min_x = max_x = pt.x;
-                min_y = max_y = pt.y;
-                has_bounds = true;
-            }
-            else
-            {
-                min_x = std::min(min_x, pt.x);
-                min_y = std::min(min_y, pt.y);
-                max_x = std::max(max_x, pt.x);
-                max_y = std::max(max_y, pt.y);
-            }
-        }
-    }
-
+    ComputeBounds(polys, min_x, min_y, has_bounds);
     if (!has_bounds)
     {
         return false;
     }
 
-    auto low = Utils::to_lower(outPath);
-    if (low.size() >= 4 && low.substr(low.size() - 4) == ".svg")
+    std::string const low = NormalizeExt(ext);
+    if (low == ".svg")
     {
-        // write simple SVG vector file: each polygon as a <polygon> element
-        std::ofstream ofs(outPath);
-        if (!ofs)
-        {
-            return false;
-        }
-        ofs << "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
-        ofs << R"(<svg xmlns="http://www.w3.org/2000/svg" width=")" << width << "\" height=\"" << height
-            << "\" viewBox=\"0 0 " << width << " " << height << "\">\n";
-        // background
-        ofs << "<rect width=\"" << SVG_PERCENT_VALUE << "%\" height=\"" << SVG_PERCENT_VALUE << "%\" fill=\"rgb("
-            << static_cast<int>(background) << "," << static_cast<int>(background) << ","
-            << static_cast<int>(background) << ")\"/>\n";
+        return BuildSvg(polys, width, height, pixelSize, min_x, min_y, foreground, background, outBuffer);
+    }
+
+#ifdef HAS_OPENCV
+    try
+    {
+        // rasterize with OpenCV
+        cv::Mat img(height, width, CV_8UC1, cv::Scalar(background));
         for (const auto& poly : polys)
         {
             if (poly.empty())
             {
                 continue;
             }
-            // build point list in pixel coordinates
-            std::ostringstream pts;
+            // build vector of points in pixel coordinates
+            std::vector<std::vector<cv::Point>> contours;
+            contours.emplace_back();
             for (const auto& pt : poly)
             {
-                double const px = (pt.x - min_x) / pixelSize + 0.5;  // center sample
-                double const py = (pt.y - min_y) / pixelSize + 0.5;
-                pts << px << "," << py << " ";
+                int const px = static_cast<int>(std::round((pt.x - min_x) / pixelSize));
+                int const py = static_cast<int>(std::round((pt.y - min_y) / pixelSize));
+                contours.back().push_back(cv::Point(px, py));
             }
-            ofs << "<polygon points=\"" << pts.str() << "\" fill=\"rgb(" << static_cast<int>(foreground) << ","
-                << static_cast<int>(foreground) << "," << static_cast<int>(foreground) << ")\" stroke=\"none\" />\n";
+            // fill polygon
+            cv::fillPoly(img, contours, cv::Scalar(foreground));
         }
-        ofs << "</svg>\n";
+        std::string const fmt = low.empty() ? std::string(".png") : low;
+        std::vector<uchar> buf;
+        if (!cv::imencode(fmt, img, buf))
+        {
+            return false;
+        }
+        outBuffer.assign(reinterpret_cast<const char*>(buf.data()), buf.size());
         return true;
     }
-#ifdef HAS_OPENCV
-
-
-    // rasterize with OpenCV
-    cv::Mat img(height, width, CV_8UC1, cv::Scalar(background));
-    for (const auto& poly : polys)
+    catch (const cv::Exception&)
     {
-        if (poly.empty())
-        {
-            continue;
-        }
-        // build vector of points in pixel coordinates
-        std::vector<std::vector<cv::Point>> contours;
-        contours.emplace_back();
-        for (const auto& pt : poly)
-        {
-            int const px = static_cast<int>(std::round((pt.x - min_x) / pixelSize));
-            int const py = static_cast<int>(std::round((pt.y - min_y) / pixelSize));
-            contours.back().push_back(cv::Point(px, py));
-        }
-        // fill polygon
-        cv::fillPoly(img, contours, cv::Scalar(foreground));
+        return false;
     }
-    return cv::imwrite(outPath, img);
-
 #else
     // rasterize manually
-    std::vector<uint8_t> img(width * height, background);
-    RasterizePolygons(polys, img, width, height, pixelSize, min_x, min_y, foreground);
-    if (low.size() >= 4 &&
-        (low.substr(low.size() - 4) == ".jpg" || (low.size() >= 5 && low.substr(low.size() - 5) == ".jpeg")))
+    std::vector<uint8_t> gray(static_cast<size_t>(width) * height, background);
+    RasterizePolygons(polys, gray, width, height, pixelSize, min_x, min_y, foreground);
+    if (low == ".jpg" || low == ".jpeg")
     {
-        return SaveJPG(outPath, img, width, height);
+        return EncodeJpgBuffer(gray, width, height, 90, outBuffer);
     }
-    else
-    {
-        return SavePNG(outPath, img, width, height);
-    }
+    return EncodePngBuffer(gray, width, height, outBuffer);
 #endif
+}
+
+// rasterize polygons to an image file; format chosen from the outPath extension
+bool ToImage(const PolygonsD& polys, int width, int height, double pixelSize, const std::string& outPath,
+             uint8_t foreground, uint8_t background)
+{
+    if (outPath.empty())
+    {
+        return false;
+    }
+    std::string const ext = std::filesystem::path(outPath).extension().string();
+    std::string buffer;
+    if (!ToImageBuffer(polys, width, height, pixelSize, ext, buffer, foreground, background))
+    {
+        return false;
+    }
+    return WriteAllBytes(outPath, buffer);
 }
 
 std::vector<PolygonsD> FromImageMulti(const std::string& path, const std::vector<int>& thresholds, double pixelSize)

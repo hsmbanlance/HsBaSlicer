@@ -134,6 +134,22 @@ HSBA_SLICER_LIB_API Polygons LuaCustomFloorByString(const Polygons& bottom_layer
 HSBA_SLICER_LIB_API bool RenderPolygonsToImage(const PolygonsD& polys, int width, int height,
                                                const std::string& outPath);
 
+/**
+ * @brief Render polygons to an encoded image held in memory (no intermediate file).
+ *
+ * Same auto pixel-size fitting as RenderPolygonsToImage but returns the encoded bytes
+ * directly into outBuffer instead of writing a file, avoiding a temp-file round-trip.
+ *
+ * @param polys Input polygons to render.
+ * @param width Requested image width in pixels (0 = auto 800).
+ * @param height Requested image height in pixels (0 = auto 600).
+ * @param ext Output format extension selecting the encoder (.png, .jpg, .svg).
+ * @param outBuffer Receives the encoded image bytes on success.
+ * @return true if rendering succeeded, false otherwise.
+ */
+HSBA_SLICER_LIB_API bool RenderPolygonsToImageBuffer(const PolygonsD& polys, int width, int height,
+                                                     const std::string& ext, std::string& outBuffer);
+
 // ============================================================
 // SLA package export
 // ============================================================
