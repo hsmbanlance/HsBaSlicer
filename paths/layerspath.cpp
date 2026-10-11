@@ -10,6 +10,7 @@
 
 #include <lua.hpp>
 
+#include "base/encoding_convert.hpp"
 #include "base/error.hpp"
 #include "fileoperator/LuaAdapter.hpp"
 #include "fileoperator/sql_adapter.hpp"
@@ -30,11 +31,13 @@ void LayersPath::push_back(const std::string& layerConfig, const PolygonsD& laye
 void LayersPath::Save(const std::filesystem::path& path) const
 {
     SQL::SQLiteAdapter db;
-    db.Connect(path.string());
+    // sqlite3_open expects a UTF-8 filename, so re-encode the native path as UTF-8 rather than
+    // path.string() (which yields the ANSI-code-page narrow form on Windows and breaks non-ASCII).
+    db.Connect(path_to_utf8(path));
     db += callback_;
     if (!db.IsConnected())
     {
-        throw RuntimeError("Failed to create or open database file: " + path.string());
+        throw RuntimeError("Failed to create or open database file: " + path_to_utf8(path));
     }
     db | SQL::SQLCreateTable("layers", {{"id", "INTEGER PRIMARY KEY AUTOINCREMENT"},
                                         {"layer_config", "TEXT NOT NULL"},
@@ -82,7 +85,7 @@ void LayersPath::Save(const std::filesystem::path& path, std::string_view script
 
     // create SQLiteAdapter as a Lua userdata and expose as global 'db'
     auto* db = NewLuaObject<SQL::SQLiteAdapter>(L.get(), "SQLiteAdapter");
-    db->Connect(path.string());
+    db->Connect(path_to_utf8(path));
     *db += callback_;
     lua_setglobal(L.get(), "db");
 
@@ -126,7 +129,7 @@ void LayersPath::Save(const std::filesystem::path& path, std::string_view script
     }
 
     // push path as global
-    lua_pushstring(L.get(), path.string().c_str());
+    lua_pushstring(L.get(), path_to_utf8(path).c_str());
     lua_setglobal(L.get(), "output_path");
 
     int const loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "LayersPathSaveScript");
@@ -185,7 +188,7 @@ void LayersPath::Save(const std::filesystem::path& path, std::string_view script
 
     // create SQLiteAdapter as a Lua userdata and expose as global 'db'
     auto* db = NewLuaObject<SQL::SQLiteAdapter>(L.get(), "SQLiteAdapter");
-    db->Connect(path.string());
+    db->Connect(path_to_utf8(path));
     *db += callback_;
     lua_setglobal(L.get(), "db");
 
@@ -223,7 +226,7 @@ void LayersPath::Save(const std::filesystem::path& path, std::string_view script
     lua_setglobal(L.get(), "layers");
 
     // push path
-    lua_pushstring(L.get(), path.string().c_str());
+    lua_pushstring(L.get(), path_to_utf8(path).c_str());
     lua_setglobal(L.get(), "output_path");
 
     // push function name

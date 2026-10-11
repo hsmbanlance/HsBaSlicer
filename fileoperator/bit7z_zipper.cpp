@@ -190,8 +190,10 @@ void Bit7zZipper::AddFileIgnoreDuplicate(std::string_view name, std::string_view
 
 void Bit7zZipper::Save(std::string_view filePath)
 {
-    std::string path = std::filesystem::path(filePath).make_preferred().string();
-    path = utf8_to_local(path);
+    // filePath is UTF-8; convert to the native narrow encoding exactly once. The previous
+    // std::filesystem::path(filePath).string() round-trip re-parsed the UTF-8 bytes through the
+    // ANSI code page before utf8_to_local ran, double-converting and mangling non-ASCII paths.
+    std::string path = utf8_to_local(std::string{filePath});
     try
     {
         bit7z::Bit7zLibrary const lib{dll_path_};

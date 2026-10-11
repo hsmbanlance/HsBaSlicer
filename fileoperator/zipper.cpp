@@ -113,8 +113,11 @@ void Zipper::AddFileIgnoreDuplicate(std::string_view name, std::string_view path
  */
 void Zipper::Save(std::string_view filePath)
 {
-    std::string path = std::filesystem::path(filePath).make_preferred().string();
-    path = utf8_to_local(path);
+    // filePath is UTF-8. miniz's fopen-based writer expects the native narrow encoding, so convert
+    // exactly once. The previous std::filesystem::path(filePath).string() round-trip re-parsed the
+    // UTF-8 bytes through the ANSI code page and then utf8_to_local converted them a second time,
+    // mangling non-ASCII archive paths.
+    std::string path = utf8_to_local(std::string{filePath});
     mz_zip_archive archiver{};
     mz_zip_zero_struct(&archiver);
     (void)mz_zip_writer_init_file(&archiver, path.c_str(), 0);

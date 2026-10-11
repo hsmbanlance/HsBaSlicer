@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <limits>
 #include <sstream>
@@ -17,6 +18,7 @@
 #include <openvdb/io/File.h>
 
 #include "base/ModelFormat.hpp"
+#include "base/encoding_convert.hpp"
 #include "base/error.hpp"
 
 namespace HsBa::Slicer
@@ -56,12 +58,14 @@ bool IsXYZFormat(std::string_view fileName)
     return lower.ends_with(".xyz") || lower.ends_with(".txt");
 }
 
-std::vector<Eigen::Vector3f> ReadPointsFromFile(const std::string& fileName)
+std::vector<Eigen::Vector3f> ReadPointsFromFile(const std::filesystem::path& path)
 {
-    std::ifstream input(fileName);
+    // std::ifstream accepts the native path, which is wide on Windows and therefore independent of
+    // the active ANSI code page, so plain-text point lists open correctly for any Unicode name.
+    std::ifstream input(path);
     if (!input.is_open())
     {
-        throw IOError("Failed to open point cloud file: " + fileName);
+        throw IOError("Failed to open point cloud file: " + path.string());
     }
 
     std::vector<Eigen::Vector3f> points;
@@ -87,15 +91,15 @@ std::vector<Eigen::Vector3f> ReadPointsFromFile(const std::string& fileName)
 
     if (points.empty())
     {
-        throw IOError("No points were found in file: " + fileName);
+        throw IOError("No points were found in file: " + path.string());
     }
 
     return points;
 }
 
-bool WritePointsToFile(const std::string& fileName, const std::vector<Eigen::Vector3f>& points)
+bool WritePointsToFile(const std::filesystem::path& path, const std::vector<Eigen::Vector3f>& points)
 {
-    std::ofstream output(fileName, std::ios::trunc);
+    std::ofstream output(path, std::ios::trunc);
     if (!output.is_open())
     {
         return false;
@@ -150,20 +154,21 @@ OpenVdbModel::operator std::pair<Eigen::MatrixXf, Eigen::MatrixXi>() const
 bool OpenVdbModel::Load(std::string_view fileName)
 {
     file_name_ = std::string{fileName};
-    const std::string normalizedPath = NormalizePath(fileName);
 
     try
     {
         if (IsVdbFile(fileName))
         {
-            openvdb::io::File file(normalizedPath);
+            // OpenVDB's io::File takes a native narrow path, so convert UTF-8 to the local encoding.
+            const std::string nativePath = NormalizePath(fileName);
+            openvdb::io::File file(nativePath);
             file.open();
             openvdb::GridPtrVecPtr const grids = file.getGrids();
             file.close();
 
             if (!grids || grids->empty())
             {
-                throw IOError("No OpenVDB grids were found in file: " + normalizedPath);
+                throw IOError("No OpenVDB grids were found in file: " + nativePath);
             }
 
             if (auto grid = openvdb::gridPtrCast<openvdb::Vec3fGrid>((*grids)[0]))
@@ -172,12 +177,14 @@ bool OpenVdbModel::Load(std::string_view fileName)
             }
             else
             {
-                throw IOError("The OpenVDB grid in file does not contain Vec3f values: " + normalizedPath);
+                throw IOError("The OpenVDB grid in file does not contain Vec3f values: " + nativePath);
             }
         }
         else
         {
-            const auto points = ReadPointsFromFile(normalizedPath);
+            // Plain-text point lists are opened through std::ifstream via a native (wide on Windows)
+            // path so non-ASCII names work regardless of the active ANSI code page.
+            const auto points = ReadPointsFromFile(utf8_to_path(std::string{fileName}));
             grid_ = openvdb::Vec3fGrid::create(openvdb::Vec3f(0.0F));
             grid_->setName("point_cloud");
             grid_->setTransform(openvdb::math::Transform::createLinearTransform(1.0));
@@ -203,10 +210,10 @@ bool OpenVdbModel::Save(std::string_view fileName, const ModelFormat format) con
         throw NotSupportedError("Unsupported point cloud format.");
     }
 
-    const std::string normalizedPath = NormalizePath(fileName);
     if (IsVdbFile(fileName))
     {
-        openvdb::io::File file(normalizedPath);
+        // OpenVDB's io::File takes a native narrow path, so convert UTF-8 to the local encoding.
+        openvdb::io::File file(NormalizePath(fileName));
         openvdb::GridPtrVec grids;
         grids.push_back(grid_);
         file.write(grids);
@@ -215,7 +222,8 @@ bool OpenVdbModel::Save(std::string_view fileName, const ModelFormat format) con
     }
 
     const auto points = Points();
-    return WritePointsToFile(normalizedPath, points);
+    // Write the plain-text list through a native (wide on Windows) path for full Unicode support.
+    return WritePointsToFile(utf8_to_path(std::string{fileName}), points);
 }
 
 void OpenVdbModel::Translate(const Eigen::Vector3f& translation)

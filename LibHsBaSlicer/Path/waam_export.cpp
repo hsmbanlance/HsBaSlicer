@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "base/encoding_convert.hpp"
 #include "base/error.hpp"
 #include "paths/weldrobotpath.hpp"
 #include "spiral_path.hpp"
@@ -115,10 +116,10 @@ HSBA_SLICER_LIB_API bool SaveWaamRobotPath(const WaamRobotPackage& pkg, const st
                     path.push_back(wp);
                 }
 
-                const std::filesystem::path out_spiral(output_path);
+                const std::filesystem::path out_spiral = utf8_to_path(output_path);
                 if (!lua_script.empty())
                 {
-                    path.Save(out_spiral, std::filesystem::path(lua_script), std::string_view(lua_func));
+                    path.Save(out_spiral, utf8_to_path(lua_script), std::string_view(lua_func));
                 }
                 else
                 {
@@ -167,10 +168,10 @@ HSBA_SLICER_LIB_API bool SaveWaamRobotPath(const WaamRobotPackage& pkg, const st
             }
         }
 
-        const std::filesystem::path out(output_path);
+        const std::filesystem::path out = utf8_to_path(output_path);
         if (!lua_script.empty())
         {
-            path.Save(out, std::filesystem::path(lua_script), std::string_view(lua_func));
+            path.Save(out, utf8_to_path(lua_script), std::string_view(lua_func));
         }
         else
         {

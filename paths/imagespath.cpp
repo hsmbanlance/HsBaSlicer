@@ -11,6 +11,7 @@
 #include "utils/LuaNewObject.hpp"
 #include <lua.hpp>
 
+#include "base/encoding_convert.hpp"
 #include "base/error.hpp"
 #include "cipher/LuaAdapter.hpp"
 #include "cipher/encoder.hpp"
@@ -43,7 +44,9 @@ void ImagesPath::Save(const std::filesystem::path& path) const
     {
         zipper.AddByteFile(path, image);
     }
-    zipper.Save(path.string());
+    // Zipper::Save expects a UTF-8 archive path, so re-encode the native path as UTF-8 instead of
+    // path.string() (the ANSI-code-page narrow form on Windows, which corrupts non-ASCII names).
+    zipper.Save(path_to_utf8(path));
 }
 
 void ImagesPath::Save(const std::filesystem::path& path, std::string_view script,
@@ -90,8 +93,8 @@ void ImagesPath::Save(const std::filesystem::path& path, std::string_view script
     }
     lua_setglobal(L.get(), "images");
 
-    // push output path
-    lua_pushstring(L.get(), path.string().c_str());
+    // push output path (UTF-8, so a Lua Zipper.Save call receives a non-mangled path on Windows)
+    lua_pushstring(L.get(), path_to_utf8(path).c_str());
     lua_setglobal(L.get(), "output_path");
 
     if (script.empty())
@@ -169,7 +172,7 @@ void ImagesPath::Save(const std::filesystem::path& path, std::string_view script
     }
     lua_setglobal(L.get(), "images");
     // push path and funcName
-    lua_pushstring(L.get(), path.string().c_str());
+    lua_pushstring(L.get(), path_to_utf8(path).c_str());
     lua_setglobal(L.get(), "output_path");
     // expose funcName as a global, mirroring ToString(script, funcName, lua_reg)
     lua_pushlstring(L.get(), funcName.data(), funcName.size());

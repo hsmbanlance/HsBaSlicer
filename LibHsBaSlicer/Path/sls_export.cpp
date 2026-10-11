@@ -12,6 +12,7 @@
 
 
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
+#include "base/encoding_convert.hpp"
 #include "base/error.hpp"
 #include "fileoperator/LuaAdapter.hpp"
 #include "paths/imagespath.hpp"
@@ -128,8 +129,7 @@ HSBA_SLICER_LIB_API bool SaveSlsPackageLua(const SlsPackage& pkg, const std::str
             }
         };
 
-        images_path.Save(std::filesystem::path(output_zip), std::filesystem::path(lua_script),
-                         std::string_view(lua_func), sql_reg);
+        images_path.Save(utf8_to_path(output_zip), utf8_to_path(lua_script), std::string_view(lua_func), sql_reg);
         return true;
     }
     catch (const RuntimeError& e)

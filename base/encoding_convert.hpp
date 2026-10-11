@@ -7,6 +7,7 @@
 #ifndef HSBA_SLICER_ENCODING_CONVERT_HPP
 #define HSBA_SLICER_ENCODING_CONVERT_HPP
 
+#include <filesystem>
 #include <string>
 #include <string_view>
 #if defined(__APPLE__)
@@ -27,6 +28,29 @@ std::string utf8_to_local(const std::string& str);
  * @return The converted string in UTF-8.
  */
 std::string local_to_utf8(const std::string& str);
+
+/** @brief Convert an internal UTF-8 file path into a native std::filesystem::path.
+ *
+ * On Windows the UTF-8 bytes are decoded into the wide (UTF-16) representation, so the
+ * resulting path is independent of the active ANSI code page and can carry any Unicode
+ * name when handed to the wide-based std::ifstream / std::ofstream / std::filesystem APIs.
+ * Constructing std::filesystem::path directly from a UTF-8 std::string instead re-parses the
+ * bytes through the ANSI code page and mangles characters outside it.
+ *
+ * On POSIX/Android/iOS the native path encoding is already UTF-8, so the bytes are used as-is.
+ * @param utf8Path The UTF-8 path to convert.
+ * @return The native std::filesystem::path.
+ */
+std::filesystem::path utf8_to_path(const std::string& utf8Path);
+/** @brief Inverse of utf8_to_path: encode a native std::filesystem::path back to a UTF-8 string.
+ *
+ * On Windows this re-encodes the wide (UTF-16) native path into UTF-8; on other platforms it is
+ * equivalent to path.string(). Use this whenever a UTF-8-expecting API (e.g. sqlite3_open, or the
+ * Zipper archive path) is fed from a std::filesystem::path.
+ * @param path The native path to convert.
+ * @return The UTF-8 encoded path string.
+ */
+std::string path_to_utf8(const std::filesystem::path& path);
 
 #ifndef QT_VERSION
 /** @brief Convert a string from one encoding to another.

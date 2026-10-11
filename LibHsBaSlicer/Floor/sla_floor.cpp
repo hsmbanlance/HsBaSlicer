@@ -21,6 +21,7 @@
 #include "2D/PolygonFill.hpp"
 #include "LibHsBaSlicer/Extends/EventSourceFunction.hpp"
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
+#include "base/encoding_convert.hpp"
 #include "base/error.hpp"
 #include "base/thread_pool.hpp"
 #include "paths/imagespath.hpp"
@@ -519,7 +520,7 @@ HSBA_SLICER_LIB_API bool SaveSlaPackage(const SlaPackage& pkg, const std::string
             }
         }
 
-        images_path.Save(output_zip);
+        images_path.Save(utf8_to_path(output_zip));
         return true;
     }
     catch (const RuntimeError&)
@@ -595,8 +596,7 @@ HSBA_SLICER_LIB_API bool SaveSlaPackageLua(const SlaPackage& pkg, const std::str
                 reg(L);
             }
         };
-        images_path.Save(std::filesystem::path(output_zip), std::string_view(lua_script), std::string_view(lua_func),
-                         sla_reg);
+        images_path.Save(utf8_to_path(output_zip), std::string_view(lua_script), std::string_view(lua_func), sla_reg);
         return true;
     }
     catch (const RuntimeError&)

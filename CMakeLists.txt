@@ -454,6 +454,26 @@ if(HSBA_SLICER_BUILD_SAMPLES)
 endif()
 
 # ---------------------------------------------------------------------------
+# Windows: UTF-8 active code page manifest for the executables we own.
+# Embedding <activeCodePage>UTF-8</activeCodePage> makes GetACP() return 65001
+# for the process, so narrow char* paths handed to libigl/CGAL/OpenCASCADE/
+# OpenVDB/miniz (which use fopen/CreateFileA) are interpreted as UTF-8 and
+# converted to UTF-16 by the CRT -- enabling full non-ASCII model/result file
+# names. It also turns utf8_to_local() into a pass-through. The DLL consumers
+# (DllHsBaSlicer) inherit the host executable's manifest, so this only applies
+# to the desktop executables built here.
+# ---------------------------------------------------------------------------
+include(${CMAKE_SOURCE_DIR}/cmake/HsBaWindowsUtf8.cmake)
+hsba_apply_utf8_codepage(HsBaSlicer)
+if(HSBA_SLICER_BUILD_SAMPLES)
+  foreach(_hsba_exe
+      fdm_sample sla_sample sls_sample slm_sample lom_sample
+      tdp_sample waam_sample custom_sample lib_sample_header lib_sample_module)
+    hsba_apply_utf8_codepage(${_hsba_exe})
+  endforeach()
+endif()
+
+# ---------------------------------------------------------------------------
 # Install & Export
 # ---------------------------------------------------------------------------
 include(GNUInstallDirs)

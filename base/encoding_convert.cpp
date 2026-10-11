@@ -4,6 +4,13 @@
  */
 #include "encoding_convert.hpp"
 
+// Windows.h is required for the UTF-8 <-> UTF-16 path conversion helpers below, which must
+// work regardless of whether the Qt (USE_QSTRING) or boost code path is selected. Its own
+// include guards make the later conditional include harmless.
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
 // use qt for qstring
 #ifdef QT_VERSION
 #define USE_QSTRING
@@ -16,11 +23,10 @@
 #if !defined(__ANDROID__) && !(defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
 #include <boost/locale.hpp>
 #if _WIN32
-// <Windows.h> must precede <VersionHelpers.h>: the version-helper inline functions
-// rely on types and macros (BOOL, OSVERSIONINFOEX, VerSetConditionMask, _WIN32_WINNT_*)
-// declared by the base Windows headers pulled in by <Windows.h>.
+// <Windows.h> is already included at the top of this file, so it precedes <VersionHelpers.h>:
+// the version-helper inline functions rely on types and macros (BOOL, OSVERSIONINFOEX,
+// VerSetConditionMask, _WIN32_WINNT_*) declared by the base Windows headers.
 #include <VersionHelpers.h>
-#include <Windows.h>
 
 #endif
 #else
@@ -90,6 +96,51 @@ std::string local_to_utf8(const std::string& str)
     // If Use qt,code here
     return QString::fromStdString(str).toStdString();
 #endif  // !USE_QSTRING
+}
+
+std::filesystem::path utf8_to_path(const std::string& utf8Path)
+{
+#ifdef _WIN32
+    if (utf8Path.empty())
+    {
+        return {};
+    }
+    const int wideLen = MultiByteToWideChar(CP_UTF8, 0, utf8Path.data(), static_cast<int>(utf8Path.size()), nullptr, 0);
+    if (wideLen <= 0)
+    {
+        // Not valid UTF-8: fall back to the native (ANSI-code-page) parsing so the caller still
+        // gets a usable path instead of an empty one.
+        return std::filesystem::path(utf8Path);
+    }
+    std::wstring wide(static_cast<size_t>(wideLen), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, utf8Path.data(), static_cast<int>(utf8Path.size()), wide.data(), wideLen);
+    return std::filesystem::path(wide);
+#else
+    // On POSIX/Android/iOS the native path encoding is UTF-8, so the bytes can be used directly.
+    return std::filesystem::path(utf8Path);
+#endif  // _WIN32
+}
+
+std::string path_to_utf8(const std::filesystem::path& path)
+{
+#ifdef _WIN32
+    const std::wstring& wide = path.native();
+    if (wide.empty())
+    {
+        return {};
+    }
+    const int len =
+        WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(wide.size()), nullptr, 0, nullptr, nullptr);
+    if (len <= 0)
+    {
+        return path.string();
+    }
+    std::string out(static_cast<size_t>(len), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(wide.size()), out.data(), len, nullptr, nullptr);
+    return out;
+#else
+    return path.string();
+#endif  // _WIN32
 }
 
 #ifndef QT_VERSION
