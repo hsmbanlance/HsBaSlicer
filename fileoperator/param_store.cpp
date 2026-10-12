@@ -13,11 +13,21 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
+#include "cipher/encrypt.hpp"
+#include "param_codec.hpp"
+
 namespace HsBa::Slicer
 {
 namespace
 {
 constexpr int64_t kSchemaVersion = 1;
+
+// Metadata columns that always stay in plaintext so rows can be looked up, listed and diffed.
+bool IsMetaColumn(const std::string& name)
+{
+    return name == "param_key" || name == "schema_version" || name == "created_at" || name == "updated_at" ||
+           name == "param_id" || name == ParamSchema::BlobColumn();
+}
 
 // Return the current wall-clock time in whole seconds.
 int64_t NowSeconds()
@@ -215,6 +225,35 @@ int64_t ParamStore::Save(std::string_view table, std::string_view key, const Uti
             const int64_t now = NowSeconds();
             data["updated_at"] = now;
 
+            // Stage 3.5: When a crypto key is set, fold the field columns into an encrypted param_blob.
+            if (CryptoEnabled())
+            {
+                std::unordered_map<std::string, std::any> fields;
+                for (const auto& [name, value] : data)
+                {
+                    if (!IsMetaColumn(name))
+                    {
+                        fields.emplace(name, value);
+                    }
+                }
+                const std::vector<unsigned char> plain = EncodeColumns(fields);
+                std::vector<unsigned char> cipher;
+                try
+                {
+                    cipher = Cipher::Encrypt::aes256_cbc_encrypt(plain, crypto_key_);
+                }
+                catch (const std::exception& e)
+                {
+                    throw SQL::SQLAdapterQueryError(std::string("ParamStore::Save: encryption failed: ") + e.what());
+                }
+                for (const auto& [name, value] : fields)
+                {
+                    (void)value;
+                    data.erase(name);
+                }
+                data[ParamSchema::BlobColumn()] = std::move(cipher);
+            }
+
             // Stage 4: Upsert
             Raise(70, "upsert");
             auto existing = db_->Select(tbl, {"param_id"}, {{"param_key", std::string(key)}}, std::nullopt, 1, 0);
@@ -303,6 +342,43 @@ bool ParamStore::Load(std::string_view table, std::string_view key, Utils::AnyOb
             }
             const auto& row = rows.at(0);
             Raise(50, "mapping");
+
+            // When the row carries an encrypted param_blob, decode it back into the column map;
+            // otherwise fall through to the plaintext wide-table columns.
+            auto blobIt = row.find(ParamSchema::BlobColumn());
+            bool const hasBlob = blobIt != row.end() && blobIt->second.type() == typeid(std::vector<unsigned char>) &&
+                                 !std::any_cast<const std::vector<unsigned char>&>(blobIt->second).empty();
+            if (hasBlob)
+            {
+                if (!CryptoEnabled())
+                {
+                    throw SQL::SQLAdapterQueryError("ParamStore::Load: row is encrypted but no crypto key is set");
+                }
+                const auto& cipher = std::any_cast<const std::vector<unsigned char>&>(blobIt->second);
+                std::vector<unsigned char> plain;
+                try
+                {
+                    plain = Cipher::Encrypt::aes256_cbc_decrypt(cipher, crypto_key_);
+                }
+                catch (const std::exception& e)
+                {
+                    throw SQL::SQLAdapterQueryError(std::string("ParamStore::Load: decryption failed: ") + e.what());
+                }
+                auto cols = DecodeColumns(plain);
+                outCfg.ForeachField(
+                    [&cols, &arena](std::string_view name, const Utils::AnyObject& child)
+                    {
+                        auto it = cols.find(std::string(name));
+                        if (it == cols.end())
+                        {
+                            return;  // Missing column: keep the target struct's original value
+                        }
+                        AnyToField(it->second, child.get_type_info(), child.get_data(), arena);
+                    });
+                Raise(100, "loaded");
+                return true;
+            }
+
             outCfg.ForeachField(
                 [&row, &arena](std::string_view name, const Utils::AnyObject& child)
                 {
@@ -368,13 +444,65 @@ bool ParamStore::Update(std::string_view table, std::string_view key, const Util
                 throw SQL::SQLAdapterInvalidArgumentError("ParamStore::Update: config type not registered");
             }
             const std::string tbl = ResolveTable(table, partial);
-            auto existing = db_->Select(tbl, {"param_id"}, {{"param_key", std::string(key)}}, std::nullopt, 1, 0);
+            auto existing = db_->Select(tbl, {}, {{"param_key", std::string(key)}}, std::nullopt, 1, 0);
             if (existing.empty())
             {
                 return false;
             }
 
             auto reflected = ReflectColumns(partial);
+
+            // Under encryption, changes must fold into the blob via a read-decode-modify-re-encrypt cycle
+            // so no plaintext field column is ever written for an encrypted table.
+            if (CryptoEnabled())
+            {
+                const auto& row = existing.at(0);
+                auto blobIt = row.find(ParamSchema::BlobColumn());
+                bool const hasBlob = blobIt != row.end() &&
+                                     blobIt->second.type() == typeid(std::vector<unsigned char>) &&
+                                     !std::any_cast<const std::vector<unsigned char>&>(blobIt->second).empty();
+                std::unordered_map<std::string, std::any> cols;
+                if (hasBlob)
+                {
+                    const auto& oldCipher = std::any_cast<const std::vector<unsigned char>&>(blobIt->second);
+                    std::vector<unsigned char> plain;
+                    try
+                    {
+                        plain = Cipher::Encrypt::aes256_cbc_decrypt(oldCipher, crypto_key_);
+                    }
+                    catch (const std::exception& e)
+                    {
+                        throw SQL::SQLAdapterQueryError(std::string("ParamStore::Update: decryption failed: ") +
+                                                        e.what());
+                    }
+                    cols = DecodeColumns(plain);
+                }
+                for (const auto& field : changedFields)
+                {
+                    auto it = reflected.find(field);
+                    if (it != reflected.end())
+                    {
+                        cols[it->first] = it->second;
+                    }
+                }
+                const std::vector<unsigned char> plain = EncodeColumns(cols);
+                std::vector<unsigned char> cipher;
+                try
+                {
+                    cipher = Cipher::Encrypt::aes256_cbc_encrypt(plain, crypto_key_);
+                }
+                catch (const std::exception& e)
+                {
+                    throw SQL::SQLAdapterQueryError(std::string("ParamStore::Update: encryption failed: ") + e.what());
+                }
+                std::unordered_map<std::string, std::any> set;
+                set[ParamSchema::BlobColumn()] = std::move(cipher);
+                set["updated_at"] = NowSeconds();
+                db_->Update(tbl, set, {{"param_key", std::string(key)}});
+                Raise(100, "updated");
+                return true;
+            }
+
             std::unordered_map<std::string, std::any> set;
             for (const auto& field : changedFields)
             {

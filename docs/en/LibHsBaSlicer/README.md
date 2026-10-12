@@ -146,6 +146,7 @@ using namespace HsBa::Slicer;
 ParamStoreConn conn;
 conn.backend    = ParamBackend::Sqlite;
 conn.sqlitePath = "params.db";
+// conn.cryptoKey = "secret";  // optional: when non-empty the whole config is encrypted into the param_blob column
 
 HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
 cfg.model_name   = "tough_template";
@@ -168,6 +169,7 @@ if (loaded.success) {
 - The MySQL/PostgreSQL branches are gated by the `HSBA_USE_MYSQL` / `HSBA_USE_PGSQL` compile macros; when disabled they return `success=false` instead of crashing (mobile builds: SQLite only).
 - The `const char*` fields filled during a load are owned by `std::malloc` and must be released with `FreeLoadedConfigStrings`.
 - The underlying storage/reflection/CRUD capabilities (`List`/`Update`/`Delete`/Lua) live in fileoperator's `ParamStore`; this layer only exposes write/read against the C config structs.
+- Optional encryption at rest: when `conn.cryptoKey` is non-empty the config is serialized and encrypted with AES-256-CBC (key derived by `HsBaCipher`) into the `param_blob` column; leaving it empty keeps the original plaintext behaviour. Loading an encrypted row without the correct key yields `success=false`. See [fileoperator/param_store.md](../fileoperator/param_store.md).
 
 ## SLA Floor / Render / Package
 

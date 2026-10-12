@@ -21,6 +21,22 @@ constexpr const char* kColKey = "param_key";
 constexpr const char* kColVersion = "schema_version";
 constexpr const char* kColCreated = "created_at";
 constexpr const char* kColUpdated = "updated_at";
+constexpr const char* kColBlob = ParamSchema::BlobColumn();
+
+// Column type for the dedicated binary-encrypted column map (raw bytes / large object).
+const char* BlobTypeName(Backend backend)
+{
+    switch (backend)
+    {
+    case Backend::MySQL:
+        return "LONGBLOB";
+    case Backend::PostgreSQL:
+        return "BYTEA";
+    case Backend::SQLite:
+    default:
+        return "BLOB";
+    }
+}
 
 // Map a converged column kind plus backend to its concrete SQL column type name.
 const char* TypeName(ColumnKind kind, Backend backend)
@@ -125,6 +141,7 @@ std::unordered_map<std::string, std::string> ParamSchema::BuildDdl(Backend backe
     ddl[kColVersion] = std::string("BIGINT NOT NULL");
     ddl[kColCreated] = "BIGINT";
     ddl[kColUpdated] = "BIGINT";
+    ddl[kColBlob] = BlobTypeName(backend);
     for (const auto& [name, kind] : columns_)
     {
         ddl[name] = TypeName(kind, backend);
@@ -179,6 +196,7 @@ std::string ParamSchema::CreateStatement(const std::string& table, Backend backe
     append(kColVersion);
     append(kColCreated);
     append(kColUpdated);
+    append(kColBlob);
     for (const auto& [name, kind] : columns_)
     {
         (void)kind;

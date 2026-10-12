@@ -22,6 +22,8 @@
 	param_reflect.cpp
 	param_convert.hpp
 	param_convert.cpp
+	param_codec.hpp
+	param_codec.cpp
 	param_schema.hpp
 	param_schema.cpp
 	param_store.hpp
@@ -36,6 +38,7 @@ endif()
 
 target_link_libraries(HsBaSlicerFileOperator PUBLIC HsBaSlicerBase 
 	rapidjson
+	HsBaCipher
 	HsBaPipelineTypes
 )
 

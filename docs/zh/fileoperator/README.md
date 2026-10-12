@@ -7,3 +7,4 @@ FileOperator 模块提供了压缩、解压缩、文件读写等多种文件操�
 - [Zipper (压缩类)](./zipper.md) - 基于miniz的ZIP压缩功能，另含基于bit7z（7-Zip）的 Bit7zZipper 多格式压缩（直接支持 `.tar.gz`/`.tar.xz`）
 - [Unzipper (解压缩类)](./unzipper.md) - 基于miniz的ZIP解压缩功能，另含基于bit7z（7-Zip）的 Bit7ZUnzipper 多格式解压（直接支持 `.tar.gz`/`.tar.xz`）
 - [SQL Adapter (SQL适配器)](./sql_adapter.md) - SQLite数据库操作功能
+- [ParamStore (工艺参数存储)](./param_store.md) - 基于反射的流水线工艺参数宽表持久化，支持可选的 AES-256-CBC 加密 `param_blob` 存储

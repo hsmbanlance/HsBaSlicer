@@ -1511,6 +1511,27 @@ int lua_paramstore_ensure_schema(lua_State* L)
     }
 }
 
+// Enable or disable at-rest encryption for subsequent Save/Load/Update calls; nil or "" disables it.
+int lua_paramstore_set_crypto_key(lua_State* L)
+{
+    auto* store = (ParamStore*)lua_topointer(L, 1);
+    if (!store)
+    {
+        lua_pushstring(L, std::format("Invalid {} object", ParamStoreTypeName).c_str());
+        return lua_error(L);
+    }
+    std::string_view key;
+    size_t len = 0;
+    const char* s = lua_isnil(L, 2) ? nullptr : lua_tolstring(L, 2, &len);
+    if (s)
+    {
+        key = std::string_view(s, len);
+    }
+    store->SetCryptoKey(key);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 int lua_paramstore_save(lua_State* L)
 {
     auto* store = (ParamStore*)lua_topointer(L, 1);
@@ -1714,6 +1735,8 @@ void RegisterLuaParamStore(lua_State* L)
     lua_setfield(L, -2, "__gc");
     lua_pushcfunction(L, lua_paramstore_ensure_schema);
     lua_setfield(L, -2, "EnsureSchema");
+    lua_pushcfunction(L, lua_paramstore_set_crypto_key);
+    lua_setfield(L, -2, "SetCryptoKey");
     lua_pushcfunction(L, lua_paramstore_save);
     lua_setfield(L, -2, "Save");
     lua_pushcfunction(L, lua_paramstore_load);

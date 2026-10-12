@@ -146,6 +146,7 @@ using namespace HsBa::Slicer;
 ParamStoreConn conn;
 conn.backend    = ParamBackend::Sqlite;
 conn.sqlitePath = "params.db";
+// conn.cryptoKey = "secret";  // 可选：非空时整份配置加密存入 param_blob 列
 
 HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
 cfg.model_name   = "tough_template";
@@ -168,6 +169,7 @@ if (loaded.success) {
 - MySQL/PostgreSQL 分支受 `HSBA_USE_MYSQL` / `HSBA_USE_PGSQL` 编译宏守卫，未启用时返回 `success=false` 而非崩溃（移动端仅 SQLite）。
 - 读取回填的 `const char*` 字段由 `std::malloc` 持有，须用 `FreeLoadedConfigStrings` 释放。
 - 底层存储/反射/CRUD（含 `List`/`Update`/`Delete`/Lua）能力位于 fileoperator 的 `ParamStore`，本层仅面向 C 配置结构体暴露写入/读取。
+- 可选静态加密：`conn.cryptoKey` 非空时，配置会被序列化并经 AES-256-CBC（口令由 `HsBaCipher` 派生）加密存入 `param_blob` 列；留空则维持原明文行为。读取加密行时口令缺失或错误会使 `success=false`。详见 [fileoperator/param_store.md](../fileoperator/param_store.md)。
 
 ## SLA 地板/渲染/打包
 

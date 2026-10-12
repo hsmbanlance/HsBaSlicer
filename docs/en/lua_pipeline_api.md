@@ -219,7 +219,7 @@ Methods: `Connect`, `Execute`, `Query`, `Insert`, `Update`, `Delete`, `CreateTab
 
 ### B.8 `ParamStore` (parameter persistence)
 
-Reflection-based pipeline-config storage. `ParamStore.new(...)` creates an instance; instance methods: `EnsureSchema`, `Save`, `Load`, `List`, `Update`, `Delete` (PascalCase; on success they return `(true, table)`, on failure `(false, err)`).
+Reflection-based pipeline-config storage. `ParamStore.new(...)` creates an instance; instance methods: `EnsureSchema`, `SetCryptoKey`, `Save`, `Load`, `List`, `Update`, `Delete` (PascalCase; on success they return `(true, table)`, on failure `(false, err)`). `SetCryptoKey(password)` enables encryption at rest: with a non-empty key, `Save`/`Update` store the whole config as an AES-256-CBC encrypted `param_blob` and `Load` decrypts it; pass `nil`/`""` to disable and keep plaintext behaviour.
 
 ---
 

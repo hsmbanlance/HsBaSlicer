@@ -92,6 +92,7 @@ ParamStoreConn ToLibConn(const HsBaParamStoreConn_t* c)
     o.password = Safe(c->password);
     o.database = Safe(c->database);
     o.port = c->port;
+    o.cryptoKey = Safe(c->crypto_password);
     return o;
 }
 

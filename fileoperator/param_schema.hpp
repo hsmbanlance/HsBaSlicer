@@ -4,7 +4,9 @@
  *        backends, and provides backend detection.
  *
  * Every Config table appends fixed metadata columns: param_id (auto-increment primary key),
- * param_key (business unique key), schema_version, created_at, updated_at. Field column types are
+ * param_key (business unique key), schema_version, created_at, updated_at. When at-rest
+ * encryption is enabled, the whole column map is serialized and stored in a dedicated
+ * param_blob binary column instead of the plaintext per-field columns. Field column types are
  * mapped from the converged std::any kind:
  *   Double(double/float)   -> REAL / DOUBLE / DOUBLE PRECISION
  *   Int64 (int/enum/int64) -> BIGINT / BIGINT / BIGINT
@@ -75,6 +77,12 @@ public:
 
     /** @brief Return the converged column kind for a field type. */
     static ColumnKind KindOf(Utils::TypeInfo* field_ti);
+
+    /** @brief Name of the dedicated binary-encrypted column map (param_blob); shared by ParamStore and the DDL. */
+    static constexpr const char* BlobColumn() noexcept
+    {
+        return "param_blob";
+    }
 
     /** @brief Reflected field names of this Config (excluding metadata columns), in TypeInfo::fields order. */
     const std::vector<std::string>& field_columns() const noexcept { return field_columns_; }

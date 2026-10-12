@@ -1027,6 +1027,7 @@ extern "C"
         const char* password;           ///< MySQL/PostgreSQL password
         const char* database;           ///< MySQL/PostgreSQL database name
         unsigned int port;              ///< MySQL/PostgreSQL port (0 = adapter default)
+        const char* crypto_password;    ///< Optional at-rest encryption password (NULL = store plaintext)
     } HsBaParamStoreConn_t;
 
     /**

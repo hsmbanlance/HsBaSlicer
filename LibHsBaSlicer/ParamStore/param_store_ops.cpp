@@ -48,7 +48,7 @@ std::string ResolveTable(PipelineConfigTag tag, std::string_view table)
 // Run Save on an adapter already connected to a concrete backend; exceptions are converged into the outcome here and
 // not rethrown.
 ParamStoreOutcome DoSave(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::string_view table, std::string_view key,
-                         const void* cfg)
+                         const void* cfg, std::string_view cryptoKey)
 {
     ParamStoreOutcome o;
     if (!cfg)
@@ -65,6 +65,10 @@ ParamStoreOutcome DoSave(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::strin
     try
     {
         ParamStore store(db);
+        if (!cryptoKey.empty())
+        {
+            store.SetCryptoKey(cryptoKey);
+        }
         store.EnsureTable(tag);
         Utils::AnyObject const obj(ti, const_cast<void*>(cfg));
         o.paramId = static_cast<long long>(store.Save(ResolveTable(tag, table), key, obj));
@@ -81,7 +85,7 @@ ParamStoreOutcome DoSave(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::strin
 // Run Load on an adapter already connected to a concrete backend; on a hit convert the arena strings to malloc
 // ownership.
 ParamStoreOutcome DoLoad(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::string_view table, std::string_view key,
-                         void* out_cfg)
+                         void* out_cfg, std::string_view cryptoKey)
 {
     ParamStoreOutcome o;
     if (!out_cfg)
@@ -98,6 +102,10 @@ ParamStoreOutcome DoLoad(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::strin
     try
     {
         ParamStore store(db);
+        if (!cryptoKey.empty())
+        {
+            store.SetCryptoKey(cryptoKey);
+        }
         store.EnsureTable(tag);
         StringArena arena;
         Utils::AnyObject const obj(ti, out_cfg);
@@ -157,7 +165,7 @@ ParamStoreOutcome SavePipelineParams(const ParamStoreConn& conn, ParamPipelineKi
             o.error = std::string("ParamStore: sqlite connect failed: ") + e.what();
             return o;
         }
-        return DoSave(db, tag, table, key, cfg);
+        return DoSave(db, tag, table, key, cfg, conn.cryptoKey);
     }
     case ParamBackend::MySql:
 #ifdef HSBA_USE_MYSQL
@@ -180,7 +188,7 @@ ParamStoreOutcome SavePipelineParams(const ParamStoreConn& conn, ParamPipelineKi
             o.error = std::string("ParamStore: mysql connect failed: ") + e.what();
             return o;
         }
-        return DoSave(db, tag, table, key, cfg);
+        return DoSave(db, tag, table, key, cfg, conn.cryptoKey);
     }
 #else
         return BackendUnavailable(conn.backend);
@@ -206,7 +214,7 @@ ParamStoreOutcome SavePipelineParams(const ParamStoreConn& conn, ParamPipelineKi
             o.error = std::string("ParamStore: postgresql connect failed: ") + e.what();
             return o;
         }
-        return DoSave(db, tag, table, key, cfg);
+        return DoSave(db, tag, table, key, cfg, conn.cryptoKey);
     }
 #else
         return BackendUnavailable(conn.backend);
@@ -245,7 +253,7 @@ ParamStoreOutcome LoadPipelineParams(const ParamStoreConn& conn, ParamPipelineKi
             o.error = std::string("ParamStore: sqlite connect failed: ") + e.what();
             return o;
         }
-        return DoLoad(db, tag, table, key, outCfg);
+        return DoLoad(db, tag, table, key, outCfg, conn.cryptoKey);
     }
     case ParamBackend::MySql:
 #ifdef HSBA_USE_MYSQL
@@ -268,7 +276,7 @@ ParamStoreOutcome LoadPipelineParams(const ParamStoreConn& conn, ParamPipelineKi
             o.error = std::string("ParamStore: mysql connect failed: ") + e.what();
             return o;
         }
-        return DoLoad(db, tag, table, key, outCfg);
+        return DoLoad(db, tag, table, key, outCfg, conn.cryptoKey);
     }
 #else
         return BackendUnavailable(conn.backend);
@@ -294,7 +302,7 @@ ParamStoreOutcome LoadPipelineParams(const ParamStoreConn& conn, ParamPipelineKi
             o.error = std::string("ParamStore: postgresql connect failed: ") + e.what();
             return o;
         }
-        return DoLoad(db, tag, table, key, outCfg);
+        return DoLoad(db, tag, table, key, outCfg, conn.cryptoKey);
     }
 #else
         return BackendUnavailable(conn.backend);

@@ -446,7 +446,98 @@ BOOST_AUTO_TEST_CASE(c_api_param_store_smoke)
     RemoveQuiet(path);
 }
 
-// 9. 后端可用性守卫：未编译进的 MySQL/PGSQL 安全返回 success=false（不崩溃）
+// 9. 加密往返：设置 crypto key 后，字段值以密文存于 param_blob，明文字段列不写入；
+//    同 key 可读回，错误 key 解密失败；未设 key 读取密文行报错但不崩溃。
+BOOST_AUTO_TEST_CASE(encrypted_round_trip)
+{
+    RegisterPipelineConfigTypes();
+    auto path = TempDbPath("enc");
+    RemoveQuiet(path);
+
+    SQL::SQLiteAdapter db;
+    db.Connect(path.string());
+
+    ParamStore store(db);
+    store.SetCryptoKey("s3cr3t-key");
+    BOOST_CHECK(store.CryptoEnabled());
+    store.EnsureSchema();
+
+    HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+    cfg.model_name = "secret_box";
+    cfg.layer_height = 0.4f;
+    cfg.wall_count = 8;
+
+    int64_t id = store.Save("", "enc1", AnyObject(GetTypeInfo<HsBaFdmPipelineConfig_t>(), &cfg));
+    BOOST_CHECK(id > 0);
+
+    // 密文列非空，且明文字段列未写入（保持 NULL）
+    auto rows = db.Select("hsba_param_fdm", {"param_blob", "model_name"}, {{"param_key", std::string("enc1")}},
+                          std::nullopt, 1, 0);
+    BOOST_REQUIRE_EQUAL(rows.size(), 1u);
+    const auto& blob = rows.at(0).at("param_blob");
+    BOOST_CHECK(blob.type() == typeid(std::vector<unsigned char>));
+    BOOST_CHECK(!std::any_cast<const std::vector<unsigned char>&>(blob).empty());
+    const auto& mn = rows.at(0).at("model_name");
+    BOOST_CHECK(!mn.has_value() || mn.type() == typeid(std::nullptr_t) ||
+                (mn.type() == typeid(std::string) && std::any_cast<const std::string&>(mn).empty()));
+
+    // 同 key 读回
+    HsBaFdmPipelineConfig_t loaded = HsBaFdmConfigDefault();
+    StringArena arena;
+    BOOST_CHECK(store.Load("", "enc1", AnyObject(GetTypeInfo<HsBaFdmPipelineConfig_t>(), &loaded), arena));
+    BOOST_CHECK_EQUAL(std::string(loaded.model_name), "secret_box");
+    BOOST_CHECK_SMALL(loaded.layer_height - 0.4f, 1e-6f);
+    BOOST_CHECK_EQUAL(loaded.wall_count, 8);
+
+    // 错误 key：解密/解码失败抛出
+    ParamStore wrong(db);
+    wrong.SetCryptoKey("wrong-key");
+    HsBaFdmPipelineConfig_t bad = HsBaFdmConfigDefault();
+    StringArena arena2;
+    BOOST_CHECK_THROW(wrong.Load("", "enc1", AnyObject(GetTypeInfo<HsBaFdmPipelineConfig_t>(), &bad), arena2),
+                      std::exception);
+
+    RemoveQuiet(path);
+}
+
+// 10. Lib 层带 crypto key 往返 + 未设 key 读取密文安全失败
+BOOST_AUTO_TEST_CASE(lib_encrypted_round_trip)
+{
+    auto path = TempDbPath("libenc");
+    RemoveQuiet(path);
+
+    ParamStoreConn conn;
+    conn.backend = ParamBackend::Sqlite;
+    conn.sqlitePath = path.string();
+    conn.cryptoKey = "lib-secret";
+
+    HsBaFdmPipelineConfig_t src = HsBaFdmConfigDefault();
+    src.model_name = "lib_enc_box";
+    src.wall_count = 11;
+    auto save = SavePipelineParams(conn, ParamPipelineKind::Fdm, "", "l1", &src);
+    BOOST_CHECK(save.success);
+
+    // 同 key 读取
+    HsBaFdmPipelineConfig_t dst = HsBaFdmConfigDefault();
+    auto load = LoadPipelineParams(conn, ParamPipelineKind::Fdm, "", "l1", &dst);
+    BOOST_CHECK(load.success);
+    BOOST_CHECK_EQUAL(std::string(dst.model_name), "lib_enc_box");
+    BOOST_CHECK_EQUAL(dst.wall_count, 11);
+    FreeLoadedConfigStrings(ParamPipelineKind::Fdm, &dst);
+
+    // 未设 key 读取密文行 -> success=false 且不崩溃
+    ParamStoreConn plain;
+    plain.backend = ParamBackend::Sqlite;
+    plain.sqlitePath = path.string();
+    HsBaFdmPipelineConfig_t out = HsBaFdmConfigDefault();
+    auto l2 = LoadPipelineParams(plain, ParamPipelineKind::Fdm, "", "l1", &out);
+    BOOST_CHECK(!l2.success);
+    BOOST_CHECK(!l2.error.empty());
+
+    RemoveQuiet(path);
+}
+
+// 11. 后端可用性守卫：未编译进的 MySQL/PGSQL 安全返回 success=false（不崩溃）
 //    注意：MySQL/PostgreSQLAdapter 在无实例时 Connect 会崩溃而非抛异常，
 //    因此编译进对应宏时必须仅在有实例（环境变量）时才发起调用。
 BOOST_AUTO_TEST_CASE(param_store_backend_guard)

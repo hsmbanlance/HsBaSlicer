@@ -83,6 +83,21 @@ public:
     /// @brief Install the migration hook.
     void SetMigrationHook(MigrationFn fn) { migration_ = std::move(fn); }
 
+    /**
+     * @brief Enable or disable at-rest encryption for the persisted column map.
+     *
+     * When a non-empty key is set, Save serializes the reflected column map to a self-describing
+     * binary buffer, encrypts it with AES-256-CBC (password-derived) and stores it in the dedicated
+     * param_blob column, leaving the plaintext per-field columns empty; Load decrypts and decodes it
+     * back. param_key, schema_version, created_at and updated_at always stay in plaintext so rows can
+     * still be looked up and listed. An empty key disables encryption and preserves the prior
+     * wide-table plaintext behavior. Existing rows are only readable with the same key.
+     */
+    void SetCryptoKey(std::string_view key) { crypto_key_.assign(key); }
+
+    /// @brief Whether at-rest encryption is currently enabled.
+    bool CryptoEnabled() const noexcept { return !crypto_key_.empty(); }
+
     /** @brief Message of the most recent failure (errors are not swallowed; the exception still propagates). */
     std::string GetLastError() const { return last_error_; }
 
@@ -101,6 +116,7 @@ private:
     Backend backend_;
     ProgressFn progress_;
     MigrationFn migration_;
+    std::string crypto_key_;
     std::string last_error_;
 };
 }  // namespace HsBa::Slicer

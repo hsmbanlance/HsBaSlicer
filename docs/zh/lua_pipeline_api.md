@@ -218,7 +218,7 @@ db:Delete("table", "where...")
 
 ### B.8 `ParamStore`（参数持久化）
 
-基于反射的流水线配置存取。`ParamStore.new(...)` 创建实例，实例方法：`EnsureSchema`、`Save`、`Load`、`List`、`Update`、`Delete`。
+基于反射的流水线配置存取。`ParamStore.new(...)` 创建实例，实例方法：`EnsureSchema`、`SetCryptoKey`、`Save`、`Load`、`List`、`Update`、`Delete`。`SetCryptoKey(password)` 启用静态加密：口令非空时，`Save`/`Update` 将整份配置以 AES-256-CBC 加密存入 `param_blob`，`Load` 自动解密；传 `nil`/`""` 则禁用并保持明文行为。
 
 ---
 
