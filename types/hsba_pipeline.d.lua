@@ -62,13 +62,49 @@ PolygonOperations = {}
 PolygonFill = {}
 
 ---路径顺序优化器（减少空行程）
+
+---区域级全组合图的一条边（i->j 的最短路径代价）
+---@class FullGraphEdge
+---@field from  integer   源区域 id
+---@field to    integer   目标区域 id
+---@field cost  number    最短路径代价
+
+---区域级全组合图：所有区域两两之间的门径感知最短路径代价（供自定义排序算法）
+---@class FullGraph
+---@field vertices    integer[]           区域 id，按矩阵下标顺序
+---@field distMatrix  (number|false)[][]  [i][j] 代价；false 表示不可达；对角为 0
+---@field edges       FullGraphEdge[]     扁平可达边表（i ~= j）
+---@field areaCount   integer             区域数量
+
+---门级展开图的一个顶点（区域的入口或出口侧）
+---@class ExpandedGraphVertex
+---@field areaId  integer   所属区域 id
+---@field gateId  integer   门禁索引
+---@field isExit  boolean   true=出口侧，false=入口侧
+
+---门级展开图的一条边（from->to，索引为 1 基）
+---@class ExpandedGraphEdge
+---@field from    integer   起点顶点下标（1 基）
+---@field to      integer   终点顶点下标（1 基）
+---@field weight  number    边代价
+
+---门级展开图：所有入口/出口顶点及内部迁移边、区域间路由边（供细粒度自定义规划）
+---@class ExpandedGraph
+---@field vertices     ExpandedGraphVertex[]  全部入口/出口顶点
+---@field edges        ExpandedGraphEdge[]    全部迁移/路由边（1 基端点下标）
+---@field vertexCount  integer                顶点数量
+---@field edgeCount    integer                边数量
+
 ---@class PathOptimizeInstance
----@field addRegion      fun(self: PathOptimizeInstance, regionId: integer, paths: Polygons)
----@field addPolygons    fun(self: PathOptimizeInstance, regionId: integer, polygons: Polygons)
----@field addRoute       fun(self: PathOptimizeInstance, fromId: integer, toId: integer, cost: number)
----@field optimizeOrder  fun(self: PathOptimizeInstance): integer[]
----@field buildPaths     fun(self: PathOptimizeInstance): Polygons
----@field buildPolygons  fun(self: PathOptimizeInstance): Polygons
+---@field addRegion        fun(self: PathOptimizeInstance, regionId: integer, paths: Polygons)
+---@field addPolygons      fun(self: PathOptimizeInstance, regionId: integer, polygons: Polygons)
+---@field addRoute         fun(self: PathOptimizeInstance, fromId: integer, toId: integer, cost: number)
+---@field optimizeOrder    fun(self: PathOptimizeInstance): integer[]
+---@field buildPaths       fun(self: PathOptimizeInstance): Polygons
+---@field buildPolygons    fun(self: PathOptimizeInstance): Polygons
+---@field getFullGraph     fun(self: PathOptimizeInstance): FullGraph
+---@field getExpandedGraph fun(self: PathOptimizeInstance): ExpandedGraph
+---@field setCustomTour    fun(self: PathOptimizeInstance, tour: integer[], entryGates?: table<integer, integer>)
 
 ---@class PathOptimize
 ---@field new               fun(): PathOptimizeInstance

@@ -10,6 +10,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "../export.h"
@@ -44,6 +45,46 @@ namespace HsBa::Slicer
 class HSBA_SLICER_LIB_API RegionPathOptimizer
 {
 public:
+    /**
+     * @brief Area-level full combination graph: the gate-aware shortest-path cost between every
+     *        ordered pair of regions, provided both as an N x N distance matrix and a flat edge list.
+     *        Enables user-defined Lua algorithms (custom TSP, greedy, annealing, ...) over region order.
+     */
+    struct FullGraphData
+    {
+        std::vector<int> vertices;                    // region ids, in matrix order
+        std::vector<std::vector<double>> distMatrix;  // [i][j] cost; -1 marks unreachable
+        struct EdgeInfo
+        {
+            int from;     // source region id
+            int to;       // target region id
+            double cost;  // shortest-path cost between the regions
+        };
+        std::vector<EdgeInfo> edges;  // flat edge list over reachable pairs
+    };
+
+    /**
+     * @brief Gate-level expanded graph: every entry/exit gate vertex and all internal transit /
+     *        inter-region route edges, enabling fine-grained custom path planning.
+     */
+    struct ExpandedGraphData
+    {
+        struct VertexInfo
+        {
+            int areaId;   // region id this vertex belongs to
+            int gateId;   // gate index of the vertex
+            bool isExit;  // true = exit side, false = entry side
+        };
+        struct EdgeInfo
+        {
+            std::size_t fromIdx;  // index into the vertices array
+            std::size_t toIdx;    // index into the vertices array
+            double weight;        // edge cost
+        };
+        std::vector<VertexInfo> vertices;
+        std::vector<EdgeInfo> edges;
+    };
+
     RegionPathOptimizer();
     ~RegionPathOptimizer();
     RegionPathOptimizer(const RegionPathOptimizer&) = delete;
@@ -94,6 +135,29 @@ public:
      */
     PolygonsD buildPolygons();
 
+    /**
+     * @brief Get the area-level full combination graph (cheapest gate-aware shortest-path cost
+     *        between every ordered pair of regions). Builds the underlying AreaGraph on demand.
+     * @return The complete graph as a distance matrix plus a flat edge list.
+     */
+    FullGraphData getFullGraph();
+
+    /**
+     * @brief Get the gate-level expanded graph (all entry/exit vertices and every internal transit
+     *        and inter-region route edge). Builds the underlying AreaGraph on demand.
+     * @return The expanded graph vertices and edges.
+     */
+    ExpandedGraphData getExpandedGraph();
+
+    /**
+     * @brief Set a user-computed region visit order and per-region entry gates, bypassing the
+     *        built-in genetic TSP. After calling this, buildPaths()/buildPolygons() use this order.
+     * @param tour The ordered list of region ids.
+     * @param entryGates Optional map region id -> entry gate index (regions absent here use the
+     *        default entry strategy).
+     */
+    void setCustomTour(const std::vector<int>& tour, const std::unordered_map<int, int>& entryGates = {});
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
@@ -104,11 +168,22 @@ private:
  *
  * After registration the following are available in Lua:
  * - PathOptimize.new()                ->
- * optimizer object (addRegion/addPolygons/addRoute/optimizeOrder/buildPaths/buildPolygons)
- * - PathOptimize.optimizeRegions(regions)  -> one-shot fill-result-mode optimization, returns the complete fill-path table (supports multi-point polylines)
- * - PathOptimize.optimizePolygons(regions) -> one-shot polygon-mode optimization, returns the polygon table in optimized order (runs before filling)
- * where regions = an array of regions, each region = an array of polylines/polygons,
- * each polyline/polygon = an array of {x=.., y=..} points.
+ * optimizer object
+ * (addRegion/addPolygons/addRoute/optimizeOrder/buildPaths/buildPolygons/getFullGraph/getExpandedGraph/setCustomTour)
+ * - PathOptimize.optimizeRegions(regions)  -> one-shot fill-result-mode optimization, returns the complete fill-path
+ * table (supports multi-point polylines)
+ * - PathOptimize.optimizePolygons(regions) -> one-shot polygon-mode optimization, returns the polygon table in
+ * optimized order (runs before filling) where regions = an array of regions, each region = an array of
+ * polylines/polygons, each polyline/polygon = an array of {x=.., y=..} points.
+ *
+ * The optimizer object additionally exposes the full combination graphs so users can design
+ * arbitrary path-optimization algorithms in Lua:
+ * - opt:getFullGraph()      -> {vertices={id..}, distMatrix={{cost..}..} (false=unreachable),
+ *                               edges={{from,to,cost}..}, areaCount}
+ * - opt:getExpandedGraph()  -> {vertices={{areaId,gateId,isExit}..}, edges={{from,to,weight}..}
+ *                               (1-based vertex indices), vertexCount, edgeCount}
+ * - opt:setCustomTour(tour [, entryGates])  -> feed a user order (array of ids) and optional
+ *                               {[areaId]=gateIndex} map, then buildPaths()/buildPolygons() use it.
  *
  * @param L Lua state pointer.
  */

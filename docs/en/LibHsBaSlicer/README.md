@@ -263,6 +263,16 @@ opt2.addRegion(2, region2_paths);
 opt2.addRoute(1, 2, 42.0);                 // Optional: manual override of inter-region travel cost (symmetric)
 opt2.optimizeOrder();
 PolygonsD full_paths = opt2.buildPaths();  // Region-internal path direction/order arranged greedily to reduce jumps
+
+// Full combination graphs: let a user algorithm decide the region visit order
+RegionPathOptimizer opt3;
+opt3.addRegion(1, region1_paths);
+opt3.addRegion(2, region2_paths);
+opt3.addRegion(3, region3_paths);
+auto fg = opt3.getFullGraph();             // N x N pairwise shortest-path cost matrix + flat edge list
+auto eg = opt3.getExpandedGraph();         // gate-level expanded graph (all entry/exit vertices and edges)
+opt3.setCustomTour({3, 1, 2});             // feed a user-computed order (skips the built-in genetic TSP)
+PolygonsD custom_paths = opt3.buildPaths();
 ```
 
 ### Lua Script Embedding (the only delivery entry)
@@ -271,15 +281,24 @@ The script environment registers the global table `PathOptimize`:
 
 | Lua Interface | Description |
 | --- | --- |
-| `PathOptimize.new()` | Create optimizer object (`addPolygons`/`addRegion`/`addRoute`/`optimizeOrder`/`buildPolygons`/`buildPaths`) |
+| `PathOptimize.new()` | Create optimizer object (`addPolygons`/`addRegion`/`addRoute`/`optimizeOrder`/`buildPolygons`/`buildPaths`/`getFullGraph`/`getExpandedGraph`/`setCustomTour`) |
 | `PathOptimize.optimizePolygons(regions)` | One-shot polygon-mode optimization, returns polygons in optimized order |
 | `PathOptimize.optimizeRegions(regions)` | One-shot fill-result-mode optimization, returns complete fill paths (multi-point polylines supported) |
+
+The optimizer object additionally exposes the **full combination graphs** so users can design arbitrary path-optimization algorithms in Lua:
+
+| Lua Interface | Description |
+| --- | --- |
+| `opt:getFullGraph()` | Area-level complete graph: `{vertices, distMatrix (false = unreachable), edges, areaCount}` — pairwise gate-aware shortest-path costs |
+| `opt:getExpandedGraph()` | Gate-level expanded graph: `{vertices (areaId/gateId/isExit), edges (from/to/weight, 1-based), vertexCount, edgeCount}` |
+| `opt:setCustomTour(tour[, entryGates])` | Feed a user order (array of ids) and optional `{[areaId]=gateIndex}` map; `buildPaths()`/`buildPolygons()` reuse it, skipping the built-in genetic TSP |
 
 where `regions` = array of regions, each region = array of polylines/polygons, each polyline/polygon = array of `{x=.., y=..}` points.
 
 Script contract: the function receives `regions` and returns the optimized result table in the same format;
 polygon operations and fill functions are also available inside the script.
-See `tests/PolygonFill/optimize_paths.lua` for an example script:
+See `tests/PolygonFill/optimize_paths.lua` (built-in strategies) and `tests/PolygonFill/custom_tsp.lua`
+(user-defined algorithms over the full graph) for example scripts:
 
 ```lua
 -- Fill-result mode: outputs complete fill paths (multi-point polylines supported)
@@ -290,6 +309,19 @@ end
 -- Polygon mode (before fill): outputs polygons in optimized order for subsequent filling
 function optimize_polygons(regions)
     return PathOptimize.optimizePolygons(regions)
+end
+
+-- User-defined algorithm over the full combination graph (nearest-neighbor example)
+function optimize_paths_custom(regions)
+    local opt = PathOptimize.new()
+    for i, paths in ipairs(regions) do
+        opt:addRegion(i, paths)
+    end
+    local graph = opt:getFullGraph()          -- N x N pairwise cost matrix
+    local tour = { graph.vertices[1] }         -- start from the first region
+    -- ...pick the cheapest unvisited region each step, then feed the order back...
+    opt:setCustomTour(tour)
+    return opt:buildPaths()
 end
 ```
 

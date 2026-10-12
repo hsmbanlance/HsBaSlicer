@@ -513,6 +513,116 @@ end
     BOOST_CHECK_EQUAL(RegionHelper::CountContiguousBlocks(out2, 3), 3);
 }
 
+// getFullGraph: 三区域应得到 3x3 代价矩阵，对角为 0，其余可达（>=0），
+// 扁平边表覆盖全部有序对 (i!=j)
+BOOST_AUTO_TEST_CASE(optimizer_full_graph_matrix)
+{
+    RegionPathOptimizer opt;
+    opt.addRegion(1, RegionHelper::MakeLines(0.0, 0.0, 10.0, 3, 2.0));
+    opt.addRegion(2, RegionHelper::MakeLines(12.0, 1000.0, 10.0, 3, 2.0));
+    opt.addRegion(3, RegionHelper::MakeLines(1000.0, 2000.0, 10.0, 3, 2.0));
+
+    auto g = opt.getFullGraph();
+    BOOST_REQUIRE_EQUAL(g.vertices.size(), 3u);
+    BOOST_REQUIRE_EQUAL(g.distMatrix.size(), 3u);
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        BOOST_CHECK_EQUAL(g.distMatrix[i].size(), 3u);
+        BOOST_CHECK_CLOSE(g.distMatrix[i][i], 0.0, 1e-9);
+    }
+    // 全连通：所有有序对可达（非 -1），且代价非负
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        for (std::size_t j = 0; j < 3; ++j)
+        {
+            if (i != j)
+            {
+                BOOST_CHECK(g.distMatrix[i][j] >= 0.0);
+            }
+        }
+    }
+    // 边表包含全部 3*2 = 6 条有序可达边
+    BOOST_CHECK_EQUAL(g.edges.size(), 6u);
+}
+
+// getExpandedGraph: 门级展开图顶点数 = 各区域门禁数 * 2（可进可出），
+// 每区域含内部迁移边且区域间含路由边
+BOOST_AUTO_TEST_CASE(optimizer_expanded_graph_structure)
+{
+    RegionPathOptimizer opt;
+    // 每区域 3 条填充线 -> 6 个门禁（首/尾）-> 展开为 12 个顶点
+    opt.addRegion(1, RegionHelper::MakeLines(0.0, 0.0, 10.0, 3, 2.0));
+    opt.addRegion(2, RegionHelper::MakeLines(12.0, 1000.0, 10.0, 3, 2.0));
+    opt.addRegion(3, RegionHelper::MakeLines(1000.0, 2000.0, 10.0, 3, 2.0));
+
+    auto g = opt.getExpandedGraph();
+    BOOST_CHECK_EQUAL(g.vertices.size(), 36u);  // 3 regions * 6 gates * 2 (entry+exit)
+    BOOST_CHECK(!g.edges.empty());
+    // 每条边端点索引都落在顶点数组范围内
+    for (const auto& e : g.edges)
+    {
+        BOOST_CHECK_LT(e.fromIdx, g.vertices.size());
+        BOOST_CHECK_LT(e.toIdx, g.vertices.size());
+    }
+    // 顶点属性回读一致：areaId 属于 {1,2,3}
+    for (const auto& v : g.vertices)
+    {
+        BOOST_CHECK(v.areaId == 1 || v.areaId == 2 || v.areaId == 3);
+    }
+}
+
+// setCustomTour: 用户指定的顺序应直接驱动 buildPaths 的输出分块顺序，跳过内置 TSP
+BOOST_AUTO_TEST_CASE(optimizer_custom_tour_build_paths)
+{
+    RegionPathOptimizer opt;
+    // 区域 1/2/3 分别落在 y 频带 0/1/2
+    opt.addRegion(1, RegionHelper::MakeLines(0.0, 0.0, 10.0, 2, 2.0));
+    opt.addRegion(2, RegionHelper::MakeLines(0.0, 1000.0, 10.0, 2, 2.0));
+    opt.addRegion(3, RegionHelper::MakeLines(0.0, 2000.0, 10.0, 2, 2.0));
+
+    // 强制顺序 3 -> 1 -> 2（对应频带 2 -> 0 -> 1）
+    opt.setCustomTour({3, 1, 2});
+    auto out = opt.buildPaths();
+    BOOST_REQUIRE_EQUAL(out.size(), 6u);
+
+    // 输出路径的频带应严格按 2,0,1 连续分块
+    BOOST_CHECK_EQUAL(RegionHelper::BandOf(out[0], 3), 2);
+    BOOST_CHECK_EQUAL(RegionHelper::BandOf(out[1], 3), 2);
+    BOOST_CHECK_EQUAL(RegionHelper::BandOf(out[2], 3), 0);
+    BOOST_CHECK_EQUAL(RegionHelper::BandOf(out[3], 3), 0);
+    BOOST_CHECK_EQUAL(RegionHelper::BandOf(out[4], 3), 1);
+    BOOST_CHECK_EQUAL(RegionHelper::BandOf(out[5], 3), 1);
+
+    // 空 tour 抛异常
+    BOOST_CHECK_THROW(opt.setCustomTour({}), RuntimeError);
+}
+
+// Lua 嵌入方案：自定义算法通过 getFullGraph + setCustomTour 反馈顺序（覆盖三个新绑定）
+BOOST_AUTO_TEST_CASE(lua_custom_graph_optimize)
+{
+    std::vector<PolygonsD> regions;
+    regions.push_back(RegionHelper::MakeLines(0.0, 0.0, 10.0, 3, 2.0));
+    regions.push_back(RegionHelper::MakeLines(0.0, 1000.0, 10.0, 3, 2.0));
+    regions.push_back(RegionHelper::MakeLines(0.0, 2000.0, 10.0, 3, 2.0));
+    std::vector<PolygonsD> input{regions[1], regions[2], regions[0]};
+
+    std::filesystem::path script_path = std::filesystem::path(__FILE__).parent_path() / "custom_tsp.lua";
+
+    // 最近邻贪心
+    auto out = LuaOptimizeRegionPaths(input, script_path.string(), "optimize_paths_custom");
+    BOOST_REQUIRE_EQUAL(out.size(), 9u);
+    BOOST_CHECK_EQUAL(RegionHelper::CountContiguousBlocks(out, 3), 3);
+
+    // 暴力枚举 TSP
+    auto bf = LuaOptimizeRegionPaths(input, script_path.string(), "optimize_paths_bruteforce");
+    BOOST_REQUIRE_EQUAL(bf.size(), 9u);
+    BOOST_CHECK_EQUAL(RegionHelper::CountContiguousBlocks(bf, 3), 3);
+
+    // 门级展开图只读探测
+    auto probe = LuaOptimizeRegionPaths(input, script_path.string(), "optimize_paths_probe");
+    BOOST_REQUIRE_EQUAL(probe.size(), 9u);
+}
+
 BOOST_AUTO_TEST_CASE(fill_stage_lua_exposes_path_optimize)
 {
     // Fill 阶段入口 LuaCustomFillByFile 的 Lua 环境应已注册 PathOptimize（路径优化接入对应流程）
@@ -572,42 +682,42 @@ BOOST_AUTO_TEST_CASE(zigzag_fill_concave_u_shape_drives_bridge)
 
 namespace
 {
-    // Axis-aligned bounding box covering every vertex of a set of integer polygons.
-    struct Box
-    {
-        int64_t xmin, ymin, xmax, ymax;
-    };
+// Axis-aligned bounding box covering every vertex of a set of integer polygons.
+struct Box
+{
+    int64_t xmin, ymin, xmax, ymax;
+};
 
-    Box BoundingBox(const Polygons& polys)
+Box BoundingBox(const Polygons& polys)
+{
+    Box b{INT64_MAX, INT64_MAX, INT64_MIN, INT64_MIN};
+    for (const auto& pz : polys)
     {
-        Box b{INT64_MAX, INT64_MAX, INT64_MIN, INT64_MIN};
-        for (const auto& pz : polys)
+        for (const auto& pt : pz)
         {
-            for (const auto& pt : pz)
-            {
-                b.xmin = std::min(b.xmin, pt.x);
-                b.ymin = std::min(b.ymin, pt.y);
-                b.xmax = std::max(b.xmax, pt.x);
-                b.ymax = std::max(b.ymax, pt.y);
-            }
+            b.xmin = std::min(b.xmin, pt.x);
+            b.ymin = std::min(b.ymin, pt.y);
+            b.xmax = std::max(b.xmax, pt.x);
+            b.ymax = std::max(b.ymax, pt.y);
         }
-        return b;
     }
+    return b;
+}
 
-    // True when any emitted vertex lies inside or on the given single contour.
-    bool ContourReached(const Polygons& single, const Polygons& zig)
+// True when any emitted vertex lies inside or on the given single contour.
+bool ContourReached(const Polygons& single, const Polygons& zig)
+{
+    for (const auto& pz : zig)
     {
-        for (const auto& pz : zig)
+        for (const auto& pt : pz)
         {
-            for (const auto& pt : pz)
-            {
-                auto r = PointInPolygons(Clipper2Lib::Point64{pt.x, pt.y}, single);
-                if (r != Clipper2Lib::PointInPolygonResult::IsOutside)
-                    return true;
-            }
+            auto r = PointInPolygons(Clipper2Lib::Point64{pt.x, pt.y}, single);
+            if (r != Clipper2Lib::PointInPolygonResult::IsOutside)
+                return true;
         }
-        return false;
     }
+    return false;
+}
 }  // namespace
 
 // Two squares stacked vertically leave a band of empty scan rows between them. Because

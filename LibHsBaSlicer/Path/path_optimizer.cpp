@@ -234,6 +234,74 @@ struct RegionPathOptimizer::Impl
         return result;
     }
 
+    // Area-level full combination graph: cheapest gate-aware shortest path between every ordered pair
+    RegionPathOptimizer::FullGraphData getFullGraph()
+    {
+        RegionAreaGraph ag;
+        buildAreaGraph(ag);
+
+        std::vector<int> areas;
+        areas.reserve(regions.size());
+        for (const auto& r : regions)
+        {
+            areas.push_back(r.id);
+        }
+
+        auto dump = ag.dumpPairwiseGraph(areas);
+        RegionPathOptimizer::FullGraphData data;
+        data.vertices = dump.areas;
+        const std::size_t n = dump.areas.size();
+        data.distMatrix.assign(n, std::vector<double>(n, -1.0));
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            for (std::size_t j = 0; j < n; ++j)
+            {
+                if (dump.distMatrix[i][j].has_value())
+                {
+                    data.distMatrix[i][j] = dump.distMatrix[i][j].value();
+                }
+            }
+        }
+        for (const auto& e : dump.edges)
+        {
+            data.edges.push_back({e.from, e.to, e.cost});
+        }
+        return data;
+    }
+
+    // Gate-level expanded graph: all entry/exit vertices and every transit/route edge
+    RegionPathOptimizer::ExpandedGraphData getExpandedGraph()
+    {
+        RegionAreaGraph ag;
+        buildAreaGraph(ag);
+
+        auto dump = ag.dumpExpandedGraph();
+        RegionPathOptimizer::ExpandedGraphData data;
+        data.vertices.reserve(dump.vertices.size());
+        for (const auto& v : dump.vertices)
+        {
+            data.vertices.push_back({v.areaId, v.gateId, v.isExit});
+        }
+        data.edges.reserve(dump.edges.size());
+        for (const auto& e : dump.edges)
+        {
+            data.edges.push_back({e.fromIdx, e.toIdx, e.weight});
+        }
+        return data;
+    }
+
+    // Accept a user-computed order and entry gates, skipping the built-in genetic TSP
+    void setCustomTour(const std::vector<int>& newTour, const std::unordered_map<int, int>& newEntryGates)
+    {
+        if (newTour.empty())
+        {
+            throw RuntimeError("Custom tour cannot be empty");
+        }
+        tour = newTour;
+        entryGates = newEntryGates;
+        optimized = true;
+    }
+
 private:
     bool modeSet = false;  // whether the optimization mode is set (decided by the first region)
     bool polygonMode = false;
@@ -473,6 +541,21 @@ PolygonsD RegionPathOptimizer::buildPolygons()
     return impl_->buildPolygons();
 }
 
+RegionPathOptimizer::FullGraphData RegionPathOptimizer::getFullGraph()
+{
+    return impl_->getFullGraph();
+}
+
+RegionPathOptimizer::ExpandedGraphData RegionPathOptimizer::getExpandedGraph()
+{
+    return impl_->getExpandedGraph();
+}
+
+void RegionPathOptimizer::setCustomTour(const std::vector<int>& tour, const std::unordered_map<int, int>& entryGates)
+{
+    impl_->setCustomTour(tour, entryGates);
+}
+
 // =============================================================================
 // Lua bindings: global table PathOptimize + RegionPathOptimizer userdata
 // =============================================================================
@@ -553,12 +636,160 @@ int l_optimizer_buildPolygons(lua_State* L)
     return 1;
 }
 
+// Push the area-level full combination graph onto the Lua stack as a table
+void PushFullGraphToLua(lua_State* L, const RegionPathOptimizer::FullGraphData& g)
+{
+    lua_newtable(L);
+
+    // vertices = {areaId...}
+    lua_newtable(L);
+    for (std::size_t i = 0; i < g.vertices.size(); ++i)
+    {
+        lua_pushinteger(L, g.vertices[i]);
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    lua_setfield(L, -2, "vertices");
+
+    // distMatrix = {{cost...}...}; unreachable -> false
+    lua_newtable(L);
+    for (std::size_t i = 0; i < g.distMatrix.size(); ++i)
+    {
+        lua_newtable(L);
+        for (std::size_t j = 0; j < g.distMatrix[i].size(); ++j)
+        {
+            if (g.distMatrix[i][j] < 0.0)
+            {
+                lua_pushboolean(L, 0);  // false = unreachable
+            }
+            else
+            {
+                lua_pushnumber(L, g.distMatrix[i][j]);
+            }
+            lua_rawseti(L, -2, static_cast<lua_Integer>(j + 1));
+        }
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    lua_setfield(L, -2, "distMatrix");
+
+    // edges = {{from=.., to=.., cost=..}, ...}
+    lua_newtable(L);
+    for (std::size_t i = 0; i < g.edges.size(); ++i)
+    {
+        lua_newtable(L);
+        lua_pushinteger(L, g.edges[i].from);
+        lua_setfield(L, -2, "from");
+        lua_pushinteger(L, g.edges[i].to);
+        lua_setfield(L, -2, "to");
+        lua_pushnumber(L, g.edges[i].cost);
+        lua_setfield(L, -2, "cost");
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    lua_setfield(L, -2, "edges");
+
+    lua_pushinteger(L, static_cast<lua_Integer>(g.vertices.size()));
+    lua_setfield(L, -2, "areaCount");
+}
+
+// Push the gate-level expanded graph onto the Lua stack as a table
+void PushExpandedGraphToLua(lua_State* L, const RegionPathOptimizer::ExpandedGraphData& g)
+{
+    lua_newtable(L);
+
+    // vertices = {{areaId=.., gateId=.., isExit=..}, ...}
+    lua_newtable(L);
+    for (std::size_t i = 0; i < g.vertices.size(); ++i)
+    {
+        lua_newtable(L);
+        lua_pushinteger(L, g.vertices[i].areaId);
+        lua_setfield(L, -2, "areaId");
+        lua_pushinteger(L, g.vertices[i].gateId);
+        lua_setfield(L, -2, "gateId");
+        lua_pushboolean(L, g.vertices[i].isExit ? 1 : 0);
+        lua_setfield(L, -2, "isExit");
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    lua_setfield(L, -2, "vertices");
+
+    // edges = {{from=.., to=.., weight=..}, ...} (1-based vertex indices for Lua convenience)
+    lua_newtable(L);
+    for (std::size_t i = 0; i < g.edges.size(); ++i)
+    {
+        lua_newtable(L);
+        lua_pushinteger(L, static_cast<lua_Integer>(g.edges[i].fromIdx + 1));
+        lua_setfield(L, -2, "from");
+        lua_pushinteger(L, static_cast<lua_Integer>(g.edges[i].toIdx + 1));
+        lua_setfield(L, -2, "to");
+        lua_pushnumber(L, g.edges[i].weight);
+        lua_setfield(L, -2, "weight");
+        lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+    }
+    lua_setfield(L, -2, "edges");
+
+    lua_pushinteger(L, static_cast<lua_Integer>(g.vertices.size()));
+    lua_setfield(L, -2, "vertexCount");
+    lua_pushinteger(L, static_cast<lua_Integer>(g.edges.size()));
+    lua_setfield(L, -2, "edgeCount");
+}
+
+int l_optimizer_getFullGraph(lua_State* L)
+{
+    auto* opt = CheckOptimizer(L, 1);
+    auto g = opt->getFullGraph();
+    PushFullGraphToLua(L, g);
+    return 1;
+}
+
+int l_optimizer_getExpandedGraph(lua_State* L)
+{
+    auto* opt = CheckOptimizer(L, 1);
+    auto g = opt->getExpandedGraph();
+    PushExpandedGraphToLua(L, g);
+    return 1;
+}
+
+// opt:setCustomTour(tour [, entryGates])
+// tour: ordered array of region ids; entryGates: optional table {[areaId]=gateIndex}
+int l_optimizer_setCustomTour(lua_State* L)
+{
+    auto* opt = CheckOptimizer(L, 1);
+    luaL_checktype(L, 2, LUA_TTABLE);
+
+    std::vector<int> tour;
+    const int tourLen = static_cast<int>(lua_rawlen(L, 2));
+    tour.reserve(static_cast<std::size_t>(tourLen));
+    for (int i = 1; i <= tourLen; ++i)
+    {
+        lua_rawgeti(L, 2, i);
+        tour.push_back(static_cast<int>(luaL_checkinteger(L, -1)));
+        lua_pop(L, 1);
+    }
+
+    std::unordered_map<int, int> entryGates;
+    if (lua_istable(L, 3))
+    {
+        lua_pushnil(L);
+        while (lua_next(L, 3) != 0)
+        {
+            int const areaId = static_cast<int>(luaL_checkinteger(L, -2));
+            int const gate = static_cast<int>(luaL_checkinteger(L, -1));
+            entryGates[areaId] = gate;
+            lua_pop(L, 1);  // pop value, keep key
+        }
+    }
+
+    opt->setCustomTour(tour, entryGates);
+    return 0;
+}
+
 const luaL_Reg optimizerMethods[] = {{.name = "addRegion", .func = l_optimizer_addRegion},
                                      {.name = "addPolygons", .func = l_optimizer_addPolygons},
                                      {.name = "addRoute", .func = l_optimizer_addRoute},
                                      {.name = "optimizeOrder", .func = l_optimizer_optimizeOrder},
                                      {.name = "buildPaths", .func = l_optimizer_buildPaths},
                                      {.name = "buildPolygons", .func = l_optimizer_buildPolygons},
+                                     {.name = "getFullGraph", .func = l_optimizer_getFullGraph},
+                                     {.name = "getExpandedGraph", .func = l_optimizer_getExpandedGraph},
+                                     {.name = "setCustomTour", .func = l_optimizer_setCustomTour},
                                      {.name = "__gc", .func = l_optimizer_gc},
                                      {.name = nullptr, .func = nullptr}};
 

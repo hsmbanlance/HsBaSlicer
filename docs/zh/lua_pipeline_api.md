@@ -162,9 +162,19 @@ HsBaSlicer 中的 Lua 脚本按用途分为两类：
 
 | 调用 | 说明 |
 |------|------|
-| `PathOptimize.new()` | 创建优化器对象，方法：`addRegion(id, paths)`、`addPolygons(id, polys)`、`addRoute(...)`、`optimizeOrder()`、`buildPaths()`、`buildPolygons()` |
+| `PathOptimize.new()` | 创建优化器对象，方法：`addRegion(id, paths)`、`addPolygons(id, polys)`、`addRoute(...)`、`optimizeOrder()`、`buildPaths()`、`buildPolygons()`、`getFullGraph()`、`getExpandedGraph()`、`setCustomTour(...)` |
 | `PathOptimize.optimizeRegions(regions)` | 填充结果模式一键优化，返回完整填充路径 |
 | `PathOptimize.optimizePolygons(regions)` | 多边形模式一键优化（填充前执行），返回优化顺序的多边形集合 |
+
+优化器对象额外暴露**全组合图**，供用户用 Lua 设计任意路径优化算法：
+
+| 调用 | 说明 |
+|------|------|
+| `opt:getFullGraph()` | 区域级全组合图：`{vertices={id..}, distMatrix={{代价..}..}（不可达为 false），edges={{from,to,cost}..}, areaCount}`，即所有区域两两的门禁感知最短路径代价 |
+| `opt:getExpandedGraph()` | 门级展开图：`{vertices={{areaId,gateId,isExit}..}, edges={{from,to,weight}..}（1 基下标）, vertexCount, edgeCount}` |
+| `opt:setCustomTour(tour[, entryGates])` | 反馈用户计算的顺序（区域 id 数组）与可选 `{[areaId]=门禁下标}` 映射，随后 `buildPaths()`/`buildPolygons()` 复用该顺序、跳过内置遗传 TSP |
+
+> 示例脚本 `tests/PolygonFill/custom_tsp.lua` 演示了最近邻贪心与暴力枚举 TSP 两种自定义算法。
 
 ### B.4 `Support`（支撑生成工具）
 

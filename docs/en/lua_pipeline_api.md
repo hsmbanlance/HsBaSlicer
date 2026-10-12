@@ -162,9 +162,20 @@ The following global libraries are callable from **both the custom pipeline and 
 
 | Call | Description |
 |------|-------------|
-| `PathOptimize.new()` | Create an optimizer object; methods: `addRegion(id, paths)`, `addPolygons(id, polys)`, `addRoute(...)`, `optimizeOrder()`, `buildPaths()`, `buildPolygons()` |
+| `PathOptimize.new()` | Create an optimizer object; methods: `addRegion(id, paths)`, `addPolygons(id, polys)`, `addRoute(...)`, `optimizeOrder()`, `buildPaths()`, `buildPolygons()`, `getFullGraph()`, `getExpandedGraph()`, `setCustomTour(...)` |
 | `PathOptimize.optimizeRegions(regions)` | One-shot optimization in fill-result mode; returns the complete fill path |
 | `PathOptimize.optimizePolygons(regions)` | One-shot optimization in polygon mode (before fill); returns the reordered polygon set |
+
+The optimizer object additionally exposes the **full combination graphs** so users can design arbitrary
+path-optimization algorithms in Lua:
+
+| Call | Description |
+|------|-------------|
+| `opt:getFullGraph()` | Area-level complete graph: `{vertices={id..}, distMatrix={{cost..}..} (false = unreachable), edges={{from,to,cost}..}, areaCount}` — the gate-aware shortest-path cost between every ordered pair of regions |
+| `opt:getExpandedGraph()` | Gate-level expanded graph: `{vertices={{areaId,gateId,isExit}..}, edges={{from,to,weight}..} (1-based indices), vertexCount, edgeCount}` |
+| `opt:setCustomTour(tour[, entryGates])` | Feed a user-computed order (array of region ids) and an optional `{[areaId]=gateIndex}` map; `buildPaths()`/`buildPolygons()` then reuse this order, skipping the built-in genetic TSP |
+
+> The example script `tests/PolygonFill/custom_tsp.lua` demonstrates two custom algorithms: nearest-neighbor greedy and brute-force TSP enumeration.
 
 ### B.4 `Support` (support generators)
 
