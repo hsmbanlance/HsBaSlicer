@@ -1,0 +1,4 @@
+- Each converter pair is implemented as two sibling files named `<From>2<To>.hpp` / `<From>2<To>.cpp` (e.g. `Eigen2Msg`, `Msg2Eigen`, `FullTopoModel2Msg`, `PipelineConfig2Msg`), keeping source-to-target and target-to-source conversions in parallel units.
+- All public functions live in the `HsBa::Slicer` namespace and are declared in a header guarded by an `HSBA_SLICER_<NAME>__HPP` include guard matching the file name.
+- Conversion functions follow a consistent signature shape: a free function taking the source value (by const reference or pointer) and writing into an output protobuf message pointer or Eigen reference, rather than returning new objects.
+- Every header begins with a Doxygen `@file` / `@brief` / `@author HsBa` comment block describing the conversion direction.

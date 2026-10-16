@@ -1,1 +1,0 @@
-Build produces either a static or shared `HsBaSlicerLog` library depending on `BUILD_SHARED_LIBS`; when building the shared variant on Windows, define `HSBA_SLICER_LOG_EXPORTS` to export symbols. Runtime configuration lives in `<working_dir>/logcfg.ini` with keys `log.log_level[_debug]`, `log.use_log_file`, `log.log_file`, and `log_format.log_datatime_format`.

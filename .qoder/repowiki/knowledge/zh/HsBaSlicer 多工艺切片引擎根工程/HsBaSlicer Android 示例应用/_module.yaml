@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: android_app
+title: HsBaSlicer Android 示例应用
+scope:
+    - android/
+source_files: []
+depends_on: []
+related_to:
+    - path: dll_wrapper

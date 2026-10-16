@@ -1,19 +1,18 @@
-# iOS Integration / iOS集成
+# iOS Integration
 
 <cite>
-**Referenced Files in This Document**   
-- [ViewController.swift](file://ios/HsBaSlicerExample/ViewController.swift)
+**Referenced Files in This Document**
 - [HsBaSlicerBridge.h](file://ios/HsBaSlicerExample/HsBaSlicerBridge.h)
-- [HsBaSlicer.cpp](file://HsBaSlicer/HsBaSlicer.cpp)
-- [initialize.h](file://DllHsBaSlicer/initialize.h)
-- [initialize.cpp](file://DllHsBaSlicer/initialize.cpp)
-- [dllexport.h](file://DllHsBaSlicer/dllexport.h)
-- [CMakeLists.txt](file://DllHsBaSlicer/CMakeLists.txt)
-- [CMakeLists.txt](file://HsBaSlicer/CMakeLists.txt)
-- [CMakeLists.txt](file://base/CMakeLists.txt)
-- [CMakeLists.txt](file://CMakeLists.txt)
+- [ViewController.swift](file://ios/HsBaSlicerExample/ViewController.swift)
 - [build-ios.yml](file://.github/workflows/build-ios.yml)
 - [cmake-multi-platform.yml](file://.github/workflows/cmake-multi-platform.yml)
+- [CMakePresets.json](file://CMakePresets.json)
+- [base CMakeLists.txt](file://base/CMakeLists.txt)
+- [initialize.h](file://DllHsBaSlicer/initialize.h)
+- [initialize.cpp](file://DllHsBaSlicer/initialize.cpp)
+- [custom_pipeline.h](file://DllHsBaSlicer/custom_pipeline.h)
+- [custom_pipeline.cpp](file://DllHsBaSlicer/custom_pipeline.cpp)
+- [HsBaSlicer.cpp](file://HsBaSlicer/HsBaSlicer.cpp)
 </cite>
 
 ## Table of Contents
@@ -29,321 +28,445 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document explains how to integrate HsBaSlicer into an iOS application using Swift and Objective-C bridging. It covers Xcode project configuration, linking the static C API layer, loading native libraries on iOS, and implementing a safe Swift entry point that calls the exported C function for pipeline examples. It also documents iOS-specific constraints such as static library linkage, background execution, memory management with ARC, device architecture support (ARM64), testing strategies, simulator versus device deployment, and App Store compliance considerations including binary size optimization and security.
+This document explains how to integrate HsBaSlicer into an iOS application. It covers Swift/Objective-C bridging through a bridging header, static library linking, Xcode project configuration, architecture settings for device and simulator, code signing requirements, memory management with ARC, background task handling, App Store review considerations, device compatibility across iPhone and iPad architectures, debugging with LLDB, performance profiling with Instruments, and deployment for development and production.
 
-The example app demonstrates:
-- A bridging header declaring the C entry point.
-- A Swift ViewController that triggers pipeline examples on a background queue and updates the UI on the main thread.
-- The C++ entry point that initializes the runtime and runs FDM, SLA, and SLS pipeline examples.
+The repository provides:
+- A C ABI bridging header that exposes `HsBaRunPipelineExamples` to Swift.
+- An iOS example app entry point in Swift that calls the C function on a background queue and updates the UI on the main queue.
+- GitHub Actions workflows that build HsBaSlicer as static libraries for iOS using vcpkg and CMake.
+- C API definitions for initialization and asynchronous custom pipeline execution.
 
 ## Project Structure
-The iOS integration consists of three layers:
-- Swift UI layer: ViewController.swift provides the user interaction and dispatches work off the main thread.
-- Bridging header: HsBaSlicerBridge.h exposes the C function to Swift.
-- Native C/C++ layer: HsBaSlicer.cpp exports HsBaRunPipelineExamples(), which initializes the runtime and runs example pipelines.
+The iOS integration surface is small and focused:
+
+| Area | Purpose |
+|---|---|
+| `ios/HsBaSlicerExample/HsBaSlicerBridge.h` | Bridging header declaring the C function exposed to Swift. |
+| `ios/HsBaSlicerExample/ViewController.swift` | Example iOS app showing how to call the native pipeline function asynchronously. |
+| `.github/workflows/build-ios.yml` | CI workflow that builds HsBaSlicer for iOS as static libraries and verifies exported symbols. |
+| `HsBaSlicer/HsBaSlicer.cpp` | Platform-specific entry point that exports `HsBaRunPipelineExamples` on iOS. |
+| `DllHsBaSlicer/initialize.*` | Initialization entry used by the iOS example. |
+| `DllHsBaSlicer/custom_pipeline.*` | Asynchronous C API for Lua-driven pipelines. |
+| `base/CMakeLists.txt` | iOS-specific dependency wiring, including `iconv`. |
 
 ```mermaid
 graph TB
-Swift["Swift ViewController<br/>User interaction and background dispatch"] --> Bridge["Bridging Header<br/>HsBaSlicerBridge.h"]
-Bridge --> Entry["C++ Entry<br/>HsBaRunPipelineExamples()"]
-Entry --> Init["Initialize Runtime<br/>initialize()"]
-Entry --> Pipelines["Pipeline Examples<br/>FDM / SLA / SLS"]
+SwiftApp["Swift App<br/>ViewController.swift"] --> BridgeHeader["Bridging Header<br/>HsBaSlicerBridge.h"]
+BridgeHeader --> IOSExport["iOS Export<br/>HsBaRunPipelineExamples"]
+IOSExport --> Initialize["Initialize<br/>initialize()"]
+IOSExport --> PipelineExamples["Run All Pipeline Examples"]
+Workflow["CI Build Workflow<br/>.github/workflows/build-ios.yml"] --> StaticLibraries["Static Libraries<br/>libHsBaSlicer.a / libDllHsBaSlicer.a / libLibHsBaSlicer.a"]
 ```
 
 **Diagram sources**
-- [ViewController.swift:14-55](file://ios/HsBaSlicerExample/ViewController.swift#L14-L55)
+- [ViewController.swift:44-55](file://ios/HsBaSlicerExample/ViewController.swift#L44-L55)
 - [HsBaSlicerBridge.h:19-25](file://ios/HsBaSlicerExample/HsBaSlicerBridge.h#L19-L25)
 - [HsBaSlicer.cpp:242-253](file://HsBaSlicer/HsBaSlicer.cpp#L242-L253)
+- [build-ios.yml:59-107](file://.github/workflows/build-ios.yml#L59-L107)
 
 **Section sources**
+- [HsBaSlicerBridge.h:1-31](file://ios/HsBaSlicerExample/HsBaSlicerBridge.h#L1-L31)
 - [ViewController.swift:1-86](file://ios/HsBaSlicerExample/ViewController.swift#L1-L86)
-- [HsBaSlicerBridge.h:1-32](file://ios/HsBaSlicerExample/HsBaSlicerBridge.h#L1-L32)
+- [build-ios.yml:42-107](file://.github/workflows/build-ios.yml#L42-L107)
 - [HsBaSlicer.cpp:242-253](file://HsBaSlicer/HsBaSlicer.cpp#L242-L253)
 
 ## Core Components
-- Bridging header declares the C function HsBaRunPipelineExamples(void).
-- Swift ViewController uses UIKit, sets up a UILabel, adds a tap gesture, and runs the pipeline example on a global background queue.
-- C++ entry point HsBaRunPipelineExamples() is compiled only for iOS targets and calls initialize() then runs all pipeline examples.
+The iOS integration relies on three core components:
 
-Key responsibilities:
-- Bridging header: Provide a stable C ABI for Swift to call.
-- ViewController: Handle UI lifecycle and ensure heavy work does not block the UI thread.
-- HsBaSlicer.cpp: Initialize the runtime once and run example pipelines.
+1. **Bridging Header**
+   - Declares `HsBaRunPipelineExamples` under `extern "C"` so Swift can call it directly.
+   - The comment states this is an example/test entry, not a production entry.
 
-**Section sources**
-- [HsBaSlicerBridge.h:19-25](file://ios/HsBaSlicerExample/HsBaSlicerBridge.h#L19-L25)
-- [ViewController.swift:14-55](file://ios/HsBaSlicerExample/ViewController.swift#L14-L55)
-- [HsBaSlicer.cpp:242-253](file://HsBaSlicer/HsBaSlicer.cpp#L242-L253)
+2. **Swift ViewController Example**
+   - Sets up a simple UI label.
+   - Runs the native pipeline function on a global background queue.
+   - Updates the UI on the main queue after completion.
 
-## Architecture Overview
-The iOS integration follows a simple bridge pattern:
-- Swift calls a C function declared in the bridging header.
-- The C function is implemented in C++ and guarded by platform macros so it is available only on iOS.
-- The C++ function initializes the runtime and executes example pipelines.
+3. **Platform-Specific iOS Export**
+   - When compiled for iOS, `HsBaSlicer.cpp` exports `HsBaRunPipelineExamples`.
+   - The export calls `initialize()` and then runs all pipeline examples.
 
 ```mermaid
 sequenceDiagram
 participant User as "User"
-participant VC as "ViewController (Swift)"
-participant Bridge as "HsBaSlicerBridge.h"
-participant Entry as "HsBaRunPipelineExamples()"
+participant SwiftUI as "Swift ViewController"
+participant Bridge as "Bridging Header"
+participant Native as "HsBaSlicer.cpp"
 participant Init as "initialize()"
-participant Pipes as "Pipeline Examples"
-User->>VC : Tap screen
-VC->>VC : Dispatch to background queue
-VC->>Bridge : Call HsBaRunPipelineExamples()
-Bridge-->>Entry : C ABI call
-Entry->>Init : initialize()
-Entry->>Pipes : Run FDM / SLA / SLS examples
-Pipes-->>VC : Completion
-VC->>VC : Update UI on main thread
+participant Pipelines as "Pipeline Examples"
+User->>SwiftUI : Tap screen
+SwiftUI->>SwiftUI : DispatchQueue.global(.userInitiated).async
+SwiftUI->>Bridge : Call HsBaRunPipelineExamples()
+Bridge->>Native : HsBaRunPipelineExamples()
+Native->>Init : initialize()
+Native->>Pipelines : RunAllPipelineExamples()
+Pipelines-->>Native : Completed
+Native-->>SwiftUI : Return
+SwiftUI->>SwiftUI : Update UI on main queue
 ```
 
 **Diagram sources**
-- [ViewController.swift:43-55](file://ios/HsBaSlicerExample/ViewController.swift#L43-L55)
+- [ViewController.swift:44-55](file://ios/HsBaSlicerExample/ViewController.swift#L44-L55)
 - [HsBaSlicerBridge.h:19-25](file://ios/HsBaSlicerExample/HsBaSlicerBridge.h#L19-L25)
 - [HsBaSlicer.cpp:242-253](file://HsBaSlicer/HsBaSlicer.cpp#L242-L253)
-- [initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
+
+**Section sources**
+- [HsBaSlicerBridge.h:1-31](file://ios/HsBaSlicerExample/HsBaSlicerBridge.h#L1-L31)
+- [ViewController.swift:14-55](file://ios/HsBaSlicerExample/ViewController.swift#L14-L55)
+- [HsBaSlicer.cpp:242-253](file://HsBaSlicer/HsBaSlicer.cpp#L242-L253)
+
+## Architecture Overview
+At runtime, the iOS app links against static libraries built by the CMake-based build system. The Swift layer calls a C function declared in the bridging header; that function is implemented in the platform-specific entry point and delegates to initialization and pipeline execution.
+
+```mermaid
+graph TB
+subgraph "iOS App"
+SwiftLayer["Swift Layer<br/>ViewController.swift"]
+ObjCBridge["Objective-C/Swift Bridge<br/>HsBaSlicerBridge.h"]
+end
+subgraph "HsBaSlicer Static Libraries"
+EntryPoint["Entry Point<br/>HsBaSlicer.cpp"]
+DllLayer["C API Layer<br/>DllHsBaSlicer"]
+CoreLib["Core Library<br/>LibHsBaSlicer"]
+BaseLib["Base Library<br/>base"]
+end
+SwiftLayer --> ObjCBridge
+ObjCBridge --> EntryPoint
+EntryPoint --> DllLayer
+DllLayer --> CoreLib
+CoreLib --> BaseLib
+```
+
+**Diagram sources**
+- [ViewController.swift:44-55](file://ios/HsBaSlicerExample/ViewController.swift#L44-L55)
+- [HsBaSlicerBridge.h:19-25](file://ios/HsBaSlicerExample/HsBaSlicerBridge.h#L19-L25)
+- [HsBaSlicer.cpp:242-253](file://HsBaSlicer/HsBaSlicer.cpp#L242-L253)
+- [build-ios.yml:59-107](file://.github/workflows/build-ios.yml#L59-L107)
 
 ## Detailed Component Analysis
 
-### Bridging Header Setup
-The bridging header declares the C function HsBaRunPipelineExamples(void) with extern "C" linkage so Swift can import it directly. This is the contract between Swift and the native layer.
+### Bridging Header Configuration
+The bridging header is the contract between Swift and the native C ABI.
 
-Best practices:
-- Keep the bridging header minimal and focused on C ABI declarations.
-- Avoid exposing internal C++ types; use plain C functions and POD structures where possible.
-- Ensure the symbol is exported from the static library linked into your app.
+Key points:
+- It uses `extern "C"` to prevent C++ name mangling.
+- It declares `HsBaRunPipelineExamples`, which internally initializes the slicer and runs FDM/SLA/SLS pipeline examples.
+- The comments explicitly mark this as an example/test entry, not a production entry.
 
-**Section sources**
-- [HsBaSlicerBridge.h:14-25](file://ios/HsBaSlicerExample/HsBaSlicerBridge.h#L14-L25)
-
-### Swift ViewController Implementation
-The ViewController:
-- Creates and lays out a status label.
-- Adds a tap gesture recognizer.
-- On tap, switches to a background queue to avoid blocking the UI.
-- Calls HsBaRunPipelineExamples().
-- Updates the UI on the main thread after completion.
-
-Important notes:
-- Use DispatchQueue.global(qos: .userInitiated) for CPU-heavy tasks.
-- Always marshal back to the main queue for UI updates.
-- The example is for demonstration; production code should encapsulate error handling and progress callbacks.
+Recommended usage pattern:
+- Add `HsBaSlicerBridge.h` to your Xcode project’s Objective-C Bridging Header setting.
+- Link the built static libraries produced by the iOS build.
+- Import or reference the bridged symbol from Swift.
 
 ```mermaid
 flowchart TD
-Start(["Tap Gesture"]) --> Background["Dispatch to background queue"]
-Background --> CallNative["Call HsBaRunPipelineExamples()"]
-CallNative --> Complete{"Native call completed?"}
-Complete --> |Yes| MainThread["Dispatch to main queue"]
-MainThread --> UpdateUI["Update status label"]
-UpdateUI --> End(["Done"])
-Complete --> |No| UpdateError["Show error state"]
-UpdateError --> End
+Start(["Add Bridging Header"]) --> Declare["Declare extern \"C\" function"]
+Declare --> LinkLibs["Link HsBaSlicer static libraries"]
+LinkLibs --> SwiftCall["Call from Swift"]
+SwiftCall --> BackgroundQueue["Run on background queue"]
+BackgroundQueue --> MainQueue["Update UI on main queue"]
 ```
 
 **Diagram sources**
-- [ViewController.swift:38-55](file://ios/HsBaSlicerExample/ViewController.swift#L38-L55)
+- [HsBaSlicerBridge.h:14-25](file://ios/HsBaSlicerExample/HsBaSlicerBridge.h#L14-L25)
+- [ViewController.swift:44-55](file://ios/HsBaSlicerExample/ViewController.swift#L44-L55)
+
+**Section sources**
+- [HsBaSlicerBridge.h:1-31](file://ios/HsBaSlicerExample/HsBaSlicerBridge.h#L1-L31)
+
+### Swift ViewController Example
+The example demonstrates:
+- Creating a simple UI label.
+- Handling a tap gesture.
+- Running the native function on a background queue.
+- Updating the UI on the main queue.
+
+Important behavior:
+- The function call is intentionally placed on `DispatchQueue.global(qos: .userInitiated)` to avoid blocking the UI thread.
+- After the native call returns, the UI is updated on the main queue.
+
+```mermaid
+sequenceDiagram
+participant View as "ViewController"
+participant Queue as "Background Queue"
+participant Native as "HsBaRunPipelineExamples"
+participant UI as "Main Queue UI"
+View->>View : viewDidLoad()
+View->>View : add tap gesture
+View->>Queue : async runExamples()
+Queue->>Native : HsBaRunPipelineExamples()
+Native-->>Queue : return
+Queue->>UI : update statusLabel
+```
+
+**Diagram sources**
+- [ViewController.swift:24-41](file://ios/HsBaSlicerExample/ViewController.swift#L24-L41)
+- [ViewController.swift:44-55](file://ios/HsBaSlicerExample/ViewController.swift#L44-L55)
 
 **Section sources**
 - [ViewController.swift:14-55](file://ios/HsBaSlicerExample/ViewController.swift#L14-L55)
 
-### Native C++ Entry Point
-On iOS, HsBaSlicer.cpp defines HsBaRunPipelineExamples() under the TARGET_OS_IPHONE branch. It calls initialize() and then runs FDM, SLA, and SLS pipeline examples.
+### iOS Export and Initialization Flow
+On iOS, the platform-specific entry point exports `HsBaRunPipelineExamples`. This function:
+1. Calls `initialize()`.
+2. Runs all pipeline examples.
 
-Behavior:
-- initialize(): One-time setup for Lua/pipeline registration and runtime initialization.
-- Pipeline examples: Demonstrate configuration, execution, result handling, and memory cleanup.
+The initialization function is defined as a C ABI entry point and is safe to call once at load time.
+
+```mermaid
+flowchart TD
+Entry["HsBaRunPipelineExamples()"] --> Init["initialize()"]
+Init --> Examples["RunAllPipelineExamples()"]
+Examples --> Done["Return to Swift"]
+```
+
+**Diagram sources**
+- [HsBaSlicer.cpp:242-253](file://HsBaSlicer/HsBaSlicer.cpp#L242-L253)
+- [initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
+- [initialize.cpp:7-9](file://DllHsBaSlicer/initialize.cpp#L7-L9)
+
+**Section sources**
+- [HsBaSlicer.cpp:242-253](file://HsBaSlicer/HsBaSlicer.cpp#L242-L253)
+- [initialize.h:1-22](file://DllHsBaSlicer/initialize.h#L1-L22)
+- [initialize.cpp:1-10](file://DllHsBaSlicer/initialize.cpp#L1-L10)
+
+### Asynchronous Custom Pipeline API
+For production use, prefer the asynchronous custom pipeline API rather than the example entry point.
+
+API highlights:
+- `HsBaCreateDefaultCustomConfig` creates default configuration.
+- `HsBaRunCustomPipeline` runs synchronously but wraps coroutine-based execution internally.
+- `HsBaRunCustomPipelineAsync` runs asynchronously and invokes a result callback.
+- `HsBaFreeCustomPipelineResult` frees memory allocated in the result structure.
 
 ```mermaid
 classDiagram
-class HsBaSlicerCpp {
-+HsBaRunPipelineExamples() void
--RunAllPipelineExamples() void
--RunFdmExample() int
--RunSlaExample() int
--RunSlsExample() int
+class HsBaCustomPipelineConfig_t {
++string pipeline_lua_script
++string pipeline_lua_source
++string entry_func
++string config_json
++string model_name
++string model_path
++string output_path
 }
-class Initialize {
-+initialize() void
+class HsBaCustomPipelineResult_t {
++bool success
++int total_layers
++char* output_path
++char* result_string
++char* error_message
++double elapsed_seconds
 }
-HsBaSlicerCpp --> Initialize : "calls"
+class CustomPipelineAPI {
++HsBaCreateDefaultCustomConfig()
++HsBaRunCustomPipeline(config, progress_cb, user_data)
++HsBaRunCustomPipelineAsync(config, progress_cb, user_data, result_callback, result_user_data)
++HsBaFreeCustomPipelineResult(result)
+}
+CustomPipelineAPI --> HsBaCustomPipelineConfig_t : "uses"
+CustomPipelineAPI --> HsBaCustomPipelineResult_t : "returns"
 ```
 
 **Diagram sources**
-- [HsBaSlicer.cpp:242-253](file://HsBaSlicer/HsBaSlicer.cpp#L242-L253)
-- [initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
-- [initialize.cpp:7-9](file://DllHsBaSlicer/initialize.cpp#L7-L9)
+- [custom_pipeline.h:17-62](file://DllHsBaSlicer/custom_pipeline.h#L17-L62)
+- [custom_pipeline.cpp:171-200](file://DllHsBaSlicer/custom_pipeline.cpp#L171-L200)
 
 **Section sources**
-- [HsBaSlicer.cpp:242-253](file://HsBaSlicer/HsBaSlicer.cpp#L242-L253)
-- [initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
-- [initialize.cpp:7-9](file://DllHsBaSlicer/initialize.cpp#L7-L9)
-
-### Xcode Project Configuration and Framework Integration
-To integrate HsBaSlicer into an iOS app:
-- Build the static libraries using CMake for iOS (ARM64).
-- Link libDllHsBaSlicer.a and libLibHsBaSlicer.a into your Xcode target.
-- Add the bridging header path to your Swift settings.
-- Ensure the target supports ARM64 devices.
-
-Build system behavior:
-- DllHsBaSlicer is built as STATIC on iOS because iOS apps cannot load arbitrary dylibs at runtime.
-- The top-level CMake disables dynamic loader features on non-desktop platforms.
-- Base dependencies link iconv on iOS when building HsBaSlicerBase.
-
-Recommended steps:
-1. Configure CMake for iOS with arm64 architecture and iPhoneOS sysroot.
-2. Build the project to produce static libraries.
-3. In Xcode:
-   - Add the generated .a files to your target’s “Link Binary With Libraries”.
-   - Set “Header Search Paths” to include headers for the bridging header.
-   - Enable “Always Embed Swift Standard Libraries” if needed.
-   - Verify Architectures includes arm64.
-4. Add HsBaSlicerBridge.h to the project and enable the bridging header in Build Settings.
-
-**Section sources**
-- [CMakeLists.txt:41-49](file://HsBaSlicer/CMakeLists.txt#L41-L49)
-- [CMakeLists.txt:4-41](file://DllHsBaSlicer/CMakeLists.txt#L4-L41)
-- [CMakeLists.txt:37-47](file://base/CMakeLists.txt#L37-L47)
-- [CMakeLists.txt:232-239](file://CMakeLists.txt#L232-L239)
-
-### Memory Management with ARC
-- Swift manages object lifetimes automatically via ARC.
-- When calling into C/C++, avoid retaining C pointers in Swift objects longer than necessary.
-- If you extend the bridge to return C strings or buffers, ensure proper ownership semantics and free them according to the C API contract.
-- The example pipelines demonstrate freeing results returned by the C API; mirror this pattern when integrating custom pipelines.
-
-**Section sources**
-- [HsBaSlicer.cpp:103-105](file://HsBaSlicer/HsBaSlicer.cpp#L103-L105)
-- [HsBaSlicer.cpp:153-155](file://HsBaSlicer/HsBaSlicer.cpp#L153-L155)
-- [HsBaSlicer.cpp:205-207](file://HsBaSlicer/HsBaSlicer.cpp#L205-L207)
-
-### Background Task Execution
-- Heavy slicing operations must run off the main thread to keep the UI responsive.
-- Use DispatchQueue.global(qos: .userInitiated) for CPU-intensive tasks.
-- Marshal UI updates back to the main queue.
-- For long-running jobs, consider using OperationQueue or async/await patterns with cancellation support.
-
-**Section sources**
-- [ViewController.swift:43-55](file://ios/HsBaSlicerExample/ViewController.swift#L43-L55)
-
-### Device Architecture Support (ARM64)
-- iOS builds target arm64 architecture.
-- CI workflows configure CMAKE_OSX_ARCHITECTURES=arm64 and VCPKG_TARGET_TRIPLET=arm64-ios.
-- Ensure your Xcode target includes arm64 and not deprecated architectures like i386 or x86_64.
-
-**Section sources**
-- [build-ios.yml:42-52](file://.github/workflows/build-ios.yml#L42-L52)
-- [cmake-multi-platform.yml:360-370](file://.github/workflows/cmake-multi-platform.yml#L360-L370)
-
-### Error Handling Strategy
-- Check pipeline result.success before accessing outputs.
-- Log error messages provided by the C API.
-- Wrap native calls in try/catch-free wrappers since the C API returns structured results.
-- Surface errors to the UI with user-friendly messages.
-
-**Section sources**
-- [HsBaSlicer.cpp:80-105](file://HsBaSlicer/HsBaSlicer.cpp#L80-L105)
-- [HsBaSlicer.cpp:143-155](file://HsBaSlicer/HsBaSlicer.cpp#L143-L155)
-- [HsBaSlicer.cpp:195-207](file://HsBaSlicer/HsBaSlicer.cpp#L195-L207)
-
-### Testing Strategies with XCTest
-- Unit tests: Validate configuration creation, parameter validation, and result parsing.
-- Integration tests: Invoke HsBaRunPipelineExamples() in a test target and assert output artifacts exist.
-- Simulators vs devices: Test both to catch architecture-specific issues.
-- Performance tests: Measure elapsed_seconds and total_layers for regression detection.
-
-[No sources needed since this section provides general guidance]
-
-### Simulator vs Device Deployment
-- Build for both simulator (x86_64/arm64 depending on host) and device (arm64) if you need universal binaries.
-- The repository’s iOS CI targets arm64 device builds; adjust toolchain settings for simulator builds if required.
-- Ensure signing and provisioning profiles are configured for device deployment.
-
-**Section sources**
-- [build-ios.yml:42-57](file://.github/workflows/build-ios.yml#L42-L57)
-
-### App Store Compliance Requirements
-- Static linkage: iOS requires static libraries; dynamic loading of arbitrary dylibs is restricted.
-- Binary size optimization:
-  - Strip symbols for release builds.
-  - Remove unused architectures and debug symbols.
-  - Avoid embedding unnecessary resources.
-- Security considerations:
-  - Do not load remote code or scripts at runtime unless explicitly allowed and validated.
-  - Validate file paths and inputs to prevent filesystem abuse.
-  - Follow Apple’s privacy guidelines for logging and diagnostics.
-
-**Section sources**
-- [CMakeLists.txt:4-41](file://DllHsBaSlicer/CMakeLists.txt#L4-L41)
-- [CMakeLists.txt:232-239](file://CMakeLists.txt#L232-L239)
+- [custom_pipeline.h:1-69](file://DllHsBaSlicer/custom_pipeline.h#L1-L69)
+- [custom_pipeline.cpp:1-200](file://DllHsBaSlicer/custom_pipeline.cpp#L1-L200)
 
 ## Dependency Analysis
-The iOS build links multiple static libraries through CMake. The key relationships are:
-- HsBaSlicer (iOS static library) depends on DllHsBaSlicer and logging utilities.
-- DllHsBaSlicer (static on iOS) depends on LibHsBaSlicer and other core modules.
-- Base dependencies link iconv on iOS.
+The iOS build produces static libraries and verifies their presence and exported symbols.
+
+Build characteristics:
+- The workflow sets `-DCMAKE_OSX_ARCHITECTURES=arm64` and targets iOS.
+- On iOS, all libraries are static; there is no dylib support.
+- The workflow checks for:
+  - `libHsBaSlicer.a`
+  - `libDllHsBaSlicer.a`
+  - `libLibHsBaSlicer.a`
+- It verifies that `HsBaRunPipelineExamples` is present in the built artifacts.
 
 ```mermaid
 graph LR
-HsBaSlicer["HsBaSlicer (iOS static)"] --> DllHsBaSlicer["DllHsBaSlicer (static on iOS)"]
-DllHsBaSlicer --> LibHsBaSlicer["LibHsBaSlicer"]
-DllHsBaSlicer --> Base["HsBaSlicerBase"]
-Base --> Iconv["iconv (iOS)"]
+CMake["CMake iOS Build"] --> LibHsBaSlicer["libLibHsBaSlicer.a"]
+CMake --> LibDllHsBaSlicer["libDllHsBaSlicer.a"]
+CMake --> LibHsBaSlicerEntry["libHsBaSlicer.a"]
+LibHsBaSlicerEntry --> Symbol["HsBaRunPipelineExamples"]
+LibDllHsBaSlicer --> Symbol
 ```
 
 **Diagram sources**
-- [CMakeLists.txt:41-49](file://HsBaSlicer/CMakeLists.txt#L41-L49)
-- [CMakeLists.txt:84-100](file://DllHsBaSlicer/CMakeLists.txt#L84-L100)
-- [CMakeLists.txt:37-47](file://base/CMakeLists.txt#L37-L47)
+- [build-ios.yml:42-52](file://.github/workflows/build-ios.yml#L42-L52)
+- [build-ios.yml:59-107](file://.github/workflows/build-ios.yml#L59-L107)
 
 **Section sources**
-- [CMakeLists.txt:41-49](file://HsBaSlicer/CMakeLists.txt#L41-L49)
-- [CMakeLists.txt:84-100](file://DllHsBaSlicer/CMakeLists.txt#L84-L100)
-- [CMakeLists.txt:37-47](file://base/CMakeLists.txt#L37-L47)
+- [build-ios.yml:42-107](file://.github/workflows/build-ios.yml#L42-L107)
+- [cmake-multi-platform.yml:418-453](file://.github/workflows/cmake-multi-platform.yml#L418-L453)
 
 ## Performance Considerations
-- Offload slicing to background queues to maintain UI responsiveness.
-- Reuse configuration objects where possible to reduce allocations.
-- Monitor elapsed_seconds and total_layers to detect regressions.
-- Avoid excessive logging in release builds; use lightweight logs or os_log on iOS.
+- Use background queues for long-running slicing operations. The example uses `DispatchQueue.global(qos: .userInitiated)` to avoid blocking the UI.
+- Prefer asynchronous APIs when integrating into production apps. The custom pipeline API supports non-blocking execution via callbacks.
+- Avoid heavy work on the main thread; update UI only after native work completes.
+- Profile CPU-intensive slicing steps with Instruments Time Profiler.
+- Monitor memory usage with Allocations and Leaks, especially when working with C strings and results returned from C APIs.
 
 [No sources needed since this section provides general guidance]
 
 ## Troubleshooting Guide
-Common issues and resolutions:
-- Missing HsBaRunPipelineExamples symbol:
-  - Ensure DllHsBaSlicer is built and linked as a static library.
-  - Verify the symbol exists in the static archive using nm.
-- Build fails due to missing iconv on iOS:
-  - Confirm the base module links iconv correctly.
-- Dynamic loader disabled:
-  - Non-desktop platforms disable HSBA_USE_DLL_LOADER; rely on static linkage.
-- Simulator/device mismatch:
-  - Adjust CMAKE_OSX_ARCHITECTURES and sysroot for simulator builds.
+
+### Missing Bridging Header or Symbol
+Symptoms:
+- Swift cannot find `HsBaRunPipelineExamples`.
+- Build fails because the bridging header is missing.
+
+Checks:
+- Ensure `HsBaSlicerBridge.h` exists in the expected location.
+- Ensure the bridging header declares `HsBaRunPipelineExamples`.
+- Verify the symbol exists in the built static library.
+
+Relevant verification logic:
+- The CI workflow checks for the bridging header file.
+- The CI workflow checks that the bridging header contains the expected function declaration.
+- The CI workflow checks for the exported symbol using `nm`.
 
 **Section sources**
+- [build-ios.yml:113-137](file://.github/workflows/build-ios.yml#L113-L137)
 - [build-ios.yml:98-107](file://.github/workflows/build-ios.yml#L98-L107)
-- [CMakeLists.txt:37-47](file://base/CMakeLists.txt#L37-L47)
-- [CMakeLists.txt:232-239](file://CMakeLists.txt#L232-L239)
+
+### iOS Static Library Verification
+Symptoms:
+- Expected static libraries are missing.
+- Symbols are not found in the built artifacts.
+
+Checks:
+- Confirm `libHsBaSlicer.a`, `libDllHsBaSlicer.a`, and `libLibHsBaSlicer.a` exist.
+- Confirm `HsBaRunPipelineExamples` is exported.
+
+**Section sources**
+- [build-ios.yml:59-107](file://.github/workflows/build-ios.yml#L59-L107)
+
+### iOS Architecture and Deployment Target
+Symptoms:
+- Build fails due to unsupported architecture.
+- Simulator and device builds behave differently.
+
+Configuration references:
+- The iOS workflow sets `CMAKE_OSX_ARCHITECTURES=arm64`.
+- The preset file includes `CMAKE_OSX_ARCHITECTURES=arm64`.
+- The workflow sets `CMAKE_SYSTEM_NAME=iOS`, `CMAKE_OSX_SYSROOT=iphoneos`, and a deployment target.
+
+Recommendations:
+- For device builds, use `arm64`.
+- For simulator builds, configure `x86_64` or `arm64` depending on your macOS host and SDK version.
+- Keep deployment target consistent with your Xcode project settings.
+
+**Section sources**
+- [build-ios.yml:42-52](file://.github/workflows/build-ios.yml#L42-L52)
+- [CMakePresets.json:190-198](file://CMakePresets.json#L190-L198)
+
+### iOS Dependencies and iconv
+Symptoms:
+- Build fails because `iconv` is not found on iOS.
+
+Explanation:
+- The base library has iOS-specific logic that finds and links `iconv`.
+- If `iconv` is unavailable, the build fails with a fatal error.
+
+**Section sources**
+- [base CMakeLists.txt:37-47](file://base/CMakeLists.txt#L37-L47)
+
+### Code Signing and App Store Review
+Guidance:
+- Configure code signing in Xcode for both development and release schemes.
+- Ensure the app bundle includes the required entitlements and provisioning profiles.
+- Follow App Store review guidelines for background processing, privacy, and resource usage.
+- Avoid blocking the UI thread during slicing operations.
+
+[No sources needed since this section provides general guidance]
+
+### Device Compatibility Across iPhone and iPad Architectures
+Guidance:
+- iPhone devices use `arm64`.
+- iPad devices also use `arm64` on modern hardware.
+- Simulator builds may require additional architectures depending on the macOS host and SDK.
+- Validate builds for both device and simulator before distribution.
+
+[No sources needed since this section provides general guidance]
+
+### Debugging with LLDB
+Recommendations:
+- Set breakpoints in Swift and in the C/C++ layers.
+- Inspect variables passed across the Swift-to-C boundary.
+- Check logs from the slicer if logging is enabled.
+- Use `bt` to inspect stack traces when crashes occur in native code.
+
+[No sources needed since this section provides general guidance]
+
+### Performance Profiling with Instruments
+Recommendations:
+- Use Time Profiler to identify slow slicing stages.
+- Use Allocations and Leaks to detect memory issues.
+- Use System Trace to understand threading and concurrency behavior.
+- Measure elapsed time around pipeline execution to validate performance improvements.
+
+[No sources needed since this section provides general guidance]
 
 ## Conclusion
-Integrating HsBaSlicer into iOS involves setting up a bridging header, linking static libraries, and ensuring background execution for heavy tasks. The example demonstrates a safe Swift entry point that calls the C++ export HsBaRunPipelineExamples(), which initializes the runtime and runs pipeline examples. Follow the build configurations for ARM64, adhere to App Store requirements for static linkage and binary size optimization, and implement robust error handling and testing strategies.
+HsBaSlicer’s iOS integration centers on a small, well-defined bridge:
+- A bridging header exposing a C function.
+- A Swift example that calls the function off the main thread.
+- A platform-specific export that initializes the slicer and runs pipeline examples.
+- A CI workflow that builds static libraries for iOS and verifies exported symbols.
+
+For production applications:
+- Use the asynchronous custom pipeline API.
+- Run slicing tasks on background queues.
+- Update the UI on the main queue.
+- Configure Xcode for proper code signing, architecture targets, and deployment targets.
+- Test on real devices and simulators.
+- Use LLDB and Instruments for debugging and performance analysis.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
 ## Appendices
 
-### Step-by-Step Xcode Setup Checklist
-- Build static libraries with CMake for iOS (arm64).
-- Add libDllHsBaSlicer.a and libLibHsBaSlicer.a to your target.
-- Configure Header Search Paths for bridging header.
-- Enable ARM64 architecture support.
-- Add HsBaSlicerBridge.h and set the bridging header in Build Settings.
-- Test on both simulator and device.
+### Xcode Project Configuration Checklist
+- Add `HsBaSlicerBridge.h` to the Objective-C Bridging Header setting.
+- Link the built static libraries:
+  - `libHsBaSlicer.a`
+  - `libDllHsBaSlicer.a`
+  - `libLibHsBaSlicer.a`
+- Set valid architectures:
+  - Device: `arm64`
+  - Simulator: `x86_64` or `arm64` depending on environment
+- Set minimum deployment target according to your app’s requirements.
+- Configure code signing and provisioning profiles.
+- Enable background task handling where appropriate.
+
+[No sources needed since this section provides general guidance]
+
+### Production Integration Pattern
+Recommended flow:
+1. Create a custom pipeline configuration.
+2. Run the pipeline asynchronously.
+3. Handle progress callbacks.
+4. Process the result callback.
+5. Free allocated result memory.
+
+```mermaid
+flowchart TD
+Config["Create Default Custom Config"] --> Async["Run Custom Pipeline Async"]
+Async --> Progress["Progress Callback"]
+Async --> Result["Result Callback"]
+Result --> Free["Free Custom Pipeline Result"]
+```
+
+**Diagram sources**
+- [custom_pipeline.h:17-62](file://DllHsBaSlicer/custom_pipeline.h#L17-L62)
+- [custom_pipeline.cpp:171-200](file://DllHsBaSlicer/custom_pipeline.cpp#L171-L200)
 
 **Section sources**
-- [build-ios.yml:42-57](file://.github/workflows/build-ios.yml#L42-L57)
-- [CMakeLists.txt:41-49](file://HsBaSlicer/CMakeLists.txt#L41-L49)
+- [custom_pipeline.h:1-69](file://DllHsBaSlicer/custom_pipeline.h#L1-L69)
+- [custom_pipeline.cpp:171-200](file://DllHsBaSlicer/custom_pipeline.cpp#L171-L200)

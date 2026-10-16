@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: paths
+title: Slicer Path Output Abstraction (IPath)
+scope:
+    - paths/
+source_files: []
+depends_on: []
+related_to: []

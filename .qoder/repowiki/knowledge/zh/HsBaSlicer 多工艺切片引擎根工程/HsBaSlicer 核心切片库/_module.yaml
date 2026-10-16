@@ -1,0 +1,16 @@
+schema_version: 1
+module_path: core_library
+title: HsBaSlicer 核心切片库
+scope:
+    - LibHsBaSlicer/
+source_files: []
+depends_on: []
+related_to:
+    - path: cipher_crypto
+    - path: dll_wrapper
+    - path: file_operations
+    - path: geometry_algorithms
+    - path: logger
+    - path: model_backends
+    - path: path_output_types
+    - path: utils_runtime

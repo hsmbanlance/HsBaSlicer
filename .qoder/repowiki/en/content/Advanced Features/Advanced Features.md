@@ -1,23 +1,18 @@
-# Advanced Features / 高级主题
+# Advanced Features
 
 <cite>
 **Referenced Files in This Document**
-- [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
-- [fdm_pipeline.h](file://DllHsBaSlicer/fdm_pipeline.h)
-- [sla_pipeline.h](file://DllHsBaSlicer/sla_pipeline.h)
-- [slm_pipeline.h](file://DllHsBaSlicer/slm_pipeline.h)
-- [sls_pipeline.h](file://DllHsBaSlicer/sls_pipeline.h)
-- [tdp_pipeline.h](file://DllHsBaSlicer/tdp_pipeline.h)
-- [waam_pipeline.h](file://DllHsBaSlicer/waam_pipeline.h)
 - [thread_pool.hpp](file://base/thread_pool.hpp)
 - [coroutine.hpp](file://base/coroutine.hpp)
 - [memory_pool.hpp](file://base/memory_pool.hpp)
 - [object_pool.hpp](file://base/object_pool.hpp)
-- [app_config.hpp](file://utils/app_config.hpp)
-- [param_store.hpp](file://fileoperator/param_store.hpp)
-- [param_schema.hpp](file://fileoperator/param_schema.hpp)
+- [concepts.hpp](file://base/concepts.hpp)
+- [lua_register.h](file://DllHsBaSlicer/lua_register.h)
+- [lua_register.cpp](file://DllHsBaSlicer/lua_register.cpp)
+- [LuaAnyObject.hpp](file://utils/LuaAnyObject.hpp)
 - [LuaDllLoader.hpp](file://utils/LuaDllLoader.hpp)
-- [EventSourceFunction.hpp](file://LibHsBaSlicer/Extends/EventSourceFunction.hpp)
+- [LuaDllLoader.cpp](file://utils/LuaDllLoader.cpp)
+- [hsba_slicer.cppm](file://ModuleHsBaSlicer/hsba_slicer.cppm)
 </cite>
 
 ## Table of Contents
@@ -30,665 +25,521 @@
 7. [Performance Considerations](#performance-considerations)
 8. [Troubleshooting Guide](#troubleshooting-guide)
 9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
 
 ## Introduction
-This document explains HsBaSlicer’s advanced features and specialized capabilities with a focus on the complete pipeline system, custom Lua-driven workflows, performance infrastructure, configuration management, plugin architecture, event-driven programming, error handling, and debugging techniques. It is intended for users who need to extend or optimize production slicing pipelines across FDM, SLA, metal powder-bed fusion (SLM/SLS), binder jetting (TDP), and wire arc additive manufacturing (WAAM).
+This document explains HsBaSlicer’s advanced features with a focus on performance, memory management, type safety, and Lua integration. It covers:
+
+- Parallel processing through a thread pool and C++20 coroutine-based async execution.
+- Memory management using custom allocators, object pooling, and memory pools.
+- Type safety through C++20 concepts and generic programming constraints.
+- Lua integration including dynamic loading, type conversion, and event registration.
+- Practical guidance for benchmarking, profiling, optimization, and troubleshooting.
+
+The content is grounded in the repository’s core base utilities, DLL extension interface, and Lua bridge components.
 
 ## Project Structure
-The advanced feature surface is exposed through:
-- C ABI pipeline headers that define per-process configurations, results, progress callbacks, and async entry points.
-- A shared type layer defining all pipeline config/result structs and enums.
-- Performance primitives such as thread pools, coroutines, memory pools, and object pools.
-- Configuration and parameter persistence layers including application settings and schema-backed parameter storage.
-- Plugin and extension mechanisms via dynamic DLL loading and Lua integration.
-- Event source functions enabling progress and I/O callbacks.
+The advanced features are primarily implemented in:
+
+- `base/`: concurrency, coroutines, memory pools, object pools, and C++20 concepts.
+- `DllHsBaSlicer/`: C ABI for registering external Lua functions and events into the pipeline runtime.
+- `utils/`: Lua type adapters, dynamic library loader, and Lua-visible helpers.
+- `ModuleHsBaSlicer/`: module-level API surface exposing registration and event callback functions.
 
 ```mermaid
 graph TB
-subgraph "Pipeline APIs"
-FDM["FDM Pipeline API"]
-SLA["SLA Pipeline API"]
-SLM["SLM Pipeline API"]
-SLS["SLS Pipeline API"]
-TDP["TDP Pipeline API"]
-WAAM["WAAM Pipeline API"]
+subgraph "Base Utilities"
+TP["ThreadPool<br/>base/thread_pool.hpp"]
+Coro["Coroutines & Task<br/>base/coroutine.hpp"]
+MemPool["Memory Pool Allocators<br/>base/memory_pool.hpp"]
+ObjPool["Named Object Pool<br/>base/object_pool.hpp"]
+Concepts["C++20 Concepts<br/>base/concepts.hpp"]
 end
-subgraph "Shared Types"
-PT["Pipeline Types<br/>Configs, Results, Callbacks"]
+subgraph "DLL Extension Layer"
+LuaRegABI["Lua Registration C ABI<br/>DllHsBaSlicer/lua_register.*"]
 end
-subgraph "Performance"
-TP["ThreadPool"]
-CO["Coroutines & Task"]
-MP["MemoryPool / StaticMemoryPool"]
-OP["NamedObjectPool"]
+subgraph "Lua Bridge"
+AnyObj["AnyObject Adapters<br/>utils/LuaAnyObject.hpp"]
+DllLoad["Dynamic Loader<br/>utils/LuaDllLoader.*"]
 end
-subgraph "Configuration"
-AC["AppConfigSingletone"]
-PS["ParamStore"]
-SC["ParamSchema"]
+subgraph "Module Surface"
+ModAPI["Module API<br/>ModuleHsBaSlicer/hsba_slicer.cppm"]
 end
-subgraph "Plugins & Events"
-DL["LuaDllLoader"]
-EV["EventSourceFunction"]
-end
-FDM --> PT
-SLA --> PT
-SLM --> PT
-SLS --> PT
-TDP --> PT
-WAAM --> PT
-FDM --> TP
-SLA --> TP
-SLM --> TP
-SLS --> TP
-TDP --> TP
-WAAM --> TP
-TP --> CO
-MP --> OP
-PS --> SC
-DL --> EV
+TP --> Coro
+Coro --> MemPool
+MemPool --> ObjPool
+Concepts --> Coro
+Concepts --> MemPool
+LuaRegABI --> ModAPI
+AnyObj --> DllLoad
+DllLoad --> LuaRegABI
 ```
 
 **Diagram sources**
-- [pipeline_types.h:23-783](file://pipelinetypes/pipeline_types.h#L23-L783)
-- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
-- [sla_pipeline.h:17-56](file://DllHsBaSlicer/sla_pipeline.h#L17-L56)
-- [slm_pipeline.h:17-56](file://DllHsBaSlicer/slm_pipeline.h#L17-L56)
-- [sls_pipeline.h:17-56](file://DllHsBaSlicer/sls_pipeline.h#L17-L56)
-- [tdp_pipeline.h:17-56](file://DllHsBaSlicer/tdp_pipeline.h#L17-L56)
-- [waam_pipeline.h:17-57](file://DllHsBaSlicer/waam_pipeline.h#L17-L57)
 - [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
-- [coroutine.hpp:47-382](file://base/coroutine.hpp#L47-L382)
-- [memory_pool.hpp:44-208](file://base/memory_pool.hpp#L44-L208)
-- [object_pool.hpp:23-283](file://base/object_pool.hpp#L23-L283)
-- [app_config.hpp:19-46](file://utils/app_config.hpp#L19-L46)
-- [param_store.hpp:33-105](file://fileoperator/param_store.hpp#L33-L105)
-- [param_schema.hpp:58-92](file://fileoperator/param_schema.hpp#L58-L92)
-- [LuaDllLoader.hpp:27-79](file://utils/LuaDllLoader.hpp#L27-L79)
-- [EventSourceFunction.hpp:18-41](file://LibHsBaSlicer/Extends/EventSourceFunction.hpp#L18-L41)
+- [coroutine.hpp:47-773](file://base/coroutine.hpp#L47-L773)
+- [memory_pool.hpp:43-208](file://base/memory_pool.hpp#L43-L208)
+- [object_pool.hpp:22-283](file://base/object_pool.hpp#L22-L283)
+- [concepts.hpp:15-267](file://base/concepts.hpp#L15-L267)
+- [lua_register.h:11-35](file://DllHsBaSlicer/lua_register.h#L11-L35)
+- [LuaAnyObject.hpp:19-521](file://utils/LuaAnyObject.hpp#L19-L521)
+- [LuaDllLoader.hpp:27-263](file://utils/LuaDllLoader.hpp#L27-L263)
+- [hsba_slicer.cppm:504-520](file://ModuleHsBaSlicer/hsba_slicer.cppm#L504-L520)
 
 **Section sources**
-- [pipeline_types.h:23-783](file://pipelinetypes/pipeline_types.h#L23-L783)
-- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
-- [sla_pipeline.h:17-56](file://DllHsBaSlicer/sla_pipeline.h#L17-L56)
-- [slm_pipeline.h:17-56](file://DllHsBaSlicer/slm_pipeline.h#L17-L56)
-- [sls_pipeline.h:17-56](file://DllHsBaSlicer/sls_pipeline.h#L17-L56)
-- [tdp_pipeline.h:17-56](file://DllHsBaSlicer/tdp_pipeline.h#L17-L56)
-- [waam_pipeline.h:17-57](file://DllHsBaSlicer/waam_pipeline.h#L17-L57)
+- [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
+- [coroutine.hpp:47-773](file://base/coroutine.hpp#L47-L773)
+- [memory_pool.hpp:43-208](file://base/memory_pool.hpp#L43-L208)
+- [object_pool.hpp:22-283](file://base/object_pool.hpp#L22-L283)
+- [concepts.hpp:15-267](file://base/concepts.hpp#L15-L267)
+- [lua_register.h:11-35](file://DllHsBaSlicer/lua_register.h#L11-L35)
+- [LuaAnyObject.hpp:19-521](file://utils/LuaAnyObject.hpp#L19-L521)
+- [LuaDllLoader.hpp:27-263](file://utils/LuaDllLoader.hpp#L27-L263)
+- [hsba_slicer.cppm:504-520](file://ModuleHsBaSlicer/hsba_slicer.cppm#L504-L520)
 
 ## Core Components
-This section summarizes the core pipeline families and their responsibilities.
+This section summarizes the key building blocks used across advanced features.
 
-- FDM (Fused Deposition Modeling)
-  - Config fields include model inputs, slice parameters, fill mode and density, support pattern and geometry, path generation options, G-code firmware target, nozzle/filament/temperature/retraction settings, optional Lua support/infill scripts, and output path.
-  - Result contains success flag, total layers, G-code content, error message, and elapsed time.
-  - Exposes synchronous and asynchronous run functions plus a result-freeing function.
-
-- SLA (Stereolithography)
-  - Config includes model inputs, slice parameters, exposure/lift/retract settings, floor/raft geometry, support options, Lua customization for support/floor/export, image format and resolution, and output zip path.
-  - Result contains success flag, total layers, exported zip path, error message, and elapsed time.
-
-- SLS (Selective Laser Sintering)
-  - Config includes model inputs, slice parameters, laser power/scan speed/hatch spacing/rotation, bed temperature, required Lua export script/function, and output path.
-  - No built-in floor/support; output format is fully defined by the Lua export script.
-
-- SLM (Selective Laser Melting)
-  - Mirrors SLS flow but adds metal-specific material, light source, and shielding gas enums.
-  - Requires Lua export script/function; output is produced by the export script.
-
-- TDP (Binder Jetting / 3DP)
-  - Config includes model inputs, slice parameters, head count, drop spacing, binder saturation, curing time, bed temperature, binder mode, required Lua export script/function, spiral mode, and output path.
-  - Output is produced by the Lua export script.
-
-- WAAM (Wire Arc Additive Manufacturing)
-  - Config includes model inputs, bead/layer height, travel/wire feed speeds, arc current/voltage, gas flow, material/process/protection/gas enums, interpass temperature, robot controller type, optional Lua path generator, spiral mode, and output path.
-  - Produces robot program code rather than a layer archive.
-
-- Custom Lua Pipeline
-  - Fully Lua-driven workflow where stage order and behavior are defined by a Lua entry function. The C++ side exposes pipeline building blocks through a global Lua table.
-  - Config supports either an external Lua script file or inline Lua source, an entry function name, free-form JSON passed as pipeline configuration, optional model metadata, and default output path.
-
-```mermaid
-classDiagram
-class HsBaFdmPipelineConfig_t {
-+model_name
-+model_path
-+layer_height
-+first_layer_height
-+fill_spacing
-+fill_mode
-+fill_angle
-+wall_count
-+top_layer_count
-+bottom_layer_count
-+infill_density
-+enable_support
-+overhang_angle
-+support_gap
-+support_diameter
-+support_density
-+support_pattern
-+interface_layers
-+interface_density
-+line_width
-+print_speed
-+travel_speed
-+extrusion_multiplier
-+spiral_mode
-+gcode_firmware
-+nozzle_diameter
-+filament_diameter
-+nozzle_temp
-+bed_temp
-+retract_length
-+retract_speed
-+first_layer_speed
-+support_lua_script
-+support_lua_func
-+infill_lua_script
-+infill_lua_func
-+output_path
-}
-class HsBaSlaPipelineConfig_t {
-+model_name
-+model_path
-+layer_height
-+first_layer_height
-+bottom_exposure_time
-+normal_exposure_time
-+bottom_lift_distance
-+lift_distance
-+lift_speed
-+retract_speed
-+floor_raft_offset
-+floor_border_width
-+floor_fill_spacing
-+floor_fill_angle
-+floor_border_count
-+floor_use_convex_hull
-+enable_support
-+overhang_angle
-+support_gap
-+support_diameter
-+support_density
-+support_pattern
-+support_lua_script
-+support_lua_func
-+floor_lua_script
-+floor_lua_func
-+export_lua_script
-+export_lua_func
-+output_path
-+image_type
-+image_width
-+image_height
-}
-class HsBaSlsPipelineConfig_t {
-+model_name
-+model_path
-+layer_height
-+first_layer_height
-+laser_power
-+scan_speed
-+hatch_spacing
-+hatch_rotation
-+bed_temperature
-+export_lua_script
-+export_lua_func
-+output_path
-}
-class HsBaSlmPipelineConfig_t {
-+model_name
-+model_path
-+layer_height
-+first_layer_height
-+laser_power
-+scan_speed
-+hatch_spacing
-+hatch_rotation
-+bed_temperature
-+material
-+light_source
-+protect_gas
-+export_lua_script
-+export_lua_func
-+output_path
-}
-class HsBaTdpPipelineConfig_t {
-+model_name
-+model_path
-+layer_height
-+first_layer_height
-+head_count
-+drop_spacing
-+binder_saturation
-+ink_curing_time
-+bed_temperature
-+binder_mode
-+export_lua_script
-+export_lua_func
-+output_path
-+spiral_mode
-}
-class HsBaWaamPipelineConfig_t {
-+model_name
-+model_path
-+layer_height
-+first_layer_height
-+bead_width
-+travel_speed
-+wire_feed_speed
-+arc_current
-+arc_voltage
-+gas_flow_rate
-+material
-+welding_process
-+protection
-+protect_gas
-+interpass_temperature
-+robot_type
-+path_lua_script
-+path_lua_func
-+output_path
-+spiral_mode
-}
-class HsBaCustomPipelineConfig_t {
-+pipeline_lua_script
-+pipeline_lua_source
-+entry_func
-+config_json
-+model_name
-+model_path
-+output_path
-}
-```
-
-**Diagram sources**
-- [pipeline_types.h:56-113](file://pipelinetypes/pipeline_types.h#L56-L113)
-- [pipeline_types.h:170-218](file://pipelinetypes/pipeline_types.h#L170-L218)
-- [pipeline_types.h:259-283](file://pipelinetypes/pipeline_types.h#L259-L283)
-- [pipeline_types.h:359-376](file://pipelinetypes/pipeline_types.h#L359-L376)
-- [pipeline_types.h:480-496](file://pipelinetypes/pipeline_types.h#L480-L496)
-- [pipeline_types.h:578-600](file://pipelinetypes/pipeline_types.h#L578-L600)
-- [pipeline_types.h:689-704](file://pipelinetypes/pipeline_types.h#L689-L704)
+- ThreadPool: A bounded worker-thread pool that submits tasks via futures, tracks active/pending work, supports graceful shutdown, and optionally integrates with C++20 coroutines through an executor interface.
+- Coroutines: A Task abstraction over C++20 coroutines with executors (noop, async, thread pool), awaiters, result handling, callbacks, and optional custom allocator support for coroutine promise allocation.
+- Memory Pools: Fixed-size allocators (`MemoryPool`, `StaticMemoryPool`) providing predictable allocation behavior, alignment guarantees, and per-pool or static shared state.
+- Named Object Pool: A named registry of shared objects with capacity limits, inactive-object cleanup, and concurrent access protection.
+- Concepts: Reusable C++20 concepts for streamability, hashing, string types, allocators, arithmetic operations, and more, enabling compile-time checks and generic APIs.
+- Lua Integration: C ABI entry points to register 2D/3D/File Lua functions and event callbacks; AnyObject adapters bridging native values to Lua; dynamic loader exposing function resolution and invocation from Lua.
 
 **Section sources**
-- [pipeline_types.h:23-783](file://pipelinetypes/pipeline_types.h#L23-L783)
-- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
-- [sla_pipeline.h:17-56](file://DllHsBaSlicer/sla_pipeline.h#L17-L56)
-- [slm_pipeline.h:17-56](file://DllHsBaSlicer/slm_pipeline.h#L17-L56)
-- [sls_pipeline.h:17-56](file://DllHsBaSlicer/sls_pipeline.h#L17-L56)
-- [tdp_pipeline.h:17-56](file://DllHsBaSlicer/tdp_pipeline.h#L17-L56)
-- [waam_pipeline.h:17-57](file://DllHsBaSlicer/waam_pipeline.h#L17-L57)
+- [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
+- [coroutine.hpp:47-773](file://base/coroutine.hpp#L47-L773)
+- [memory_pool.hpp:43-208](file://base/memory_pool.hpp#L43-L208)
+- [object_pool.hpp:22-283](file://base/object_pool.hpp#L22-L283)
+- [concepts.hpp:15-267](file://base/concepts.hpp#L15-L267)
+- [lua_register.h:11-35](file://DllHsBaSlicer/lua_register.h#L11-L35)
+- [LuaAnyObject.hpp:19-521](file://utils/LuaAnyObject.hpp#L19-L521)
+- [LuaDllLoader.hpp:27-263](file://utils/LuaDllLoader.hpp#L27-L263)
 
 ## Architecture Overview
-The pipeline architecture follows a consistent pattern:
-- Each process family exposes a C ABI with default config creation, synchronous execution, asynchronous execution, and result cleanup.
-- All configs/results share a common shape: success flag, total layers, output payload, error message, and elapsed time.
-- Progress callbacks report percentage and stage descriptions; async variants return results through completion callbacks.
-- Metal and thermal processes rely on Lua export scripts to produce final artifacts.
+The advanced feature architecture connects parallel execution, memory management, type safety, and Lua scripting into a cohesive system.
 
 ```mermaid
 sequenceDiagram
-participant App as "Application"
-participant API as "Process Pipeline API"
-participant Core as "Pipeline Core"
-participant Lua as "Lua Export Script"
-participant IO as "File System"
-App->>API : CreateDefaultConfig()
-App->>API : RunPipeline(config, progress_cb)
-API->>Core : Preprocess -> Slice -> Process-Specific Steps
-Core-->>App : progress_cb(percent, stage)
-alt Metal/Thermal
-Core->>Lua : Execute export function
-Lua->>IO : Write artifact(s)
-IO-->>Core : Artifact path(s)
-else FDM/SLA
-Core->>IO : Generate G-code or layer images
-IO-->>Core : Output path/content
-end
-Core-->>App : PipelineResult(success, layers, output, error, elapsed)
-App->>API : FreePipelineResult(result)
+participant App as "Application Code"
+participant TP as "ThreadPool"
+participant Coro as "Task/Coroutine"
+participant Mem as "MemoryPool/StaticMemoryPool"
+participant Obj as "NamedObjectPool"
+participant Lua as "Lua Runtime"
+participant Ext as "External DLL"
+App->>TP : submit(task)
+TP-->>App : future
+App->>Coro : co_await task()
+Coro->>Mem : allocate small objects
+Mem-->>Coro : aligned pointers
+App->>Obj : emplace(name, args)
+Obj-->>App : shared_ptr<T>
+Lua->>Ext : get_<signature>(name)
+Ext-->>Lua : function pointer
+Lua->>Ext : call_<signature>(args...)
+Ext-->>Lua : return value
+Lua-->>App : typed result or AnyObject
 ```
 
 **Diagram sources**
-- [fdm_pipeline.h:21-61](file://DllHsBaSlicer/fdm_pipeline.h#L21-L61)
-- [sla_pipeline.h:21-56](file://DllHsBaSlicer/sla_pipeline.h#L21-L56)
-- [slm_pipeline.h:21-56](file://DllHsBaSlicer/slm_pipeline.h#L21-L56)
-- [sls_pipeline.h:21-56](file://DllHsBaSlicer/sls_pipeline.h#L21-L56)
-- [tdp_pipeline.h:21-56](file://DllHsBaSlicer/tdp_pipeline.h#L21-L56)
-- [waam_pipeline.h:21-57](file://DllHsBaSlicer/waam_pipeline.h#L21-L57)
-- [pipeline_types.h:120-140](file://pipelinetypes/pipeline_types.h#L120-L140)
-- [pipeline_types.h:225-245](file://pipelinetypes/pipeline_types.h#L225-L245)
-- [pipeline_types.h:290-310](file://pipelinetypes/pipeline_types.h#L290-L310)
-- [pipeline_types.h:381-401](file://pipelinetypes/pipeline_types.h#L381-L401)
-- [pipeline_types.h:501-521](file://pipelinetypes/pipeline_types.h#L501-L521)
-- [pipeline_types.h:605-625](file://pipelinetypes/pipeline_types.h#L605-L625)
+- [thread_pool.hpp:67-111](file://base/thread_pool.hpp#L67-L111)
+- [coroutine.hpp:205-382](file://base/coroutine.hpp#L205-L382)
+- [memory_pool.hpp:111-175](file://base/memory_pool.hpp#L111-L175)
+- [object_pool.hpp:66-92](file://base/object_pool.hpp#L66-L92)
+- [LuaDllLoader.hpp:160-245](file://utils/LuaDllLoader.hpp#L160-L245)
 
 ## Detailed Component Analysis
 
-### FDM Pipeline
-- Purpose: Convert a CAD model into printable G-code using configurable fill patterns, support structures, and path generation tuned for fused deposition modeling.
-- Key behaviors:
-  - Supports multiple fill modes and densities, wall/top/bottom layer counts, and interface layers.
-  - Provides support detection and generation with plannable patterns.
-  - Emits G-code targeting Marlin, RepRap/RRF, or Klipper firmware profiles.
-  - Offers spiral vase mode to generate a continuous outer wall helix.
-  - Allows Lua-based support and infill customization.
+### Parallel Processing: Thread Pool and Coroutine Executors
+HsBaSlicer provides a robust thread pool and coroutine infrastructure suitable for high-throughput slicing pipelines.
+
+Key behaviors:
+- Worker threads pull tasks from a queue protected by a mutex and condition variable.
+- Tasks are wrapped in packaged tasks returning futures.
+- Active and pending task counts are tracked atomically and via queue size.
+- Shutdown sets a stop flag, notifies all workers, and joins threads.
+- Optional coroutine executor integrates with Task via IExecutor.
 
 ```mermaid
-flowchart TD
-Start(["Start FDM Pipeline"]) --> Load["Load Model"]
-Load --> Slice["Slice Layers"]
-Slice --> Support{"Support Enabled?"}
-Support --> |Yes| GenSupport["Generate Support"]
-Support --> |No| Fill["Generate Infill"]
-GenSupport --> Fill
-Fill --> PathGen["Path Generation"]
-PathGen --> GCode["Emit G-code"]
-GCode --> End(["Return Result"])
+classDiagram
+class ThreadPool {
++submit(f, args) future
++PendingTasks() size_t
++ActiveTasks() size_t
++WaitAll() void
+-WorkerLoop() void
+-workers_ vector<thread>
+-tasks_ queue<function<void()>>
+-queue_mutex_ mutex
+-condition_ condition_variable
+-finished_condition_ condition_variable
+-stop_ atomic<bool>
+-active_tasks_ atomic<size_t>
+}
+class IExecutor {
+<<interface>>
++execute(func) void
+}
+class ThreadPoolExecutor {
++execute(func) void
++SetDefaultPool(pool) void
+-default_pool_ ThreadPool*
+-pool_ ThreadPool*
+-get_pool() ThreadPool*
+}
+ThreadPoolExecutor --> ThreadPool : "uses"
+ThreadPoolExecutor ..|> IExecutor : "implements"
 ```
 
 **Diagram sources**
-- [fdm_pipeline.h:21-61](file://DllHsBaSlicer/fdm_pipeline.h#L21-L61)
-- [pipeline_types.h:56-113](file://pipelinetypes/pipeline_types.h#L56-L113)
+- [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
+- [thread_pool.hpp:170-207](file://base/thread_pool.hpp#L170-L207)
+
+Practical usage patterns:
+- Submit CPU-bound slices or path computations concurrently.
+- Use WaitAll to synchronize completion before exporting results.
+- Configure thread count based on hardware concurrency and workload characteristics.
+
+Best practices:
+- Avoid submitting extremely fine-grained tasks to reduce overhead.
+- Prefer batching independent work units.
+- Monitor ActiveTasks and PendingTasks to detect bottlenecks.
 
 **Section sources**
-- [fdm_pipeline.h:21-61](file://DllHsBaSlicer/fdm_pipeline.h#L21-L61)
-- [pipeline_types.h:56-113](file://pipelinetypes/pipeline_types.h#L56-L113)
+- [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
+- [thread_pool.hpp:170-207](file://base/thread_pool.hpp#L170-L207)
 
-### SLA Pipeline
-- Purpose: Produce layer images and support structures for stereolithography, optionally generating a zipped package.
-- Key behaviors:
-  - Configurable exposure and lift/retract kinematics.
-  - Floor/raft generation with border and fill controls.
-  - Support generation with sacrificial or cone patterns.
-  - Lua hooks for support, floor, and export stages.
-  - Image output formats include PNG, JPEG, and SVG.
+### Coroutine-Based Async Operations
+The coroutine layer abstracts asynchronous execution with customizable executors and strong result semantics.
+
+Highlights:
+- Task<T, Executor> encapsulates coroutine state, result, and lifecycle.
+- DispatchAwaiter ensures initial suspension on the configured executor.
+- Finalization hooks allow cleanup after completion.
+- CustomAllocatorTask enables allocator-aware coroutine promises.
 
 ```mermaid
 flowchart TD
-Start(["Start SLA Pipeline"]) --> Load["Load Model"]
-Load --> Slice["Slice Layers"]
-Slice --> Floor["Generate Floor/Raft"]
-Floor --> Support{"Support Enabled?"}
-Support --> |Yes| GenSupport["Generate Support"]
-Support --> |No| Export["Export Layer Images"]
-GenSupport --> Export
-Export --> Zip["Package ZIP"]
-Zip --> End(["Return Export Path"])
+Start(["Coroutine Entry"]) --> InitialSuspend["initial_suspend()<br/>DispatchAwaiter"]
+InitialSuspend --> RunBody["Execute coroutine body"]
+RunBody --> AwaitTask{"co_await another Task?"}
+AwaitTask --> |Yes| SuspendAndResume["executor.execute(resume)"]
+AwaitTask --> |No| ReturnResult["return_value / return_void"]
+ReturnResult --> FinalSuspend["final_suspend()"]
+FinalSuspend --> Cleanup["finally callbacks<br/>destroy handle"]
+Cleanup --> End(["Coroutine Exit"])
 ```
 
 **Diagram sources**
-- [sla_pipeline.h:21-56](file://DllHsBaSlicer/sla_pipeline.h#L21-L56)
-- [pipeline_types.h:170-218](file://pipelinetypes/pipeline_types.h#L170-L218)
+- [coroutine.hpp:234-276](file://base/coroutine.hpp#L234-L276)
+- [coroutine.hpp:414-448](file://base/coroutine.hpp#L414-L448)
+- [coroutine.hpp:593-687](file://base/coroutine.hpp#L593-L687)
+
+Integration with ThreadPool:
+- ThreadPoolExecutor implements IExecutor and forwards execution to ThreadPool::submit.
+- SetDefaultPool allows global default executor configuration.
+
+Error handling:
+- Result wraps exceptions and values; get_or_throw rethrows stored exceptions.
+- catching and then provide callback-based error and success handling.
 
 **Section sources**
-- [sla_pipeline.h:21-56](file://DllHsBaSlicer/sla_pipeline.h#L21-L56)
-- [pipeline_types.h:170-218](file://pipelinetypes/pipeline_types.h#L170-L218)
+- [coroutine.hpp:47-773](file://base/coroutine.hpp#L47-L773)
+- [thread_pool.hpp:170-207](file://base/thread_pool.hpp#L170-L207)
 
-### SLS and SLM Pipelines
-- Purpose: Powder-bed fusion processing paths where the powder bed provides support and thermal stability.
-- Differences:
-  - SLS focuses on polymer sintering parameters.
-  - SLM adds metal-specific material, energy source, and shielding gas configuration.
-- Both delegate final artifact generation to a required Lua export script.
+### Memory Management Strategies
+HsBaSlicer offers multiple strategies to control allocation patterns and resource lifetimes.
+
+#### Custom Allocators and Memory Pools
+- MemoryPool<T, PoolSize>: Per-instance fixed-size pool with alignment-safe scanning and usage tracking.
+- StaticMemoryPool<T, PoolSize>: Shared static buffer with identical allocation semantics but process-wide state.
+
+```mermaid
+classDiagram
+class MemoryPoolState {
++char[] pool
++bool[] used
++size_t used_count
+}
+class MemoryPool {
++allocate(n) T*
++deallocate(p, n) void
++construct(p, args) void
++destroy(p) void
++max_size() size_t
++get_state() shared_ptr<MemoryPoolState>
+-state_ shared_ptr<MemoryPoolState>
+-mutex_ mutex
+}
+class StaticMemoryPool {
++allocate(n) T*
++deallocate(p, n) void
++construct(p, args) void
++destroy(p) void
++max_size() size_t
++UsedCount() size_t
+-buffer char[]
+-used bool[]
+-used_count size_t
+-mutex_ mutex
+}
+MemoryPool --> MemoryPoolState : "owns"
+```
+
+**Diagram sources**
+- [memory_pool.hpp:28-34](file://base/memory_pool.hpp#L28-L34)
+- [memory_pool.hpp:43-208](file://base/memory_pool.hpp#L43-L208)
+- [memory_pool.hpp:215-372](file://base/memory_pool.hpp#L215-L372)
+
+Usage guidance:
+- Use MemoryPool when you need isolated pools per algorithm or stage.
+- Use StaticMemoryPool for globally shared buffers where identity equality is expected.
+- Ensure PoolSize accommodates peak allocations; otherwise, bad_alloc is thrown.
+
+#### Object Pooling
+NamedObjectPool manages named shared objects with capacity limits and inactive-object cleanup.
+
+Key capabilities:
+- emplace/insert/allocate create pooled objects.
+- get/operator[] retrieve shared pointers.
+- CleanupInactiveObjects removes entries whose use count equals one.
+- InactiveCount/ActiveCount expose pool health metrics.
 
 ```mermaid
 flowchart TD
-Start(["Start SLS/SLM Pipeline"]) --> Load["Load Model"]
-Load --> Slice["Slice Layers"]
-Slice --> Export["Execute Lua Export Script"]
-Export --> End(["Return Export Path"])
+Add["emplace(name, args)"] --> CheckCapacity{"size >= MaxSize?"}
+CheckCapacity --> |Yes| Cleanup["CleanupInactiveObjects()"]
+CheckCapacity --> |No| Create["make_shared<T>(args...)"]
+Cleanup --> CheckCapacityAgain{"size >= MaxSize?"}
+CheckCapacityAgain --> |Yes| Throw["throw RuntimeError"]
+CheckCapacityAgain --> |No| Create
+Create --> Insert["objects_.emplace(name, PooledObject{ptr})"]
+Insert --> Return["return shared_ptr<T>"]
 ```
 
 **Diagram sources**
-- [sls_pipeline.h:21-56](file://DllHsBaSlicer/sls_pipeline.h#L21-L56)
-- [slm_pipeline.h:21-56](file://DllHsBaSlicer/slm_pipeline.h#L21-L56)
-- [pipeline_types.h:259-283](file://pipelinetypes/pipeline_types.h#L259-L283)
-- [pipeline_types.h:359-376](file://pipelinetypes/pipeline_types.h#L359-L376)
+- [object_pool.hpp:66-92](file://base/object_pool.hpp#L66-L92)
+- [object_pool.hpp:262-279](file://base/object_pool.hpp#L262-L279)
+
+Resource management patterns:
+- Prefer shared ownership for long-lived resources.
+- Trigger cleanup only when necessary to avoid thrashing.
+- Monitor ActiveCount/InactiveCount to tune MaxSize.
 
 **Section sources**
-- [sls_pipeline.h:21-56](file://DllHsBaSlicer/sls_pipeline.h#L21-L56)
-- [slm_pipeline.h:21-56](file://DllHsBaSlicer/slm_pipeline.h#L21-L56)
-- [pipeline_types.h:259-283](file://pipelinetypes/pipeline_types.h#L259-L283)
-- [pipeline_types.h:359-376](file://pipelinetypes/pipeline_types.h#L359-L376)
+- [memory_pool.hpp:43-208](file://base/memory_pool.hpp#L43-L208)
+- [memory_pool.hpp:215-372](file://base/memory_pool.hpp#L215-L372)
+- [object_pool.hpp:22-283](file://base/object_pool.hpp#L22-L283)
 
-### TDP Pipeline
-- Purpose: Binder jetting workflow producing binder outlines and curing/head parameters for each layer, delegated to a Lua export script.
-- Key behaviors:
-  - Multi-head printing and binder saturation control.
-  - Optional spiral mode for continuous contour deposition.
+### Type Safety with C++20 Concepts
+Concepts enforce compile-time requirements and improve generic code readability.
 
-```mermaid
-flowchart TD
-Start(["Start TDP Pipeline"]) --> Load["Load Model"]
-Load --> Slice["Slice Layers"]
-Slice --> Export["Execute Lua Export Script"]
-Export --> End(["Return Export Path"])
-```
+Important concepts:
+- Streamability: CharStream, WCharStream.
+- String handling: StdString, CStyleString, String, StringView.
+- Hashing: StdHash, Hash, EqualAndStdHash, EqualAndHash.
+- Allocator traits: TAllocator, NoStateAllocator.
+- Arithmetic operations: Addable, Subtractable, Multipliable, Dividable.
+- Pointer-like behavior: PointerLike, PointerOrIt.
+- Enumerations and references: Enum, LvalueRef, RvalueRef, Ref.
 
-**Diagram sources**
-- [tdp_pipeline.h:21-56](file://DllHsBaSlicer/tdp_pipeline.h#L21-L56)
-- [pipeline_types.h:480-496](file://pipelinetypes/pipeline_types.h#L480-L496)
+Generic programming patterns:
+- Functions can constrain parameters with concepts to fail early at compile time.
+- Allocator-aware algorithms can require TAllocator and NoStateAllocator for predictable behavior.
+- String abstractions unify std::string variants and C-style strings.
 
-**Section sources**
-- [tdp_pipeline.h:21-56](file://DllHsBaSlicer/tdp_pipeline.h#L21-L56)
-- [pipeline_types.h:480-496](file://pipelinetypes/pipeline_types.h#L480-L496)
-
-### WAAM Pipeline
-- Purpose: Wire arc additive manufacturing producing robot language programs (ABB/KUKA/FANUC) instead of layer archives.
-- Key behaviors:
-  - Configurable welding process, protection method, shielding gas, and interpass temperature.
-  - Optional Lua path generator for custom robot code.
-  - Spiral mode to deposit outer wall as one continuous rising bead.
-
-```mermaid
-flowchart TD
-Start(["Start WAAM Pipeline"]) --> Load["Load Model"]
-Load --> Slice["Slice Layers"]
-Slice --> RobotPath["Generate Robot Paths"]
-RobotPath --> Program["Emit Robot Program"]
-Program --> End(["Return Output Path"])
-```
-
-**Diagram sources**
-- [waam_pipeline.h:21-57](file://DllHsBaSlicer/waam_pipeline.h#L21-L57)
-- [pipeline_types.h:578-600](file://pipelinetypes/pipeline_types.h#L578-L600)
+Example application areas:
+- Serialization/deserialization helpers requiring streamable types.
+- Config mapping requiring hashable keys.
+- Custom allocators for containers and coroutine promises.
 
 **Section sources**
-- [waam_pipeline.h:21-57](file://DllHsBaSlicer/waam_pipeline.h#L21-L57)
-- [pipeline_types.h:578-600](file://pipelinetypes/pipeline_types.h#L578-L600)
+- [concepts.hpp:15-267](file://base/concepts.hpp#L15-L267)
 
-### Custom Lua Pipeline
-- Purpose: Allow complete workflow customization through Lua scripting.
-- Capabilities:
-  - Define pipeline stages, data flow, and outputs entirely in Lua.
-  - Receive model metadata, free-form JSON configuration, and default output path.
-  - Use C++-exposed pipeline building blocks via a global Lua table.
+### Lua Integration Architecture
+HsBaSlicer exposes a flexible Lua integration surface for extending pipeline stages and interacting with native code.
+
+#### Dynamic Loading
+Lua sees a DllLoader object that can load, reload, and unload native libraries. It also exposes typed get_/call_ functions generated per signature.
 
 ```mermaid
 sequenceDiagram
-participant App as "Application"
-participant API as "Custom Pipeline API"
-participant VM as "Lua VM"
-participant Stage as "Lua Stages"
-App->>API : CreateDefaultConfig()
-App->>API : RunCustomPipeline(config, progress_cb)
-API->>VM : Initialize Lua state
-VM->>Stage : Execute entry function
-Stage->>Stage : Call pipeline building blocks
-Stage-->>API : Report layers/output/result
-API-->>App : CustomPipelineResult
+participant Lua as "Lua Script"
+participant Loader as "DllLoader"
+participant Native as "Native DLL"
+Lua->>Loader : new("path/to/dll")
+Lua->>Loader : get_<Ret(Args...)>("symbol_name")
+Loader->>Native : resolve symbol
+Native-->>Loader : function pointer
+Loader-->>Lua : lightuserdata function
+Lua->>Loader : call_<Ret(Args...)>("symbol_name", args...)
+Loader->>Native : invoke function
+Native-->>Loader : return value
+Loader-->>Lua : push number/string/AnyObject
 ```
 
 **Diagram sources**
-- [pipeline_types.h:689-732](file://pipelinetypes/pipeline_types.h#L689-L732)
+- [LuaDllLoader.hpp:27-79](file://utils/LuaDllLoader.hpp#L27-L79)
+- [LuaDllLoader.hpp:160-245](file://utils/LuaDllLoader.hpp#L160-L245)
+- [LuaDllLoader.cpp:14-52](file://utils/LuaDllLoader.cpp#L14-L52)
+- [LuaDllLoader.cpp:55-103](file://utils/LuaDllLoader.cpp#L55-L103)
+
+#### Type Conversion
+AnyObject adapters bridge native values to Lua and back.
+
+- New functions wrap native values into Lua userdata representing AnyObject.
+- Cast functions extract native values from AnyObject with type checking and exception propagation.
+- Built-in adapters exist for int, long, long long, size_t, float, double, bool, string, cstring.
+
+```mermaid
+flowchart TD
+FromLua["Lua value"] --> Wrap["NewLuaObject<AnyObject, name>(L, value)"]
+Wrap --> AnyObj["AnyObject userdata"]
+AnyObj --> Cast["cast_new<T>()"]
+Cast --> ToLua["Push T onto Lua stack"]
+```
+
+**Diagram sources**
+- [LuaAnyObject.hpp:72-112](file://utils/LuaAnyObject.hpp#L72-L112)
+- [LuaAnyObject.hpp:118-126](file://utils/LuaAnyObject.hpp#L118-L126)
+- [LuaAnyObject.hpp:128-509](file://utils/LuaAnyObject.hpp#L128-L509)
+
+#### Event System
+The C ABI exposes registration functions for 2D/3D/File Lua functions and named event callbacks.
+
+- HsBaAdd2DFunction/HsBaAdd3DFunction/HsBaAddFileFunction register Lua functions into pipeline stages.
+- HsBaAddEventCallback registers a Lua function for a named event such as zipper or database events.
+- Module-level API mirrors these registrations for higher-level consumers.
+
+```mermaid
+sequenceDiagram
+participant Host as "Host Application"
+participant ABI as "HsBaAdd* C ABI"
+participant Runtime as "Pipeline Runtime"
+participant Lua as "Lua State"
+Host->>ABI : HsBaAdd2DFunction(func)
+ABI->>Runtime : Add2DFunctions(func)
+Host->>ABI : HsBaAddEventCallback("zipper.on_add", func)
+ABI->>Runtime : AddEventCallback("zipper.on_add", func)
+Runtime->>Lua : invoke registered function(event_data)
+```
+
+**Diagram sources**
+- [lua_register.h:21-31](file://DllHsBaSlicer/lua_register.h#L21-L31)
+- [lua_register.cpp:11-41](file://DllHsBaSlicer/lua_register.cpp#L11-L41)
+- [hsba_slicer.cppm:504-520](file://ModuleHsBaSlicer/hsba_slicer.cppm#L504-L520)
 
 **Section sources**
-- [pipeline_types.h:689-732](file://pipelinetypes/pipeline_types.h#L689-L732)
+- [LuaDllLoader.hpp:27-263](file://utils/LuaDllLoader.hpp#L27-L263)
+- [LuaDllLoader.cpp:14-103](file://utils/LuaDllLoader.cpp#L14-L103)
+- [LuaAnyObject.hpp:19-521](file://utils/LuaAnyObject.hpp#L19-L521)
+- [lua_register.h:11-35](file://DllHsBaSlicer/lua_register.h#L11-L35)
+- [lua_register.cpp:11-41](file://DllHsBaSlicer/lua_register.cpp#L11-L41)
+- [hsba_slicer.cppm:504-520](file://ModuleHsBaSlicer/hsba_slicer.cppm#L504-L520)
 
 ## Dependency Analysis
-The following diagram shows how pipeline APIs depend on shared types and performance/configuration subsystems.
+The following diagram shows how advanced features depend on each other.
 
 ```mermaid
 graph LR
-FDM_API["FDM API"] --> PT["Pipeline Types"]
-SLA_API["SLA API"] --> PT
-SLM_API["SLM API"] --> PT
-SLS_API["SLS API"] --> PT
-TDP_API["TDP API"] --> PT
-WAAM_API["WAAM API"] --> PT
-PT --> CORE["Core Algorithms"]
-CORE --> TP["ThreadPool"]
-TP --> CO["Coroutines"]
-CORE --> MP["MemoryPool"]
-MP --> OP["ObjectPool"]
-CORE --> PS["ParamStore"]
-PS --> SC["ParamSchema"]
-CORE --> AC["AppConfig"]
-CORE --> DL["LuaDllLoader"]
-DL --> EV["EventSourceFunction"]
+Concepts["concepts.hpp"] --> ThreadPool["thread_pool.hpp"]
+Concepts --> Coroutines["coroutine.hpp"]
+Concepts --> MemoryPools["memory_pool.hpp"]
+ThreadPool --> Coroutines
+Coroutines --> MemoryPools
+MemoryPools --> ObjectPool["object_pool.hpp"]
+LuaAnyObject["LuaAnyObject.hpp"] --> Coroutines
+LuaDllLoader["LuaDllLoader.*"] --> LuaAnyObject
+LuaRegister["lua_register.*"] --> ModuleAPI["hsba_slicer.cppm"]
 ```
 
 **Diagram sources**
-- [fdm_pipeline.h:21-61](file://DllHsBaSlicer/fdm_pipeline.h#L21-L61)
-- [sla_pipeline.h:21-56](file://DllHsBaSlicer/sla_pipeline.h#L21-L56)
-- [slm_pipeline.h:21-56](file://DllHsBaSlicer/slm_pipeline.h#L21-L56)
-- [sls_pipeline.h:21-56](file://DllHsBaSlicer/sls_pipeline.h#L21-L56)
-- [tdp_pipeline.h:21-56](file://DllHsBaSlicer/tdp_pipeline.h#L21-L56)
-- [waam_pipeline.h:21-57](file://DllHsBaSlicer/waam_pipeline.h#L21-L57)
-- [pipeline_types.h:23-783](file://pipelinetypes/pipeline_types.h#L23-L783)
+- [concepts.hpp:15-267](file://base/concepts.hpp#L15-L267)
 - [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
-- [coroutine.hpp:47-382](file://base/coroutine.hpp#L47-L382)
-- [memory_pool.hpp:44-208](file://base/memory_pool.hpp#L44-L208)
-- [object_pool.hpp:23-283](file://base/object_pool.hpp#L23-L283)
-- [param_store.hpp:33-105](file://fileoperator/param_store.hpp#L33-L105)
-- [param_schema.hpp:58-92](file://fileoperator/param_schema.hpp#L58-L92)
-- [app_config.hpp:19-46](file://utils/app_config.hpp#L19-L46)
-- [LuaDllLoader.hpp:27-79](file://utils/LuaDllLoader.hpp#L27-L79)
-- [EventSourceFunction.hpp:18-41](file://LibHsBaSlicer/Extends/EventSourceFunction.hpp#L18-L41)
+- [coroutine.hpp:47-773](file://base/coroutine.hpp#L47-L773)
+- [memory_pool.hpp:43-208](file://base/memory_pool.hpp#L43-L208)
+- [object_pool.hpp:22-283](file://base/object_pool.hpp#L22-L283)
+- [LuaAnyObject.hpp:19-521](file://utils/LuaAnyObject.hpp#L19-L521)
+- [LuaDllLoader.hpp:27-263](file://utils/LuaDllLoader.hpp#L27-L263)
+- [lua_register.h:11-35](file://DllHsBaSlicer/lua_register.h#L11-L35)
+- [hsba_slicer.cppm:504-520](file://ModuleHsBaSlicer/hsba_slicer.cppm#L504-L520)
 
 **Section sources**
-- [pipeline_types.h:23-783](file://pipelinetypes/pipeline_types.h#L23-L783)
+- [concepts.hpp:15-267](file://base/concepts.hpp#L15-L267)
 - [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
-- [coroutine.hpp:47-382](file://base/coroutine.hpp#L47-L382)
-- [memory_pool.hpp:44-208](file://base/memory_pool.hpp#L44-L208)
-- [object_pool.hpp:23-283](file://base/object_pool.hpp#L23-L283)
-- [param_store.hpp:33-105](file://fileoperator/param_store.hpp#L33-L105)
-- [param_schema.hpp:58-92](file://fileoperator/param_schema.hpp#L58-L92)
-- [app_config.hpp:19-46](file://utils/app_config.hpp#L19-L46)
-- [LuaDllLoader.hpp:27-79](file://utils/LuaDllLoader.hpp#L27-L79)
-- [EventSourceFunction.hpp:18-41](file://LibHsBaSlicer/Extends/EventSourceFunction.hpp#L18-L41)
+- [coroutine.hpp:47-773](file://base/coroutine.hpp#L47-L773)
+- [memory_pool.hpp:43-208](file://base/memory_pool.hpp#L43-L208)
+- [object_pool.hpp:22-283](file://base/object_pool.hpp#L22-L283)
+- [LuaAnyObject.hpp:19-521](file://utils/LuaAnyObject.hpp#L19-L521)
+- [LuaDllLoader.hpp:27-263](file://utils/LuaDllLoader.hpp#L27-L263)
+- [lua_register.h:11-35](file://DllHsBaSlicer/lua_register.h#L11-L35)
+- [hsba_slicer.cppm:504-520](file://ModuleHsBaSlicer/hsba_slicer.cppm#L504-L520)
 
 ## Performance Considerations
-HsBaSlicer provides several high-performance primitives designed for slicing workloads:
+Guidance derived from the implementation details:
 
-- Parallel Processing with Thread Pools
-  - ThreadPool manages worker threads, task submission, pending/active task tracking, and WaitAll synchronization.
-  - Integrates with C++20 coroutines via ThreadPoolExecutor when enabled.
+- Parallelism tuning:
+  - Size ThreadPool according to hardware_concurrency and workload type.
+  - Batch independent tasks to amortize scheduling overhead.
+  - Use ActiveTasks/PendingTasks to detect saturation and adjust batch sizes.
 
-- Coroutine-Based Asynchronous Operations
-  - Task<T, Executor> provides structured concurrency with initial dispatch, final suspension, completion callbacks, chaining, catching exceptions, and finally hooks.
-  - Supports both value-returning and void tasks, plus custom allocator variants.
+- Coroutines:
+  - Prefer executor-driven dispatch to avoid blocking the calling thread.
+  - Use finally hooks for deterministic cleanup.
+  - For heavy data paths, consider CustomAllocatorTask with a NoStateAllocator to localize allocations.
 
-- Memory Pooling Strategies
-  - MemoryPool<T, PoolSize> offers fixed-size pool allocation with alignment guarantees and thread-safe bookkeeping.
-  - StaticMemoryPool<T, PoolSize> provides a static shared pool with identical semantics.
-  - NamedObjectPool<T, MaxSize> manages named shared objects with automatic inactive cleanup and capacity enforcement.
+- Memory pools:
+  - Choose PoolSize to cover peak allocations; repeated bad_alloc indicates undersized pools.
+  - Prefer MemoryPool for isolation and StaticMemoryPool for shared state.
+  - Validate alignment-sensitive allocations; the pool scans by alignment.
 
-- SIMD Vectorization
-  - The referenced files do not expose explicit SIMD vectorization APIs. If needed, consider integrating platform-specific intrinsics at algorithm boundaries (e.g., polygon fill or path optimization) while keeping the pipeline interfaces unchanged.
+- Object pooling:
+  - Tune MaxSize based on typical concurrent usage.
+  - Monitor InactiveCount/ActiveCount to ensure timely cleanup without thrashing.
 
-```mermaid
-flowchart TD
-Submit["Submit Tasks"] --> Queue["Thread Pool Queue"]
-Queue --> Workers["Worker Threads"]
-Workers --> Await["Coroutine Awaiters"]
-Await --> Resume["Resume Coroutines"]
-Resume --> Complete["Complete Tasks"]
-MemAlloc["Memory Allocation"] --> Pool["MemoryPool / StaticMemoryPool"]
-Pool --> Objects["NamedObjectPool"]
-Objects --> Cleanup["Cleanup Inactive Objects"]
-```
-
-**Diagram sources**
-- [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
-- [coroutine.hpp:47-382](file://base/coroutine.hpp#L47-L382)
-- [memory_pool.hpp:44-208](file://base/memory_pool.hpp#L44-L208)
-- [object_pool.hpp:23-283](file://base/object_pool.hpp#L23-L283)
-
-**Section sources**
-- [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
-- [coroutine.hpp:47-382](file://base/coroutine.hpp#L47-L382)
-- [memory_pool.hpp:44-208](file://base/memory_pool.hpp#L44-L208)
-- [object_pool.hpp:23-283](file://base/object_pool.hpp#L23-L283)
-
-## Troubleshooting Guide
-Common issues and strategies:
-
-- Pipeline Execution Errors
-  - Check result.success and result.error_message returned by pipeline calls.
-  - For async runs, inspect the result delivered to the completion callback.
-  - Ensure output paths and Lua script paths are valid before invoking pipelines.
-
-- Lua Integration Problems
-  - Validate Lua script paths and function names in pipeline configs.
-  - Use DllLoader to diagnose symbol resolution errors when calling native functions from Lua.
-  - Register event callbacks to trace zipper/database events during export.
-
-- Configuration and Persistence Issues
-  - Verify ParamStore schema initialization and backend selection.
-  - Inspect last_error messages after Save/Load operations.
-  - Confirm AppConfigSingletone settings for external tools like 7-Zip.
-
-- Concurrency and Resource Leaks
-  - Ensure ThreadPool is properly constructed and destroyed.
-  - Avoid submitting tasks to stopped thread pools.
-  - Release pipeline results using the provided free functions.
-
-```mermaid
-flowchart TD
-Error["Error Occurs"] --> Capture["Capture Error Message"]
-Capture --> Diagnose["Diagnose Source<br/>Pipeline / Lua / Config / IO"]
-Diagnose --> Fix["Apply Fix<br/>Validate Inputs / Adjust Config / Retry"]
-Fix --> Verify["Verify via Logs / Callbacks"]
-Verify --> Resolve["Resolved"]
-```
-
-**Section sources**
-- [fdm_pipeline.h:53-61](file://DllHsBaSlicer/fdm_pipeline.h#L53-L61)
-- [sla_pipeline.h:49-56](file://DllHsBaSlicer/sla_pipeline.h#L49-L56)
-- [slm_pipeline.h:52-56](file://DllHsBaSlicer/slm_pipeline.h#L52-L56)
-- [sls_pipeline.h:49-56](file://DllHsBaSlicer/sls_pipeline.h#L49-L56)
-- [tdp_pipeline.h:52-56](file://DllHsBaSlicer/tdp_pipeline.h#L52-L56)
-- [waam_pipeline.h:53-57](file://DllHsBaSlicer/waam_pipeline.h#L53-L57)
-- [param_store.hpp:81-87](file://fileoperator/param_store.hpp#L81-L87)
-- [LuaDllLoader.hpp:160-244](file://utils/LuaDllLoader.hpp#L160-L244)
-- [EventSourceFunction.hpp:18-41](file://LibHsBaSlicer/Extends/EventSourceFunction.hpp#L18-L41)
-
-## Conclusion
-HsBaSlicer’s advanced features provide a robust, extensible, and high-performance foundation for modern additive manufacturing workflows. The consistent pipeline API design, comprehensive process coverage, Lua-driven customization, strong concurrency primitives, and schema-backed configuration management enable production-grade integrations. By leveraging parallel processing, coroutine-based async operations, memory pooling, and event-driven callbacks, developers can build scalable slicer applications tailored to specific equipment and processes.
-
-## Appendices
-
-### Practical Examples and Integration Patterns
-- Complex Workflows
-  - Combine FDM support and infill Lua scripts with custom fill algorithms to optimize print quality and material usage.
-  - Use SLA floor and support Lua scripts to tailor raft geometry and support density for resin characteristics.
-  - For metal and thermal processes, implement Lua export scripts that generate machine-specific artifacts (e.g., database packages, toolpaths, or robot programs).
-
-- Performance Tuning Scenarios
-  - Tune ThreadPool size based on hardware concurrency and workload characteristics.
-  - Prefer coroutine-based async pipelines to avoid blocking UI threads.
-  - Use MemoryPool or StaticMemoryPool for hot loops involving frequent small allocations.
-  - Employ NamedObjectPool for reusable intermediate objects across slices.
-
-- Production Integration Patterns
-  - Wrap pipeline calls in retry logic with exponential backoff for transient failures.
-  - Stream progress updates to UI via progress callbacks.
-  - Persist pipeline configurations using ParamStore with schema validation and migration hooks.
-  - Externalize tool paths and environment settings via AppConfigSingletone.
+- Lua integration:
+  - Minimize cross-boundary calls; batch data transfers where possible.
+  - Use typed get_/call_ functions to avoid reflection overhead.
+  - Validate argument counts and types before invoking native functions.
 
 [No sources needed since this section provides general guidance]
+
+## Troubleshooting Guide
+Common issues and remedies:
+
+- ThreadPool submission errors:
+  - Submitting to a stopped pool throws a runtime error. Ensure the pool remains alive while tasks are submitted.
+  - Verify num_threads > 0 during construction.
+
+- Coroutine failures:
+  - Exceptions inside coroutines are captured; use catching to inspect errors or let get_or_throw propagate them.
+  - If awaiting tasks never resume, verify the executor is correctly set and not blocked.
+
+- Memory pool exhaustion:
+  - bad_alloc indicates insufficient PoolSize or incorrect deallocation patterns.
+  - Ensure every allocated block is destroyed and deallocated exactly once.
+
+- Object pool full:
+  - RuntimeError occurs if the pool is full and no inactive objects are available. Increase MaxSize or trigger Cleanup proactively.
+
+- Lua dynamic loading:
+  - Invalid DllLoader object or mismatched signatures cause Lua errors. Confirm the DLL path and function signatures match get_/call_ templates.
+  - Argument count mismatches raise errors; validate stack length before calling.
+
+- Event callbacks:
+  - Ensure event names match exactly (e.g., zipper.on_add).
+  - Register callbacks before triggering events.
+
+**Section sources**
+- [thread_pool.hpp:37-46](file://base/thread_pool.hpp#L37-L46)
+- [thread_pool.hpp:77-89](file://base/thread_pool.hpp#L77-L89)
+- [coroutine.hpp:277-316](file://base/coroutine.hpp#L277-L316)
+- [memory_pool.hpp:111-175](file://base/memory_pool.hpp#L111-L175)
+- [object_pool.hpp:71-85](file://base/object_pool.hpp#L71-L85)
+- [LuaDllLoader.hpp:160-245](file://utils/LuaDllLoader.hpp#L160-L245)
+
+## Conclusion
+HsBaSlicer’s advanced features combine high-performance parallelism, efficient memory management, strong type safety, and extensible Lua scripting. By leveraging ThreadPool and coroutine executors, custom allocators and pools, C++20 concepts, and a robust Lua bridge, developers can build scalable slicing pipelines that are both fast and safe. The provided diagrams and source references offer concrete pathways for implementing custom algorithms, optimizing memory usage, and extending functionality through Lua scripts.
+
+[No sources needed since this section summarizes without analyzing specific files]

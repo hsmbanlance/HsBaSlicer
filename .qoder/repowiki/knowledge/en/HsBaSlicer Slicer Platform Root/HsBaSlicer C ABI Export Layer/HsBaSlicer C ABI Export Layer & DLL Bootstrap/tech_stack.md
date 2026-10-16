@@ -1,1 +1,0 @@
-C++ compiled as a C ABI shim; Windows uses `__declspec(dllexport/dllimport)` gated by `HSBA_SLICER_EXPORTS`; iOS builds as a static archive instead of a shared library.

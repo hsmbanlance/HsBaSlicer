@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: preprocess_loader
+title: 模型预处理与格式加载器
+scope:
+    - preprocess/
+source_files: []
+depends_on: []
+related_to:
+    - path: dll_wrapper

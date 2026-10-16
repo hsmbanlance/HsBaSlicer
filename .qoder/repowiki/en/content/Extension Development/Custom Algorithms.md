@@ -1,27 +1,26 @@
 # Custom Algorithms
 
 <cite>
-**Referenced Files in This Document**   
+**Referenced Files in This Document**
 - [ISupport.hpp](file://support/ISupport.hpp)
 - [ISupport.cpp](file://support/ISupport.cpp)
 - [FdmSupport.hpp](file://support/FdmSupport.hpp)
-- [FdmSupport.cpp](file://support/FdmSupport.cpp)
 - [SlaSupport.hpp](file://support/SlaSupport.hpp)
-- [SlaSupport.cpp](file://support/SlaSupport.cpp)
-- [LuaSupport.hpp](file://support/LuaSupport.hpp)
-- [LuaSupport.cpp](file://support/LuaSupport.cpp)
-- [OverhangDetector.hpp](file://support/OverhangDetector.hpp)
-- [OverhangDetector.cpp](file://support/OverhangDetector.cpp)
-- [SupportConfig.hpp](file://support/SupportConfig.hpp)
+- [fdm_support.hpp](file://LibHsBaSlicer/support/fdm_support.hpp)
+- [fdm_support.cpp](file://LibHsBaSlicer/support/fdm_support.cpp)
 - [PolygonFill.hpp](file://2D/PolygonFill.hpp)
 - [PolygonFill.cpp](file://2D/PolygonFill.cpp)
-- [polygon_fill.hpp](file://LibHsBaSlicer/Fill/polygon_fill.hpp)
-- [polygon_fill.cpp](file://LibHsBaSlicer/Fill/polygon_fill.cpp)
-- [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
-- [sla_floor.cpp](file://LibHsBaSlicer/Floor/sla_floor.cpp)
+- [path_optimizer.hpp](file://LibHsBaSlicer/Path/path_optimizer.hpp)
 - [path_optimizer.cpp](file://LibHsBaSlicer/Path/path_optimizer.cpp)
-- [lua_pipeline_api.md](file://docs/en/lua_pipeline_api.md)
+- [hsba_pipeline.d.lua](file://types/hsba_pipeline.d.lua)
+- [optimize_paths.lua](file://tests/PolygonFill/optimize_paths.lua)
+- [my_sla_floor.lua](file://samples/SLA/scripts/my_sla_floor.lua)
 - [polygon_fill_test.cpp](file://tests/PolygonFill/polygon_fill_test.cpp)
+- [fdm_support_lib_test.cpp](file://tests/Support/fdm_support_lib_test.cpp)
+- [README.md](file://docs/en/LibHsBaSlicer/README.md)
+- [lua_pipeline_api.md](file://docs/en/lua_pipeline_api.md)
+- [param_reflect.cpp](file://fileoperator/param_reflect.cpp)
+- [custom_pipeline.cpp](file://DllHsBaSlicer/custom_pipeline.cpp)
 </cite>
 
 ## Table of Contents
@@ -32,161 +31,134 @@
 5. [Detailed Component Analysis](#detailed-component-analysis)
 6. [Dependency Analysis](#dependency-analysis)
 7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
+8. [Testing Strategies](#testing-strategies)
+9. [Troubleshooting Guide](#troubleshooting-guide)
+10. [Conclusion](#conclusion)
 
 ## Introduction
-This document explains how to create custom algorithms in HsBaSlicer, focusing on two extension points:
+This document explains how to implement custom algorithms in HsBaSlicer using its strategy-based extension points. It focuses on three main areas:
 
-- Support generation algorithms through the `ISupport` interface. You can implement overhang detection, support structure creation, and parameter configuration for FDM and SLA workflows.
-- Polygon fill algorithms through the `PolygonFill` API and Lua registration system. You can implement infill patterns, boundary processing, and optimization techniques.
+- **Support generation**: Implementing new support strategies by extending the `ISupport` interface, including FDM and SLA examples.
+- **Fill patterns**: Extending or replacing polygon infill behavior through built-in fill functions and Lua-based custom fills.
+- **Path optimization**: Creating specialized region ordering and path routing algorithms using `RegionPathOptimizer`.
 
-The guide also covers algorithm registration mechanisms, parameter binding, configuration file integration, performance strategies, parallel processing considerations, memory efficiency, testing methodologies, validation techniques, and debugging approaches for computational geometry code.
+The goal is to show how these components fit into the slicing pipeline, how parameters are validated, how algorithms are registered and invoked, and how to test, benchmark, and manage memory for custom implementations.
 
 ## Project Structure
-Custom algorithms live primarily under:
+Custom algorithm development spans several modules:
 
-- `support/`: support generator interfaces, implementations, overhang detection, and Lua-based custom support.
-- `2D/`: polygon fill algorithms, Lua bindings, and helper utilities.
-- `LibHsBaSlicer/Fill/`: public C++ wrapper around the 2D fill engine.
-- `pipelinetypes/pipeline_types.h`: pipeline configuration types used by higher-level pipelines.
-- `samples/`: example scripts and executables demonstrating usage.
+| Area | Primary Files | Purpose |
+|---|---|---|
+| Support strategy interface | `support/ISupport.hpp`, `support/ISupport.cpp` | Defines the abstract support generator contract and default layer iteration. |
+| FDM support implementations | `support/FdmSupport.hpp`, `LibHsBaSlicer/support/fdm_support.cpp` | Concrete FDM strategies and C API wrapper. |
+| SLA support implementation | `support/SlaSupport.hpp` | Thin-column sacrificial support strategy. |
+| Fill pattern system | `2D/PolygonFill.hpp`, `2D/PolygonFill.cpp` | Built-in offset, line, zigzag, composite, hybrid, and Lua custom fills. |
+| Path optimization | `LibHsBaSlicer/Path/path_optimizer.hpp`, `LibHsBaSlicer/Path/path_optimizer.cpp` | Region-based TSP-style optimizer with Lua bindings. |
+| Pipeline integration | `types/hsba_pipeline.d.lua`, `samples/SLA/scripts/my_sla_floor.lua`, `tests/PolygonFill/optimize_paths.lua` | Lua entry points and sample scripts. |
+| Tests | `tests/Support/fdm_support_lib_test.cpp`, `tests/PolygonFill/polygon_fill_test.cpp` | Validation of support and path optimization behavior. |
 
 ```mermaid
 graph TB
-subgraph "Support System"
-IS["ISupport Interface"]
-FDMP["FdmPlaneSupport"]
-FDMT["FdmTreeSupport"]
-FDMH["FdmHoneycombSupport"]
-SLAS["SlaSacrificialSupport"]
-LS["LuaSupport"]
-OD["OverhangDetector"]
-SC["SupportConfig"]
-end
-subgraph "Polygon Fill System"
-PFH["PolygonFill.hpp API"]
-PFC["PolygonFill.cpp Implementation"]
-LPH["LibHsBaSlicer Fill API"]
-LPK["Lua Registration"]
-end
-IS --> FDMP
-IS --> FDMT
-IS --> FDMH
-IS --> SLAS
-IS --> LS
-FDMP --> OD
-FDMT --> OD
-FDMH --> OD
-SLAS --> OD
-LS --> PFH
-PFH --> PFC
-LPH --> PFH
-LPK --> PFC
+User["User Algorithm Code"] --> ISupport["ISupport Strategy"]
+User --> PolygonFill["PolygonFill System"]
+User --> PathOpt["RegionPathOptimizer"]
+ISupport --> FdmWrapper["FDM/SLA Wrapper"]
+PolygonFill --> LuaFill["Lua Custom Fill"]
+PathOpt --> LuaOpt["Lua Path Optimization"]
+FdmWrapper --> Layers["Layer Polygons"]
+LuaFill --> Layers
+LuaOpt --> Layers
 ```
 
 **Diagram sources**
-- [ISupport.hpp:14-45](file://support/ISupport.hpp#L14-L45)
-- [FdmSupport.hpp:11-63](file://support/FdmSupport.hpp#L11-L63)
-- [SlaSupport.hpp:11-42](file://support/SlaSupport.hpp#L11-L42)
-- [LuaSupport.hpp:19-81](file://support/LuaSupport.hpp#L19-L81)
-- [OverhangDetector.hpp:12-50](file://support/OverhangDetector.hpp#L12-L50)
-- [SupportConfig.hpp:9-43](file://support/SupportConfig.hpp#L9-L43)
-- [PolygonFill.hpp:16-136](file://2D/PolygonFill.hpp#L16-L136)
-- [polygon_fill.hpp:15-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L15-L53)
+- [ISupport.hpp:16-45](file://support/ISupport.hpp#L16-L45)
+- [PolygonFill.hpp:20-136](file://2D/PolygonFill.hpp#L20-L136)
+- [path_optimizer.hpp:23-115](file://LibHsBaSlicer/Path/path_optimizer.hpp#L23-L115)
+- [fdm_support.cpp:14-31](file://LibHsBaSlicer/support/fdm_support.cpp#L14-L31)
 
 **Section sources**
-- [ISupport.hpp:14-45](file://support/ISupport.hpp#L14-L45)
-- [FdmSupport.hpp:11-63](file://support/FdmSupport.hpp#L11-L63)
-- [SlaSupport.hpp:11-42](file://support/SlaSupport.hpp#L11-L42)
-- [LuaSupport.hpp:19-81](file://support/LuaSupport.hpp#L19-L81)
-- [OverhangDetector.hpp:12-50](file://support/OverhangDetector.hpp#L12-L50)
-- [SupportConfig.hpp:9-43](file://support/SupportConfig.hpp#L9-L43)
-- [PolygonFill.hpp:16-136](file://2D/PolygonFill.hpp#L16-L136)
-- [polygon_fill.hpp:15-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L15-L53)
+- [ISupport.hpp:1-49](file://support/ISupport.hpp#L1-L49)
+- [PolygonFill.hpp:1-141](file://2D/PolygonFill.hpp#L1-L141)
+- [path_optimizer.hpp:1-191](file://LibHsBaSlicer/Path/path_optimizer.hpp#L1-L191)
 
 ## Core Components
-Key components for custom algorithms:
+The core extensibility surface consists of three strategy-oriented systems:
 
-- `ISupport`: Abstract interface defining per-layer support generation. Implementations include FDM plane/tree/honeycomb and SLA sacrificial supports.
-- `OverhangDetector`: Detects unsupported regions between adjacent layers using angle thresholds and bridge distance logic.
-- `SupportConfig`, `FdmSupportConfig`, `SlaSupportConfig`: Configuration structures shared across support generators.
-- `PolygonFill` API: Provides offset, line, zigzag, composite, hybrid fills, plus Lua-custom fill functions.
-- `LibHsBaSlicer Fill API`: Public C++ wrapper exposing fill capabilities to consumers.
-- `LuaSupport`: Allows users to replace built-in support generation with a Lua script.
+### Support Generation Strategy (`ISupport`)
+`ISupport` defines a per-layer support generation contract:
 
-Implementation highlights:
+| Member | Responsibility |
+|---|---|
+| `Generate(current_layer, prev_layer, layer_height, config)` | Produces support polygons for one layer. |
+| `GenerateAll(layers, config)` | Default loop over layers; subclasses may override for batch optimizations. |
 
-- `ISupport::GenerateAll` provides default layer iteration behavior.
-- FDM supports use gap application, inflation, union operations, and pattern-specific generation.
-- SLA support samples points within overhang regions and unions circles into support cross-sections.
-- Polygon fill algorithms operate on integerized polygons and return filled paths or rings.
+Concrete strategies include:
+
+| Class | Mode | Description |
+|---|---|---|
+| `FdmPlaneSupport` | FDM | Column supports from overhang regions. |
+| `FdmTreeSupport` | FDM | Tree-like branching supports. |
+| `FdmHoneycombSupport` | FDM | Hexagonal honeycomb overhang fill. |
+| `SlaSacrificialSupport` | SLA | Thin sacrificial columns for resin printing. |
+
+The C API wrapper selects an implementation based on configuration and calls its `Generate` method.
 
 **Section sources**
-- [ISupport.hpp:14-45](file://support/ISupport.hpp#L14-L45)
+- [ISupport.hpp:16-45](file://support/ISupport.hpp#L16-L45)
 - [ISupport.cpp:9-21](file://support/ISupport.cpp#L9-L21)
-- [OverhangDetector.hpp:12-50](file://support/OverhangDetector.hpp#L12-L50)
-- [SupportConfig.hpp:9-43](file://support/SupportConfig.hpp#L9-L43)
-- [PolygonFill.hpp:16-136](file://2D/PolygonFill.hpp#L16-L136)
-- [polygon_fill.hpp:15-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L15-L53)
+- [FdmSupport.hpp:13-63](file://support/FdmSupport.hpp#L13-L63)
+- [SlaSupport.hpp:13-42](file://support/SlaSupport.hpp#L13-L42)
+- [fdm_support.hpp:19-67](file://LibHsBaSlicer/support/fdm_support.hpp#L19-L67)
+- [fdm_support.cpp:14-31](file://LibHsBaSlicer/support/fdm_support.cpp#L14-L31)
+
+### Fill Pattern System (`PolygonFill`)
+`PolygonFill` provides multiple fill strategies:
+
+| Function | Input | Output | Notes |
+|---|---|---|---|
+| `OffsetFill` | Polygons + spacing | Polygons | Offset-based borders and internal fill. |
+| `LineFill` | Polygons + spacing + angle + thickness | Polygons | Parallel-line fill. |
+| `SimpleZigzagFill` | Polygons + spacing + angle + thickness | Polygons | Basic zigzag. |
+| `ZigzagFill` | Polygons + spacing + angle + thickness | Polygons | Improved corner handling. |
+| `CompositeOffsetFill` | Polygons + spacing + offsets + mode + angle + thickness | Polygons | Border rings plus internal fill. |
+| `HybridFill` | Polygons + spacing + offsets + mode + angle + thickness | Polygons | Outward/inward offset rings plus final interior fill. |
+| `LuaCustomFill` / `LuaCustomFillString` | Polygons + script + function name | Polygons | Custom fill via Lua. |
+
+The Lua environment exposes `generate_fill(polys)` as the standard entry point for custom FDM fills.
+
+**Section sources**
+- [PolygonFill.hpp:20-136](file://2D/PolygonFill.hpp#L20-L136)
+- [PolygonFill.cpp:1380-1490](file://2D/PolygonFill.cpp#L1380-L1490)
+- [PolygonFill.cpp:1493-1579](file://2D/PolygonFill.cpp#L1493-L1579)
+- [hsba_pipeline.d.lua:515-525](file://types/hsba_pipeline.d.lua#L515-L525)
+
+### Path Optimization Strategy (`RegionPathOptimizer`)
+`RegionPathOptimizer` treats independent regions as graph vertices and solves a visit order that minimizes travel cost. Two modes exist:
+
+| Mode | Timing | Region Input | Gates | Output |
+|---|---|---|---|---|
+| Polygon mode | Before fill | Polygon outlines | All polygon vertices | Ordered polygons for subsequent filling. |
+| Fill-result mode | After fill | Fill paths (multi-point polylines supported) | Head/tail endpoints | Complete optimized fill paths. |
+
+Key operations:
+
+| Method | Purpose |
+|---|---|
+| `addRegion(id, paths)` | Add post-fill path region. |
+| `addPolygonRegion(id, polygons)` | Add pre-fill polygon region. |
+| `addRoute(from, to, cost)` | Override inter-region air-move cost. |
+| `optimizeOrder()` | Solve region visit order. |
+| `buildPaths()` | Build complete fill paths (fill-result mode). |
+| `buildPolygons()` | Build ordered polygons (polygon mode). |
+
+**Section sources**
+- [path_optimizer.hpp:23-115](file://LibHsBaSlicer/Path/path_optimizer.hpp#L23-L115)
+- [path_optimizer.cpp:45-120](file://LibHsBaSlicer/Path/path_optimizer.cpp#L45-L120)
+- [path_optimizer.cpp:129-235](file://LibHsBaSlicer/Path/path_optimizer.cpp#L129-L235)
+- [README.md:234-266](file://docs/en/LibHsBaSlicer/README.md#L234-L266)
 
 ## Architecture Overview
-The support generation architecture is layered:
-
-- Configuration flows from pipeline config into `SupportConfig`.
-- Overhang detection computes unsupported regions based on layer height and angle threshold.
-- Support generators transform overhang regions into per-layer support polygons.
-- Lua support allows dynamic replacement of built-in algorithms.
-
-The polygon fill architecture separates:
-
-- High-level API (`PolygonFill.hpp`) offering multiple fill modes.
-- Core implementation (`PolygonFill.cpp`) handling geometry, offsets, zigzag bridging, and Lua bindings.
-- Public wrapper (`LibHsBaSlicer/Fill/polygon_fill.hpp`) exposing fill functions to consumers.
-
-```mermaid
-sequenceDiagram
-participant Pipeline as "Pipeline Config"
-participant OD as "OverhangDetector"
-participant Gen as "ISupport Generator"
-participant Clipper as "Clipper2 Operations"
-participant Lua as "LuaSupport"
-Pipeline->>OD : Detect(current_layer, prev_layer, config)
-OD-->>Pipeline : overhang_polygons
-Pipeline->>Gen : Generate(overhang, layer_height, config)
-Gen->>Clipper : Offset/Union/Difference
-Clipper-->>Gen : support_polygons
-Gen-->>Pipeline : support_polygons
-Note over Lua,Pipeline : LuaSupport can replace Gen via script
-```
-
-**Diagram sources**
-- [OverhangDetector.cpp:41-80](file://support/OverhangDetector.cpp#L41-L80)
-- [FdmSupport.cpp:48-75](file://support/FdmSupport.cpp#L48-L75)
-- [SlaSupport.cpp:81-123](file://support/SlaSupport.cpp#L81-L123)
-- [LuaSupport.cpp:113-177](file://support/LuaSupport.cpp#L113-L177)
-
-**Section sources**
-- [OverhangDetector.cpp:41-80](file://support/OverhangDetector.cpp#L41-L80)
-- [FdmSupport.cpp:48-75](file://support/FdmSupport.cpp#L48-L75)
-- [SlaSupport.cpp:81-123](file://support/SlaSupport.cpp#L81-L123)
-- [LuaSupport.cpp:113-177](file://support/LuaSupport.cpp#L113-L177)
-
-## Detailed Component Analysis
-
-### Support Generation Through ISupport
-The `ISupport` interface defines:
-
-- `Generate`: Produces support polygons for a single layer given current and previous layer contours, layer height, and configuration.
-- `GenerateAll`: Default implementation iterates over all layers, calling `Generate` for each.
-
-Implementations:
-
-- `FdmPlaneSupport`: Inflates overhang regions by half the support diameter after applying gap.
-- `FdmTreeSupport`: Samples branch tips within overhang regions and unions circles.
-- `FdmHoneycombSupport`: Generates hexagonal cells and intersects them with overhang regions.
-- `SlaSacrificialSupport`: Samples support points and unions circles; supports both base and SLA-specific configurations.
+The custom algorithm architecture follows a strategy pattern layered over the slicing pipeline:
 
 ```mermaid
 classDiagram
@@ -210,254 +182,331 @@ class SlaSacrificialSupport {
 +Generate(current_layer, prev_layer, layer_height, sla_config) PolygonsD
 -SampleSupportPoints(overhang, tip_radius, spacing) PolygonsD
 }
-class OverhangDetector {
-+Detect(current_layer, prev_layer, layer_height, angle_threshold_deg) PolygonsD
-+Detect(current_layer, prev_layer, config) PolygonsD
-+MaxBridgeDistance(layer_height, angle_deg) double
+class RegionPathOptimizer {
++addRegion(id, paths) void
++addPolygonRegion(id, polygons) void
++addRoute(from, to, cost) void
++optimizeOrder() std : : vector<int>
++buildPaths() PolygonsD
++buildPolygons() PolygonsD
 }
-class SupportConfig {
-+overhang_angle_threshold float
-+layer_height float
-+support_gap float
-+support_diameter float
-+support_density float
-+support_pattern int
-+tree_branch_angle float
-+tree_max_branch_radius float
-+honeycomb_cell_size float
+class PolygonFill {
++OffsetFill(poly, spacing, join_type) Polygons
++LineFill(poly, spacing, angle_deg, lineThickness) Polygons
++SimpleZigzagFill(poly, spacing, angle_deg, lineThickness) Polygons
++ZigzagFill(poly, spacing, angle_deg, lineThickness) Polygons
++CompositeOffsetFill(...) Polygons
++HybridFill(...) Polygons
++LuaCustomFill(poly, scriptPath, functionName, lineThickness, lua_reg) Polygons
++LuaCustomFillString(poly, script, functionName, lineThickness, lua_reg) Polygons
 }
 ISupport <|-- FdmPlaneSupport
 ISupport <|-- FdmTreeSupport
 ISupport <|-- FdmHoneycombSupport
 ISupport <|-- SlaSacrificialSupport
-FdmPlaneSupport --> OverhangDetector : uses
-FdmTreeSupport --> OverhangDetector : uses
-FdmHoneycombSupport --> OverhangDetector : uses
-SlaSacrificialSupport --> OverhangDetector : uses
-FdmPlaneSupport --> SupportConfig : reads
-FdmTreeSupport --> SupportConfig : reads
-FdmHoneycombSupport --> SupportConfig : reads
-SlaSacrificialSupport --> SupportConfig : reads
 ```
 
 **Diagram sources**
-- [ISupport.hpp:14-45](file://support/ISupport.hpp#L14-L45)
-- [FdmSupport.hpp:11-63](file://support/FdmSupport.hpp#L11-L63)
-- [SlaSupport.hpp:11-42](file://support/SlaSupport.hpp#L11-L42)
-- [OverhangDetector.hpp:12-50](file://support/OverhangDetector.hpp#L12-L50)
-- [SupportConfig.hpp:9-43](file://support/SupportConfig.hpp#L9-L43)
+- [ISupport.hpp:16-45](file://support/ISupport.hpp#L16-L45)
+- [FdmSupport.hpp:13-63](file://support/FdmSupport.hpp#L13-L63)
+- [SlaSupport.hpp:13-42](file://support/SlaSupport.hpp#L13-L42)
+- [path_optimizer.hpp:44-100](file://LibHsBaSlicer/Path/path_optimizer.hpp#L44-L100)
+- [PolygonFill.hpp:20-136](file://2D/PolygonFill.hpp#L20-L136)
 
-**Section sources**
-- [ISupport.hpp:14-45](file://support/ISupport.hpp#L14-L45)
-- [ISupport.cpp:9-21](file://support/ISupport.cpp#L9-L21)
-- [FdmSupport.cpp:48-75](file://support/FdmSupport.cpp#L48-L75)
-- [FdmSupport.cpp:145-167](file://support/FdmSupport.cpp#L145-L167)
-- [FdmSupport.cpp:244-266](file://support/FdmSupport.cpp#L244-L266)
-- [SlaSupport.cpp:81-123](file://support/SlaSupport.cpp#L81-L123)
-- [OverhangDetector.cpp:41-80](file://support/OverhangDetector.cpp#L41-L80)
-- [SupportConfig.hpp:9-43](file://support/SupportConfig.hpp#L9-L43)
+## Detailed Component Analysis
 
-### Polygon Fill Algorithm Development
-The `PolygonFill` API exposes:
+### Support Algorithm Lifecycle
+The support lifecycle has two levels:
 
-- `OffsetFill`: Nested inward offset rings.
-- `LineFill`: Parallel line segments.
-- `SimpleZigzagFill` and `ZigzagFill`: Connected zigzag paths with improved corner handling.
-- `CompositeOffsetFill` and `HybridFill`: Composite patterns combining borders and internal fills.
-- `LuaCustomFill` and `LuaCustomFillString`: Custom fill via Lua scripts.
-
-Implementation details:
-
-- Integerization ensures robust geometric operations.
-- Zigzag bridging connects segments across scanlines while respecting polygon boundaries.
-- Lua registration binds fill functions to the `PolygonFill` module.
-
-```mermaid
-flowchart TD
-Start(["Function Entry"]) --> ModeCheck{"Fill Mode?"}
-ModeCheck --> |Line| LineFill["LineFill(poly, spacing, angle)"]
-ModeCheck --> |SimpleZigzag| SimpleZig["SimpleZigzagFill(poly, spacing, angle)"]
-ModeCheck --> |Zigzag| Zig["ZigzagFill(poly, spacing, angle)"]
-LineFill --> Result["Return Polygons"]
-SimpleZig --> Result
-Zig --> Result
-```
-
-**Diagram sources**
-- [PolygonFill.cpp:544-563](file://2D/PolygonFill.cpp#L544-L563)
-- [PolygonFill.cpp:568-800](file://2D/PolygonFill.cpp#L568-L800)
-- [polygon_fill.cpp:13-33](file://LibHsBaSlicer/Fill/polygon_fill.cpp#L13-L33)
-
-**Section sources**
-- [PolygonFill.hpp:16-136](file://2D/PolygonFill.hpp#L16-L136)
-- [PolygonFill.cpp:504-540](file://2D/PolygonFill.cpp#L504-L540)
-- [PolygonFill.cpp:544-563](file://2D/PolygonFill.cpp#L544-L563)
-- [PolygonFill.cpp:568-800](file://2D/PolygonFill.cpp#L568-L800)
-- [polygon_fill.cpp:13-33](file://LibHsBaSlicer/Fill/polygon_fill.cpp#L13-L33)
-
-### Algorithm Registration Mechanisms
-Registration occurs at multiple levels:
-
-- **Polygon fill Lua registration**: `RegisterLuaPolygonFillFunctions` binds fill functions to the `PolygonFill` module.
-- **Support Lua registration**: `LuaSupport` sets up environment, registers polygon operations and support helpers, then executes user scripts.
-- **Pipeline configuration**: `pipeline_types.h` defines C-compatible structs for pipeline parameters, including fill mode and support settings.
+1. **C API selection**: The wrapper chooses a concrete `ISupport` implementation based on configuration.
+2. **Per-layer execution**: Each implementation receives current and previous layer contours and produces support polygons.
 
 ```mermaid
 sequenceDiagram
-participant App as "Application"
-participant PF as "PolygonFill.cpp"
-participant Lua as "LuaState"
-participant Script as "User Script"
-App->>PF : RegisterLuaPolygonFillFunctions(Lua)
-PF->>Lua : luaL_newlib(polygonFillLib)
-PF->>Lua : lua_setglobal("PolygonFill")
-App->>Script : Load script and call generate_fill()
-Script-->>App : Return fill polygons
+participant Caller as "Caller"
+participant Wrapper as "GenerateFdmSupport"
+participant Strategy as "ISupport Implementation"
+participant Layer as "Layer Contours"
+Caller->>Wrapper : "current_layer, prev_layer, layer_height, config"
+Wrapper->>Wrapper : "Select strategy by support_pattern"
+Wrapper->>Strategy : "Generate(current_layer, prev_layer, layer_height, config)"
+Strategy-->>Wrapper : "Support polygons"
+Wrapper-->>Caller : "Support polygons"
 ```
 
 **Diagram sources**
-- [PolygonFill.cpp:488-502](file://2D/PolygonFill.cpp#L488-L502)
-- [LuaSupport.cpp:67-90](file://support/LuaSupport.cpp#L67-L90)
-- [pipeline_types.h:56-74](file://pipelinetypes/pipeline_types.h#L56-L74)
+- [fdm_support.cpp:14-31](file://LibHsBaSlicer/support/fdm_support.cpp#L14-L31)
+- [ISupport.hpp:27-44](file://support/ISupport.hpp#L27-L44)
+
+#### Implementing a New FDM Support Generator
+To add a new FDM support strategy:
+
+1. Create a class inheriting from `ISupport`.
+2. Override `Generate`.
+3. Use existing overhang detection and polygon utilities where appropriate.
+4. If needed, expose a new strategy selector in the wrapper.
+
+Recommended structure:
+
+| Step | Action |
+|---|---|
+| Define class | Extend `ISupport` in a dedicated header. |
+| Implement `Generate` | Compute overhangs, generate support geometry, return `PolygonsD`. |
+| Validate parameters | Check layer height, diameter, gap, and cell size against reasonable ranges. |
+| Integrate with wrapper | Add the new strategy to the selection logic if it should be selectable by configuration. |
+| Test | Add unit tests covering first layer, empty predecessor, large overhangs, and invalid inputs. |
 
 **Section sources**
-- [PolygonFill.cpp:488-502](file://2D/PolygonFill.cpp#L488-L502)
-- [LuaSupport.cpp:67-90](file://support/LuaSupport.cpp#L67-L90)
-- [pipeline_types.h:56-74](file://pipelinetypes/pipeline_types.h#L56-L74)
+- [FdmSupport.hpp:13-63](file://support/FdmSupport.hpp#L13-L63)
+- [fdm_support.cpp:14-31](file://LibHsBaSlicer/support/fdm_support.cpp#L14-L31)
+- [fdm_support_lib_test.cpp:41-75](file://tests/Support/fdm_support_lib_test.cpp#L41-L75)
 
-### Parameter Binding and Configuration File Integration
-Configuration flows from pipeline configs into support and fill algorithms:
+#### Implementing a New SLA Support Generator
+SLA support differs from FDM because it targets sacrificial thin columns rather than structural overhang fills. A new SLA strategy should:
 
-- `SupportConfig` fields control overhang detection, gap, diameter, density, pattern selection, tree parameters, and honeycomb cell size.
-- `FdmSupportConfig` adds interface layers and density.
-- `SlaSupportConfig` adds tip diameter and raft thickness.
-- `HsBaFdmPipelineConfig` includes fill spacing, mode, angle, wall count, top/bottom layer counts, and infill density.
+- Sample support points from overhang regions.
+- Generate tapered circular cross-sections.
+- Respect SLA-specific configuration such as tip radius and base adhesion.
 
-Integration examples:
+```mermaid
+flowchart TD
+Start(["Start SLA Support"]) --> DetectOverhang["Detect Overhang Regions"]
+DetectOverhang --> SamplePoints["Sample Support Points"]
+SamplePoints --> GenerateColumns["Generate Tapered Columns"]
+GenerateColumns --> ValidateGeometry{"Valid Geometry?"}
+ValidateGeometry --> |No| ReturnEmpty["Return Empty or Minimal Support"]
+ValidateGeometry --> |Yes| ReturnResult["Return Support Polygons"]
+```
 
-- SLA floor generation uses `ZigzagFill` with configurable spacing and angle.
-- Path optimizer integrates with region modeling and gate management.
-
-**Section sources**
-- [SupportConfig.hpp:9-43](file://support/SupportConfig.hpp#L9-L43)
-- [pipeline_types.h:56-74](file://pipelinetypes/pipeline_types.h#L56-L74)
-- [sla_floor.cpp:105-116](file://LibHsBaSlicer/Floor/sla_floor.cpp#L105-L116)
-- [path_optimizer.cpp:43-72](file://LibHsBaSlicer/Path/path_optimizer.cpp#L43-L72)
-
-### Practical Examples
-
-#### FDM Support Generators
-- **Plane**: Detect overhang, apply gap, inflate by half diameter.
-- **Tree**: Sample branch tips within overhang, union circles.
-- **Honeycomb**: Generate hexagonal cells, intersect with overhang.
-
-#### SLA Support Algorithms
-- **Sacrificial**: Sample support points within overhang, union circles; supports SLA-specific configuration.
+**Diagram sources**
+- [SlaSupport.hpp:13-42](file://support/SlaSupport.hpp#L13-L42)
 
 **Section sources**
-- [FdmSupport.cpp:48-75](file://support/FdmSupport.cpp#L48-L75)
-- [FdmSupport.cpp:145-167](file://support/FdmSupport.cpp#L145-L167)
-- [FdmSupport.cpp:244-266](file://support/FdmSupport.cpp#L244-L266)
-- [SlaSupport.cpp:81-123](file://support/SlaSupport.cpp#L81-L123)
+- [SlaSupport.hpp:13-42](file://support/SlaSupport.hpp#L13-L42)
+
+### Fill Pattern Extension Strategy
+HsBaSlicer supports both C++ fill functions and Lua-driven custom fills.
+
+#### Built-in Fill Functions
+Use built-in functions when the desired pattern can be expressed as:
+
+- Offset borders.
+- Parallel lines.
+- Zigzag patterns.
+- Composite or hybrid combinations.
+
+#### Lua Custom Fill Pattern
+For complex or experimental patterns:
+
+1. Write a Lua function named `generate_fill(polys)`.
+2. Return a table of polygons or polylines.
+3. Call `LuaCustomFill` or `LuaCustomFillString`.
+4. Register additional Lua helpers through the optional `lua_reg` callback.
+
+```mermaid
+flowchart TD
+Input["Input Polygons"] --> Convert["Convert to Float Polygons"]
+Convert --> LuaState["Create Lua State"]
+LuaState --> Register["Register Polygon Operations and Fill Functions"]
+Register --> LoadScript["Load Lua Script"]
+LoadScript --> CallFunction["Call generate_fill(polys)"]
+CallFunction --> ParseResult["Parse Returned Table"]
+ParseResult --> Integerize["Integerize Output Polygons"]
+Integerize --> Output["Return Polygons"]
+```
+
+**Diagram sources**
+- [PolygonFill.cpp:1493-1579](file://2D/PolygonFill.cpp#L1493-L1579)
+
+**Section sources**
+- [PolygonFill.hpp:104-136](file://2D/PolygonFill.hpp#L104-L136)
+- [PolygonFill.cpp:1493-1579](file://2D/PolygonFill.cpp#L1493-L1579)
+- [hsba_pipeline.d.lua:515-525](file://types/hsba_pipeline.d.lua#L515-L525)
+
+#### Example: Custom FDM Fill Pattern
+A typical custom FDM fill script:
+
+- Receives `polys`, the current layer polygons after wall deduction.
+- Uses `PolygonOperations` for boolean operations.
+- Uses `PolygonFill` for built-in fills.
+- Returns a union of border and internal fill.
+
+Reference example:
+
+**Section sources**
+- [my_sla_floor.lua:28-63](file://samples/SLA/scripts/my_sla_floor.lua#L28-L63)
+- [hsba_pipeline.d.lua:515-525](file://types/hsba_pipeline.d.lua#L515-L525)
+
+### Specialized Path Optimization Algorithms
+Path optimization is designed around independent regions. You can extend behavior by:
+
+- Using the built-in TSP-based optimizer.
+- Providing manual route costs.
+- Writing a Lua script that wraps `PathOptimize`.
+
+```mermaid
+sequenceDiagram
+participant Client as "Client or Lua Script"
+participant Optimizer as "RegionPathOptimizer"
+participant Graph as "AreaGraph"
+participant Output as "Ordered Paths or Polygons"
+Client->>Optimizer : "addRegion or addPolygonRegion"
+Client->>Optimizer : "addRoute (optional)"
+Client->>Optimizer : "optimizeOrder()"
+Optimizer->>Graph : "Build area graph and solve TSP"
+Graph-->>Optimizer : "Tour and entry gates"
+Optimizer->>Output : "buildPaths or buildPolygons"
+Output-->>Client : "Optimized result"
+```
+
+**Diagram sources**
+- [path_optimizer.cpp:45-120](file://LibHsBaSlicer/Path/path_optimizer.cpp#L45-L120)
+- [path_optimizer.cpp:129-235](file://LibHsBaSlicer/Path/path_optimizer.cpp#L129-L235)
+
+#### Implementing a Custom Path Optimization Strategy
+Two approaches exist:
+
+| Approach | When to Use | How |
+|---|---|---|
+| C++ `RegionPathOptimizer` | High-performance or deterministic pipelines. | Construct optimizer, add regions, call `optimizeOrder`, then `buildPaths` or `buildPolygons`. |
+| Lua script | Rapid experimentation or user-defined strategies. | Use `PathOptimize.new()` and register custom logic in `optimize_paths` or `optimize_polygons`. |
+
+Reference Lua example:
+
+**Section sources**
+- [optimize_paths.lua:1-33](file://tests/PolygonFill/optimize_paths.lua#L1-L33)
+- [path_optimizer.hpp:102-186](file://LibHsBaSlicer/Path/path_optimizer.hpp#L102-L186)
+- [polygon_fill_test.cpp:354-441](file://tests/PolygonFill/polygon_fill_test.cpp#L354-L441)
+
+### Parameter Validation and Error Handling
+Parameter validation should happen early:
+
+- For support generators: validate layer height, support diameter, gap, cell size, and overhang geometry.
+- For fill patterns: validate spacing, angle, thickness, and polygon validity.
+- For path optimization: validate region IDs, avoid mixing polygon and path modes, and handle unreachable regions.
+
+Common error signals in the codebase include:
+
+| Area | Error Behavior |
+|---|---|
+| Support generation | Selection defaults to plane support when unknown pattern is used. |
+| Lua custom fill | Throws runtime errors for missing Lua state, missing function, or invalid return type. |
+| Path optimization | Throws runtime errors when mixing region types or calling wrong builder method. |
+
+**Section sources**
+- [fdm_support.cpp:14-31](file://LibHsBaSlicer/support/fdm_support.cpp#L14-L31)
+- [PolygonFill.cpp:1501-1579](file://2D/PolygonFill.cpp#L1501-L1579)
+- [path_optimizer.cpp:68-127](file://LibHsBaSlicer/Path/path_optimizer.cpp#L68-L127)
+- [path_optimizer.cpp:187-235](file://LibHsBaSlicer/Path/path_optimizer.cpp#L187-L235)
+
+### Integration with the Pipeline System
+Custom algorithms integrate with the pipeline through:
+
+1. **C API wrappers**: e.g., `GenerateFdmSupport`, `GenerateAllSlaSupport`.
+2. **Lua pipeline functions**: e.g., `HsBa.fdmSupport`, `HsBa.slaSupport`, `HsBa.floor`.
+3. **Custom pipeline configuration**: e.g., `HsBaRunCustomPipeline`.
+4. **Parameter reflection**: pipeline configs are reflected for serialization and UI binding.
+
+```mermaid
+graph TB
+Config["Pipeline Configuration"] --> Reflect["Param Reflection"]
+Config --> CApi["C API Entry"]
+Config --> LuaEnv["Lua Pipeline Environment"]
+CApi --> Algorithm["Custom Algorithm"]
+LuaEnv --> Algorithm
+Algorithm --> Output["Layer Data or G-code"]
+```
+
+**Diagram sources**
+- [param_reflect.cpp:59-86](file://fileoperator/param_reflect.cpp#L59-L86)
+- [custom_pipeline.cpp:117-126](file://DllHsBaSlicer/custom_pipeline.cpp#L117-L126)
+- [hsba_pipeline.d.lua:404-450](file://types/hsba_pipeline.d.lua#L404-L450)
+
+**Section sources**
+- [hsba_pipeline.d.lua:404-450](file://types/hsba_pipeline.d.lua#L404-L450)
+- [param_reflect.cpp:59-86](file://fileoperator/param_reflect.cpp#L59-L86)
+- [custom_pipeline.cpp:117-126](file://DllHsBaSlicer/custom_pipeline.cpp#L117-L126)
 
 ## Dependency Analysis
-Dependencies between components:
-
-- Support generators depend on `OverhangDetector` and `SupportConfig`.
-- Polygon fill algorithms depend on integerization, boolean operations, and Lua adapters.
-- Lua support depends on polygon operations and support helpers.
+The custom algorithm subsystem has clear dependency boundaries:
 
 ```mermaid
 graph LR
-OD["OverhangDetector"] --> FDMP["FdmPlaneSupport"]
-OD --> FDMT["FdmTreeSupport"]
-OD --> FDMH["FdmHoneycombSupport"]
-OD --> SLAS["SlaSacrificialSupport"]
-SC["SupportConfig"] --> FDMP
-SC --> FDMT
-SC --> FDMH
-SC --> SLAS
-PFH["PolygonFill.hpp"] --> PFC["PolygonFill.cpp"]
-LPK["Lua Registration"] --> PFC
-LS["LuaSupport"] --> PFH
+Base["Base Types<br/>FloatPolygons, Point2D"] --> Support["ISupport"]
+Base --> Fill["PolygonFill"]
+Base --> PathOpt["RegionPathOptimizer"]
+Support --> FdmImpl["FdmPlane/FdmTree/FdmHoneycomb"]
+Support --> SlaImpl["SlaSacrificial"]
+Fill --> LuaFill["Lua Custom Fill"]
+PathOpt --> LuaOpt["Lua Path Optimize"]
+Support --> Wrapper["FDM/SLA Wrapper"]
 ```
 
 **Diagram sources**
-- [OverhangDetector.hpp:12-50](file://support/OverhangDetector.hpp#L12-L50)
-- [FdmSupport.hpp:11-63](file://support/FdmSupport.hpp#L11-L63)
-- [SlaSupport.hpp:11-42](file://support/SlaSupport.hpp#L11-L42)
-- [PolygonFill.hpp:16-136](file://2D/PolygonFill.hpp#L16-L136)
-- [LuaSupport.hpp:19-81](file://support/LuaSupport.hpp#L19-L81)
+- [ISupport.hpp:9-12](file://support/ISupport.hpp#L9-L12)
+- [PolygonFill.hpp:9-11](file://2D/PolygonFill.hpp#L9-L11)
+- [path_optimizer.hpp:15-16](file://LibHsBaSlicer/Path/path_optimizer.hpp#L15-L16)
+- [fdm_support.cpp:14-31](file://LibHsBaSlicer/support/fdm_support.cpp#L14-L31)
 
 **Section sources**
-- [OverhangDetector.hpp:12-50](file://support/OverhangDetector.hpp#L12-L50)
-- [FdmSupport.hpp:11-63](file://support/FdmSupport.hpp#L11-L63)
-- [SlaSupport.hpp:11-42](file://support/SlaSupport.hpp#L11-L42)
-- [PolygonFill.hpp:16-136](file://2D/PolygonFill.hpp#L16-L136)
-- [LuaSupport.hpp:19-81](file://support/LuaSupport.hpp#L19-L81)
+- [ISupport.hpp:9-12](file://support/ISupport.hpp#L9-L12)
+- [PolygonFill.hpp:9-11](file://2D/PolygonFill.hpp#L9-L11)
+- [path_optimizer.hpp:15-16](file://LibHsBaSlicer/Path/path_optimizer.hpp#L15-L16)
 
 ## Performance Considerations
-Optimization strategies:
+When implementing custom algorithms:
 
-- **Integerization**: Use integer coordinates for robust geometric operations to avoid floating-point errors.
-- **Early exits**: Check for empty inputs or invalid parameters before expensive computations.
-- **Bounding box filtering**: Limit point sampling and grid generation to bounding boxes of overhang regions.
-- **Union and intersection batching**: Combine multiple polygons before boolean operations to reduce overhead.
-- **Parallel processing**: Layer-wise independence enables parallel execution of `GenerateAll` if needed.
-- **Memory efficiency**: Reuse buffers, avoid unnecessary copies, and prefer move semantics where possible.
+- **Support generation**: Prefer vectorized polygon operations and avoid unnecessary copies. Reuse configuration objects where possible.
+- **Fill patterns**: Large offset counts and small spacing increase polygon complexity. Use `lineThickness` and minimum area checks to prune degenerate regions.
+- **Path optimization**: TSP solving scales poorly with many regions. Cluster distant regions, limit region count, or use polygon-mode optimization before filling.
+- **Lua integration**: Minimize Lua-C++ boundary crossings. Batch polygon conversions and avoid creating many temporary Lua tables.
 
 [No sources needed since this section provides general guidance]
 
-## Troubleshooting Guide
-Common issues and debugging approaches:
+## Testing Strategies
+Custom algorithms should be tested across three dimensions: correctness, performance, and integration.
 
-- **Lua script errors**: `LuaSupport` throws runtime errors with detailed messages when script loading or execution fails.
-- **Invalid polygon data**: Ensure input polygons are valid and closed; check for degenerate cases.
-- **Overhang detection failures**: Verify angle thresholds and layer heights; inspect intermediate difference and erosion results.
-- **Fill algorithm anomalies**: Validate spacing, angles, and join types; use tests to verify expected behavior.
+### Unit Testing
+- Validate single-layer and multi-layer support generation.
+- Verify fill output topology: number of polygons, connectivity, and expected bounds.
+- Confirm path optimizer preserves region identity and reduces travel distance.
 
-Validation techniques:
+### Regression Testing
+- Keep reference outputs for representative models.
+- Test edge cases: first layer, empty predecessor, very small features, disconnected regions.
 
-- Unit tests for polygon fill algorithms cover basic cases, edge conditions, and Lua bindings.
-- Geometry assertions ensure output correctness (e.g., segment counts, containment checks).
+### Benchmarking
+- Measure time per layer for support and fill.
+- Measure total travel distance or air-move reduction from path optimization.
+- Compare Lua vs C++ implementations when applicable.
 
 **Section sources**
-- [LuaSupport.cpp:141-177](file://support/LuaSupport.cpp#L141-L177)
-- [polygon_fill_test.cpp:26-44](file://tests/PolygonFill/polygon_fill_test.cpp#L26-L44)
-- [polygon_fill_test.cpp:177-200](file://tests/PolygonFill/polygon_fill_test.cpp#L177-L200)
-- [polygon_fill_test.cpp:202-240](file://tests/PolygonFill/polygon_fill_test.cpp#L202-L240)
+- [fdm_support_lib_test.cpp:41-75](file://tests/Support/fdm_support_lib_test.cpp#L41-L75)
+- [polygon_fill_test.cpp:354-441](file://tests/PolygonFill/polygon_fill_test.cpp#L354-L441)
+
+## Troubleshooting Guide
+Common issues and resolutions:
+
+| Symptom | Likely Cause | Resolution |
+|---|---|---|
+| Support generation returns empty results | No overhang detected or invalid configuration | Check overhang detection thresholds, layer height, and support diameter. |
+| Lua custom fill crashes | Missing function, invalid return type, or malformed polygon table | Ensure the function exists and returns a table of `{x, y}` points. |
+| Path optimizer throws mode mismatch | Mixed `addRegion` and `addPolygonRegion` calls | Use only one mode per optimizer instance. |
+| Path optimizer returns insertion order | TSP failed or fewer than two regions | Inspect region count and graph connectivity. |
+| Pipeline fails during custom execution | Missing registration or invalid config | Verify common object types are installed and config fields match expected schema. |
+
+**Section sources**
+- [PolygonFill.cpp:1501-1579](file://2D/PolygonFill.cpp#L1501-L1579)
+- [path_optimizer.cpp:68-127](file://LibHsBaSlicer/Path/path_optimizer.cpp#L68-L127)
+- [custom_pipeline.cpp:117-126](file://DllHsBaSlicer/custom_pipeline.cpp#L117-L126)
 
 ## Conclusion
-HsBaSlicer provides a flexible framework for extending support generation and polygon fill algorithms. By implementing `ISupport`, you can create custom FDM and SLA support strategies. The `PolygonFill` API and Lua registration system enable powerful infill pattern development. Configuration integration, performance optimizations, and comprehensive testing ensure robust and efficient algorithm deployment.
+HsBaSlicer’s custom algorithm framework is built around clear strategy interfaces and pluggable pipeline integration points. To implement a new algorithm:
 
-[No sources needed since this section summarizes without analyzing specific files]
+- Choose the correct extension point: `ISupport` for support generation, `PolygonFill` for infill patterns, or `RegionPathOptimizer` for path optimization.
+- Follow the existing contracts: input/output types, parameter semantics, and error signaling.
+- Provide robust parameter validation and edge-case handling.
+- Integrate through C APIs, Lua scripts, or custom pipeline configurations.
+- Test thoroughly with unit tests, regression tests, and performance benchmarks.
 
-## Appendices
-
-### API Reference Summary
-
-#### Support Interfaces
-- `ISupport::Generate`: Per-layer support generation.
-- `ISupport::GenerateAll`: Default layer iteration.
-- `OverhangDetector::Detect`: Overhang region detection.
-- `SupportConfig`: Shared configuration fields.
-
-#### Polygon Fill APIs
-- `OffsetFill`: Nested offset rings.
-- `LineFill`: Parallel lines.
-- `SimpleZigzagFill` / `ZigzagFill`: Zigzag patterns.
-- `CompositeOffsetFill` / `HybridFill`: Composite patterns.
-- `LuaCustomFill` / `LuaCustomFillString`: Custom Lua fills.
-
-**Section sources**
-- [ISupport.hpp:14-45](file://support/ISupport.hpp#L14-L45)
-- [OverhangDetector.hpp:12-50](file://support/OverhangDetector.hpp#L12-L50)
-- [SupportConfig.hpp:9-43](file://support/SupportConfig.hpp#L9-L43)
-- [PolygonFill.hpp:16-136](file://2D/PolygonFill.hpp#L16-L136)
-
-### Lua Scripting Notes
-- `PolygonOperations` provides boolean operations, offsets, hulls, area calculations, and shape creation.
-- `PolygonFill` module exposes fill algorithms to Lua scripts.
-
-**Section sources**
-- [lua_pipeline_api.md:140-159](file://docs/en/lua_pipeline_api.md#L140-L159)
+This approach allows HsBaSlicer to remain extensible while keeping core slicing logic stable and predictable.

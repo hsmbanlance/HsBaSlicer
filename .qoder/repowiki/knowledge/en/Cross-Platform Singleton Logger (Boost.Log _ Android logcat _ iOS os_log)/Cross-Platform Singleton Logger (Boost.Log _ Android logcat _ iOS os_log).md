@@ -7,69 +7,108 @@ scope:
 source_files:
     - logger/logger.hpp
     - logger/logger.cpp
+    - logger/CMakeLists.txt
+    - logger/export.h
     - utils/logcfg.ini
-    - docs/en/logger/README.md
-    - docs/zh/logger/README.md
+    - docs/en/logger/logger_singletone.md
+    - docs/en/logger/log_state.md
 ---
 
 ## What system/approach is used
 
-HsBaSlicer ships a small, self-contained logging library under `logger/` that exposes a thread-safe singleton (`LoggerSingletone`) with four user-facing levels: debug, info, warning, error. The implementation is platform-specific:
+HsBaSlicer ships a small, self-contained logging library under `logger/` that provides a thread-safe singleton with leveled output and three platform-specific backends:
 
-- **Desktop (Windows/macOS/Linux)**: uses Boost.Log (`boost/log/trivial.hpp`, `severity_logger`, `text_file_backend`, `console`).
-- **Android**: delegates to the NDK `__android_log_print` API.
-- **iOS**: delegates to Apple's `os_log` API via `<os/log.h>`.
+- **Desktop (Windows/macOS/Linux)**: Boost.Log (`boost/log/trivial.hpp`, `text_file_backend`, `console`) configured at construction time.
+- **Android**: NDK `__android_log_print` with priorities `VERBOSE/DEBUG/INFO/WARN/ERROR/FATAL`.
+- **iOS**: Apple `os_log` / `os_log_with_type` with types `DEBUG/INFO/DEFAULT/ERROR/FAULT`.
 
-There is no external configuration framework beyond a simple INI file; structured fields are not emitted — logs are plain text lines composed of timestamp + severity + source location + message.
+The public API lives in namespace `HsBa::Slicer::Log`. Consumers call either static convenience methods on `LoggerSingletone` or the fluent user-defined-literal helpers in the inline sub-namespace `LogLiterals`.
 
 ## Key files and packages
 
-- `logger/logger.hpp` — public API: `LoggerSingletone` class, static `Log*` helpers, and fluent user-defined literals `_log_debug` / `_log_info` / `_log_warning` / `_log_error` in the inline namespace `LogLiterals`.
-- `logger/logger.cpp` — backend dispatch, Boost.Log initialization, Android/iOS backends, config parsing, rotation constants (`SIZE_1KB`, `SIZE_1MB`, `SIZE_50MB`).
-- `utils/logcfg.ini` — default INI consumed by `Config::from_ini` from `fileoperator/rw_ptree.hpp`.
-- `docs/en/logger/` and `docs/zh/logger/` — bilingual Doxygen documentation for the logger module.
+- `logger/logger.hpp` — Public header: `LoggerSingletone` class, `LogState` fluent helper, `_log_debug/_log_info/_log_warning/_log_error` literals.
+- `logger/logger.cpp` — Implementation: backend selection, config loading, sinks, level mapping.
+- `logger/CMakeLists.txt` + `logger/export.h` — Library target and `HSBA_SLICER_LOG_API` export macro.
+- `utils/logcfg.ini` — Default INI configuration consumed by `fileoperator/rw_ptree.hpp`.
+- `docs/en/logger/README.md`, `logger_singletone.md`, `log_state.md` — Doxygen documentation for the logger.
+
+Consumers are scattered across the codebase; representative usages include `HsBaSlicer/HsBaSlicer.cpp`, `samples/FDM/main.cpp`, `samples/Custom/main.cpp`, and `samples/LOM/main.cpp`.
 
 ## Architecture and conventions
 
-### Levels and numeric mapping
-Levels are integers 0–5 mapped uniformly across all three backends:
+### Levels
+Levels are plain integers 0–5:
 
 | int | desktop (Boost) | Android | iOS |
-|-----|----------------|---------|-----|
-| 0   | trace          | VERBOSE | DEBUG |
-| 1   | debug          | DEBUG   | DEBUG |
-| 2   | info           | INFO    | INFO |
-| 3   | warning        | WARN    | DEFAULT |
-| 4   | error          | ERROR   | ERROR |
-| 5   | fatal          | FATAL   | FAULT |
+|-----|-----------------|---------|-----|
+| 0   | trace           | VERBOSE | DEBUG |
+| 1   | debug           | DEBUG   | DEBUG |
+| 2   | info            | INFO    | INFO |
+| 3   | warning         | WARN    | DEFAULT |
+| 4   | error           | ERROR   | ERROR |
+| 5   | fatal           | FATAL   | FAULT |
 
-Unknown values fall through to `debug` in `_DEBUG` builds and `warning` / `DEFAULT` in release builds.
+Unknown levels fall through to a default: `debug` in `_DEBUG` builds, `warning` otherwise.
 
-### Singleton lifecycle
-`LoggerSingletone` is constructed lazily via `GetInstance()` using `std::call_once` + `instance_flag_`. Construction reads `logcfg.ini` from `std::filesystem::current_path() + "/logcfg.ini"`; if the file is absent or a key is missing, defaults apply:
-
-- `log_level` = 1 in `_DEBUG`, 3 otherwise.
-- `use_log_file` = false.
-- `log_path` = `<cwd>/log/log.txt`.
-- `log_datatime_format_` = `%Y-%m-%d %H:%M:%S`.
-
-On desktop, Boost.Log sinks are set up only when `use_log_file_` is true (file sink with 50 MB rotation + daily rollover at midnight) plus a console sink. A global filter `severity >= log_level` is applied.
+### Backend dispatch
+`LoggerSingletone::Log(message, log_lv, location)` switches on `log_lv` and routes each case to the active backend. The same switch appears once in `GetLogLevel`, `GetAndroidLogPriority`, and `GetiOSLogType`, plus again inside the per-level branches of `Log`.
 
 ### Source location
-Every log call captures `std::source_location::current()` and prefixes the message with `[file:line] function_name: `. This is done via the internal helper `GetSourceLocation`.
+Every public logging method takes an optional `std::source_location` (defaulted via `std::source_location::current()`). A private helper `GetSourceLocation` formats it as `[file:line] function_name: ` and prepends it to every emitted message. This is the only structured field the logger emits beyond timestamp and severity.
+
+### Singleton lifecycle
+- Static members `instance_`, `mutex_`, `instance_flag_` live in `LoggerSingletone`.
+- `GetInstance()` uses `std::call_once` over `CreateInstance()`, which constructs via the private-tag constructor `LoggerSingletone(Private)`.
+- Each convenience method (`LogDebug`/`LogInfo`/`LogWarning`/`LogError`) also lazily initializes the instance if it is still null before delegating to `Log`.
+- `UseLogFile()` wraps its read in a `std::shared_lock(mutex_)`.
+
+### Configuration
+On construction the logger looks for `<cwd>/logcfg.ini` via `Config::from_ini` (from `fileoperator/rw_ptree.hpp`). Keys read:
+
+- `[log] log_level` — release threshold (int)
+- `[log] log_level_debug` — debug build threshold (int)
+- `[log] use_log_file` — enable file sink (bool)
+- `[log] log_file` — relative path appended to cwd
+- `[log_format] log_datatime_format` — strftime-style format string
+
+If the file is missing or any key lookup throws `ptree_bad_path`, defaults are applied:
+- `log_path_ = <cwd>/log/log.txt`
+- `use_log_file_ = false`
+- `log_datatime_format_ = "%Y-%m-%d %H:%M:%S"`
+- Release `log_level_ = 3`; debug `log_level_ = 1`.
+
+On desktop, when `use_log_file_` is true, Boost.Log adds a `text_file_backend` with rotation size `SIZE_50MB` (50 MiB) and daily rotation (`rotation_at_time_point(0,0,0)`), opened in append mode. A console sink is always added. Both sinks share one formatter:
+
+```
+[TimeStamp] <severity> [file:line] function_name: message\n
+```
+
+where `TimeStamp` is formatted with the configured `log_datatime_format`.
 
 ### Fluent literal API
-The inline namespace `LogLiterals` provides `"message"_log_debug()`, etc., which construct a `LogState` object whose destructor invokes `LoggerSingletone::Log(message_, level, location)`. Usage observed in the codebase is limited to `HsBaSlicer/HsBaSlicer.cpp`.
+The inline namespace `LogLiterals` exposes:
 
-### Thread safety
-All public methods acquire a `std::shared_lock(mutex_)` before accessing shared state; the singleton itself is guarded by `std::once_flag`.
+```cpp
+using namespace HsBa::Slicer::Log::LogLiterals;
+"some message"_log_info();
+"some message"_log_debug();
+"some message"_log_warning();
+"some message"_log_error();
+```
+
+Each literal returns a `LogState` whose destructor invokes `LoggerSingletone::Log(message_, log_lv_, location)` — enabling RAII-style delayed emission.
+
+### Platform-specific notes
+- On Android, `UseLogFile()` unconditionally returns `true` even though no file sink is installed; the constructor prints a warning via `__android_log_print` that kernel log is being used.
+- On iOS, `UseLogFile()` also returns `true`; logs go through `os_log_with_type` using a handle created via `os_log_create("HsBaSlicer", "Log")`.
+- Boost.Log headers are conditionally included only when neither `__ANDROID__` nor `TARGET_OS_IOS` is defined.
 
 ## Conventions and constraints
 
-- **Level convention**: callers use either the typed helpers `LoggerSingletone::LogDebug/Info/Warning/Error` or the `_log_*` literals; the raw `Log(message, level)` path is reserved for internal dispatch. Level 0 (trace) and 5 (fatal) exist in the enum but have no dedicated helper — they are reached only via the integer switch.
-- **Configuration file**: `logcfg.ini` must live next to the executable; it is parsed with `Config::from_ini` and keys expected are `log.log_level`, `log.log_level_debug`, `log.use_log_file`, `log.log_file`, and `log_format.log_datatime_format`. Missing keys trigger the default branch that falls back to no-file logging.
-- **Default behavior**: in release builds the effective threshold is `warning` (level 3); in debug builds it is `debug` (level 1). File logging is disabled by default.
-- **Backend selection**: compilation-time macros `__ANDROID__` and `TARGET_OS_IOS` select the backend unconditionally — there is no runtime switch between them.
-- **Structured fields**: none. Log output is a single formatted line; no key-value pairs or JSON payloads are produced.
-- **Rotation policy** (desktop): 50 MB per file and daily rotation at 00:00 via `rotation_at_time_point(0, 0, 0)`.
-- **Documentation scope**: the logger module is documented in both English and Chinese under `docs/en/logger/` and `docs/zh/logger/`, matching the project's bilingual doc convention.
+- **Level encoding**: Callers pass integer levels 0–5; there is no enum. The mapping is enforced by the three `Get*LogType/Priority` functions and the `switch` in `LoggerSingletone::Log`.
+- **Thread safety**: The singleton is initialized exactly once via `std::call_once` + `once_flag`; reads of `use_log_file_` are protected by `std::shared_mutex`.
+- **Configuration source of truth**: `utils/logcfg.ini` is the documented default; consumers must not hard-code thresholds — the constructor loads from disk and falls back to built-in defaults.
+- **Structured fields**: Only two fields are consistently emitted — a `TimeStamp` attribute (set via `add_global_attribute("TimeStamp", local_clock())`) and the source-location prefix produced by `GetSourceLocation`. No additional structured fields (e.g. module name, thread id) are attached.
+- **Backends are mutually exclusive per build**: A single binary targets exactly one backend (desktop Boost.Log, Android logcat, or iOS os_log); there is no runtime toggle between them.
+- **API surface**: All public symbols are marked with `HSBA_SLICER_LOG_API` (from `logger/export.h`), making the logger part of the exported C ABI surface.
+- **Documentation**: The logger's usage is documented in `docs/en/logger/` (`logger_singletone.md`, `log_state.md`), mirroring the Chinese docs under `docs/zh/logger/`.

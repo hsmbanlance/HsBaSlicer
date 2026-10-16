@@ -1,0 +1,5 @@
+- Every concrete path class overrides the full family of `Save(path)` and `ToString(...)` overloads declared by `IPath`, including the variants that take an inline Lua script, a script file + function name, and a `lua_State*` registration callback.
+- Lua state is never included directly in headers — `struct lua_State` is forward-declared in each `.hpp` so the Lua dependency stays out of the public ABI.
+- Brand-specific code generation is split into private `GenerateXxxCode()` methods (e.g. `GenerateAbbCode`/`GenerateKukaCode`/`GenerateFanucCode`), keeping each target's emitter isolated within the class.
+- Public enums use sentinel values like `Unknown = -1` and `Undefine = ROBOT_UNDEFINED_TYPE` to represent unspecified targets across `RLType`, `WeldProcessType`, and `ArcEndType`.
+- Each header guards itself with an `HSBA_SLICER_<NAME>_HPP` include guard and places all symbols inside the `HsBa::Slicer` namespace.

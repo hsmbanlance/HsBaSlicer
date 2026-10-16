@@ -1,0 +1,1 @@
+Top-level CMake orchestrator that composes HsBaSlicer's model, slicing, support, path and Lua-driven pipeline libraries into a cross-platform framework with stable C ABI and C++20 module exports.

@@ -1,0 +1,1 @@
+Building without CGAL is the default path; to include `CgalModel` the project must be configured with `- DHSBA_COPL=ON` so that `CGAL::CGAL` and `igl_copyleft` targets become available.

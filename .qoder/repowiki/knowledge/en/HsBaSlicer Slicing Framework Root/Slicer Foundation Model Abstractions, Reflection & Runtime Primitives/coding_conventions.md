@@ -1,0 +1,7 @@
+- Public interfaces live in `.hpp` files guarded by `HSBA_SLICER_<NAME>_HPP` macros, with implementation split into paired `.cpp` files only when compilation-unit size or external linkage requires it.
+- Cross-cutting abstractions (interfaces, concepts, errors) are placed in `HsBa::Slicer`, while reusable runtime helpers (AnyObject, Delegate, ThreadPool, etc.) are placed in the nested `HsBa::Slicer::Utils` namespace.
+- Custom exceptions derive from `RuntimeError` (itself derived from `std::runtime_error`) rather than throwing `std::exception` directly, giving a uniform catch point across the slicer.
+- Type constraints use C++20 `concept`s defined centrally in `concepts.hpp` (e.g. `StrTranslator`, `PointerLike`, `OptionalLike`) instead of ad-hoc `enable_if`/`is_same_v` checks scattered through code.
+- Reflection-capable types register metadata by specialising `GetTypeInfo<T>()` to populate a static `TypeInfo` descriptor with destroy/copy/move functors and method/field maps.
+- Thread-safety around shared callback/state containers uses `std::mutex` (or `std::shared_mutex` where applicable) with `std::lock_guard` for writers and `std::shared_lock` for readers (see `Delegate`, `MockRegistry`).
+- Test-only facilities are gated behind compile-time macros (`HSBA_ANY_OBJECT_ENABLE_MOCK`, auto-detected from common test framework macros) so production builds incur zero overhead.

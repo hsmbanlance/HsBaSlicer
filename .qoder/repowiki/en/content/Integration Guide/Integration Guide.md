@@ -4,20 +4,16 @@
 **Referenced Files in This Document**   
 - [README.md](file://README.md)
 - [CMakeLists.txt](file://CMakeLists.txt)
-- [docs/en/cpp_cmake_usage.md](file://docs/en/cpp_cmake_usage.md)
-- [docs/en/LibHsBaSlicer/README.md](file://docs/en/LibHsBaSlicer/README.md)
-- [docs/en/DllHsBaSlicer/README.md](file://docs/en/DllHsBaSlicer/README.md)
-- [docs/en/DllHsBaSlicer/game_engine_integration.md](file://docs/en/DllHsBaSlicer/game_engine_integration.md)
-- [LibHsBaSlicer/export.h](file://LibHsBaSlicer/export.h)
-- [DllHsBaSlicer/dllexport.h](file://DllHsBaSlicer/dllexport.h)
-- [DllHsBaSlicer/initialize.h](file://DllHsBaSlicer/initialize.h)
-- [samples/LibHsBaSlicer/main_header.cpp](file://samples/LibHsBaSlicer/main_header.cpp)
-- [samples/LibHsBaSlicer/main_module.cpp](file://samples/LibHsBaSlicer/main_module.cpp)
-- [android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java](file://android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java)
-- [android/app/build.gradle](file://android/app/build.gradle)
-- [android/README.md](file://android/README.md)
-- [.github/workflows/build-android.yml](file://.github/workflows/build-android.yml)
-- [ios/HsBaSlicerExample/ViewController.swift](file://ios/HsBaSlicerExample/ViewController.swift)
+- [vcpkg.json](file://vcpkg.json)
+- [LICENSE.txt](file://LICENSE.txt)
+- [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
+- [dllexport.h](file://DllHsBaSlicer/dllexport.h)
+- [initialize.h](file://DllHsBaSlicer/initialize.h)
+- [game_engine_integration.md](file://docs/en/DllHsBaSlicer/game_engine_integration.md)
+- [qt_wxwidgets_integration.md](file://docs/en/DllHsBaSlicer/qt_wxwidgets_integration.md)
+- [android README.md](file://android/README.md)
+- [ViewController.swift](file://ios/HsBaSlicerExample/ViewController.swift)
+- [HsBaSlicerBridge.h](file://ios/HsBaSlicerExample/HsBaSlicerBridge.h)
 </cite>
 
 ## Table of Contents
@@ -29,563 +25,399 @@
 6. [Dependency Analysis](#dependency-analysis)
 7. [Performance Considerations](#performance-considerations)
 8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
+9. [Security, Licensing, and Distribution](#security-licensing-and-distribution)
+10. [Conclusion](#conclusion)
 
 ## Introduction
-This document is the integration guide for incorporating HsBaSlicer into applications and platforms. It focuses on:
-- C++ integration with header inclusion, library linking, and CMake configuration.
-- Cross-language integration through the pure C ABI exported by `DllHsBaSlicer`.
-- Platform-specific guidance for Android (JNI + NDK), iOS (Swift/Objective-C bridging), Unity and Unreal Engine.
-- Deployment strategies, dependency management, runtime configuration, and common troubleshooting.
+This integration guide explains how to embed HsBaSlicer into different platforms and frameworks: Unity, Unreal Engine, Qt, wxWidgets, Android, and iOS. It focuses on the C ABI exposed by `DllHsBaSlicer`, the standalone type definitions in `pipelinetypes/pipeline_types.h`, and the platform-specific build and deployment patterns documented in this repository.
 
-HsBaSlicer exposes three main integration surfaces:
-- `LibHsBaSlicer`: core C++ slicing pipeline API.
-- `ModuleHsBaSlicer`: optional C++20 module wrapper with a class-based API.
-- `DllHsBaSlicer`: stable C ABI for cross-language and cross-process integration.
-
-The project supports desktop, Android, and iOS builds, and provides installable CMake package configuration so downstream projects can use `find_package(HsBaSlicer)` to link against the desired targets.
+HsBaSlicer is a modular, cross-platform C++ slicing framework. The recommended integration surface for external applications is the shared library `DllHsBaSlicer`, which exposes C-compatible pipeline functions for FDM, SLA, SLS, SLM, LOM, TDP, WAAM, file transfer, and custom Lua pipelines. For pure C++ consumers, `LibHsBaSlicer` provides higher-level slicing capabilities.
 
 **Section sources**
 - [README.md:21-39](file://README.md#L21-L39)
 - [README.md:100-124](file://README.md#L100-L124)
-- [docs/en/cpp_cmake_usage.md:1-11](file://docs/en/cpp_cmake_usage.md#L1-L11)
 
 ## Project Structure
-At a high level, HsBaSlicer organizes its build artifacts and public interfaces as follows:
-- `base`, `utils`, `cipher`, `2D`, `paths`, `support`, `preprocess`, `meshmodel`, `cadmodel`, `pointcloud`, `fileoperator`, `pipelinetypes`, `convert`, `proto` are internal modules.
-- `LibHsBaSlicer` packages the full slicing workflow into a C++ library.
-- `DllHsBaSlicer` wraps `LibHsBaSlicer` behind a C ABI.
-- `HsBaSlicer` is the top-level executable target that also acts as the platform entry point.
-- `ModuleHsBaSlicer` is an optional C++20 module wrapper.
+For integration purposes, the most relevant parts are:
+
+| Area | Purpose |
+|---|---|
+| `DllHsBaSlicer` | Shared library with C ABI entry points such as `initialize()` and pipeline run functions. |
+| `pipelinetypes/pipeline_types.h` | Standalone C-compatible struct and enum definitions used by all integrations. |
+| `LibHsBaSlicer` | C++ API for full slicing workflows when you do not need a separate DLL. |
+| `CMakeLists.txt` | Top-level build configuration, install targets, and platform feature toggles. |
+| `vcpkg.json` | Dependency manifest, including optional copyleft kernels that affect licensing. |
+| `docs/en/DllHsBaSlicer/*` | Official integration examples for Unity, Unreal Engine, Qt, and wxWidgets. |
+| `android/README.md` | Minimal Android packaging instructions for native `.so` artifacts. |
+| `ios/HsBaSlicerExample/*` | Swift example showing bridging to a C/C++ static-library entry point. |
 
 ```mermaid
 graph TB
-App["Host Application"] --> Dll["DllHsBaSlicer<br/>C ABI"]
-App --> Lib["LibHsBaSlicer<br/>C++ API"]
-App --> Module["ModuleHsBaSlicer<br/>C++20 module"]
-Dll --> Lib
-Lib --> Core["Core Modules<br/>Preprocess / Slice / Support / Fill / Path"]
+App["Your Application<br/>Unity / UE / Qt / wxWidgets / Android / iOS"] --> Dll["DllHsBaSlicer<br/>C ABI"]
+Dll --> Types["pipeline_types.h<br/>Config & Result Structs"]
+Dll --> Init["initialize()<br/>One-time setup"]
+Dll --> Pipelines["FDM / SLA / SLS / SLM / LOM / TDP / WAAM / Custom"]
+Lib["LibHsBaSlicer<br/>C++ API"] --> Pipelines
 ```
 
 **Diagram sources**
-- [docs/en/DllHsBaSlicer/README.md:7-19](file://docs/en/DllHsBaSlicer/README.md#L7-L19)
-- [docs/en/LibHsBaSlicer/README.md:18-31](file://docs/en/LibHsBaSlicer/README.md#L18-L31)
+- [initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
+- [pipeline_types.h:53-127](file://pipelinetypes/pipeline_types.h#L53-L127)
+- [README.md:100-124](file://README.md#L100-L124)
 
 **Section sources**
-- [README.md:29-39](file://README.md#L29-L39)
-- [CMakeLists.txt:409-439](file://CMakeLists.txt#L409-L439)
+- [README.md:100-150](file://README.md#L100-L150)
+- [CMakeLists.txt:456-519](file://CMakeLists.txt#L456-L519)
 
 ## Core Components
-HsBaSlicer provides three primary integration components:
+The integration surface consists of three layers:
 
-| Component | Type | Purpose | Typical Use Case |
-|---|---|---|---|
-| `LibHsBaSlicer` | C++ static/shared library | Full slicing pipeline API | Native C++ apps, research code, custom pipelines |
-| `ModuleHsBaSlicer` | C++20 module wrapper | Class-based RAII API | Modern C++ consumers who prefer classes over free functions |
-| `DllHsBaSlicer` | C export shared/static library | Stable C ABI for cross-language calls | Qt, wxWidgets, Unity, Unreal, Java, C#, Python, Swift |
+1. **Type layer**: `pipeline_types.h` defines all pipeline configurations and results. These structs are intentionally free of DLL export macros so downstream code can include them without linking the shared library.
+2. **ABI layer**: `DllHsBaSlicer` exports C functions using `HSBA_SLICER_API`. On Windows, this resolves to `__declspec(dllexport)` or `__declspec(dllimport)`; on other platforms it is empty.
+3. **Runtime layer**: Call `initialize()` once at process startup, then call the appropriate pipeline function with a configured struct and optional progress/result callbacks.
 
-Key characteristics:
-- `LibHsBaSlicer` exposes preprocessing, slicing, support generation, polygon filling, path generation, SLA floor/render/package, SLS export, file transfer, parameter store, and Lua extension registration.
-- `DllHsBaSlicer` only calls `LibHsBaSlicer` exported interfaces, keeping the ABI boundary clean.
-- `ModuleHsBaSlicer` is optional and requires a C++20 module-capable compiler.
+Key ABI concepts:
+
+| Concept | Meaning |
+|---|---|
+| Config structs | Passed by value or pointer depending on the wrapper; string fields must remain valid during the pipeline call. |
+| Result structs | Contain success flags, output paths or G-code content, error messages, and elapsed time. |
+| Callbacks | Progress and result callbacks fire on library threads; marshal UI updates back to your application’s main thread. |
+| Memory ownership | Caller frees result strings through the matching `HsBaFree*PipelineResult` function. |
 
 **Section sources**
-- [docs/en/LibHsBaSlicer/README.md:1-16](file://docs/en/LibHsBaSlicer/README.md#L1-L16)
-- [docs/en/DllHsBaSlicer/README.md:1-19](file://docs/en/DllHsBaSlicer/README.md#L1-L19)
-- [docs/en/cpp_cmake_usage.md:1-11](file://docs/en/cpp_cmake_usage.md#L1-L11)
+- [pipeline_types.h:5-12](file://pipelinetypes/pipeline_types.h#L5-L12)
+- [pipeline_types.h:53-127](file://pipelinetypes/pipeline_types.h#L53-L127)
+- [dllexport.h:9-20](file://DllHsBaSlicer/dllexport.h#L9-L20)
+- [initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
 
 ## Architecture Overview
-The recommended architecture separates host application logic from slicing computation:
+At runtime, an integrated application follows this flow:
 
 ```mermaid
 sequenceDiagram
-participant Host as "Host Application"
-participant Dll as "DllHsBaSlicer (C ABI)"
-participant Lib as "LibHsBaSlicer (C++)"
-participant Core as "Core Pipeline Stages"
-Host->>Dll : initialize()
-Host->>Dll : CreateDefaultConfig()
-Host->>Dll : RunPipeline(config, callback)
-Dll->>Lib : Call exported pipeline function
-Lib->>Core : Preprocess -> Slice -> Support -> Fill -> Path
-Core-->>Lib : Result data
-Lib-->>Dll : Structured result
-Dll-->>Host : Progress callbacks
-Dll-->>Host : Result callback or return value
-Host->>Dll : FreePipelineResult(result)
+participant App as "Application"
+participant ABI as "DllHsBaSlicer C ABI"
+participant Types as "pipeline_types.h"
+participant Pipeline as "Slicing Pipeline"
+participant UI as "UI Thread"
+App->>ABI : initialize()
+App->>Types : Create default config struct
+App->>ABI : Run pipeline (sync or async)
+ABI-->>App : ProgressCallback(percent, stage)
+App->>UI : Marshal progress update
+ABI-->>App : ResultCallback(result)
+App->>Types : Copy output strings
+App->>ABI : Free pipeline result
+App->>UI : Show completion state
 ```
 
 **Diagram sources**
-- [docs/en/DllHsBaSlicer/README.md:56-62](file://docs/en/DllHsBaSlicer/README.md#L56-L62)
-- [docs/en/DllHsBaSlicer/README.md:684-703](file://docs/en/DllHsBaSlicer/README.md#L684-L703)
+- [initialize.h:14-19](file://DllHsBaSlicer/initialize.h#L14-L19)
+- [pipeline_types.h:130-140](file://pipelinetypes/pipeline_types.h#L130-L140)
+- [game_engine_integration.md:128-183](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L128-L183)
+- [qt_wxwidgets_integration.md:47-106](file://docs/en/DllHsBaSlicer/qt_wxwidgets_integration.md#L47-L106)
 
 ## Detailed Component Analysis
 
-### C++ Integration with LibHsBaSlicer
-Use `LibHsBaSlicer` when you want direct C++ access to the slicing pipeline.
+### Unity Integration
+Unity integrates through C# P/Invoke against `DllHsBaSlicer`. The official guide shows:
 
-Recommended steps:
-1. Install HsBaSlicer or include it as a subdirectory.
-2. Configure your CMake project to find HsBaSlicer.
-3. Link against `HsBaSlicer::LibHsBaSlicer`.
-4. Include headers such as model preprocessing, mesh slicing, FDM support, polygon fill, and path generation.
-
-Typical workflow:
-- Load model.
-- Generate layer contours.
-- Generate FDM supports.
-- Fill polygons.
-- Generate G-code paths.
+- Platform-specific library names, including `"__Internal"` for iOS static libraries.
+- C# struct declarations that mirror `pipeline_types.h` field order and types.
+- A high-level service that keeps delegate references alive and marshals callbacks to the Unity main thread.
+- IL2CPP considerations for by-value struct passing and sequential layout.
 
 ```mermaid
 flowchart TD
-Start(["Start"]) --> LoadModel["Load Model"]
-LoadModel --> SliceLayers["Slice Layers"]
-SliceLayers --> GenerateSupports["Generate Supports"]
-GenerateSupports --> FillPolygons["Fill Polygons"]
-FillPolygons --> GenerateGcode["Generate G-code Paths"]
-GenerateGcode --> SaveOutput["Save Output"]
-SaveOutput --> End(["End"])
+Start["Unity MonoBehaviour calls SliceFdmAsync"] --> CreateCfg["Create FdmPipelineConfig via P/Invoke"]
+CreateCfg --> SetStrings["Set UTF-8 model_name and model_path"]
+SetStrings --> KeepDelegates["Keep ProgressCallback and ResultCallback alive"]
+KeepDelegates --> RunAsync["Call HsBaRunFdmPipelineAsync"]
+RunAsync --> NativeProgress["Native ProgressCallback fires"]
+NativeProgress --> MainThread["Post to Unity main thread"]
+MainThread --> UpdateUI["Update progress bar"]
+RunAsync --> NativeResult["Native ResultCallback fires"]
+NativeResult --> FreeResult["Copy strings and call HsBaFreePipelineResult"]
+FreeResult --> Done["Return Task result on main thread"]
 ```
 
 **Diagram sources**
-- [docs/en/LibHsBaSlicer/README.md:326-334](file://docs/en/LibHsBaSlicer/README.md#L326-L334)
-- [samples/LibHsBaSlicer/main_header.cpp:61-177](file://samples/LibHsBaSlicer/main_header.cpp#L61-L177)
+- [game_engine_integration.md:21-123](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L21-L123)
+- [game_engine_integration.md:128-183](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L128-L183)
+- [game_engine_integration.md:206-213](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L206-L213)
+
+Practical guidance from the repository:
+
+- Place per-ABI native libraries under the correct Unity plugin folders.
+- Keep delegates stored in static or member fields so the garbage collector does not collect them while native code holds them.
+- Never touch `UnityEngine.Object` directly inside native callbacks; marshal to the main thread first.
+- For IL2CPP, match struct layouts exactly and use `LayoutKind.Sequential`.
 
 **Section sources**
-- [docs/en/cpp_cmake_usage.md:57-99](file://docs/en/cpp_cmake_usage.md#L57-L99)
-- [docs/en/LibHsBaSlicer/README.md:33-55](file://docs/en/LibHsBaSlicer/README.md#L33-L55)
-- [samples/LibHsBaSlicer/main_header.cpp:20-28](file://samples/LibHsBaSlicer/main_header.cpp#L20-L28)
+- [game_engine_integration.md:7-18](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L7-L18)
+- [game_engine_integration.md:21-123](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L21-L123)
+- [game_engine_integration.md:128-213](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L128-L213)
 
-### C++ Integration with ModuleHsBaSlicer
-Use `ModuleHsBaSlicer` when you prefer a class-based API and modern C++20 modules.
+### Unreal Engine Integration
+Unreal Engine integrates through a C++ plugin that wraps `DllHsBaSlicer`:
 
-Requirements:
-- C++20 module-capable compiler.
-- Link against `HsHaSlicer::ModuleHsBaSlicer`.
-- Use `import hsba.slicer;`.
-
-Key benefits:
-- RAII model management.
-- Class-based pipeline execution.
-- Unified exception handling.
-
-```mermaid
-classDiagram
-class Model {
-+info()
-+translate()
-+scale()
-}
-class FdmPipeline {
-+run(model)
-}
-class CustomLuaPipeline {
-+setProgressFunc()
-+run()
-}
-Model <.. FdmPipeline : "consumes"
-Model <.. CustomLuaPipeline : "consumes"
-```
-
-**Diagram sources**
-- [docs/en/cpp_cmake_usage.md:155-232](file://docs/en/cpp_cmake_usage.md#L155-L232)
-- [samples/LibHsBaSlicer/main_module.cpp:27-29](file://samples/LibHsBaSlicer/main_module.cpp#L27-L29)
-
-**Section sources**
-- [docs/en/cpp_cmake_usage.md:155-232](file://docs/en/cpp_cmake_usage.md#L155-L232)
-- [samples/LibHsBaSlicer/main_module.cpp:14-29](file://samples/LibHsBaSlicer/main_module.cpp#L14-L29)
-
-### C ABI Integration with DllHsBaSlicer
-Use `DllHsBaSlicer` when integrating with non-C++ languages or when you need a stable ABI boundary.
-
-Important ABI concepts:
-- `HSBA_SLICER_API` marks exported symbols in the C ABI layer.
-- `initialize()` must be called once at process startup.
-- Pipeline APIs provide synchronous and asynchronous variants.
-- Result structs contain heap-allocated strings that must be freed via matching `HsBaFree*PipelineResult` functions.
-
-```mermaid
-classDiagram
-class DllExports {
-+initialize()
-+CreateDefaultConfig()
-+RunFdmPipeline()
-+RunFdmPipelineAsync()
-+FreePipelineResult()
-}
-class ConfigStruct {
-+model_name
-+model_path
-+output_path
-+layer_height
-+fill_mode
-}
-class ResultStruct {
-+success
-+total_layers
-+gcode_content
-+error_message
-+elapsed_seconds
-}
-DllExports --> ConfigStruct : "reads"
-DllExports --> ResultStruct : "returns"
-```
-
-**Diagram sources**
-- [DllHsBaSlicer/dllexport.h:1-23](file://DllHsBaSlicer/dllexport.h#L1-L23)
-- [DllHsBaSlicer/initialize.h:1-22](file://DllHsBaSlicer/initialize.h#L1-L22)
-- [docs/en/DllHsBaSlicer/README.md:56-62](file://docs/en/DllHsBaSlicer/README.md#L56-L62)
-- [docs/en/DllHsBaSlicer/README.md:147-162](file://docs/en/DllHsBaSlicer/README.md#L147-L162)
-
-**Section sources**
-- [docs/en/DllHsBaSlicer/README.md:21-54](file://docs/en/DllHsBaSlicer/README.md#L21-L54)
-- [docs/en/DllHsBaSlicer/README.md:684-703](file://docs/en/DllHsBaSlicer/README.md#L684-L703)
-
-### Build System Configuration with CMake
-HsBaSlicer installs CMake package configuration files so downstream projects can use `find_package(HsBaSlicer CONFIG REQUIRED)`.
-
-Recommended patterns:
-- Use `find_package(HsBaSlicer REQUIRED)`.
-- Link against the appropriate target:
-  - `HsBaSlicer::LibHsBaSlicer` for C++ API.
-  - `HsBaSlicer::ModuleHsBaSlicer` for C++20 module API.
-  - `HsBaSlicer::DllHsBaSlicer` for C ABI.
-- If you only need struct definitions without linking the DLL, link `HsBaSlicer::HsBaPipelineTypes`.
-
-```mermaid
-flowchart TD
-CMake["Your CMakeLists.txt"] --> FindPackage["find_package(HsBaSlicer REQUIRED)"]
-FindPackage --> LinkTarget["target_link_libraries(...)"]
-LinkTarget --> LibTarget["HsBaSlicer::LibHsBaSlicer"]
-LinkTarget --> ModuleTarget["HsBaSlicer::ModuleHsBaSlicer"]
-LinkTarget --> DllTarget["HsBaSlicer::DllHsBaSlicer"]
-```
-
-**Diagram sources**
-- [docs/en/cpp_cmake_usage.md:57-72](file://docs/en/cpp_cmake_usage.md#L57-L72)
-- [docs/en/cpp_cmake_usage.md:336-353](file://docs/en/cpp_cmake_usage.md#L336-L353)
-
-**Section sources**
-- [README.md:100-124](file://README.md#L100-L124)
-- [README.md:165-179](file://README.md#L165-L179)
-- [docs/en/cpp_cmake_usage.md:57-72](file://docs/en/cpp_cmake_usage.md#L57-L72)
-- [docs/en/cpp_cmake_usage.md:448-458](file://docs/en/cpp_cmake_usage.md#L448-L458)
-
-### Cross-Language Integration Patterns
-
-#### Python (ctypes / pybind11)
-- For ctypes: load the shared library produced by `DllHsBaSlicer`, call `initialize()`, then call pipeline functions using mirrored C structs.
-- For pybind11: wrap `LibHsBaSlicer` or `DllHsBaSlicer` into a Python module.
-- Use Protobuf-generated Python bindings if you need cross-process serialization.
-
-Key considerations:
-- Keep UTF-8 string lifetimes valid across the ABI boundary.
-- Marshal progress callbacks carefully; they run on native worker threads.
-- Release result strings with the matching `HsBaFree*PipelineResult` function.
-
-#### Java (JNI for Android)
-Android uses JNI to call native code. The example Android app loads the native library and invokes a native function that runs pipeline examples.
+- A `ThirdParty` module declares headers, import libraries, and runtime dependencies.
+- A `GameInstanceSubsystem` exposes Blueprint-callable functions.
+- Background tasks execute slicing off the GameThread.
+- Progress and completion events are broadcast on the GameThread.
 
 ```mermaid
 sequenceDiagram
-participant Java as "MainActivity.java"
-participant JNI as "JNI Bridge"
-participant Native as "Native Library"
-participant Dll as "DllHsBaSlicer"
-Java->>JNI : System.loadLibrary("HsBaSlicer")
-Java->>JNI : runPipelineExamples()
-JNI->>Native : Call native implementation
-Native->>Dll : initialize()
-Native->>Dll : Run pipeline examples
-Dll-->>Native : Results
-Native-->>JNI : Status
-JNI-->>Java : Update UI
+participant BP as "Blueprint"
+participant Subsystem as "UHsBaSlicerSubsystem"
+participant Native as "DllHsBaSlicer"
+participant GameThread as "UE GameThread"
+BP->>Subsystem : SliceFdmAsync(ModelPath)
+Subsystem->>Subsystem : Convert FString to UTF-8 bytes
+Subsystem->>Native : HsBaRunFdmPipeline(config, progress_cb, user_data)
+Native-->>Subsystem : ProgressCallback
+Subsystem->>GameThread : AsyncTask(GameThread, Broadcast OnSliceProgress)
+Native-->>Subsystem : ResultCallback
+Subsystem->>GameThread : AsyncTask(GameThread, Broadcast OnSliceFinished)
 ```
 
 **Diagram sources**
-- [android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java:17-27](file://android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java#L17-L27)
-- [android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java:29-44](file://android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java#L29-L44)
+- [game_engine_integration.md:218-269](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L218-L269)
+- [game_engine_integration.md:272-349](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L272-L349)
+- [game_engine_integration.md:357-362](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L357-L362)
+
+Important rules:
+
+- Convert `FString` to UTF-8 before crossing the C boundary.
+- Keep UTF-8 byte buffers alive for the entire slicing run.
+- Always wrap delegate broadcasts in `AsyncTask(ENamedThreads::GameThread, ...)`.
+- Package the DLL through `RuntimeDependencies`; delay loading requires proper DLL directory setup.
 
 **Section sources**
-- [android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java:1-46](file://android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java#L1-L46)
-- [android/app/build.gradle:24-33](file://android/app/build.gradle#L24-L33)
+- [game_engine_integration.md:218-362](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L218-L362)
 
-#### C# (.NET Interop)
-Unity and Unreal Engine documentation shows how to mirror C structs with `[StructLayout(LayoutKind.Sequential)]`, declare delegates for callbacks, and use `[DllImport]` to call `DllHsBaSlicer`.
+### Qt Integration
+Qt integration uses `DllHsBaSlicer` from a C++ desktop application. The guide recommends:
 
-Key points:
-- Mirror every `const char*` field as `IntPtr`.
-- Preserve delegate references so GC does not collect them while native code holds them.
-- Marshal progress callbacks back to the UI thread.
-- Free pipeline results after copying managed strings.
+- Using `find_package(HsBaSlicer CONFIG REQUIRED)` or pointing directly at build artifacts.
+- Running slicing on a worker thread, not the UI thread.
+- Emitting Qt signals from the worker so slots automatically run on the UI thread.
+- Keeping UTF-8 path strings alive while the pipeline runs.
 
-**Section sources**
-- [docs/en/DllHsBaSlicer/game_engine_integration.md:21-127](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L21-L127)
-- [docs/en/DllHsBaSlicer/game_engine_integration.md:128-183](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L128-L183)
+```mermaid
+flowchart TD
+Start["User clicks Start Slice"] --> Init["Call initialize() once"]
+Init --> Worker["Create QThread + SlicerWorker"]
+Worker --> BuildCfg["Build HsBaFdmPipelineConfig_t"]
+BuildCfg --> RunSync["Call HsBaRunFdmPipeline on worker thread"]
+RunSync --> Progress["onProgress emits progressChanged"]
+Progress --> UI["QProgressBar updated on UI thread"]
+RunSync --> Finish["Emit finished(success, gcode, error)"]
+Finish --> Save["Write G-code to file"]
+```
 
-#### JavaScript (WebAssembly)
-For WebAssembly, integrate via:
-- Compiling `LibHsBaSlicer` or `DllHsBaSlicer` to WASM where supported.
-- Using Emscripten bindings to expose C ABI functions to JavaScript.
-- Handling memory ownership carefully because WASM memory and host memory have different lifetimes.
-
-This section is conceptual because the repository does not include a dedicated WebAssembly build script; the same ABI rules apply.
-
-#### Other Languages Calling the C ABI
-Any language that can call C functions can integrate with HsBaSlicer by:
-- Loading `DllHsBaSlicer`.
-- Calling `initialize()`.
-- Creating default config structs.
-- Running synchronous or asynchronous pipeline functions.
-- Freeing result strings.
+**Diagram sources**
+- [qt_wxwidgets_integration.md:16-45](file://docs/en/DllHsBaSlicer/qt_wxwidgets_integration.md#L16-L45)
+- [qt_wxwidgets_integration.md:47-106](file://docs/en/DllHsBaSlicer/qt_wxwidgets_integration.md#L47-L106)
+- [qt_wxwidgets_integration.md:108-151](file://docs/en/DllHsBaSlicer/qt_wxwidgets_integration.md#L108-L151)
 
 **Section sources**
-- [docs/en/DllHsBaSlicer/README.md:56-62](file://docs/en/DllHsBaSlicer/README.md#L56-L62)
-- [docs/en/DllHsBaSlicer/README.md:684-703](file://docs/en/DllHsBaSlicer/README.md#L684-L703)
+- [qt_wxwidgets_integration.md:7-13](file://docs/en/DllHsBaSlicer/qt_wxwidgets_integration.md#L7-L13)
+- [qt_wxwidgets_integration.md:16-167](file://docs/en/DllHsBaSlicer/qt_wxwidgets_integration.md#L16-L167)
+
+### wxWidgets Integration
+wxWidgets integration follows the same threading principles as Qt:
+
+- Use a background thread for the blocking pipeline call.
+- Use `CallAfter` to marshal progress and completion updates to the UI thread.
+- Store UTF-8 model paths in the panel object so they outlive the callback.
+- Prefer a managed thread pool over detached threads in production.
+
+```mermaid
+flowchart TD
+Click["User starts slice"] --> StorePath["Store UTF-8 model path"]
+StorePath --> Thread["Start background thread"]
+Thread --> Run["Call HsBaRunFdmPipeline"]
+Run --> Callback["OnProgress callback"]
+Callback --> CallAfter["CallAfter to UI thread"]
+CallAfter --> Gauge["Update gauge and status text"]
+Run --> Done["Copy result strings and free result"]
+Done --> CallAfterDone["CallAfter to finish UI update"]
+```
+
+**Diagram sources**
+- [qt_wxwidgets_integration.md:171-265](file://docs/en/DllHsBaSlicer/qt_wxwidgets_integration.md#L171-L265)
+
+**Section sources**
+- [qt_wxwidgets_integration.md:171-265](file://docs/en/DllHsBaSlicer/qt_wxwidgets_integration.md#L171-L265)
 
 ### Android Integration
+Android integration packages the native `.so` files produced by the CMake build into an Android app:
 
-#### JNI Setup
-The Android example demonstrates:
-- Loading the native library with `System.loadLibrary("HsBaSlicer")`.
-- Declaring a native method `runPipelineExamples()`.
-- Invoking the native function from the Activity lifecycle.
+- Build native libraries with the Android NDK toolchain and vcpkg.
+- Copy the resulting `.so` files into `app/src/main/jniLibs/<abi>/`.
+- Open the Android project in Android Studio and build or run the APK.
+- Add a Java/Kotlin activity that loads the native library via `System.loadLibrary`.
 
 ```mermaid
 flowchart TD
-AppStart["Android App Starts"] --> LoadLib["Load HsBaSlicer native library"]
-LoadLib --> CreateActivity["Create MainActivity"]
-CreateActivity --> CallNative["Call runPipelineExamples()"]
-CallNative --> RunExamples["Run FDM / SLA / SLS examples"]
-RunExamples --> UpdateUI["Update TextView status"]
+CMake["CMake build with Android NDK"] --> So["Produce libDllHsBaSlicer.so"]
+So --> JniLibs["Copy to jniLibs/arm64-v8a/"]
+JniLibs --> Gradle["Gradle builds APK"]
+Gradle --> App["Android app loads native library"]
 ```
 
 **Diagram sources**
-- [android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java:17-27](file://android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java#L17-L27)
-- [android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java:29-44](file://android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java#L29-L44)
+- [android README.md:1-22](file://android/README.md#L1-L22)
 
 **Section sources**
-- [android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java:1-46](file://android/app/src/main/java/com/hsmbanlance/hsbaslicer/example/MainActivity.java#L1-L46)
-
-#### NDK Configuration
-The Android Gradle configuration:
-- Sets `compileSdk`, `minSdk`, and `targetSdk`.
-- Configures `jniLibs.srcDirs` to read `.so` files from `src/main/jniLibs`.
-- Filters ABI to `arm64-v8a`.
-
-CI builds native libraries with CMake and copies them into the Android app’s `jniLibs` directory.
-
-**Section sources**
-- [android/app/build.gradle:5-33](file://android/app/build.gradle#L5-L33)
-- [android/README.md:1-19](file://android/README.md#L1-L19)
-- [.github/workflows/build-android.yml:97-107](file://.github/workflows/build-android.yml#L97-L107)
-
-#### Mobile Deployment Considerations
-- On Android, dynamic library loading may be limited depending on toolchain and platform restrictions.
-- The root CMake disables the dynamic library loader on non-desktop platforms by default.
-- Ensure native `.so` files are packaged into the APK under the correct ABI directories.
-
-**Section sources**
-- [CMakeLists.txt:228-240](file://CMakeLists.txt#L228-L240)
-- [android/README.md:1-19](file://android/README.md#L1-L19)
+- [android README.md:1-22](file://android/README.md#L1-L22)
 
 ### iOS Integration
+iOS integration uses a Swift example that bridges to a C/C++ entry point exported from the static library:
 
-#### Swift/Objective-C Bridging
-The iOS example shows:
-- A Swift view controller that triggers slicing examples.
-- Calling a C function exported by the HsBaSlicer bridge.
-- Running slicing work on a background queue and updating the UI on the main queue.
-
-```mermaid
-sequenceDiagram
-participant Swift as "ViewController.swift"
-participant Queue as "DispatchQueue"
-participant Bridge as "HsBaSlicer Bridge"
-participant Dll as "DllHsBaSlicer"
-Swift->>Queue : Background task
-Queue->>Bridge : HsBaRunPipelineExamples()
-Bridge->>Dll : initialize()
-Bridge->>Dll : Run pipeline examples
-Dll-->>Bridge : Results
-Bridge-->>Queue : Completion
-Queue->>Swift : Update UI on main queue
-```
-
-**Diagram sources**
-- [ios/HsBaSlicerExample/ViewController.swift:43-55](file://ios/HsBaSlicerExample/ViewController.swift#L43-L55)
-- [ios/HsBaSlicerExample/ViewController.swift:73-85](file://ios/HsBaSlicerExample/ViewController.swift#L73-L85)
-
-**Section sources**
-- [ios/HsBaSlicerExample/ViewController.swift:1-86](file://ios/HsBaSlicerExample/ViewController.swift#L1-L86)
-
-#### App Store Distribution Requirements
-- iOS forbids loading arbitrary dylibs at runtime; `DllHsBaSlicer` is documented as a static library on iOS.
-- Ensure all required dependencies are statically linked or bundled according to Apple’s distribution rules.
-- Avoid GPL/LGPL kernel features if you must stay within MIT licensing constraints for certain distributions.
-
-**Section sources**
-- [docs/en/DllHsBaSlicer/README.md:21-31](file://docs/en/DllHsBaSlicer/README.md#L21-L31)
-- [README.md:187-190](file://README.md#L187-L190)
-- [README.md:198-210](file://README.md#L198-L210)
-
-### Game Engine Integration
-
-#### Unity Integration
-Unity integration uses C# P/Invoke to call `DllHsBaSlicer`:
-- Mirror C structs with sequential layout.
-- Declare delegates for progress and result callbacks.
-- Use `[DllImport]` to call `initialize`, default config creation, pipeline run functions, and result freeing.
-- Wrap async calls with `TaskCompletionSource` and marshal callbacks to Unity’s main thread.
-
-```mermaid
-flowchart TD
-UnityApp["Unity App"] --> Bindings["C# P/Invoke Bindings"]
-Bindings --> Dll["DllHsBaSlicer"]
-Dll --> Callbacks["Progress & Result Callbacks"]
-Callbacks --> UnityMainThread["Unity Main Thread"]
-UnityMainThread --> UI["Update UI / Save G-code"]
-```
-
-**Diagram sources**
-- [docs/en/DllHsBaSlicer/game_engine_integration.md:21-127](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L21-L127)
-- [docs/en/DllHsBaSlicer/game_engine_integration.md:128-183](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L128-L183)
-
-**Section sources**
-- [docs/en/DllHsBaSlicer/game_engine_integration.md:21-183](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L21-L183)
-
-#### Unreal Engine Integration
-Unreal Engine integration uses a ThirdParty module pattern:
-- Add `DllHsBaSlicer` headers and binaries under `ThirdParty`.
-- Create a C++ subsystem that wraps `DllHsBaSlicer`.
-- Use UE threading primitives to move callbacks from native worker threads to the GameThread.
-- Expose Blueprint-callable functions for designers.
+- `HsBaSlicerBridge.h` declares `HsBaRunPipelineExamples()` as an `extern "C"` function.
+- `ViewController.swift` calls the bridge function on a background queue and updates the UI on the main queue.
+- The example is explicitly marked as non-production and intended for testing.
 
 ```mermaid
 sequenceDiagram
-participant Blueprint as "Blueprint"
-participant Subsystem as "UHsBaSlicerSubsystem"
-participant UEThreads as "UE Async Tasks"
-participant Dll as "DllHsBaSlicer"
-Blueprint->>Subsystem : SliceFdmAsync(ModelPath)
-Subsystem->>UEThreads : AnyBackgroundThreadNormalTask
-UEThreads->>Dll : RunFdmPipeline(callback)
-Dll-->>UEThreads : Progress callback
-UEThreads->>Subsystem : GameThread callback
-Subsystem->>Blueprint : OnSliceProgress
-Dll-->>UEThreads : Result callback
-UEThreads->>Subsystem : GameThread finish
-Subsystem->>Blueprint : OnSliceFinished
+participant Swift as "Swift ViewController"
+participant Bridge as "HsBaSlicerBridge.h"
+participant StaticLib as "HsBaSlicer Static Library"
+participant UI as "Main Thread"
+Swift->>StaticLib : HsBaRunPipelineExamples() on background queue
+StaticLib-->>Swift : Example completes
+Swift->>UI : Dispatch to main thread and update label
 ```
 
 **Diagram sources**
-- [docs/en/DllHsBaSlicer/game_engine_integration.md:214-270](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L214-L270)
-- [docs/en/DllHsBaSlicer/game_engine_integration.md:270-347](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L270-L347)
+- [HsBaSlicerBridge.h:14-25](file://ios/HsBaSlicerExample/HsBaSlicerBridge.h#L14-L25)
+- [ViewController.swift:43-55](file://ios/HsBaSlicerExample/ViewController.swift#L43-L55)
 
 **Section sources**
-- [docs/en/DllHsBaSlicer/game_engine_integration.md:214-362](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L214-L362)
+- [HsBaSlicerBridge.h:1-32](file://ios/HsBaSlicerExample/HsBaSlicerBridge.h#L1-L32)
+- [ViewController.swift:1-86](file://ios/HsBaSlicerExample/ViewController.swift#L1-L86)
+
+### Pipeline Mapping Across Platforms
+All major platforms share the same pipeline mapping pattern:
+
+| Process | Config Type | Default Function | Run Function | Free Function |
+|---|---|---|---|---|
+| FDM | `HsBaFdmPipelineConfig_t` | `HsBaCreateDefaultConfig` | `HsBaRunFdmPipeline` or async variant | `HsBaFreePipelineResult` |
+| SLA | `HsBaSlaPipelineConfig_t` | `HsBaCreateDefaultSlaConfig` | `HsBaRunSlaPipeline` or async variant | `HsBaFreeSlaPipelineResult` |
+| SLS | `HsBaSlsPipelineConfig_t` | `HsBaCreateDefaultSlsConfig` | `HsBaRunSlsPipeline` or async variant | `HsBaFreeSlsPipelineResult` |
+
+SLS requires an export Lua script; the result contains an exported file path rather than inline G-code.
+
+**Section sources**
+- [game_engine_integration.md:366-377](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L366-L377)
+- [qt_wxwidgets_integration.md:268-289](file://docs/en/DllHsBaSlicer/qt_wxwidgets_integration.md#L268-L289)
+- [pipeline_types.h:115-127](file://pipelinetypes/pipeline_types.h#L115-L127)
+- [pipeline_types.h:220-232](file://pipelinetypes/pipeline_types.h#L220-L232)
+- [pipeline_types.h:285-297](file://pipelinetypes/pipeline_types.h#L285-L297)
 
 ## Dependency Analysis
-HsBaSlicer has many internal and external dependencies. At configure time, it detects platform capabilities, optional copyleft kernels, and feature flags.
+HsBaSlicer uses CMake and vcpkg for dependency management. The top-level CMake configuration:
 
-Key dependency categories:
-- Core math and geometry: Eigen3, libigl, CGAL (optional).
-- CAD and mesh processing: OpenCASCADE (optional), IGL.
-- Serialization and configuration: Protobuf, RapidJSON, yaml-cpp, tinyxml2.
-- Threading and utilities: Boost, OpenSSL, magic_enum.
-- Platform-specific: OpenCV (desktop), SQLite/MySQL/PostgreSQL adapters.
+- Enables position-independent code for static libraries linked into shared libraries.
+- Detects desktop vs mobile vs game-console builds.
+- Controls optional copyleft kernel usage based on `HSBA_COPL` and vcpkg features.
+- Installs targets, headers, and CMake package configuration files.
 
 ```mermaid
 graph TB
-HsBaSlicer["HsBaSlicer Root"] --> LibHsBaSlicer["LibHsBaSlicer"]
-HsBaSlicer --> DllHsBaSlicer["DllHsBaSlicer"]
-LibHsBaSlicer --> Base["base"]
-LibHsBaSlicer --> Utils["utils"]
-LibHsBaSlicer --> Mesh["meshmodel"]
-LibHsBaSlicer --> Support["support"]
-LibHsBaSlicer --> Paths["paths"]
-DllHsBaSlicer --> LibHsBaSlicer
+Root["Top-level CMakeLists.txt"] --> Desktop["Desktop Features<br/>OpenCV, OpenVDB, SQL, CAD"]
+Root --> Mobile["Mobile Features<br/>Android/iOS reduced set"]
+Root --> Console["Game Console Features<br/>HSBA_GAME_CONSOLE"]
+Root --> Install["Install Targets<br/>Headers + CMake Config"]
+VCPKG["vcpkg.json"] --> Deps["Dependencies<br/>Boost, Clipper2, Lua, OpenSSL, etc."]
+VCPKG --> Copyleft["Copyleft Feature<br/>CGAL, OpenCascade"]
 ```
 
 **Diagram sources**
-- [CMakeLists.txt:409-439](file://CMakeLists.txt#L409-L439)
-- [docs/en/LibHsBaSlicer/README.md:18-31](file://docs/en/LibHsBaSlicer/README.md#L18-L31)
+- [CMakeLists.txt:129-157](file://CMakeLists.txt#L129-L157)
+- [CMakeLists.txt:170-204](file://CMakeLists.txt#L170-L204)
+- [CMakeLists.txt:270-339](file://CMakeLists.txt#L270-L339)
+- [CMakeLists.txt:456-519](file://CMakeLists.txt#L456-L519)
+- [vcpkg.json:1-113](file://vcpkg.json#L1-L113)
 
 **Section sources**
-- [CMakeLists.txt:206-349](file://CMakeLists.txt#L206-L349)
-- [CMakeLists.txt:409-439](file://CMakeLists.txt#L409-L439)
-- [docs/en/cpp_cmake_usage.md:461-472](file://docs/en/cpp_cmake_usage.md#L461-L472)
+- [CMakeLists.txt:129-157](file://CMakeLists.txt#L129-L157)
+- [CMakeLists.txt:170-204](file://CMakeLists.txt#L170-L204)
+- [CMakeLists.txt:270-339](file://CMakeLists.txt#L270-L339)
+- [CMakeLists.txt:456-519](file://CMakeLists.txt#L456-L519)
+- [vcpkg.json:1-113](file://vcpkg.json#L1-L113)
 
 ## Performance Considerations
-- Prefer asynchronous pipeline calls in interactive applications to avoid blocking the UI thread.
-- Marshal progress and result callbacks back to the host’s UI or game thread.
-- Reuse model handles and avoid repeated model loads when possible.
-- Disable heavy optional features (CGAL boolean operations, OpenCascade, OpenVDB) on constrained platforms.
-- Use header-only type definitions (`HsBaPipelineTypes`) when mirroring structs for P/Invoke to avoid unnecessary linking.
-- On mobile platforms, keep slicing work off the main thread and limit memory allocations during real-time slicing.
+Performance-sensitive integrations should follow these patterns:
 
-[No sources needed since this section provides general guidance]
+| Concern | Recommendation |
+|---|---|
+| Real-time slicing | Use async pipeline APIs where available; avoid blocking the UI or render thread. |
+| Threading discipline | Keep native callbacks off UI threads; marshal progress and results back to the application’s main thread. |
+| String handling | Convert UTF-16 or platform strings to UTF-8 before calling C functions; keep buffers alive for the whole pipeline run. |
+| Memory ownership | Copy result strings before calling `HsBaFree*PipelineResult`; never access freed memory. |
+| Delegate lifetime | In Unity, keep delegates passed to native code in static or member fields to prevent GC collection. |
+| Large models | Configure realistic layer heights, fill densities, and support settings; avoid unnecessary debug features. |
+| Logging and heavy kernels | Disable or reduce logging and copyleft-heavy features on constrained platforms. |
+
+These recommendations are derived from the Unity, Unreal Engine, Qt, and wxWidgets integration guides, which consistently emphasize background execution, main-thread marshalling, and careful memory management.
+
+**Section sources**
+- [game_engine_integration.md:128-213](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L128-L213)
+- [game_engine_integration.md:357-362](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L357-L362)
+- [qt_wxwidgets_integration.md:7-13](file://docs/en/DllHsBaSlicer/qt_wxwidgets_integration.md#L7-L13)
+- [qt_wxwidgets_integration.md:47-106](file://docs/en/DllHsBaSlicer/qt_wxwidgets_integration.md#L47-L106)
 
 ## Troubleshooting Guide
+Common integration issues and their causes:
 
-### Common CMake Issues
-- Missing `find_package(HsBaSlicer)` configuration: ensure HsBaSlicer is installed or included as a subdirectory.
-- Wrong target name: use `HsBaSlicer::LibHsBaSlicer`, `HsBaSlicer::ModuleHsBaSlicer`, or `HsBaSlicer::DllHsBaSlicer`.
-- Transitive dependencies not found: set `CMAKE_PREFIX_PATH` to the vcpkg or system install location.
-
-**Section sources**
-- [docs/en/cpp_cmake_usage.md:57-72](file://docs/en/cpp_cmake_usage.md#L57-L72)
-- [docs/en/cpp_cmake_usage.md:461-472](file://docs/en/cpp_cmake_usage.md#L461-L472)
-
-### ABI and Memory Management Errors
-- Forgetting to call `initialize()`: always call it once after process startup.
-- Not freeing result strings: use `HsBaFreePipelineResult` or the matching free function.
-- Passing invalid UTF-8 pointers across the C boundary: ensure string lifetimes cover the entire pipeline call.
-- Collecting delegates too early in C#: keep delegate references alive while native callbacks may fire.
+| Symptom | Likely Cause | Fix |
+|---|---|---|
+| Unity `DllNotFoundException` | Plugin placed in wrong folder or platform disabled in Inspector. | Place per-ABI libraries in the correct Unity plugin path and enable the target platform. |
+| Unity crash after callback | Delegate was collected by the garbage collector. | Keep delegate references in static or member fields. |
+| UE packaged build cannot find DLL | Missing runtime dependency or incorrect DLL location. | Add `RuntimeDependencies` and ensure the DLL ships with the build. |
+| iOS link failure | Trying to load a dylib instead of using the static library. | Use the static `.a` library and `DllImport("__Internal")` in Unity. |
+| Struct misalignment or random crashes | C# or C++ struct layout does not match `pipeline_types.h`. | Match field order, types, and sequential layout exactly. |
+| Qt/wxWidgets UI freezes | Sync API called on the UI thread. | Move slicing to a worker thread and marshal callbacks to the UI thread. |
+| Crash updating widgets in callback | Callback runs on a library thread. | Post UI updates via signals/slots or `CallAfter`. |
+| Non-ASCII path failures | Wrong string encoding across the C boundary. | Pass UTF-8 encoded paths. |
+| Garbled result strings | Calling free too early. | Copy strings first, then call the matching free function. |
 
 **Section sources**
-- [docs/en/DllHsBaSlicer/README.md:56-62](file://docs/en/DllHsBaSlicer/README.md#L56-L62)
-- [docs/en/DllHsBaSlicer/README.md:684-703](file://docs/en/DllHsBaSlicer/README.md#L684-L703)
-- [docs/en/DllHsBaSlicer/game_engine_integration.md:128-183](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L128-L183)
+- [game_engine_integration.md:453-462](file://docs/en/DllHsBaSlicer/game_engine_integration.md#L453-L462)
+- [qt_wxwidgets_integration.md:340-349](file://docs/en/DllHsBaSlicer/qt_wxwidgets_integration.md#L340-L349)
 
-### Android-Specific Issues
-- Native library not found: verify `.so` files are copied into `src/main/jniLibs/arm64-v8a`.
-- ABI mismatch: ensure the built ABI matches `abiFilters` in Gradle.
-- Dynamic loader limitations: the project disables the dynamic library loader on non-desktop platforms by default.
+## Security, Licensing, and Distribution
+HsBaSlicer uses a conditional dual license:
+
+- Builds that do not include GPL/LGPL components, such as iOS or game-console builds without CGAL or OpenCascade, are licensed under MIT.
+- Builds that include copyleft kernels like CGAL or OpenCascade are licensed under GPL-3.0-or-later.
+- The effective license is determined at configure time from vcpkg configuration and can be queried at runtime through version information.
+
+Distribution implications:
+
+| Platform | Typical License Outcome | Distribution Notes |
+|---|---|---|
+| iOS | Usually MIT | Avoid enabling copyleft kernels unless required; bundle static libraries as shown in the iOS example. |
+| Game consoles | Usually MIT | The build system detects console triplets and disables some desktop-only features. |
+| Desktop Windows/Linux/macOS | Often GPL-3.0-or-later if copyleft kernels are enabled | Ensure source distribution obligations are met if distributing GPL-covered builds. |
+| Android | Often GPL-3.0-or-later if copyleft kernels are enabled | Follow Android packaging steps and consider whether CGAL/OpenCascade are needed. |
+
+Dependency and build notes:
+
+- Use `vcpkg.json` to manage dependencies and the optional `copyleft` feature.
+- Use `find_package(HsBaSlicer CONFIG REQUIRED)` and link against `HsBaSlicer::DllHsBaSlicer` or other installed targets.
+- Install artifacts with `cmake --install` and deploy the required runtime libraries next to your executable or into the platform-specific packaging structure.
 
 **Section sources**
-- [android/app/build.gradle:24-33](file://android/app/build.gradle#L24-L33)
-- [android/README.md:1-19](file://android/README.md#L1-L19)
-- [CMakeLists.txt:228-240](file://CMakeLists.txt#L228-L240)
-
-### iOS-Specific Issues
-- Runtime dylib loading is not allowed on iOS: use static library integration.
-- Swift bridge must call exported C functions correctly.
-- App Store distribution requires careful bundling of dependencies and license compliance.
-
-**Section sources**
-- [docs/en/DllHsBaSlicer/README.md:21-31](file://docs/en/DllHsBaSlicer/README.md#L21-L31)
-- [ios/HsBaSlicerExample/ViewController.swift:43-55](file://ios/HsBaSlicerExample/ViewController.swift#L43-L55)
-- [README.md:187-210](file://README.md#L187-L210)
+- [LICENSE.txt:1-23](file://LICENSE.txt#L1-L23)
+- [README.md:196-210](file://README.md#L196-L210)
+- [CMakeLists.txt:170-204](file://CMakeLists.txt#L170-L204)
+- [CMakeLists.txt:456-519](file://CMakeLists.txt#L456-L519)
+- [vcpkg.json:1-113](file://vcpkg.json#L1-L113)
 
 ## Conclusion
-HsBaSlicer provides flexible integration options:
-- Use `LibHsBaSlicer` for native C++ control.
-- Use `ModuleHsBaSlicer` for modern C++20 module-style APIs.
-- Use `DllHsBaSlicer` for cross-language and cross-platform integration.
-- Follow the provided CMake configuration, ABI memory rules, and platform-specific guidance for Android and iOS.
-- For game engines, rely on the documented Unity and Unreal patterns for real-time slicing, asset pipeline integration, and performance optimization.
-
-[No sources needed since this section summarizes without analyzing specific files]
-
-## Appendices
-
-### Minimal C++ Example Paths
-- Traditional headers sample: [samples/LibHsBaSlicer/main_header.cpp](file://samples/LibHsBaSlicer/main_header.cpp)
-- C++20 module sample: [samples/LibHsBaSlicer/main_module.cpp](file://samples/LibHsBaSlicer/main_module.cpp)
-
-**Section sources**
-- [samples/LibHsBaSlicer/main_header.cpp:1-28](file://samples/LibHsBaSlicer/main_header.cpp#L1-L28)
-- [samples/LibHsBaSlicer/main_module.cpp:1-29](file://samples/LibHsBaSlicer/main_module.cpp#L1-L29)
+HsBaSlicer provides a consistent C ABI for slicing across platforms. For Unity and Unreal Engine, focus on correct P/Invoke or plugin setup, background execution, and main-thread marshalling. For Qt and wxWidgets, use worker threads and UI-safe callback forwarding. For Android and iOS, follow the repository’s packaging and bridging examples. Always respect memory ownership, string encoding, threading discipline, and the conditional dual license determined by your dependency configuration.

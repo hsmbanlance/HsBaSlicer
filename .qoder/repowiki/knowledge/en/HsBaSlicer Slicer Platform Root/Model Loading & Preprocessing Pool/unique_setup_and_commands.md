@@ -1,1 +1,0 @@
-Build target `HsBaPreprocess` links `HsBaSlicerBase` and `HsBaSlicerMesh` unconditionally; `HsBaSlicerPointCloud` is linked unless building for ANDROID/IOS/HSBA_GAME_CONSOLE, and `HsBaSlicerCADModel` is only linked when `HSBA_COPL` is defined. Runtime availability of BRep and point-cloud loaders is controlled by `USE_OCCT` / `USE_OPENVDB` preprocessor macros.

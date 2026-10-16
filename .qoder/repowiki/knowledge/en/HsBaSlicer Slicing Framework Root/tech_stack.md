@@ -1,0 +1,1 @@
+CMake 3.28+ with vcpkg-managed dependencies (Boost.Log, Clipper2, miniz/bit7z, Protobuf, RapidJSON, Eigen3, OpenSSL, libigl, CGAL, OpenCASCADE, OpenVDB, Sqlpp11/SQLite3/MySQL/PostgreSQL, Lua, tinyxml2, yaml-cpp, magic_enum); C++20 standard across all children, with optional C23 for C sources on modern compilers.

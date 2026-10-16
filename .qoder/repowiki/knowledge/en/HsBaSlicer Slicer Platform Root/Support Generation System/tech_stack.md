@@ -1,1 +1,0 @@
-C++ with an embedded Lua interpreter used via `lua_State*` to execute user-provided scripts; 2D geometry is expressed through `PolygonsD` from the project's `2D/FloatPolygons` types.

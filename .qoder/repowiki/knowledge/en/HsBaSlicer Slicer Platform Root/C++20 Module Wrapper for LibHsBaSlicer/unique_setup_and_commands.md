@@ -1,1 +1,0 @@
-Built as a STATIC library because DLL linkage of the module BMI triggers `oleaut32.lib` path issues on some environments; the `module_anchor.cpp` anchor TU is required so CMake actually invokes the archiver and emits `ModuleHsBaSlicer.lib`.

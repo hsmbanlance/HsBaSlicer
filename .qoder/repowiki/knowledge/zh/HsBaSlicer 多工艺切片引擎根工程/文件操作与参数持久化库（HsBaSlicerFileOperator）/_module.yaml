@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: file_operations
+title: 文件操作与参数持久化库（HsBaSlicerFileOperator）
+scope:
+    - fileoperator/
+source_files: []
+depends_on: []
+related_to:
+    - path: core_library

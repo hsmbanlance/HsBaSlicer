@@ -1,0 +1,1 @@
+Requires OpenCASCADE installed and discoverable via `find_package(OpenCASCADE CONFIG REQUIRED)`; the dynamic-library path feature is disabled when `HSBA_NO_DLL_LOADER` is defined or when building for Android/iOS/Game Console (see CMake conditional around `find_package(Boost REQUIRED COMPONENTS dll)`).

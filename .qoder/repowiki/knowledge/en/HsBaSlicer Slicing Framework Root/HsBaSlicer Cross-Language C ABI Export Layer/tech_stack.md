@@ -1,0 +1,1 @@
+C++ with C ABI (`extern "C"`) targeting Windows (`__declspec(dllexport)`), macOS, Linux, and iOS; uses CMake conditional on `IOS`/`CMAKE_SYSTEM_NAME`; links against internal `LibHsBaSlicer` + preprocessing/support/path/file/version/converter/proto libraries.

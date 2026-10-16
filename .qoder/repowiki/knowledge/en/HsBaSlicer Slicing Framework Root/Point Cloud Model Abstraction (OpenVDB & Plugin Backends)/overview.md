@@ -1,0 +1,1 @@
+Provides the IModel-backed point cloud abstraction with an OpenVDB voxel-grid implementation and a user-supplied DLL/SO plugin backend for interchangeable point-cloud kernels.

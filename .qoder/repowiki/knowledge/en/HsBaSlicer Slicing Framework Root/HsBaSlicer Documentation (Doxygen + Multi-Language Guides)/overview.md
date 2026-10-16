@@ -1,0 +1,1 @@
+Multi-language documentation site for HsBaSlicer, providing English and Chinese guides for every source module plus Doxygen-driven API reference generation.

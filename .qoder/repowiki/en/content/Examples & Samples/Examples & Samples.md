@@ -3,15 +3,21 @@
 <cite>
 **Referenced Files in This Document**   
 - [README.md](file://README.md)
-- [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
 - [samples/FDM/main.cpp](file://samples/FDM/main.cpp)
+- [samples/FDM/CMakeLists.txt](file://samples/FDM/CMakeLists.txt)
 - [samples/SLA/main.cpp](file://samples/SLA/main.cpp)
-- [samples/Custom/main.cpp](file://samples/Custom/main.cpp)
+- [samples/SLA/CMakeLists.txt](file://samples/SLA/CMakeLists.txt)
 - [samples/SLS/main.cpp](file://samples/SLS/main.cpp)
-- [samples/SLM/main.cpp](file://samples/SLM/main.cpp)
-- [samples/TDP/main.cpp](file://samples/TDP/main.cpp)
-- [samples/WAAM/main.cpp](file://samples/WAAM/main.cpp)
+- [samples/SLS/CMakeLists.txt](file://samples/SLS/CMakeLists.txt)
 - [samples/LOM/main.cpp](file://samples/LOM/main.cpp)
+- [samples/LOM/CMakeLists.txt](file://samples/LOM/CMakeLists.txt)
+- [samples/TDP/main.cpp](file://samples/TDP/main.cpp)
+- [samples/TDP/CMakeLists.txt](file://samples/TDP/CMakeLists.txt)
+- [samples/WAAM/main.cpp](file://samples/WAAM/main.cpp)
+- [samples/WAAM/CMakeLists.txt](file://samples/WAAM/CMakeLists.txt)
+- [samples/Custom/main.cpp](file://samples/Custom/main.cpp)
+- [samples/LibHsBaSlicer/main_header.cpp](file://samples/LibHsBaSlicer/main_header.cpp)
+- [samples/LibHsBaSlicer/main_module.cpp](file://samples/LibHsBaSlicer/main_module.cpp)
 </cite>
 
 ## Table of Contents
@@ -27,568 +33,601 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document is the practical tutorial and examples page for HsBaSlicer. It focuses on how to use the provided sample programs to run slicing workflows, configure process parameters, customize behavior with Lua scripts, and handle errors. The samples cover:
+This document provides complete, working examples for HsBaSlicer across manufacturing technologies and integration targets. It covers:
+- Basic slicing workflows for FDM, SLA, SLS, LOM, TDP, and WAAM.
+- Configuration management patterns using C++ pipeline configuration structures.
+- Error handling and result cleanup patterns.
+- Advanced customization through Lua scripts and the Custom pipeline.
+- Performance techniques such as asynchronous execution and spiral/vase mode.
+- Platform-specific notes for Android, iOS, and desktop applications.
+- Sample Lua scripts for custom fill, support, floor, export, and robot path generation.
 
-- Basic FDM slicing with G-code output.
-- SLA processing with floor/raft and sacrificial supports.
-- Metal powder-bed processes SLM and SLS with Lua-driven export.
-- Thermal binder jetting TDP and wire deposition WAAM.
-- Laminated object manufacturing LOM.
-- Fully custom Lua pipelines that replace the entire workflow.
-
-The repository README explains that HsBaSlicer is a modular, cross-platform C++ framework for production-level slicing pipelines, provides shared-library and static-library targets, and installs CMake configuration files so downstream projects can link against `HsBaSlicer::DllHsBaSlicer` or `HsBaSlicer::LibHsBaSlicer`.
+The repository includes sample executables under `samples/`, each with a `main.cpp` demonstrating one or more pipelines, and a `CMakeLists.txt` that links against `DllHsBaSlicer`. The root README also documents build requirements, installation, and platform notes.
 
 **Section sources**
-- [README.md:21-39](file://README.md#L21-L39)
+- [README.md:21-23](file://README.md#L21-L23)
+- [README.md:41-98](file://README.md#L41-L98)
 - [README.md:100-124](file://README.md#L100-L124)
 
 ## Project Structure
-The example code lives under `samples/`, with one subdirectory per major printing technology. Each sample program follows the same pattern:
-
-1. Create a default pipeline configuration.
-2. Set model name and model path.
-3. Adjust process-specific parameters.
-4. Optionally set Lua script paths and function names.
-5. Run the pipeline synchronously or asynchronously.
-6. Check `success`, layer count, elapsed time, and output path.
-7. Free the returned result structure.
+The samples are organized by technology and integration target:
+- `samples/FDM`: FDM G-code slicing with sync/async, Lua infill/support, spiral mode.
+- `samples/SLA`: SLA layer SVG + config zip export with floor/support customization.
+- `samples/SLS`: Powder-bed SLS with Lua-driven export.
+- `samples/LOM`: Sheet-bonding LOM with cut/bond parameters and Lua export.
+- `samples/TDP`: Binder-jetting 3DP with head/drop/curing parameters and Lua export.
+- `samples/WAAM`: Wire arc additive manufacturing robot program generation (ABB/KUKA/FANUC), optional Lua path generator.
+- `samples/Custom`: Full workflow defined in Lua via the Custom pipeline API.
+- `samples/LibHsBaSlicer`: Direct C++ API usage via headers and C++20 modules.
 
 ```mermaid
 graph TB
-Root["samples/"] --> FDM["FDM<br/>G-code output"]
-Root --> SLA["SLA<br/>Layer images + zip"]
-Root --> Custom["Custom<br/>Lua-defined pipeline"]
-Root --> SLS["SLS<br/>Powder bed + Lua export"]
-Root --> SLM["SLM<br/>Metal powder bed + Lua export"]
-Root --> TDP["TDP<br/>Binder jetting + Lua export"]
-Root --> WAAM["WAAM<br/>Robot program output"]
-Root --> LOM["LOM<br/>Sheet bonding + Lua export"]
+Root["Repository Root"] --> Samples["samples/"]
+Samples --> FDM["FDM<br/>G-code slicing"]
+Samples --> SLA["SLA<br/>Layer SVG + config zip"]
+Samples --> SLS["SLS<br/>Lua-driven export"]
+Samples --> LOM["LOM<br/>Cut/bond + Lua export"]
+Samples --> TDP["TDP<br/>Binder jetting + Lua export"]
+Samples --> WAAM["WAAM<br/>Robot program"]
+Samples --> Custom["Custom<br/>Full Lua workflow"]
+Samples --> Lib["LibHsBaSlicer<br/>Headers + Modules"]
 ```
 
 **Diagram sources**
 - [samples/FDM/main.cpp:1-10](file://samples/FDM/main.cpp#L1-L10)
 - [samples/SLA/main.cpp:1-10](file://samples/SLA/main.cpp#L1-L10)
-- [samples/Custom/main.cpp:1-33](file://samples/Custom/main.cpp#L1-L33)
 - [samples/SLS/main.cpp:1-14](file://samples/SLS/main.cpp#L1-L14)
-- [samples/SLM/main.cpp:1-14](file://samples/SLM/main.cpp#L1-L14)
+- [samples/LOM/main.cpp:1-14](file://samples/LOM/main.cpp#L1-L14)
 - [samples/TDP/main.cpp:1-14](file://samples/TDP/main.cpp#L1-L14)
 - [samples/WAAM/main.cpp:1-13](file://samples/WAAM/main.cpp#L1-L13)
-- [samples/LOM/main.cpp:1-14](file://samples/LOM/main.cpp#L1-L14)
+- [samples/Custom/main.cpp:1-33](file://samples/Custom/main.cpp#L1-L33)
+- [samples/LibHsBaSlicer/main_header.cpp:1-11](file://samples/LibHsBaSlicer/main_header.cpp#L1-L11)
+- [samples/LibHsBaSlicer/main_module.cpp:1-12](file://samples/LibHsBaSlicer/main_module.cpp#L1-L12)
 
 **Section sources**
-- [samples/FDM/main.cpp:1-10](file://samples/FDM/main.cpp#L1-L10)
-- [samples/SLA/main.cpp:1-10](file://samples/SLA/main.cpp#L1-L10)
-- [samples/Custom/main.cpp:1-33](file://samples/Custom/main.cpp#L1-L33)
-- [samples/SLS/main.cpp:1-14](file://samples/SLS/main.cpp#L1-L14)
-- [samples/SLM/main.cpp:1-14](file://samples/SLM/main.cpp#L1-L14)
-- [samples/TDP/main.cpp:1-14](file://samples/TDP/main.cpp#L1-L14)
-- [samples/WAAM/main.cpp:1-13](file://samples/WAAM/main.cpp#L1-L13)
-- [samples/LOM/main.cpp:1-14](file://samples/LOM/main.cpp#L1-L14)
+- [samples/FDM/CMakeLists.txt:1-11](file://samples/FDM/CMakeLists.txt#L1-L11)
+- [samples/SLA/CMakeLists.txt:1-11](file://samples/SLA/CMakeLists.txt#L1-L11)
+- [samples/SLS/CMakeLists.txt:1-11](file://samples/SLS/CMakeLists.txt#L1-L11)
+- [samples/LOM/CMakeLists.txt:1-9](file://samples/LOM/CMakeLists.txt#L1-L9)
+- [samples/TDP/CMakeLists.txt:1-9](file://samples/TDP/CMakeLists.txt#L1-L9)
+- [samples/WAAM/CMakeLists.txt:1-11](file://samples/WAAM/CMakeLists.txt#L1-L11)
 
 ## Core Components
-The core configuration and result types are defined as C-compatible structs and enums in `pipelinetypes/pipeline_types.h`. This header intentionally avoids DLL export macros so downstream modules can reference the type definitions without depending on the shared library.
+Each technology sample demonstrates:
+- Creating a default configuration object for the relevant pipeline.
+- Setting model name and path.
+- Configuring process parameters (layer height, first layer height, material/process settings).
+- Running the pipeline synchronously or asynchronously.
+- Handling success/failure and freeing results.
+- Writing outputs to an `output/` directory.
 
-Key components used by the samples:
-
-| Component | Purpose | Key Fields / Behavior |
-|---|---|---|
-| `HsBaFdmPipelineConfig_t` | FDM slicing configuration | Layer height, wall count, top/bottom layers, infill density, support options, line width, print speed, spiral mode, firmware, nozzle/filament settings, Lua support/infill scripts, G-code output. |
-| `HsBaFdmPipelineResult_t` | FDM result | Success flag, total layers, G-code content, error message, elapsed seconds. |
-| `HsBaSlaPipelineConfig_t` | SLA slicing configuration | Layer height, exposure/lift/retract, floor/raft, support, image format/size, Lua floor/support/export scripts, zip output. |
-| `HsBaSlsPipelineConfig_t` | SLS configuration | Layer height, laser power, scan speed, hatch spacing/rotation, bed temperature, required Lua export script. |
-| `HsBaSlmPipelineConfig_t` | SLM metal configuration | Mirrors SLS plus material, light source, shielding gas. |
-| `HsBaTdpPipelineConfig_t` | 3DP binder jetting configuration | Head count, drop spacing, binder saturation, curing time, bed temperature, binder mode, optional spiral mode. |
-| `HsBaWaamPipelineConfig_t` | WAAM robot deposition configuration | Bead width, travel/wire speeds, arc current/voltage, gas flow, protection, robot controller type, optional Lua path generator, spiral mode. |
-| `HsBaLomPipelineConfig_t` | LOM sheet-bonding configuration | Sheet thickness, cut speed/margin/power, bond temperature/pressure/time, seal contour, cut mode, Lua export. |
-| `HsBaCustomPipelineConfig_t` | Fully Lua-defined pipeline | Script file or inline Lua source, entry function, free-form JSON config, model fields, output path. |
-
-All result structures include an `elapsed_seconds` field, which is useful for simple performance tracking across examples.
-
-**Section sources**
-- [pipeline_types.h:19-140](file://pipelinetypes/pipeline_types.h#L19-L140)
-- [pipeline_types.h:142-245](file://pipelinetypes/pipeline_types.h#L142-L245)
-- [pipeline_types.h:247-310](file://pipelinetypes/pipeline_types.h#L247-L310)
-- [pipeline_types.h:312-401](file://pipelinetypes/pipeline_types.h#L312-L401)
-- [pipeline_types.h:403-461](file://pipelinetypes/pipeline_types.h#L403-L461)
-- [pipeline_types.h:463-521](file://pipelinetypes/pipeline_types.h#L463-L521)
-- [pipeline_types.h:523-625](file://pipelinetypes/pipeline_types.h#L523-L625)
-- [pipeline_types.h:627-732](file://pipelinetypes/pipeline_types.h#L627-L732)
-
-## Architecture Overview
-Each sample demonstrates a consistent API shape:
-
-- **Default configuration**: A constructor-like helper returns a fully initialized struct with documented defaults.
-- **Model input**: `model_name` and `model_path` identify the mesh.
-- **Process parameters**: Geometry, thermal, laser, or robot parameters are filled into the config.
-- **Lua customization**: Optional script paths and function names allow replacing support, fill, floor, export, or the entire pipeline.
-- **Execution**: Synchronous functions return results directly; asynchronous functions invoke completion callbacks.
-- **Resource cleanup**: Result strings must be freed through the corresponding `HsBaFree*PipelineResult` function.
-
-```mermaid
-sequenceDiagram
-participant App as "Sample Program"
-participant Config as "Pipeline Config"
-participant Pipeline as "HsBaSlicer Pipeline"
-participant Lua as "Optional Lua Script"
-participant Output as "File System"
-App->>Config : Create default config
-App->>Config : Set model_name / model_path
-App->>Config : Set process parameters
-App->>Pipeline : Run(config, progress_callback, user_data)
-Pipeline->>Lua : Call custom script if configured
-Pipeline-->>App : Return result struct
-App->>Output : Write G-code / zip / robot program
-App->>Pipeline : Free result memory
-```
-
-**Diagram sources**
-- [samples/FDM/main.cpp:53-96](file://samples/FDM/main.cpp#L53-L96)
-- [samples/SLA/main.cpp:52-84](file://samples/SLA/main.cpp#L52-L84)
-- [samples/Custom/main.cpp:100-131](file://samples/Custom/main.cpp#L100-L131)
-- [samples/SLS/main.cpp:56-92](file://samples/SLS/main.cpp#L56-L92)
-- [samples/SLM/main.cpp:56-84](file://samples/SLM/main.cpp#L56-L84)
-- [samples/TDP/main.cpp:55-82](file://samples/TDP/main.cpp#L55-L82)
-- [samples/WAAM/main.cpp:54-81](file://samples/WAAM/main.cpp#L54-L81)
-- [samples/LOM/main.cpp:55-82](file://samples/LOM/main.cpp#L55-L82)
-
-## Detailed Component Analysis
-
-### FDM Slicing Examples
-The FDM sample demonstrates five common workflows:
-
-1. **Basic pipeline**: Use default config, set model, run synchronously, write G-code to disk.
-2. **Custom process parameters**: Configure layer height, wall count, top/bottom solid layers, infill density, support pattern, print/travel speeds, and output path.
-3. **Lua custom support and fill**: Point `support_lua_script`/`support_lua_func` and `infill_lua_script`/`infill_lua_func` to custom Lua algorithms.
-4. **Asynchronous pipeline**: Start non-blocking execution and poll a completion flag.
-5. **Spiral/vase mode**: Enable `spiral_mode` so the outer wall becomes one continuous rising extrusion, skipping per-layer infill and support.
+Common output types:
+- FDM: `.gcode` text file.
+- SLA: `.zip` containing config JSON and per-layer contour images.
+- SLS/LOM/TDP: `.zip` generated by Lua export scripts.
+- WAAM: Robot language program text file (ABB/KUKA/FANUC or custom Lua).
 
 ```mermaid
 flowchart TD
-Start(["FDM Example Entry"]) --> Default["Create default FDM config"]
-Default --> Model["Set model_name and model_path"]
-Model --> Mode{"Which example?"}
-Mode --> |Basic| SyncRun["Run FDM pipeline synchronously"]
-Mode --> |Custom| Params["Set walls, infill, support, speeds"]
-Params --> SyncRun
-Mode --> |Lua| LuaCfg["Set support_lua_script/func and infill_lua_script/func"]
-LuaCfg --> SyncRun
-Mode --> |Async| AsyncRun["Run FDM pipeline async with callback"]
-Mode --> |Spiral| Spiral["Enable spiral_mode = 1"]
-Spiral --> SyncRun
-SyncRun --> Check["Check result.success"]
-AsyncRun --> Check
-Check --> |Success| Write["Write G-code or log success"]
-Check --> |Failure| LogError["Log error_message"]
-Write --> Free["Free pipeline result"]
-LogError --> Free
-Free --> End(["Example Exit"])
+Start(["Start Sample"]) --> CreateCfg["Create Default Config"]
+CreateCfg --> SetModel["Set Model Name and Path"]
+SetModel --> Configure["Configure Process Parameters"]
+Configure --> RunSync{"Run Sync?"}
+RunSync --> |Yes| RunSyncCall["Run Pipeline Sync"]
+RunSync --> |No| RunAsyncCall["Run Pipeline Async"]
+RunSyncCall --> CheckResult["Check Result.success"]
+RunAsyncCall --> WaitCallback["Wait for Completion Callback"]
+CheckResult --> WriteOutput["Write Output File(s)"]
+WaitCallback --> WriteOutput
+WriteOutput --> FreeResult["Free Pipeline Result"]
+FreeResult --> End(["End"])
 ```
 
 **Diagram sources**
 - [samples/FDM/main.cpp:53-96](file://samples/FDM/main.cpp#L53-L96)
-- [samples/FDM/main.cpp:101-165](file://samples/FDM/main.cpp#L101-L165)
-- [samples/FDM/main.cpp:170-220](file://samples/FDM/main.cpp#L170-L220)
-- [samples/FDM/main.cpp:227-269](file://samples/FDM/main.cpp#L227-L269)
-- [samples/FDM/main.cpp:274-318](file://samples/FDM/main.cpp#L274-L318)
-
-#### Beginner Workflow: Basic FDM Slicing
-- Create default config with `HsBaCreateDefaultConfig`.
-- Set `model_name` and `model_path`.
-- Call `HsBaRunFdmPipeline`.
-- If `result.success` is true, write `gcode_content` to a `.gcode` file.
-- Always call `HsBaFreePipelineResult`.
-
-Expected outputs:
-- Console logs showing progress percentage and stage.
-- A generated G-code file under the `output` directory.
-- Total layer count and elapsed time in the result.
-
-#### Advanced Workflow: Lua Custom Support and Fill
-- Keep built-in slicing and path generation.
-- Replace only support generation via `support_lua_script` and `support_lua_func`.
-- Replace only infill generation via `infill_lua_script` and `infill_lua_func`.
-- This is the recommended extension point when you want custom algorithms without rewriting the whole pipeline.
+- [samples/SLA/main.cpp:52-84](file://samples/SLA/main.cpp#L52-L84)
+- [samples/SLS/main.cpp:56-92](file://samples/SLS/main.cpp#L56-L92)
+- [samples/LOM/main.cpp:55-82](file://samples/LOM/main.cpp#L55-L82)
+- [samples/TDP/main.cpp:55-82](file://samples/TDP/main.cpp#L55-L82)
+- [samples/WAAM/main.cpp:54-81](file://samples/WAAM/main.cpp#L54-L81)
 
 **Section sources**
 - [samples/FDM/main.cpp:53-96](file://samples/FDM/main.cpp#L53-L96)
-- [samples/FDM/main.cpp:101-165](file://samples/FDM/main.cpp#L101-L165)
-- [samples/FDM/main.cpp:170-220](file://samples/FDM/main.cpp#L170-L220)
-- [samples/FDM/main.cpp:227-269](file://samples/FDM/main.cpp#L227-L269)
-- [samples/FDM/main.cpp:274-318](file://samples/FDM/main.cpp#L274-L318)
-- [pipeline_types.h:23-140](file://pipelinetypes/pipeline_types.h#L23-L140)
+- [samples/SLA/main.cpp:52-84](file://samples/SLA/main.cpp#L52-L84)
+- [samples/SLS/main.cpp:56-92](file://samples/SLS/main.cpp#L56-L92)
+- [samples/LOM/main.cpp:55-82](file://samples/LOM/main.cpp#L55-L82)
+- [samples/TDP/main.cpp:55-82](file://samples/TDP/main.cpp#L55-L82)
+- [samples/WAAM/main.cpp:54-81](file://samples/WAAM/main.cpp#L54-L81)
 
-### SLA Processing Examples
-The SLA sample covers:
+## Architecture Overview
+The samples demonstrate two primary integration styles:
+- C ABI via `DllHsBaSlicer`: Each technology has a dedicated pipeline function family (e.g., `HsBaRunFdmPipeline`, `HsBaRunSlaPipeline`, etc.).
+- C++ API via `LibHsBaSlicer`: Direct header-based usage or C++20 module usage with class-based APIs (`Model`, `FdmPipeline`, `CustomLuaPipeline`).
 
-1. **Basic SLA pipeline**: Default config, model, zip output.
-2. **Custom exposure, floor, raft, and support**: Fine layer height, bottom/normal exposure, lift distance/speed, floor offset/border/fill, convex hull floor, sacrificial support pattern.
-3. **Lua custom floor, support, and export**: Replace floor generation, support generation, and optionally the export step.
-4. **Asynchronous SLA pipeline**: Non-blocking execution with completion callback.
+```mermaid
+graph TB
+ClientApp["Your Application"] --> Dll["DllHsBaSlicer<br/>C ABI Pipelines"]
+ClientApp --> Lib["LibHsBaSlicer<br/>C++ API"]
+Dll --> FDM["FDM Pipeline"]
+Dll --> SLA["SLA Pipeline"]
+Dll --> SLS["SLS Pipeline"]
+Dll --> LOM["LOM Pipeline"]
+Dll --> TDP["TDP Pipeline"]
+Dll --> WAAM["WAAM Pipeline"]
+Lib --> Preprocess["Preprocess"]
+Lib --> Slice["Slice"]
+Lib --> Support["Support"]
+Lib --> Fill["Fill"]
+Lib --> PathGen["Path Generation"]
+```
+
+**Diagram sources**
+- [samples/FDM/main.cpp:17-22](file://samples/FDM/main.cpp#L17-L22)
+- [samples/SLA/main.cpp:16-21](file://samples/SLA/main.cpp#L16-L21)
+- [samples/SLS/main.cpp:20-25](file://samples/SLS/main.cpp#L20-L25)
+- [samples/LOM/main.cpp:20-25](file://samples/LOM/main.cpp#L20-L25)
+- [samples/TDP/main.cpp:20-25](file://samples/TDP/main.cpp#L20-L25)
+- [samples/WAAM/main.cpp:19-24](file://samples/WAAM/main.cpp#L19-L24)
+- [samples/LibHsBaSlicer/main_header.cpp:20-27](file://samples/LibHsBaSlicer/main_header.cpp#L20-L27)
+- [samples/LibHsBaSlicer/main_module.cpp:22-29](file://samples/LibHsBaSlicer/main_module.cpp#L22-L29)
+
+## Detailed Component Analysis
+
+### FDM Pipeline Examples
+Purpose: Demonstrate FDM slicing with G-code output, including basic usage, custom parameters, Lua infill/support, async execution, and spiral/vase mode.
+
+Prerequisites:
+- Build system configured (CMake >= 3.12, C++20 compiler).
+- Optional: Logger linked on non-game-console platforms.
+- Model file: `models/stanford_bunny.stl` (downloaded automatically if missing).
+
+Build instructions:
+- Build the `fdm_sample` target; on mobile platforms it builds as a static library.
+- Resources (model and scripts) are copied to the executable’s output directory at post-build.
+
+Expected output:
+- `output/stanford_bunny_basic.gcode`
+- `output/stanford_bunny_custom.gcode`
+- `output/stanford_bunny_lua.gcode`
+- `output/stanford_bunny_spiral.gcode`
+
+Key patterns:
+- Default config creation and field assignment.
+- Progress callback and error message handling.
+- Asynchronous execution with completion callback.
+- Spiral mode enabling continuous outer-wall path without per-layer retraction.
 
 ```mermaid
 sequenceDiagram
-participant Sample as "SLA Sample"
-participant Config as "HsBaSlaPipelineConfig_t"
-participant Pipeline as "SLA Pipeline"
-participant Floor as "Floor Generator"
-participant Support as "Support Generator"
-participant Export as "Zip Export"
-Sample->>Config : Create default SLA config
-Sample->>Config : Set model and output zip path
-Sample->>Pipeline : RunSlaPipeline
-Pipeline->>Floor : Generate floor/raft
-Pipeline->>Support : Generate supports if enabled
-Pipeline->>Export : Export layer images and config
-Pipeline-->>Sample : SLA pipeline result
-Sample->>Export : Inspect exported zip path
+participant App as "FDM Sample"
+participant API as "HsBaRunFdmPipeline"
+participant Lua as "Lua Infill/Support"
+participant FS as "File System"
+App->>API : CreateDefaultConfig()
+App->>API : Set model_name/model_path
+App->>API : Configure layer_height, fill_mode, support_pattern
+App->>API : RunSync()/RunAsync()
+API-->>Lua : Load scripts if provided
+API-->>FS : Write .gcode
+API-->>App : Result{success,total_layers,error_message}
+```
+
+**Diagram sources**
+- [samples/FDM/main.cpp:53-96](file://samples/FDM/main.cpp#L53-L96)
+- [samples/FDM/main.cpp:101-165](file://samples/FDM/main.cpp#L101-L165)
+- [samples/FDM/main.cpp:170-220](file://samples/FDM/main.cpp#L170-L220)
+- [samples/FDM/main.cpp:245-269](file://samples/FDM/main.cpp#L245-L269)
+- [samples/FDM/main.cpp:274-318](file://samples/FDM/main.cpp#L274-L318)
+
+**Section sources**
+- [samples/FDM/main.cpp:53-96](file://samples/FDM/main.cpp#L53-L96)
+- [samples/FDM/main.cpp:101-165](file://samples/FDM/main.cpp#L101-L165)
+- [samples/FDM/main.cpp:170-220](file://samples/FDM/main.cpp#L170-L220)
+- [samples/FDM/main.cpp:245-269](file://samples/FDM/main.cpp#L245-L269)
+- [samples/FDM/main.cpp:274-318](file://samples/FDM/main.cpp#L274-L318)
+- [samples/FDM/CMakeLists.txt:1-72](file://samples/FDM/CMakeLists.txt#L1-L72)
+
+### SLA Pipeline Examples
+Purpose: Demonstrate SLA slicing producing a zip archive with config JSON and per-layer contour images, including floor/support customization via Lua.
+
+Prerequisites:
+- Same build requirements as FDM.
+- Model file reused from FDM sample.
+
+Build instructions:
+- Build the `sla_sample` target; resources are copied to the output directory.
+
+Expected output:
+- `output/sla_basic_output.zip`
+- `output/sla_custom_output.zip`
+- `output/sla_lua_custom_output.zip`
+- `output/sla_async_output.zip`
+
+Key patterns:
+- Exposure/lift/retract parameter configuration.
+- Floor/raft generation options.
+- Support pattern selection and density/gap tuning.
+- Lua hooks for floor and support generation.
+
+```mermaid
+sequenceDiagram
+participant App as "SLA Sample"
+participant API as "HsBaRunSlaPipeline"
+participant Lua as "Lua Floor/Support"
+participant Zip as "Zip Exporter"
+App->>API : CreateDefaultSlaConfig()
+App->>API : Set exposure/lift/floor/support params
+App->>API : RunSync()/RunAsync()
+API-->>Lua : Execute floor/support scripts if set
+API-->>Zip : Generate zip(config.json + layer images)
+API-->>App : Result{success,total_layers,export_path}
 ```
 
 **Diagram sources**
 - [samples/SLA/main.cpp:52-84](file://samples/SLA/main.cpp#L52-L84)
 - [samples/SLA/main.cpp:89-144](file://samples/SLA/main.cpp#L89-L144)
 - [samples/SLA/main.cpp:149-191](file://samples/SLA/main.cpp#L149-L191)
-- [samples/SLA/main.cpp:198-239](file://samples/SLA/main.cpp#L198-L239)
-- [pipeline_types.h:142-245](file://pipelinetypes/pipeline_types.h#L142-L245)
-
-#### Process-Specific Notes
-- SLA output is a zip containing configuration and layer images.
-- Image format can be PNG, JPEG, or SVG.
-- Floor/raft is separate from model supports.
-- Sacrificial supports are thin columns; cone-shaped supports are also available.
+- [samples/SLA/main.cpp:217-239](file://samples/SLA/main.cpp#L217-L239)
 
 **Section sources**
 - [samples/SLA/main.cpp:52-84](file://samples/SLA/main.cpp#L52-L84)
 - [samples/SLA/main.cpp:89-144](file://samples/SLA/main.cpp#L89-L144)
 - [samples/SLA/main.cpp:149-191](file://samples/SLA/main.cpp#L149-L191)
-- [samples/SLA/main.cpp:198-239](file://samples/SLA/main.cpp#L198-L239)
-- [pipeline_types.h:142-245](file://pipelinetypes/pipeline_types.h#L142-L245)
+- [samples/SLA/main.cpp:217-239](file://samples/SLA/main.cpp#L217-L239)
+- [samples/SLA/CMakeLists.txt:1-48](file://samples/SLA/CMakeLists.txt#L1-L48)
 
-### Metal Processing: SLM and SLS
-Both SLM and SLS are powder-bed processes where the powder bed itself provides support. They do not generate floor/raft or traditional supports in the same way as FDM/SLA. Their output format is controlled by a Lua export script.
+### SLS Pipeline Examples
+Purpose: Demonstrate powder-bed SLS slicing where output format is fully controlled by a Lua export script.
 
-| Aspect | SLS | SLM |
-|---|---|---|
-| Process family | Powder bed sintering | Metal powder bed melting |
-| Floor/raft | Not needed | Not needed |
-| Supports | Not needed | Not needed |
-| Laser/scanner | Power, scan speed, hatch spacing/rotation, bed temperature | Same geometry parameters plus metal-specific metadata |
-| Material metadata | Not part of the basic config struct | Material enum, light source enum, shielding gas |
-| Output | Lua-driven export (zip + database registration) | Lua-driven export (zip + database registration) |
+Prerequisites:
+- Same build requirements as FDM.
+- Lua export script: `scripts/my_sls_export.lua`.
+
+Build instructions:
+- Build the `sls_sample` target; resources are copied to the output directory.
+
+Expected output:
+- `output/sls_basic_output.zip`
+- `output/sls_custom_output.zip`
+- `output/sls_async_output.zip`
+
+Key patterns:
+- Laser power, scan speed, hatch spacing/rotation, bed temperature.
+- No floor/support needed; Lua export handles packaging and database registration.
 
 ```mermaid
-classDiagram
-class SlsConfig {
-+model_name
-+model_path
-+layer_height
-+first_layer_height
-+laser_power
-+scan_speed
-+hatch_spacing
-+hatch_rotation
-+bed_temperature
-+export_lua_script
-+export_lua_func
-+output_path
-}
-class SlmConfig {
-+model_name
-+model_path
-+layer_height
-+first_layer_height
-+laser_power
-+scan_speed
-+hatch_spacing
-+hatch_rotation
-+bed_temperature
-+material
-+light_source
-+protect_gas
-+export_lua_script
-+export_lua_func
-+output_path
-}
-SlmConfig --> SlsConfig : "Shares powder-bed slice/export concept"
+flowchart TD
+Start(["Start SLS Sample"]) --> Cfg["Create Default SLS Config"]
+Cfg --> Params["Set laser/power/hatch/bed params"]
+Params --> LuaExport["Set Lua export script/function"]
+LuaExport --> Run["Run Pipeline Sync/Async"]
+Run --> Output["Generate zip via Lua export"]
+Output --> Done(["Done"])
 ```
 
 **Diagram sources**
-- [pipeline_types.h:247-310](file://pipelinetypes/pipeline_types.h#L247-L310)
-- [pipeline_types.h:312-401](file://pipelinetypes/pipeline_types.h#L312-L401)
 - [samples/SLS/main.cpp:56-92](file://samples/SLS/main.cpp#L56-L92)
-- [samples/SLM/main.cpp:56-84](file://samples/SLM/main.cpp#L56-L84)
-
-#### SLS Tutorial Steps
-1. Create default SLS config.
-2. Set model name and path.
-3. Provide `export_lua_script` and `export_lua_func`.
-4. Optionally adjust layer height, laser power, scan speed, hatch spacing, hatch rotation, and bed temperature.
-5. Run synchronously or asynchronously.
-6. Inspect `export_path` and `elapsed_seconds`.
-
-#### SLM Tutorial Steps
-1. Create default SLM config.
-2. Set model name and path.
-3. Provide `export_lua_script` and `export_lua_func`.
-4. Set metal material, energy source, and shielding gas.
-5. Optionally adjust laser/scanner and bed temperature.
-6. Run synchronously or asynchronously.
-7. Inspect `export_path` and `elapsed_seconds`.
+- [samples/SLS/main.cpp:97-140](file://samples/SLS/main.cpp#L97-L140)
+- [samples/SLS/main.cpp:166-190](file://samples/SLS/main.cpp#L166-L190)
 
 **Section sources**
 - [samples/SLS/main.cpp:56-92](file://samples/SLS/main.cpp#L56-L92)
 - [samples/SLS/main.cpp:97-140](file://samples/SLS/main.cpp#L97-L140)
-- [samples/SLS/main.cpp:147-190](file://samples/SLS/main.cpp#L147-L190)
-- [samples/SLM/main.cpp:56-84](file://samples/SLM/main.cpp#L56-L84)
-- [samples/SLM/main.cpp:89-132](file://samples/SLM/main.cpp#L89-L132)
-- [samples/SLM/main.cpp:137-177](file://samples/SLM/main.cpp#L137-L177)
-- [pipeline_types.h:247-401](file://pipelinetypes/pipeline_types.h#L247-L401)
+- [samples/SLS/main.cpp:166-190](file://samples/SLS/main.cpp#L166-L190)
+- [samples/SLS/CMakeLists.txt:1-48](file://samples/SLS/CMakeLists.txt#L1-L48)
 
-### Thermal Processing: TDP and WAAM
-TDP and WAAM represent two very different thermal/additive families.
+### LOM Pipeline Examples
+Purpose: Demonstrate sheet-bonding LOM slicing with cut/bond parameters and Lua-driven export.
 
-- **TDP (3DP binder jetting)**: Liquid binder is jetted onto a powder bed. The sample includes a spiral mode that exposes a continuous rising outer-wall path to the export script while still keeping per-layer images.
-- **WAAM (wire arc additive manufacturing)**: Metal is deposited bead-by-bead along contours. The output is a robot language program, not a layer zip. Built-in generators exist for ABB, KUKA, and FANUC, or you can supply a custom Lua path generator.
+Prerequisites:
+- Same build requirements as FDM.
+- Lua export script: `scripts/my_lom_export.lua`.
 
-```mermaid
-flowchart TD
-ThermalStart["Thermal Processing Entry"] --> Choice{"TDP or WAAM?"}
-Choice --> |TDP| TdpFlow["Configure binder head/drop/curing<br/>Optionally enable spiral_mode"]
-Choice --> |WAAM| WaamFlow["Configure bead width, travel speed,<br/>arc current/voltage, gas flow, robot type"]
-TdpFlow --> TdpRun["Run TDP pipeline"]
-WaamFlow --> WaamRun["Run WAAM pipeline"]
-TdpRun --> TdpOut["Zip with layer images<br/>Optional spiral/path.json"]
-WaamRun --> WaamOut["Robot program file"]
-```
+Build instructions:
+- Build the `lom_sample` target; resources are copied to the output directory.
 
-**Diagram sources**
-- [samples/TDP/main.cpp:55-82](file://samples/TDP/main.cpp#L55-L82)
-- [samples/TDP/main.cpp:87-125](file://samples/TDP/main.cpp#L87-L125)
-- [samples/TDP/main.cpp:175-205](file://samples/TDP/main.cpp#L175-L205)
-- [samples/WAAM/main.cpp:54-81](file://samples/WAAM/main.cpp#L54-L81)
-- [samples/WAAM/main.cpp:86-131](file://samples/WAAM/main.cpp#L86-L131)
-- [samples/WAAM/main.cpp:183-217](file://samples/WAAM/main.cpp#L183-L217)
-- [pipeline_types.h:463-625](file://pipelinetypes/pipeline_types.h#L463-L625)
+Expected output:
+- `output/lom_basic_output.zip`
+- `output/lom_custom_output.zip`
+- `output/lom_async_output.zip`
 
-#### TDP Tutorial Steps
-1. Create default TDP config.
-2. Set model name and path.
-3. Provide `export_lua_script` and `export_lua_func`.
-4. Optionally set head count, drop spacing, binder saturation, curing time, bed temperature, and binder mode.
-5. For continuous deposition-style export, enable `spiral_mode`.
-6. Run synchronously or asynchronously.
-7. Inspect `export_path` and `elapsed_seconds`.
-
-#### WAAM Tutorial Steps
-1. Create default WAAM config.
-2. Set model name and path.
-3. Choose a built-in robot type or provide a custom Lua path generator.
-4. Set bead width, travel speed, welding process, protection method, shielding gas, arc current/voltage, wire feed speed, gas flow rate, and interpass temperature.
-5. Optionally enable `spiral_mode` to produce one continuous rising weld bead.
-6. Run synchronously or asynchronously.
-7. Inspect `output_path` and `elapsed_seconds`.
-
-**Section sources**
-- [samples/TDP/main.cpp:55-82](file://samples/TDP/main.cpp#L55-L82)
-- [samples/TDP/main.cpp:87-125](file://samples/TDP/main.cpp#L87-L125)
-- [samples/TDP/main.cpp:175-205](file://samples/TDP/main.cpp#L175-L205)
-- [samples/WAAM/main.cpp:54-81](file://samples/WAAM/main.cpp#L54-L81)
-- [samples/WAAM/main.cpp:86-131](file://samples/WAAM/main.cpp#L86-L131)
-- [samples/WAAM/main.cpp:183-217](file://samples/WAAM/main.cpp#L183-L217)
-- [pipeline_types.h:463-625](file://pipelinetypes/pipeline_types.h#L463-L625)
-
-### LOM Processing
-LOM uses sheet bonding and cutting. There is no floor/raft or support in the conventional sense; instead, the sample configures cut speed, cut margin, cut power, sealing, cut mode, and bonding temperature/pressure/time.
+Key patterns:
+- Sheet thickness, cut speed/margin/power, seal contour, cut mode.
+- Bond temperature/pressure/time.
+- Lua export receives cut/bond parameters via config JSON.
 
 ```mermaid
 flowchart TD
-LomStart["LOM Example Entry"] --> LomDefault["Create default LOM config"]
-LomDefault --> LomModel["Set model_name and model_path"]
-LomModel --> LomParams["Set cut and bond parameters"]
-LomParams --> LomLua["Provide Lua export script"]
-LomLua --> LomRun["Run LOM pipeline"]
-LomRun --> LomCheck{"Success?"}
-LomCheck --> |Yes| LomOut["Inspect exported zip path"]
-LomCheck --> |No| LomErr["Log error_message"]
-LomOut --> LomFree["Free pipeline result"]
-LomErr --> LomFree
+Start(["Start LOM Sample"]) --> Cfg["Create Default LOM Config"]
+Cfg --> CutParams["Set cut speed/margin/power/seal/mode"]
+CutParams --> BondParams["Set bond temperature/pressure/time"]
+BondParams --> LuaExport["Set Lua export script/function"]
+LuaExport --> Run["Run Pipeline Sync/Async"]
+Run --> Output["Generate zip via Lua export"]
+Output --> Done(["Done"])
 ```
 
 **Diagram sources**
 - [samples/LOM/main.cpp:55-82](file://samples/LOM/main.cpp#L55-L82)
 - [samples/LOM/main.cpp:87-130](file://samples/LOM/main.cpp#L87-L130)
-- [samples/LOM/main.cpp:135-175](file://samples/LOM/main.cpp#L135-L175)
-- [pipeline_types.h:403-461](file://pipelinetypes/pipeline_types.h#L403-L461)
+- [samples/LOM/main.cpp:154-175](file://samples/LOM/main.cpp#L154-L175)
 
 **Section sources**
 - [samples/LOM/main.cpp:55-82](file://samples/LOM/main.cpp#L55-L82)
 - [samples/LOM/main.cpp:87-130](file://samples/LOM/main.cpp#L87-L130)
-- [samples/LOM/main.cpp:135-175](file://samples/LOM/main.cpp#L135-L175)
-- [pipeline_types.h:403-461](file://pipelinetypes/pipeline_types.h#L403-L461)
+- [samples/LOM/main.cpp:154-175](file://samples/LOM/main.cpp#L154-L175)
+- [samples/LOM/CMakeLists.txt:1-42](file://samples/LOM/CMakeLists.txt#L1-L42)
 
-### Custom Lua Pipelines
-The Custom sample is the most powerful extension surface. Instead of fixing the stage order in C++, it gives Lua full control over the workflow. The C++ side exposes a global `HsBa` table with operations such as:
+### TDP Pipeline Examples
+Purpose: Demonstrate binder-jetting 3DP slicing with head/drop/curing parameters and Lua-driven export.
 
-- Progress reporting.
-- Model loading, transformation, and removal.
-- Layer counting and slicing.
-- Polygon conversion, filling, support generation, floor generation.
-- G-code generation.
-- Packaging helpers for SLA, SLS, WAAM, and image rendering.
-- Access to registered libraries like polygon operations, support, polygon fill, path optimization, zipper, cipher, and SQLite adapter.
+Prerequisites:
+- Same build requirements as FDM.
+- Lua export script: `scripts/my_tdp_export.lua`.
+
+Build instructions:
+- Build the `tdp_sample` target; resources are copied to the output directory.
+
+Expected output:
+- `output/3dp_basic_output.zip`
+- `output/3dp_custom_output.zip`
+- `output/3dp_async_output.zip`
+- `output/3dp_spiral_output.zip`
+
+Key patterns:
+- Head count, drop spacing, binder saturation, curing time, bed temperature.
+- Spiral mode exposes a continuous Z-rising outer-wall path to the export script.
+
+```mermaid
+flowchart TD
+Start(["Start TDP Sample"]) --> Cfg["Create Default TDP Config"]
+Cfg --> BinderParams["Set head/drop/saturation/curing/bed params"]
+BinderParams --> LuaExport["Set Lua export script/function"]
+LuaExport --> Run["Run Pipeline Sync/Async"]
+Run --> Output["Generate zip via Lua export"]
+Output --> Done(["Done"])
+```
+
+**Diagram sources**
+- [samples/TDP/main.cpp:55-82](file://samples/TDP/main.cpp#L55-L82)
+- [samples/TDP/main.cpp:87-125](file://samples/TDP/main.cpp#L87-L125)
+- [samples/TDP/main.cpp:149-170](file://samples/TDP/main.cpp#L149-L170)
+- [samples/TDP/main.cpp:175-205](file://samples/TDP/main.cpp#L175-L205)
+
+**Section sources**
+- [samples/TDP/main.cpp:55-82](file://samples/TDP/main.cpp#L55-L82)
+- [samples/TDP/main.cpp:87-125](file://samples/TDP/main.cpp#L87-L125)
+- [samples/TDP/main.cpp:149-170](file://samples/TDP/main.cpp#L149-L170)
+- [samples/TDP/main.cpp:175-205](file://samples/TDP/main.cpp#L175-L205)
+- [samples/TDP/CMakeLists.txt:1-42](file://samples/TDP/CMakeLists.txt#L1-L42)
+
+### WAAM Pipeline Examples
+Purpose: Demonstrate wire arc additive manufacturing robot program generation (ABB/KUKA/FANUC), with optional Lua path generator and spiral/vase mode.
+
+Prerequisites:
+- Same build requirements as FDM.
+- Optional Lua path script: `scripts/my_waam_path.lua`.
+
+Build instructions:
+- Build the `waam_sample` target; resources are copied to the output directory.
+
+Expected output:
+- `output/waam_basic_output.txt`
+- `output/waam_custom_output.txt`
+- `output/waam_async_output.txt`
+- `output/waam_spiral_output.txt`
+
+Key patterns:
+- Material, welding process, protection gas, arc current/voltage, wire feed speed, gas flow rate, interpass temperature.
+- Built-in robot code generators vs. custom Lua path generator.
+- Spiral mode merges outer walls into one continuous rising bead.
 
 ```mermaid
 sequenceDiagram
-participant Host as "Custom main.cpp"
-participant Engine as "Custom Pipeline Engine"
-participant LuaEnv as "Lua Environment"
-participant Ops as "HsBa Operations"
-participant FileSys as "File System"
-Host->>Engine : RunCustomPipeline(config, progress, user_data)
-Engine->>LuaEnv : Load script or inline source
-LuaEnv->>Ops : loadModel, layerCount, slice, fill, fdmSupport/slaSupport, floor
-Ops-->>LuaEnv : Polygons, layers, paths
-LuaEnv->>Ops : toGcode / saveSlaPackage / saveSlsPackage / saveWaamPackage
-Ops-->>LuaEnv : Strings or packaged data
-LuaEnv->>FileSys : writeFile or package output
-LuaEnv-->>Engine : Report layers, output path, result string
-Engine-->>Host : Custom pipeline result
+participant App as "WAAM Sample"
+participant API as "HsBaRunWaamPipeline"
+participant Lua as "Lua Path Generator"
+participant Robot as "Robot Code Generator"
+App->>API : CreateDefaultWaamConfig()
+App->>API : Set material/welding/robot params
+App->>API : RunSync()/RunAsync()
+alt Custom Lua path
+API-->>Lua : Execute path generator
+Lua-->>App : Robot program text
+else Built-in robot
+API-->>Robot : Generate ABB/KUKA/FANUC code
+Robot-->>App : Robot program text
+end
 ```
 
 **Diagram sources**
-- [samples/Custom/main.cpp:1-33](file://samples/Custom/main.cpp#L1-L33)
-- [samples/Custom/main.cpp:100-131](file://samples/Custom/main.cpp#L100-L131)
-- [samples/Custom/main.cpp:140-165](file://samples/Custom/main.cpp#L140-L165)
-- [samples/Custom/main.cpp:174-265](file://samples/Custom/main.cpp#L174-L265)
-- [samples/Custom/main.cpp:270-314](file://samples/Custom/main.cpp#L270-L314)
-- [samples/Custom/main.cpp:331-354](file://samples/Custom/main.cpp#L331-L354)
-- [samples/Custom/main.cpp:516-589](file://samples/Custom/main.cpp#L516-L589)
-- [pipeline_types.h:627-732](file://pipelinetypes/pipeline_types.h#L627-L732)
-
-#### Custom Pipeline Scenarios Covered
-- Pure Lua FDM pipeline from a script file.
-- Pure Lua SLS packaging pipeline.
-- Pure Lua SLM, LOM, 3DP, and WAAM pipelines.
-- Inline Lua source without a script file.
-- Asynchronous Lua pipeline.
-- Protobuf wire-format request/response for cross-process or cross-language integration.
+- [samples/WAAM/main.cpp:54-81](file://samples/WAAM/main.cpp#L54-L81)
+- [samples/WAAM/main.cpp:86-131](file://samples/WAAM/main.cpp#L86-L131)
+- [samples/WAAM/main.cpp:155-178](file://samples/WAAM/main.cpp#L155-L178)
+- [samples/WAAM/main.cpp:183-217](file://samples/WAAM/main.cpp#L183-L217)
 
 **Section sources**
-- [samples/Custom/main.cpp:1-33](file://samples/Custom/main.cpp#L1-L33)
-- [samples/Custom/main.cpp:100-131](file://samples/Custom/main.cpp#L100-L131)
-- [samples/Custom/main.cpp:140-165](file://samples/Custom/main.cpp#L140-L165)
-- [samples/Custom/main.cpp:174-265](file://samples/Custom/main.cpp#L174-L265)
-- [samples/Custom/main.cpp:270-314](file://samples/Custom/main.cpp#L270-L314)
-- [samples/Custom/main.cpp:331-354](file://samples/Custom/main.cpp#L331-L354)
-- [samples/Custom/main.cpp:516-589](file://samples/Custom/main.cpp#L516-L589)
-- [pipeline_types.h:627-732](file://pipelinetypes/pipeline_types.h#L627-L732)
+- [samples/WAAM/main.cpp:54-81](file://samples/WAAM/main.cpp#L54-L81)
+- [samples/WAAM/main.cpp:86-131](file://samples/WAAM/main.cpp#L86-L131)
+- [samples/WAAM/main.cpp:155-178](file://samples/WAAM/main.cpp#L155-L178)
+- [samples/WAAM/main.cpp:183-217](file://samples/WAAM/main.cpp#L183-L217)
+- [samples/WAAM/CMakeLists.txt:1-46](file://samples/WAAM/CMakeLists.txt#L1-L46)
 
-## Dependency Analysis
-At the sample level, dependencies are straightforward:
+### Custom Lua Pipeline Examples
+Purpose: Demonstrate full workflow definition in Lua via the Custom pipeline API, covering FDM, SLS, SLM, LOM, TDP, WAAM, inline Lua source, async execution, and Protobuf wire serialization.
 
-- Each sample links against its own pipeline header.
-- All samples share the same result-handling pattern: check `success`, read `total_layers`, inspect `elapsed_seconds`, and free the result.
-- The C ABI types live in `pipelinetypes/pipeline_types.h`, allowing downstream modules and converters to reference them without depending on the shared library.
+Prerequisites:
+- Same build requirements as FDM.
+- Lua scripts under `samples/Custom/scripts/`.
+
+Build instructions:
+- Build the `custom_sample` target; resources are copied to the output directory.
+
+Expected output:
+- Various `.gcode`, `.zip`, and `.txt` files depending on the selected Lua pipeline.
+- CSV report when running the inline Lua example.
+
+Key patterns:
+- `HsBa` operator table exposed to Lua: progress reporting, model loading/slicing, fill/support/floor generation, G-code conversion, package saving, image rendering.
+- Inline Lua source executed before the script file for parameter preloading.
+- Protobuf wire encoding/decoding for cross-language calls.
 
 ```mermaid
-graph LR
-Types["pipeline_types.h"] --> FDM["samples/FDM/main.cpp"]
-Types --> SLA["samples/SLA/main.cpp"]
-Types --> Custom["samples/Custom/main.cpp"]
-Types --> SLS["samples/SLS/main.cpp"]
-Types --> SLM["samples/SLM/main.cpp"]
-Types --> TDP["samples/TDP/main.cpp"]
-Types --> WAAM["samples/WAAM/main.cpp"]
-Types --> LOM["samples/LOM/main.cpp"]
+flowchart TD
+Start(["Start Custom Sample"]) --> Cfg["Create Default Custom Config"]
+Cfg --> Script["Set Lua script/source/entry_func"]
+Script --> Params["Set model/output/config_json"]
+Params --> Run["Run Custom Pipeline Sync/Async"]
+Run --> LuaOps["Execute Lua operators (slice/fill/support/export)"]
+LuaOps --> Output["Write output based on Lua logic"]
+Output --> Done(["Done"])
 ```
 
 **Diagram sources**
-- [pipeline_types.h:19-732](file://pipelinetypes/pipeline_types.h#L19-L732)
-- [samples/FDM/main.cpp:17-18](file://samples/FDM/main.cpp#L17-L18)
-- [samples/SLA/main.cpp:16-17](file://samples/SLA/main.cpp#L16-L17)
-- [samples/Custom/main.cpp:47-48](file://samples/Custom/main.cpp#L47-L48)
-- [samples/SLS/main.cpp:20-21](file://samples/SLS/main.cpp#L20-L21)
-- [samples/SLM/main.cpp:20-21](file://samples/SLM/main.cpp#L20-L21)
-- [samples/TDP/main.cpp:20-21](file://samples/TDP/main.cpp#L20-L21)
-- [samples/WAAM/main.cpp:19-20](file://samples/WAAM/main.cpp#L19-L20)
-- [samples/LOM/main.cpp:20-21](file://samples/LOM/main.cpp#L20-L21)
+- [samples/Custom/main.cpp:100-132](file://samples/Custom/main.cpp#L100-L132)
+- [samples/Custom/main.cpp:140-165](file://samples/Custom/main.cpp#L140-L165)
+- [samples/Custom/main.cpp:174-265](file://samples/Custom/main.cpp#L174-L265)
+- [samples/Custom/main.cpp:270-314](file://samples/Custom/main.cpp#L270-L314)
+- [samples/Custom/main.cpp:331-354](file://samples/Custom/main.cpp#L331-L354)
+- [samples/Custom/main.cpp:516-589](file://samples/Custom/main.cpp#L516-L589)
 
 **Section sources**
-- [pipeline_types.h:19-732](file://pipelinetypes/pipeline_types.h#L19-L732)
-- [samples/FDM/main.cpp:17-18](file://samples/FDM/main.cpp#L17-L18)
-- [samples/SLA/main.cpp:16-17](file://samples/SLA/main.cpp#L16-L17)
-- [samples/Custom/main.cpp:47-48](file://samples/Custom/main.cpp#L47-L48)
-- [samples/SLS/main.cpp:20-21](file://samples/SLS/main.cpp#L20-L21)
-- [samples/SLM/main.cpp:20-21](file://samples/SLM/main.cpp#L20-L21)
-- [samples/TDP/main.cpp:20-21](file://samples/TDP/main.cpp#L20-L21)
-- [samples/WAAM/main.cpp:19-20](file://samples/WAAM/main.cpp#L19-L20)
-- [samples/LOM/main.cpp:20-21](file://samples/LOM/main.cpp#L20-L21)
+- [samples/Custom/main.cpp:100-132](file://samples/Custom/main.cpp#L100-L132)
+- [samples/Custom/main.cpp:140-165](file://samples/Custom/main.cpp#L140-L165)
+- [samples/Custom/main.cpp:174-265](file://samples/Custom/main.cpp#L174-L265)
+- [samples/Custom/main.cpp:270-314](file://samples/Custom/main.cpp#L270-L314)
+- [samples/Custom/main.cpp:331-354](file://samples/Custom/main.cpp#L331-L354)
+- [samples/Custom/main.cpp:516-589](file://samples/Custom/main.cpp#L516-L589)
+
+### LibHsBaSlicer Integration Examples
+Purpose: Demonstrate direct C++ API usage via traditional headers and C++20 modules.
+
+Prerequisites:
+- C++20 compatible compiler.
+- For module version: HSBA_SLICER_MODULE=ON (default).
+
+Build instructions:
+- Build the `lib_header_sample` and `lib_module_sample` targets.
+
+Expected output:
+- `output/lib_header_sample.gcode`
+- `output/lib_module_sample.gcode`
+- `output/lib_module_lua.gcode` (if Lua script exists)
+
+Key patterns:
+- Header-based workflow: LoadModel -> Slice -> Support -> Fill -> GenerateGCodePath.
+- Module-based workflow: `Model`, `FdmPipeline`, `CustomLuaPipeline` classes.
+- Exception handling for `SlicerError` and standard exceptions.
+
+```mermaid
+classDiagram
+class Model {
++info() ModelInfo
++translate(vec3) void
++scale(factor) void
+}
+class FdmPipeline {
++run(model) FdmResult
++sliceAll(model) vector<Polygons>
++generateSupports(layers_d) vector<PolygonsD>
++fill(contours) Polygons
++generatePath(layer_data) PathData
+}
+class CustomLuaPipeline {
++setProgressFunc(callback) void
++run() CustomLuaResult
+}
+Model --> FdmPipeline : "input"
+FdmPipeline --> CustomLuaPipeline : "optional Lua workflow"
+```
+
+**Diagram sources**
+- [samples/LibHsBaSlicer/main_header.cpp:46-185](file://samples/LibHsBaSlicer/main_header.cpp#L46-L185)
+- [samples/LibHsBaSlicer/main_module.cpp:31-161](file://samples/LibHsBaSlicer/main_module.cpp#L31-L161)
+
+**Section sources**
+- [samples/LibHsBaSlicer/main_header.cpp:46-185](file://samples/LibHsBaSlicer/main_header.cpp#L46-L185)
+- [samples/LibHsBaSlicer/main_module.cpp:31-161](file://samples/LibHsBaSlicer/main_module.cpp#L31-L161)
+
+## Dependency Analysis
+Samples depend on:
+- `DllHsBaSlicer` for C ABI pipeline functions.
+- Optional `HsBaSlicerLog` for logging on non-game-console platforms.
+- Model files downloaded/copied during build/post-build.
+- Lua scripts for customization (infill, support, floor, export, path generation).
+
+```mermaid
+graph TB
+FDM_Sample["FDM Sample"] --> Dll["DllHsBaSlicer"]
+SLA_Sample["SLA Sample"] --> Dll
+SLS_Sample["SLS Sample"] --> Dll
+LOM_Sample["LOM Sample"] --> Dll
+TDP_Sample["TDP Sample"] --> Dll
+WAAM_Sample["WAAM Sample"] --> Dll
+Custom_Sample["Custom Sample"] --> Dll
+LibHeader["Lib Header Sample"] --> Lib["LibHsBaSlicer"]
+LibModule["Lib Module Sample"] --> Lib
+```
+
+**Diagram sources**
+- [samples/FDM/CMakeLists.txt:13-24](file://samples/FDM/CMakeLists.txt#L13-L24)
+- [samples/SLA/CMakeLists.txt:13-24](file://samples/SLA/CMakeLists.txt#L13-L24)
+- [samples/SLS/CMakeLists.txt:13-24](file://samples/SLS/CMakeLists.txt#L13-L24)
+- [samples/LOM/CMakeLists.txt:11-20](file://samples/LOM/CMakeLists.txt#L11-L20)
+- [samples/TDP/CMakeLists.txt:11-20](file://samples/TDP/CMakeLists.txt#L11-L20)
+- [samples/WAAM/CMakeLists.txt:13-24](file://samples/WAAM/CMakeLists.txt#L13-L24)
+
+**Section sources**
+- [samples/FDM/CMakeLists.txt:13-24](file://samples/FDM/CMakeLists.txt#L13-L24)
+- [samples/SLA/CMakeLists.txt:13-24](file://samples/SLA/CMakeLists.txt#L13-L24)
+- [samples/SLS/CMakeLists.txt:13-24](file://samples/SLS/CMakeLists.txt#L13-L24)
+- [samples/LOM/CMakeLists.txt:11-20](file://samples/LOM/CMakeLists.txt#L11-L20)
+- [samples/TDP/CMakeLists.txt:11-20](file://samples/TDP/CMakeLists.txt#L11-L20)
+- [samples/WAAM/CMakeLists.txt:13-24](file://samples/WAAM/CMakeLists.txt#L13-L24)
 
 ## Performance Considerations
-The samples consistently expose timing information through `elapsed_seconds` in each pipeline result. This makes it easy to compare configurations and modes.
-
-Practical guidance based on the samples:
-
-- **Use asynchronous execution for UI-heavy applications**: The FDM, SLA, SLS, SLM, TDP, WAAM, and Custom samples all show how to start a pipeline without blocking the caller.
-- **Prefer default configs as baselines**: Each sample starts from a default configuration, then changes only what is necessary.
-- **Avoid unnecessary support and infill for vase/spiral modes**: FDM and WAAM demonstrate `spiral_mode`, which merges outer walls into a continuous rising path and skips per-layer infill/support where applicable.
-- **Keep Lua scripts focused**: In Custom pipelines, the comment explicitly states that the C++ side provides pipeline building blocks and the Lua script decides stage order and content.
-- **Track layer counts and elapsed time**: All result structs report `total_layers` and `elapsed_seconds`, enabling simple benchmarking across parameter sets.
+- Asynchronous execution: All samples demonstrate async pipeline calls with completion callbacks, allowing UI updates or background processing.
+- Spiral/vase mode: Reduces travel moves and retractions by merging outer walls into a continuous path (FDM, TDP, WAAM).
+- Resource copying: Post-build commands copy models and scripts to the executable directory to avoid runtime path issues.
+- Mobile platforms: Samples compile as static libraries on Android/iOS to keep code verified even without console executables.
 
 [No sources needed since this section provides general guidance]
 
 ## Troubleshooting Guide
-Common issues visible in the sample patterns:
-
-| Symptom | Likely Cause | Resolution |
-|---|---|---|
-| Pipeline reports failure | Invalid model path, missing Lua script, or invalid parameters | Check `error_message` in the result and verify `model_path`, `output_path`, and Lua script paths. |
-| No output file created | Output path is invalid or writing failed | Ensure the output directory exists and the path is writable. |
-| Memory leak after pipeline | Result not freed | Always call the matching `HsBaFree*PipelineResult` function. |
-| Custom pipeline does nothing | Wrong entry function or missing Lua source/script | Verify `entry_func`, `pipeline_lua_script`, and `pipeline_lua_source`. |
-| Cross-language Custom pipeline fails | Wire format mismatch | Ensure the protobuf wire encoding matches `custom_pipeline.proto` field numbers and wire types. |
+Common issues and resolutions:
+- Missing model file: Ensure `models/stanford_bunny.stl` exists or allow automatic download during build.
+- Lua script not found: Verify script paths relative to the executable’s output directory.
+- Logging disabled on game consoles: Logger is conditionally linked; logs may be suppressed on `HSBA_GAME_CONSOLE`.
+- Protobuf conflicts: Avoid linking protobuf runtime in both C++ caller and DllHsBaSlicer simultaneously to prevent duplicate proto registration errors.
 
 **Section sources**
-- [samples/FDM/main.cpp:69-96](file://samples/FDM/main.cpp#L69-L96)
-- [samples/SLA/main.cpp:69-84](file://samples/SLA/main.cpp#L69-L84)
-- [samples/Custom/main.cpp:80-94](file://samples/Custom/main.cpp#L80-L94)
-- [samples/Custom/main.cpp:534-559](file://samples/Custom/main.cpp#L534-L559)
-- [pipeline_types.h:115-140](file://pipelinetypes/pipeline_types.h#L115-L140)
-- [pipeline_types.h:220-245](file://pipelinetypes/pipeline_types.h#L220-L245)
-- [pipeline_types.h:706-732](file://pipelinetypes/pipeline_types.h#L706-L732)
+- [samples/FDM/CMakeLists.txt:34-54](file://samples/FDM/CMakeLists.txt#L34-L54)
+- [samples/Custom/main.cpp:357-364](file://samples/Custom/main.cpp#L357-L364)
 
 ## Conclusion
-The HsBaSlicer samples provide a complete progression from beginner-friendly workflows to advanced customization:
+The HsBaSlicer samples provide comprehensive, working examples for all major manufacturing technologies and integration targets. They demonstrate:
+- Basic and advanced slicing workflows.
+- Configuration management and error handling.
+- Lua-driven customization for fill, support, floor, export, and robot path generation.
+- Asynchronous execution and performance optimizations like spiral mode.
+- Cross-platform considerations for Android, iOS, and desktop applications.
 
-- Beginners should start with the basic FDM and SLA examples.
-- Intermediate users should explore Lua-based support, fill, floor, and export customization.
-- Advanced users should use the Custom pipeline to define entirely new workflows, integrate with other languages via Protobuf wire formats, and extend thermal and metal processes like TDP, WAAM, SLS, and SLM.
-
-The consistent API design across samples makes it straightforward to switch between technologies while reusing the same configuration, progress, result, and resource-cleanup patterns.
+These samples serve as a foundation for extending HsBaSlicer with custom algorithms, optimization techniques, and multi-threading strategies tailored to specific production needs.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
 ## Appendices
 
-### Quick Reference: Configuration Defaults
-The following table summarizes representative default values and key options exposed by the C-compatible types.
-
-| Pipeline | Default Layer Height | Default First Layer | Key Customization Options |
-|---|---:|---:|---|
-| FDM | 0.2 mm | 0.25 mm | Wall count, top/bottom layers, infill density, support pattern, line width, print/travel speed, spiral mode, firmware, nozzle/filament settings. |
-| SLA | 0.05 mm | 0.1 mm | Exposure times, lift distances/speeds, floor/raft, support pattern, image format/size, Lua floor/support/export. |
-| SLS | 0.1 mm | 0.15 mm | Laser power, scan speed, hatch spacing/rotation, bed temperature, Lua export script. |
-| SLM | Varies by config | Varies by config | Same as SLS plus material, light source, shielding gas. |
-| TDP | Varies by config | Varies by config | Head count, drop spacing, binder saturation, curing time, bed temperature, binder mode, spiral mode. |
-| WAAM | Varies by config | Varies by config | Bead width, travel/wire speeds, arc current/voltage, gas flow, protection, robot type, path Lua generator, spiral mode. |
-| LOM | Varies by config | Varies by config | Cut speed/margin/power, bond temperature/pressure/time, seal contour, cut mode. |
-| Custom | N/A | N/A | Lua script or inline source, entry function, free-form JSON config, model/output fields. |
+### Platform-Specific Notes
+- Desktop (Windows/Linux/macOS): All library targets participate in installation; samples build as executables.
+- Android/iOS: Samples build as static libraries; model/script resources are handled differently due to platform constraints.
+- Game consoles: Logger is conditionally excluded; samples still compile and verify core logic.
 
 **Section sources**
-- [pipeline_types.h:53-113](file://pipelinetypes/pipeline_types.h#L53-L113)
-- [pipeline_types.h:165-218](file://pipelinetypes/pipeline_types.h#L165-L218)
-- [pipeline_types.h:259-283](file://pipelinetypes/pipeline_types.h#L259-L283)
-- [pipeline_types.h:359-376](file://pipelinetypes/pipeline_types.h#L359-L376)
-- [pipeline_types.h:419-436](file://pipelinetypes/pipeline_types.h#L419-L436)
-- [pipeline_types.h:480-496](file://pipelinetypes/pipeline_types.h#L480-L496)
-- [pipeline_types.h:578-600](file://pipelinetypes/pipeline_types.h#L578-L600)
-- [pipeline_types.h:689-704](file://pipelinetypes/pipeline_types.h#L689-L704)
+- [README.md:187-191](file://README.md#L187-L191)
+- [samples/FDM/CMakeLists.txt:5-11](file://samples/FDM/CMakeLists.txt#L5-L11)
+- [samples/SLA/CMakeLists.txt:5-11](file://samples/SLA/CMakeLists.txt#L5-L11)
+- [samples/SLS/CMakeLists.txt:5-11](file://samples/SLS/CMakeLists.txt#L5-L11)
+- [samples/LOM/CMakeLists.txt:5-9](file://samples/LOM/CMakeLists.txt#L5-L9)
+- [samples/TDP/CMakeLists.txt:5-9](file://samples/TDP/CMakeLists.txt#L5-L9)
+- [samples/WAAM/CMakeLists.txt:5-11](file://samples/WAAM/CMakeLists.txt#L5-L11)

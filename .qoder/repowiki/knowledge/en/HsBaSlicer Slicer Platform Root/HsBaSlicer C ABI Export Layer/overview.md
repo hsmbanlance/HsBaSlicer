@@ -1,1 +1,0 @@
-C ABI boundary that wraps the HsBaSlicer core library, exposing per-technology slicing pipelines and shared pipeline utilities as a single dynamically loadable DLL for C#/Java/Python consumers.

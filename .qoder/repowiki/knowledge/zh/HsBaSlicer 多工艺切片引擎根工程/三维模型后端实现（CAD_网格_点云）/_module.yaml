@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: model_backends
+title: 三维模型后端实现（CAD/网格/点云）
+scope:
+    - cadmodel/
+    - meshmodel/
+    - pointcloud/
+source_files: []
+depends_on: []
+related_to:
+    - path: core_library

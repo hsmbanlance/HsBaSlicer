@@ -1,1 +1,0 @@
-Cross-platform application entry point that initializes the slicer and runs FDM/SLA/SLS pipeline examples as a desktop executable, Android shared library, or iOS static library.

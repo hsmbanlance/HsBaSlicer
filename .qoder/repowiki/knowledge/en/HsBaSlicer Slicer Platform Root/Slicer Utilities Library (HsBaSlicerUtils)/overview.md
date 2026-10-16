@@ -1,1 +1,0 @@
-Static C++ utility library providing Lua bridge helpers, typed graph algorithms, multi-format struct serialization, and shared application configuration for the slicer.

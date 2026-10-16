@@ -1,0 +1,1 @@
+Eigen matrices for geometry, libigl for basic mesh IO/ops, CGAL `Exact_predicates_inexact_constructions_kernel` + `Nef_polyhedron_3` for robust boolean ops and surface geodesics, and Lua scripting integration for custom slice generation.

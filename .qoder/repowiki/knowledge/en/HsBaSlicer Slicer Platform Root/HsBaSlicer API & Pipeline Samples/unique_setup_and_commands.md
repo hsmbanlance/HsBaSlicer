@@ -1,1 +1,0 @@
-Non-mobile builds run as console programs that create an `output/` directory next to the executable and expect `models/stanford_bunny.stl` beside it; CMake `POST_BUILD` commands copy both the STL and the `scripts/` tree into the target's output directory. The LibHsBaSlicer module sample additionally requires `HSBA_SLICER_MODULE=ON` at configure time.

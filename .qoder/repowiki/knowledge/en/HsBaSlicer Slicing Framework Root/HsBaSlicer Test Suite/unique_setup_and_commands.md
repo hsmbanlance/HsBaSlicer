@@ -1,0 +1,1 @@
+Build the parent project first so all `HsBaSlicer*` targets exist, then run `ctest -V` from the build tree; individual tests can be invoked directly as `<build>/tests/<name>_test`. The `HSBA_RUN_TESTS_AFTER_BUILD` CMake option auto-runs CTest after each test target builds, and `HSBA_COPL` enables the copyleft CGAL model test.

@@ -1,0 +1,1 @@
+Run `cmake --build . --target docs` from the project root to generate API docs; requires Doxygen and Graphviz installed so that `find_package(Doxygen COMPONENTS dot)` succeeds.

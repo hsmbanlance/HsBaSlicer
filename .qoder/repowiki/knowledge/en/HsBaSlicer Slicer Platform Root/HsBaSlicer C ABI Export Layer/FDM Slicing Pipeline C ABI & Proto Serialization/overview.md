@@ -1,1 +1,0 @@
-C ABI entry point for the FDM slicing pipeline and a unified proto-serialization layer converting between protobuf wire format and C config/result structs across all printer technologies.

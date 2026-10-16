@@ -1,0 +1,1 @@
+C++ static library built with CMake; miniz for default ZIP I/O; optional Bit7z (`bit7z::bit7z`, `bit7z::bit7z64`) for alternate archive backends; sqlpp11 with SQLite (always linked), MySQL and PostgreSQL (conditional); Boost.PropertyTree for INI/JSON/XML; Lua (find_package(Lua REQUIRED)); Boost.Log (optional, off on mobile/console targets).

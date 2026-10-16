@@ -1,0 +1,5 @@
+- Every public C ABI function is declared inside an `#ifdef __cplusplus extern "C" { ... }` block and annotated with `HSBA_SLICER_API` from `dllexport.h`.
+- Each printer technology is implemented as a paired header/source file named `<technology>_pipeline.{h,cpp}` exposing create/run/free functions over `HsBaPipelineConfig_t` / `HsBaPipelineResult_t`.
+- One-time initialization is centralized in `initialize()`, which registers Lua extensions, pipeline types, and event callbacks rather than doing work at global construction time.
+- Extension points are exposed as function-pointer registration APIs (`HsBaAdd2DFunction`, `HsBaAdd3DFunction`, `HsBaAddFileFunction`, `HsBaAddEventCallback`, `HsBaAddZipperEventCallback`, `HsBaAddDBEventCallback`) taking `HsBaLuaRegFn` or plain C callbacks.
+- Adapter implementations wrap core library calls in thin `extern "C"` wrappers that forward to `HsBa::Slicer::*` namespace functions, keeping the C ABI boundary explicit.

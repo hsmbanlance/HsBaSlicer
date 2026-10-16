@@ -1,0 +1,1 @@
+Conditional OCCT build: set `HSBA_COPL=ON` and ensure OCCT is installed; the CAD-dependent `HsBaSlicerCADModel` link is automatically disabled on Android, iOS, and game-console targets regardless of the flag. Shared-library consumers must include `LibHsBaSlicer/export.h` to get the `HSBA_SLICER_LIB_API` decoration.

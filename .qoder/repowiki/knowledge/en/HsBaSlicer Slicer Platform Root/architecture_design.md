@@ -1,8 +1,0 @@
-The root `CMakeLists.txt` is the single wiring point: it detects compiler capabilities (C++20 concepts/ranges/source_location/NTTP), selects optional kernels via `HSBA_COPL` (CGAL/OpenCascade) vs. default IGL/OpenVDB, then includes subdirectories in a strict dependency order — `proto` → `base` → `cipher` → `utils` → `logger` → `2D` → `paths` → `fileoperator` → mesh/CAD/pointcloud model backends → `preprocess` → `support` → `pipelinetypes` → `convert` → `LibHsBaSlicer` → `ModuleHsBaSlicer` → `DllHsBaSlicer` → `HsBaSlicer` app entry.
-
-Cross-child contracts are enforced at three levels:
-- ABI layer: `pipelinetypes` defines the C ABI structs/enums/callbacks consumed by every technology pipeline; `dll_export_layer` exposes them as a single DLL; `cpp_module_layer` wraps them in a C++20 module.
-- Serialization layer: `protobuf_schema` provides `.proto` definitions; `convert_layer` bidirectionally converts Eigen/topology/pipeline types to/from protobuf messages used across preprocess/support/path consumers.
-- Plugin/loader layer: `model_processing` backends register themselves into the pooled registry managed by `preprocess_layer`, selected at runtime via the Lua-driven plugin loader.
-
-Platform gating (`HSBA_DESKTOP`/`HSBA_MOBILE`/`HSBA_GAME_CONSOLE`/`HSBA_COPL`) uniformly toggles features like dynamic library loading, bit7z, OpenCV, CGAL/OCCT, point cloud, SQL backends, and logger availability across all children. The install/export block publishes a `HsBaSlicer::` CMake namespace with generated `HsBaSlicerConfig.cmake` so downstream projects consume the same layered contract.

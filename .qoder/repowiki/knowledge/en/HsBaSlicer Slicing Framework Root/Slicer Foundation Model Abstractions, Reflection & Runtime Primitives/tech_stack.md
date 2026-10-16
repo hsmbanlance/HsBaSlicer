@@ -1,0 +1,1 @@
+C++20 concepts and templates; Eigen Core/Geometry for vector/matrix math; magic_enum for `ModelFormat` name/deserialization; optional Boost integration via `boost_std_convert.hpp`.

@@ -1,0 +1,1 @@
+C++17 with Eigen3 (`Eigen/Core`, `Eigen/Geometry`) for geometric math, and Google Protobuf-generated headers (`*.pb.h`) from `HsBaSlicerProto` as the serialization layer.

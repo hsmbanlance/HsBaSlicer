@@ -1,0 +1,6 @@
+- Every test file starts with `#define BOOST_TEST_MODULE <name>` followed by `#include <boost/test/included/unit_test.hpp>` and groups cases under `BOOST_AUTO_TEST_SUITE(<suite>)` / `BOOST_AUTO_TEST_CASE(<case>)`.
+- Each feature directory gets its own `add_executable` + `target_link_libraries(... Boost::unit_test_framework)` block in `tests/CMakeLists.txt`, and every test target is registered through `enable_testing()` + `add_test(NAME ... COMMAND $<TARGET_FILE:...>)`.
+- Optional or platform-specific tests are gated behind CMake conditionals (`if(HSBA_COPL)`, `if(TARGET HsBaSlicerCADModel)`, `if(HSBA_POLYGON_DUMP)`, `if(HSBA_USE_DLL_LOADER)`) before their `add_executable`/`add_test` blocks.
+- Cross-process plugin contracts are exercised by shipping a small companion mock DLL (e.g. `mock_cad_dll.cpp`, `mock_dll_loader_dll.cpp`, `mock_point_cloud_dll.cpp`) that exports a fixed C ABI surface consumed by the test.
+- Lua-driven coverage uses inline `R"(...)"` scripts executed via `luaL_dostring`, with results read back through global variables checked by `BOOST_CHECK`.
+- MSVC-specific workarounds are applied per-target where needed (e.g. `/bigobj` for `graph_test.cpp` due to Boost.Graph template instantiation exceeding the 65535 segment limit).

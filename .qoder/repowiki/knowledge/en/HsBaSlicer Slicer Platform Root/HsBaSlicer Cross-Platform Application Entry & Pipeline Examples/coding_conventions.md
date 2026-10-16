@@ -1,3 +1,0 @@
-- Each pipeline example follows the same four-step sequence: obtain default config via `HsBaCreateDefault*Config()`, populate fields, call the synchronous `HsBaRun*Pipeline(&cfg, OnProgress, nullptr)`, then free the result with the matching `HsBaFree*PipelineResult`.
-- Platform-specific entry points are selected through nested `#if/#elif/#else` blocks around `main()` / JNI / C-export functions rather than separate source files.
-- Logging goes through the `LoggerSingletone` singleton using the `_log_info` / `_log_warning` string-literal operators from `HsBa::Slicer::Log::LogLiterals`.

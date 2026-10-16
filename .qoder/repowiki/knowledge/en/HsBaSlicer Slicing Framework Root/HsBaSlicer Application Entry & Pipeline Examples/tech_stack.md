@@ -1,0 +1,1 @@
+C++17 (`<filesystem>`, `<format>`), CMake cross-compilation targeting Android (shared lib + ABI-specific output under `android_libs/<ABI>`), iOS (static lib), and desktop; uses vcpkg-deployed DLLs and a custom `cmake/deploy_dlls.cmake` script for Windows PDB deployment.

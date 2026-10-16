@@ -1,1 +1,0 @@
-Standalone sample executables demonstrating the FDM/SLA/SLS/SLM/TDP/WAAP/LAM slicing pipelines, fully Lua-driven Custom pipeline, and both C ABI and C++20 module APIs of HsBaSlicer.

@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: cadmodel
+title: CAD Model Abstraction Layer (OCCT + User DLL)
+scope:
+    - cadmodel/
+source_files: []
+depends_on: []
+related_to:
+    - path: preprocess

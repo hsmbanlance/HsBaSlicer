@@ -1,0 +1,1 @@
+C++ with optional third-party kernels selected at build time: libigl for mesh formats (STL/OBJ/PLY/OFF), OpenCASCADE (OCCT) for BRep (STEP/IGES/VRML/BREP), and OpenVDB for point clouds; Eigen vectors/matrices used for geometry data when CGAL/OpenVDB is enabled.

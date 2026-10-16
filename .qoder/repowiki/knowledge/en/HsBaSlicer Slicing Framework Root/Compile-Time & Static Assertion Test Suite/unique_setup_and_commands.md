@@ -1,0 +1,1 @@
+Build is driven by the repository's top-level CMake configuration which pulls in `static_tests/` as a subdirectory; individual test binaries are built as part of the normal build — there is no separate test runner since each file is self-contained and fails compilation on any assertion mismatch.

@@ -1,0 +1,1 @@
+C++ with `static_assert`-only validation; uses `magic_enum` for enum-to-string round-trip customization; optional C++20 coroutines guarded by `__cpp_lib_coroutine && __cpp_impl_coroutine`; includes Lua state helpers (`MakeUniqueLuaState`, `LuaGC`).

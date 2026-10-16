@@ -1,1 +1,0 @@
-CMake 3.28+ with vcpkg manifest-driven dependencies (Boost, Clipper2, miniz/bit7z, Protobuf, RapidJSON, Eigen3, OpenSSL, libigl, OpenCASCADE/CGAL, OpenVDB, Sqlpp11, Lua, tinyxml2, yaml-cpp, magic_enum); C++20 standard with optional coroutines/explicit-this/C23 constexpr feature detection; Doxygen for API docs; gcov/gcovr coverage gates.

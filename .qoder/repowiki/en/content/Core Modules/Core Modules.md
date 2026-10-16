@@ -2,22 +2,22 @@
 
 <cite>
 **Referenced Files in This Document**
+- [base_interface.hpp](file://base/base_interface.hpp)
 - [IModel.hpp](file://base/IModel.hpp)
 - [memory_pool.hpp](file://base/memory_pool.hpp)
+- [object_pool.hpp](file://base/object_pool.hpp)
 - [thread_pool.hpp](file://base/thread_pool.hpp)
-- [static_reflect.hpp](file://base/static_reflect.hpp)
+- [template_helper.hpp](file://base/template_helper.hpp)
 - [IntPolygon.hpp](file://2D/IntPolygon.hpp)
 - [FloatPolygons.hpp](file://2D/FloatPolygons.hpp)
 - [PolygonFill.hpp](file://2D/PolygonFill.hpp)
+- [2Dhull.hpp](file://2D/2Dhull.hpp)
 - [FullTopoModel.hpp](file://meshmodel/FullTopoModel.hpp)
-- [OcctModel.hpp](file://cadmodel/OcctModel.hpp)
-- [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp)
-- [ISupport.hpp](file://support/ISupport.hpp)
+- [ModelLoader.hpp](file://preprocess/ModelLoader.hpp)
 - [FdmSupport.hpp](file://support/FdmSupport.hpp)
-- [SupportConfig.hpp](file://support/SupportConfig.hpp)
+- [SlaSupport.hpp](file://support/SlaSupport.hpp)
+- [IPath.hpp](file://paths/IPath.hpp)
 - [path_generator.hpp](file://LibHsBaSlicer/Path/path_generator.hpp)
-- [gcodepath.hpp](file://paths/gcodepath.hpp)
-- [polygon_fill.hpp](file://LibHsBaSlicer/Fill/polygon_fill.hpp)
 </cite>
 
 ## Table of Contents
@@ -32,179 +32,160 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document explains HsBaSlicer’s core modules with a focus on implementation details, public interfaces, configuration options, performance characteristics, and integration patterns. It covers the base infrastructure (types, templates, memory management, threading, static reflection), 2D geometry processing (FloatPolygons, IntPolygon, Clipper2 integration, boolean operations, offsets, area), mesh model processing (IModel abstraction, FullTopoModel, CGAL/IGL backends, transformations), CAD model processing (OpenCascade B-Rep and boolean operations), slicing engine (mesh slicing, layer generation, adaptive slicing, tolerance control), support structure generation (overhang detection, FDM strategies, SLA sacrificial support), path generation and optimization (G-code, toolpath optimization, multi-firmware, spiral/vase mode), and fill algorithms (infill patterns and polygon fill operations).
+This document describes HsBaSlicer’s core modules with a focus on the Foundation Layer, 2D Geometry Engine, Mesh Processing, Support Structure System, Path Generation, and the Core Library API. It explains implementation details, interfaces, configuration options, usage patterns, relationships between modules, performance considerations, and common integration patterns. The content is grounded in the actual source files referenced below.
 
 ## Project Structure
-The core is organized by capability:
-- Base infrastructure under `base/` provides foundational types, memory pools, thread pool, and static reflection utilities.
-- 2D geometry under `2D/` provides integer and double-precision polygons, boolean operations, offsetting, area, and fill generators.
-- Mesh model under `meshmodel/` provides topology reconstruction and slicing APIs.
-- CAD model under `cadmodel/` provides OpenCascade B-Rep model support.
-- Slicing API under `LibHsBaSlicer/Slice/` exposes planar slicing and reusable topology building.
-- Support under `support/` defines the support interface, configurations, and FDM strategies.
-- Path generation under `LibHsBaSlicer/Path/` and `paths/` generates G-code paths and supports multiple firmware targets.
-- Fill API under `LibHsBaSlicer/Fill/` wraps 2D fill engines for consumption by higher layers.
+The core modules are organized into layered components:
+- Foundation Layer (base/): core data structures, memory management, threading, template utilities, and base interfaces.
+- 2D Geometry Engine (2D/): polygon types, boolean operations, hull computation, and fill algorithms.
+- Mesh Processing (meshmodel/, preprocess/): model loading, topology reconstruction, and geometric analysis.
+- Support Structure System (support/): overhang detection and support generation for FDM/SLA.
+- Path Generation (paths/, LibHsBaSlicer/Path/): G-code generation, robot paths, and optimization.
+- Core Library API (LibHsBaSlicer/): main slicing pipeline orchestration and public C++ API.
 
 ```mermaid
 graph TB
-subgraph "Base"
-IModel["IModel.hpp"]
-MemPool["memory_pool.hpp"]
-ThrdPool["thread_pool.hpp"]
-Reflect["static_reflect.hpp"]
+subgraph "Foundation Layer"
+Base["base/*"]
 end
-subgraph "2D Geometry"
-IntPoly["IntPolygon.hpp"]
-FloatPoly["FloatPolygons.hpp"]
-PolyFill["PolygonFill.hpp"]
+subgraph "2D Geometry Engine"
+D2["2D/*"]
 end
-subgraph "Mesh Model"
-Topo["FullTopoModel.hpp"]
+subgraph "Mesh Processing"
+Mesh["meshmodel/*"]
+Pre["preprocess/*"]
 end
-subgraph "CAD Model"
-Occt["OcctModel.hpp"]
+subgraph "Support System"
+Sup["support/*"]
 end
-subgraph "LibHsBaSlicer"
-SliceAPI["mesh_slice.hpp"]
-PathGen["path_generator.hpp"]
-FillAPI["polygon_fill.hpp"]
+subgraph "Path Generation"
+Paths["paths/*"]
+LPath["LibHsBaSlicer/Path/*"]
 end
-subgraph "Paths"
-GCode["gcodepath.hpp"]
-end
-subgraph "Support"
-ISupp["ISupport.hpp"]
-FdmSupp["FdmSupport.hpp"]
-SuppCfg["SupportConfig.hpp"]
-end
-IModel --> Topo
-IModel --> Occt
-IntPoly --> FloatPoly
-FloatPoly --> PolyFill
-Topo --> SliceAPI
-SliceAPI --> PathGen
-PathGen --> GCode
-PolyFill --> FillAPI
-ISupp --> FdmSupp
-FdmSupp --> SuppCfg
+Base --> D2
+Base --> Mesh
+Base --> Paths
+D2 --> Mesh
+D2 --> Sup
+D2 --> Paths
+Mesh --> Sup
+Mesh --> LPath
+Sup --> LPath
+Paths --> LPath
 ```
 
 **Diagram sources**
 - [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
-- [memory_pool.hpp:43-208](file://base/memory_pool.hpp#L43-L208)
-- [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
-- [static_reflect.hpp:113-183](file://base/static_reflect.hpp#L113-L183)
-- [IntPolygon.hpp:16-27](file://2D/IntPolygon.hpp#L16-L27)
-- [FloatPolygons.hpp:18-25](file://2D/FloatPolygons.hpp#L18-L25)
-- [PolygonFill.hpp:20-117](file://2D/PolygonFill.hpp#L20-L117)
+- [IntPolygon.hpp:14-27](file://2D/IntPolygon.hpp#L14-L27)
+- [FloatPolygons.hpp:16-25](file://2D/FloatPolygons.hpp#L16-L25)
 - [FullTopoModel.hpp:53-142](file://meshmodel/FullTopoModel.hpp#L53-L142)
-- [OcctModel.hpp:30-124](file://cadmodel/OcctModel.hpp#L30-L124)
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [path_generator.hpp:20-91](file://LibHsBaSlicer/Path/path_generator.hpp#L20-L91)
-- [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
-- [ISupport.hpp:22-44](file://support/ISupport.hpp#L22-L44)
-- [FdmSupport.hpp:13-63](file://support/FdmSupport.hpp#L13-L63)
-- [SupportConfig.hpp:14-43](file://support/SupportConfig.hpp#L14-L43)
-- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
+- [ModelLoader.hpp:30-202](file://preprocess/ModelLoader.hpp#L30-L202)
+- [FdmSupport.hpp:11-63](file://support/FdmSupport.hpp#L11-L63)
+- [SlaSupport.hpp:11-42](file://support/SlaSupport.hpp#L11-L42)
+- [IPath.hpp:29-65](file://paths/IPath.hpp#L29-L65)
+- [path_generator.hpp:23-91](file://LibHsBaSlicer/Path/path_generator.hpp#L23-L91)
 
 **Section sources**
 - [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
-- [memory_pool.hpp:43-208](file://base/memory_pool.hpp#L43-L208)
-- [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
-- [static_reflect.hpp:113-183](file://base/static_reflect.hpp#L113-L183)
-- [IntPolygon.hpp:16-27](file://2D/IntPolygon.hpp#L16-L27)
-- [FloatPolygons.hpp:18-25](file://2D/FloatPolygons.hpp#L18-L25)
-- [PolygonFill.hpp:20-117](file://2D/PolygonFill.hpp#L20-L117)
+- [IntPolygon.hpp:14-27](file://2D/IntPolygon.hpp#L14-L27)
+- [FloatPolygons.hpp:16-25](file://2D/FloatPolygons.hpp#L16-L25)
 - [FullTopoModel.hpp:53-142](file://meshmodel/FullTopoModel.hpp#L53-L142)
-- [OcctModel.hpp:30-124](file://cadmodel/OcctModel.hpp#L30-L124)
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [path_generator.hpp:20-91](file://LibHsBaSlicer/Path/path_generator.hpp#L20-L91)
-- [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
-- [ISupport.hpp:22-44](file://support/ISupport.hpp#L22-L44)
-- [FdmSupport.hpp:13-63](file://support/FdmSupport.hpp#L13-L63)
-- [SupportConfig.hpp:14-43](file://support/SupportConfig.hpp#L14-L43)
-- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
+- [ModelLoader.hpp:30-202](file://preprocess/ModelLoader.hpp#L30-L202)
+- [FdmSupport.hpp:11-63](file://support/FdmSupport.hpp#L11-L63)
+- [SlaSupport.hpp:11-42](file://support/SlaSupport.hpp#L11-L42)
+- [IPath.hpp:29-65](file://paths/IPath.hpp#L29-L65)
+- [path_generator.hpp:23-91](file://LibHsBaSlicer/Path/path_generator.hpp#L23-L91)
 
 ## Core Components
-This section summarizes the major components and their responsibilities:
-- Base infrastructure: IModel abstracts 3D models; MemoryPool/StaticMemoryPool provide fixed-size allocators; ThreadPool enables concurrent task execution; StaticReflect enables compile-time introspection.
-- 2D geometry: IntPolygon and FloatPolygons wrap Clipper2 for robust boolean operations, offsets, area, and conversions; PolygonFill provides infill pattern generators.
-- Mesh model: FullTopoModel reconstructs topology from meshes and exposes safe/unsafe/fast slice APIs plus Lua-driven slicing.
-- CAD model: OcctModel implements IModel using OpenCascade for B-Rep operations, primitives, extrusions, and boolean operations.
-- Slicing engine: mesh_slice.hpp exposes planar slicing, reusable topology building, and normalization to PolygonsD.
-- Support generation: ISupport defines per-layer strategy; FdmSupport provides plane/tree/honeycomb strategies; SupportConfig centralizes parameters.
-- Path generation: path_generator.hpp generates G-code paths, supports multi-firmware output via GCodePath, and includes spiral/vase mode.
-- Fill API: polygon_fill.hpp wraps 2D fill engines for line/zigzag/border/Lua custom fills.
+This section summarizes the foundational building blocks that underpin all higher-level modules.
+
+- IModel interface: defines load/save, transformations, bounding box, volume, and triangle mesh access; also exposes C ABI structs for vectors, quaternions, matrices, and polygons.
+- Memory pools: MemoryPool and StaticMemoryPool provide fixed-size allocators with thread-safe allocation/deallocation and object construction helpers.
+- NamedObjectPool: manages named shared objects with capacity limits, inactive cleanup, and concurrent access via shared_mutex.
+- ThreadPool: worker-thread pool with task submission, futures, active/pending counters, WaitAll, and optional coroutine executor integration.
+- Template utilities: compile-time string handling, enum name conversion, named pointers, Y combinator, formatter specialization, and other modern C++ helpers.
+
+Key responsibilities and usage patterns:
+- Use IModel as the abstraction for any 3D model type consumed by preprocessing and slicing.
+- Prefer MemoryPool/StaticMemoryPool for high-frequency allocations within tight loops to reduce heap churn.
+- Use NamedObjectPool to manage reusable models or intermediate results across pipeline stages.
+- Offload CPU-bound tasks to ThreadPool; use ThreadPoolExecutor when integrating coroutines.
+- Leverage template utilities for safe, fast, and readable code (e.g., TemplateString, EnumName).
 
 **Section sources**
-- [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
-- [memory_pool.hpp:43-208](file://base/memory_pool.hpp#L43-L208)
+- [IModel.hpp:19-139](file://base/IModel.hpp#L19-L139)
+- [memory_pool.hpp:28-208](file://base/memory_pool.hpp#L28-L208)
+- [memory_pool.hpp:215-371](file://base/memory_pool.hpp#L215-L371)
+- [object_pool.hpp:22-283](file://base/object_pool.hpp#L22-L283)
 - [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
-- [static_reflect.hpp:113-183](file://base/static_reflect.hpp#L113-L183)
-- [IntPolygon.hpp:16-27](file://2D/IntPolygon.hpp#L16-L27)
-- [FloatPolygons.hpp:18-25](file://2D/FloatPolygons.hpp#L18-L25)
-- [PolygonFill.hpp:20-117](file://2D/PolygonFill.hpp#L20-L117)
-- [FullTopoModel.hpp:53-142](file://meshmodel/FullTopoModel.hpp#L53-L142)
-- [OcctModel.hpp:30-124](file://cadmodel/OcctModel.hpp#L30-L124)
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [ISupport.hpp:22-44](file://support/ISupport.hpp#L22-L44)
-- [FdmSupport.hpp:13-63](file://support/FdmSupport.hpp#L13-L63)
-- [SupportConfig.hpp:14-43](file://support/SupportConfig.hpp#L14-L43)
-- [path_generator.hpp:20-91](file://LibHsBaSlicer/Path/path_generator.hpp#L20-L91)
-- [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
-- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
+- [thread_pool.hpp:164-209](file://base/thread_pool.hpp#L164-L209)
+- [template_helper.hpp:50-305](file://base/template_helper.hpp#L50-L305)
+- [template_helper.hpp:375-555](file://base/template_helper.hpp#L375-L555)
+- [template_helper.hpp:558-687](file://base/template_helper.hpp#L558-L687)
+- [template_helper.hpp:743-778](file://base/template_helper.hpp#L743-L778)
+- [base_interface.hpp:19-25](file://base/base_interface.hpp#L19-L25)
 
 ## Architecture Overview
-The system composes modular layers:
-- Models implement IModel (mesh via FullTopoModel or IGAL/CGAL backends; CAD via OcctModel).
-- Slicing consumes IModel to produce PolygonsD per layer.
-- Fill algorithms generate infill patterns from Polygons.
-- Support strategies compute support cross-sections per layer.
-- Path generation converts outlines/fills/supports into G-code for multiple firmware targets.
+The slicing pipeline flows from model input through geometry processing, support generation, and path generation to final output.
 
 ```mermaid
 sequenceDiagram
 participant App as "Application"
+participant Loader as "ModelLoader"
 participant Model as "IModel"
-participant Slice as "Slice API"
 participant Topo as "FullTopoModel"
 participant Fill as "PolygonFill"
-participant Support as "ISupport"
-participant Path as "Path Generator"
-participant GCode as "GCodePath"
-App->>Model : Load(file)
-App->>Slice : BuildSliceTopology(model)
-Slice-->>App : shared_ptr<FullTopoModel>
-loop Layers
-App->>Slice : SliceLayer(topo, z)
-Slice-->>App : PolygonsD
-App->>Fill : Generate infill(PolygonsD)
-App->>Support : Generate(current_layer, prev_layer, config)
-Support-->>App : PolygonsD supports
-App->>Path : GenerateGCodePathV2(layer_data, config, printer_config)
-Path-->>App : unique_ptr<GCodePath>
-App->>GCode : ToGCode(firmware)
-GCode-->>App : G-code string
-end
+participant Support as "Support Generators"
+participant Gen as "Path Generator"
+participant Out as "IPath Implementations"
+App->>Loader : LoadModel(name, filePath)
+Loader-->>App : shared_ptr<IModel>
+App->>Topo : Construct(model)
+App->>Topo : Slice(height)
+Topo-->>App : Polygons
+App->>Fill : Generate fills/outlines
+Fill-->>App : Polygons
+App->>Support : Generate(current_layer, prev_layer, layer_height, config)
+Support-->>App : PolygonsD
+App->>Gen : GenerateGCodePath / V2 / Spiral
+Gen-->>App : GCodePath / PointsPath
+App->>Out : Save / ToString (with Lua post-processing)
+Out-->>App : File / String
 ```
 
 **Diagram sources**
-- [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
-- [mesh_slice.hpp:79-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L79-L103)
-- [FullTopoModel.hpp:100-127](file://meshmodel/FullTopoModel.hpp#L100-L127)
-- [PolygonFill.hpp:20-117](file://2D/PolygonFill.hpp#L20-L117)
-- [ISupport.hpp:22-44](file://support/ISupport.hpp#L22-L44)
-- [path_generator.hpp:44-80](file://LibHsBaSlicer/Path/path_generator.hpp#L44-L80)
-- [gcodepath.hpp:74-96](file://paths/gcodepath.hpp#L74-L96)
+- [ModelLoader.hpp:47-77](file://preprocess/ModelLoader.hpp#L47-L77)
+- [FullTopoModel.hpp:107-127](file://meshmodel/FullTopoModel.hpp#L107-L127)
+- [PolygonFill.hpp:20-136](file://2D/PolygonFill.hpp#L20-L136)
+- [FdmSupport.hpp:19-63](file://support/FdmSupport.hpp#L19-L63)
+- [SlaSupport.hpp:20-42](file://support/SlaSupport.hpp#L20-L42)
+- [path_generator.hpp:50-91](file://LibHsBaSlicer/Path/path_generator.hpp#L50-L91)
+- [IPath.hpp:34-56](file://paths/IPath.hpp#L34-L56)
 
 ## Detailed Component Analysis
 
-### Base Infrastructure Module
-The base module provides foundational abstractions and utilities:
-- IModel: Abstract interface for 3D models supporting load/save, transforms, bounding box, volume, and triangle mesh extraction.
-- MemoryPool and StaticMemoryPool: Fixed-size allocators with thread-safe allocation/deallocation and alignment guarantees.
-- ThreadPool: Worker-thread pool with task submission, futures, active/pending counters, and optional coroutine executor integration.
-- StaticReflect: Compile-time reflection utilities for fields and methods via Reflector and FieldInfo/MethodInfo templates.
+### Foundation Layer (base/)
+The Foundation Layer provides the primitives and infrastructure used throughout the system.
+
+- IModel interface:
+  - Responsibilities: file I/O, transforms, bounding box/volume, triangle mesh extraction.
+  - C ABI: vector/quaternion/matrix/polygon structs for cross-language interoperability.
+  - Usage: implementers include IglModel, OcctModel, OpenVdbModel; consumers call Load/Save/TriangleMesh.
+
+- Memory management:
+  - MemoryPool<T, PoolSize>: per-instance fixed-size allocator with mutex protection; supports construct/destroy and rebind.
+  - StaticMemoryPool<T, PoolSize>: static shared pool with global buffer; useful for process-wide pooling.
+  - NamedObjectPool<T, MaxSize>: named shared-object registry with capacity control and inactive cleanup.
+
+- Threading:
+  - ThreadPool: worker threads, submit(), PendingTasks(), ActiveTasks(), WaitAll(); exception-safe task execution.
+  - ThreadPoolExecutor: coroutine executor adapter with default pool fallback.
+
+- Template utilities:
+  - TemplateString: fixed-size string with conversions, split, case transforms, formatting.
+  - Enum utilities: EnumName, EnumFromName, AllValidEnum with range validation.
+  - NamedPtr/NamedRawPtr: debuggable pointer wrappers with compile-time names.
+  - YCombinator, MakeNonCopyableArray, std::formatter specialization.
 
 ```mermaid
 classDiagram
@@ -220,19 +201,24 @@ class IModel {
 +TriangleMesh() pair
 }
 class MemoryPool {
-+allocate(n, hint) pointer
++allocate(n) pointer
 +deallocate(p, n) void
-+max_size() size_type
 +construct(p, args) void
 +destroy(p) void
++max_size() size_type
 }
 class StaticMemoryPool {
-+allocate(n, hint) pointer
++allocate(n) pointer
 +deallocate(p, n) void
-+max_size() size_type
-+construct(p, args) void
-+destroy(p) void
 +UsedCount() size_t
+}
+class NamedObjectPool {
++emplace(name, args) ObjectPtr
++insert(name, ptr) ObjectPtr
++get(name) ObjectPtr
++remove(name) bool
++Cleanup() size_t
++GetNames() vector
 }
 class ThreadPool {
 +submit(f, args) future
@@ -240,141 +226,101 @@ class ThreadPool {
 +ActiveTasks() size_t
 +WaitAll() void
 }
-class Reflector {
-+ClassName() string_view
-+FieldCount() size_t
-+MethodCount() size_t
-+GetField(obj) T&
-+InvokeMemberFunction(obj, args) auto
-}
-IModel <.. FullTopoModel : "implemented by"
-IModel <.. OcctModel : "implemented by"
+IModel <.. FullTopoModel : "consumed by"
+NamedObjectPool <.. ModelLoader : "used by"
 ```
 
 **Diagram sources**
 - [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
 - [memory_pool.hpp:43-208](file://base/memory_pool.hpp#L43-L208)
-- [memory_pool.hpp:215-372](file://base/memory_pool.hpp#L215-L372)
+- [memory_pool.hpp:215-371](file://base/memory_pool.hpp#L215-L371)
+- [object_pool.hpp:22-283](file://base/object_pool.hpp#L22-L283)
 - [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
-- [static_reflect.hpp:113-183](file://base/static_reflect.hpp#L113-L183)
-
-Implementation notes:
-- MemoryPool uses a shared state and mutex-guarded allocation scanning; StaticMemoryPool uses a static buffer and global usage tracking.
-- ThreadPool manages worker threads, condition variables, and atomic counters; exceptions in tasks are caught to avoid crashing workers.
-- StaticReflect requires classes to expose FieldList, MethodList, and ClassName for compile-time introspection.
-
-Configuration and performance considerations:
-- Choose MemoryPool vs StaticMemoryPool based on whether instances should share memory.
-- Tune ThreadPool size to hardware concurrency; use WaitAll for synchronization.
-- Use StaticReflect for zero-cost introspection where possible.
 
 **Section sources**
-- [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
-- [memory_pool.hpp:43-208](file://base/memory_pool.hpp#L43-L208)
-- [memory_pool.hpp:215-372](file://base/memory_pool.hpp#L215-L372)
+- [IModel.hpp:19-139](file://base/IModel.hpp#L19-L139)
+- [memory_pool.hpp:28-208](file://base/memory_pool.hpp#L28-L208)
+- [memory_pool.hpp:215-371](file://base/memory_pool.hpp#L215-L371)
+- [object_pool.hpp:22-283](file://base/object_pool.hpp#L22-L283)
 - [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
-- [static_reflect.hpp:113-183](file://base/static_reflect.hpp#L113-L183)
+- [thread_pool.hpp:164-209](file://base/thread_pool.hpp#L164-L209)
+- [template_helper.hpp:50-305](file://base/template_helper.hpp#L50-L305)
+- [template_helper.hpp:375-555](file://base/template_helper.hpp#L375-L555)
+- [template_helper.hpp:558-687](file://base/template_helper.hpp#L558-L687)
+- [template_helper.hpp:743-778](file://base/template_helper.hpp#L743-L778)
+- [base_interface.hpp:19-25](file://base/base_interface.hpp#L19-L25)
 
-### 2D Geometry Processing Module
-Provides robust 2D polygon operations built on Clipper2:
-- IntPolygon: Integer-coordinate types (Point64, Path64, Paths64) with MakeSimple, NormalizeToSimplePolygons, boolean ops (Union/Intersection/Difference/Xor), Offset, PointInPolygons, Area.
-- FloatPolygons: Double-precision types (PointD, PathD, PathsD) with MakeSimple, boolean ops, Area, shape generators (rectangle/circle/ellipse/regular polygon), text-to-polygons, and integerization/un-integerization helpers.
-- PolygonFill: Infill pattern generators including offset-based, line, zigzag, composite, hybrid, and Lua-custom fills.
+### 2D Geometry Engine (2D/)
+The 2D engine provides robust polygon operations built on Clipper2.
+
+- Types and conversions:
+  - IntPolygon: Point2, Polygon, Polygons (Clipper2 64-bit integer), simplification, boolean ops, offset, area, point-in-polygon.
+  - FloatPolygons: double-precision equivalents (PointD, PolygonD, PolygonsD), shape generators (rectangle, circle, ellipse, regular polygon), text-to-polygons, integerization/un-integerization.
+
+- Boolean logic and offsets:
+  - Union, Intersection, Difference, Xor for both single polygons and sets.
+  - Offset for inflation/deflation with join/end types.
+
+- Hull computation:
+  - ConvexHull and ConcaveHullSimulation for integer, double, and multi-polygon inputs.
+
+- Fill algorithms:
+  - OffsetFill, LineFill, SimpleZigzagFill, ZigzagFill.
+  - CompositeOffsetFill and HybridFill combining borders and internal fills.
+  - LuaCustomFill and LuaCustomFillString for custom fill scripts; RegisterLuaPolygonFillFunctions exposes built-ins to Lua.
 
 ```mermaid
 flowchart TD
 Start(["Input Polygons"]) --> Simplify["MakeSimple / NormalizeToSimplePolygons"]
-Simplify --> BooleanOps{"Boolean Operation?"}
-BooleanOps --> |Yes| BoolRes["Union/Intersection/Difference/Xor"]
-BooleanOps --> |No| OffsetCheck{"Offset Needed?"}
-BoolRes --> OffsetCheck
-OffsetCheck --> |Yes| OffsetRes["Offset(polygons, delta, join_type, end_type)"]
-OffsetCheck --> |No| AreaCalc["Area(polygons)"]
-OffsetRes --> AreaCalc
-AreaCalc --> End(["Output Polygons"])
+Simplify --> BoolOps{"Boolean Operation?"}
+BoolOps --> |Union| U["Union"]
+BoolOps --> |Intersection| I["Intersection"]
+BoolOps --> |Difference| D["Difference"]
+BoolOps --> |Xor| X["Xor"]
+BoolOps --> |None| Next["Next"]
+U --> Next
+I --> Next
+D --> Next
+X --> Next
+Next --> Offset["Offset (inflate/deflate)"]
+Offset --> Hull{"Compute Hull?"}
+Hull --> |Yes| CH["ConvexHull / ConcaveHullSimulation"]
+Hull --> |No| Fill["Generate Fill Patterns"]
+CH --> Fill
+Fill --> End(["Output Polygons"])
 ```
 
 **Diagram sources**
 - [IntPolygon.hpp:28-192](file://2D/IntPolygon.hpp#L28-L192)
-- [FloatPolygons.hpp:27-135](file://2D/FloatPolygons.hpp#L27-L135)
-- [PolygonFill.hpp:20-117](file://2D/PolygonFill.hpp#L20-L117)
-
-Key capabilities:
-- Robust boolean operations and offsets for both integer and double precision.
-- Area computation and point-in-polygon tests.
-- Shape generators and text-to-polygons for UI/debugging.
-- Fill pattern generators for infill and border strategies.
-
-Configuration and performance considerations:
-- Use integerized polygons for Clipper2 stability; convert to double when needed for downstream operations.
-- Adjust epsilon in MakeSimple to balance simplification and geometric fidelity.
-- For large datasets, prefer batch operations and reuse intermediate results.
+- [FloatPolygons.hpp:27-221](file://2D/FloatPolygons.hpp#L27-L221)
+- [2Dhull.hpp:14-72](file://2D/2Dhull.hpp#L14-L72)
+- [PolygonFill.hpp:20-136](file://2D/PolygonFill.hpp#L20-L136)
 
 **Section sources**
-- [IntPolygon.hpp:28-192](file://2D/IntPolygon.hpp#L28-L192)
-- [FloatPolygons.hpp:27-135](file://2D/FloatPolygons.hpp#L27-L135)
-- [PolygonFill.hpp:20-117](file://2D/PolygonFill.hpp#L20-L117)
+- [IntPolygon.hpp:14-241](file://2D/IntPolygon.hpp#L14-L241)
+- [FloatPolygons.hpp:16-271](file://2D/FloatPolygons.hpp#L16-L271)
+- [2Dhull.hpp:14-72](file://2D/2Dhull.hpp#L14-L72)
+- [PolygonFill.hpp:20-136](file://2D/PolygonFill.hpp#L20-L136)
 
-### Mesh Model Processing Module
-Focuses on topology reconstruction and slicing:
-- FullTopoModel: Rebuilds vertex/edge/face topology from mesh data; exposes CheckTopo, EulerCharacteristic, TriangleMesh, and slicing APIs (Safe/Unsafe/Fast/Lua).
-- Backends: IglModel/CgalModel are referenced for mesh processing; FullTopoModel integrates with them via IModel.
+### Mesh Processing (meshmodel/, preprocess/)
+Mesh processing bridges raw models and slicing-ready geometry.
+
+- FullTopoModel:
+  - Rebuilds full topology (vertices, edges, faces) from an IModel or vertex/triangle lists.
+  - Provides CheckTopo, EulerCharacteristic, and multiple slicing methods:
+    - Safe slice (closed contours only).
+    - Unsafe slice (includes open contours).
+    - Fast slice (topology-based, throws if incomplete).
+    - Lua-assisted slicing with exposed V/E/F arrays and height.
+
+- ModelLoader:
+  - Unified loader dispatching to IglModel (mesh formats) or OcctModel (BRep formats).
+  - Manages models via NamedObjectPool with configurable capacity.
+  - Advanced operations (CGAL/OpenVDB) for thick-solid, boolean ops, point cloud to mesh, merging, downsampling, outlier removal, centroid/normals.
 
 ```mermaid
 classDiagram
-class FullTopoModel {
-+CheckTopo() bool
-+EulerCharacteristic() int
-+TriangleMesh() pair
-+Slice(height, tolerance) Polygons
-+UnSafeSlice(height, tolerance) UnSafePolygons
-+SliceFast(height) Polygons
-+SliceLua(script, height, ext_regs) Polygons
-+UnSafeSliceLua(script, height, ext_regs) UnSafePolygons
-}
-class Vertex {
-+vertex Vector3f
-+faces vector<int>
-+edges vector<int>
-}
-class Edge {
-+vertices array<int,2>
-+faces array<int,2>
-}
-class Face {
-+triangle array<int,3>
-+edges array<int,3>
-+normal Vector3f
-}
-FullTopoModel --> Vertex : "contains"
-FullTopoModel --> Edge : "contains"
-FullTopoModel --> Face : "contains"
-```
-
-**Diagram sources**
-- [FullTopoModel.hpp:53-142](file://meshmodel/FullTopoModel.hpp#L53-L142)
-
-Implementation notes:
-- Safe slicing returns only closed contours; unsafe slicing may include open polylines.
-- Fast slicing leverages prebuilt topology and validates completeness before operation.
-- Lua scripting allows custom contour extraction from V/E/F data.
-
-Integration patterns:
-- Use BuildSliceTopology once for multi-layer pipelines to avoid repeated topology rebuilds.
-- Combine with mesh_slice.hpp SliceLayer for normalized PolygonsD outputs.
-
-**Section sources**
-- [FullTopoModel.hpp:53-142](file://meshmodel/FullTopoModel.hpp#L53-L142)
-- [mesh_slice.hpp:79-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L79-L103)
-
-### CAD Model Processing Module
-OpenCascade-based B-Rep model support:
-- OcctModel implements IModel with Load/Save for STEP/IGES/VRML/BRep, affine transforms, bounding box, volume, tessellation, boolean operations (Union/Intersection/Difference/Xor), thick-solid operations, and primitive factories (box/sphere/cylinder/cone/torus/extrusion).
-
-```mermaid
-classDiagram
-class OcctModel {
-+AddShape(shape) void
+class IModel {
 +Load(fileName) bool
 +Save(fileName, format) bool
 +Translate(translation) void
@@ -382,282 +328,246 @@ class OcctModel {
 +Scale(scale) void
 +Transform(transform) void
 +BoundingBox(min, max) void
-+TriangleMesh() pair
 +Volume() float
-+UnionAll() bool
-+CreateBox(size) OcctModel
-+CreateSphere(radius, subdivisions) OcctModel
-+CreateCylinder(radius, height, segments) OcctModel
-+CreateCone(radius, height, segments) OcctModel
-+CreateTorus(majorRadius, minorRadius, majorSegments, minorSegments) OcctModel
-+CreatePrime(poly, direction) OcctModel
-+CreatePrime(polys, direction) OcctModel
++TriangleMesh() pair
 }
-OcctModel ..> IModel : "implements"
+class FullTopoModel {
++CheckTopo() bool
++EulerCharacteristic() int
++Slice(height) Polygons
++UnSafeSlice(height) UnSafePolygons
++SliceFast(height) Polygons
++SliceLua(script, height) Polygons
+}
+class ModelLoader {
++LoadModel(name, filePath) shared_ptr<IModel>
++InsertModel(name, model) shared_ptr<IModel>
++GetModel(name) shared_ptr<IModel>
++RemoveModel(name) void
++ContainsModel(name) bool
++ModelCount() size_t
++GetModelNames() vector
++Cleanup() size_t
+}
+IModel <|-- FullTopoModel : "consumed by"
+NamedObjectPool <.. ModelLoader : "manages"
 ```
 
 **Diagram sources**
-- [OcctModel.hpp:30-124](file://cadmodel/OcctModel.hpp#L30-L124)
 - [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
-
-Configuration and performance considerations:
-- Prefer UnionAll to consolidate shapes before boolean operations.
-- Tessellation quality affects downstream slicing accuracy and performance.
+- [FullTopoModel.hpp:53-142](file://meshmodel/FullTopoModel.hpp#L53-L142)
+- [ModelLoader.hpp:30-202](file://preprocess/ModelLoader.hpp#L30-L202)
 
 **Section sources**
-- [OcctModel.hpp:30-124](file://cadmodel/OcctModel.hpp#L30-L124)
-- [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
+- [FullTopoModel.hpp:25-142](file://meshmodel/FullTopoModel.hpp#L25-L142)
+- [ModelLoader.hpp:23-202](file://preprocess/ModelLoader.hpp#L23-L202)
 
-### Slicing Engine Module
-Planar mesh slicing and layer generation:
-- Slice/UnSafeSlice: Produce closed or open contours at a given Z with configurable tolerance.
-- SliceLua: Script-driven slicing returning PolygonsD or UnSafePolygons.
-- BuildSliceTopology: Prebuild topology for efficient multi-layer slicing.
-- SliceLayer: Slice a single layer from prebuilt topology and normalize to PolygonsD.
+### Support Structure System (support/)
+Support generation creates build-friendly structures based on overhang regions.
 
-```mermaid
-sequenceDiagram
-participant API as "Slice API"
-participant Model as "IModel"
-participant Topo as "FullTopoModel"
-participant Normalizer as "NormalizeUnSafePolygons"
-API->>Model : Extract mesh (via IModel : : TriangleMesh)
-API->>Topo : BuildSliceTopology(model)
-Topo-->>API : shared_ptr<FullTopoModel>
-API->>Topo : UnSafeSlice(z, tolerance)
-Topo-->>API : UnSafePolygons
-API->>Normalizer : NormalizeUnSafePolygons(unsafe_polys)
-Normalizer-->>API : PolygonsD
-```
+- FDM strategies:
+  - FdmPlaneSupport: columnar supports inflated from overhang areas.
+  - FdmTreeSupport: branching tree-like supports grown upward.
+  - FdmHoneycombSupport: lightweight honeycomb infill within overhang regions.
 
-**Diagram sources**
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [FullTopoModel.hpp:100-127](file://meshmodel/FullTopoModel.hpp#L100-L127)
+- SLA strategy:
+  - SlaSacrificialSupport: thin sacrificial columns with tapered diameters.
 
-Adaptive slicing and tolerance control:
-- Tolerance parameter controls point merging during slicing; adjust based on model scale and desired precision.
-- Adaptive layering can be implemented by varying z steps based on curvature or overhang severity (outside this module but integrable).
-
-**Section sources**
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [FullTopoModel.hpp:100-127](file://meshmodel/FullTopoModel.hpp#L100-L127)
-
-### Support Structure Generation Module
-Per-layer support generation strategies:
-- ISupport: Abstract interface defining Generate(current_layer, prev_layer, layer_height, config) and default GenerateAll iteration.
-- FdmPlaneSupport: Column supports inflated from overhang regions.
-- FdmTreeSupport: Tree-like branching supports grown upward.
-- FdmHoneycombSupport: Hexagonal honeycomb fill within overhang areas.
-- SupportConfig: Shared configuration including overhang angle threshold, layer height, gap, diameter, density, pattern selection, tree parameters, and honeycomb cell size.
+All strategies implement ISupport.Generate(current_layer, prev_layer, layer_height, config) returning PolygonsD.
 
 ```mermaid
 classDiagram
 class ISupport {
 <<interface>>
 +Generate(current_layer, prev_layer, layer_height, config) PolygonsD
-+GenerateAll(layers, config) vector<PolygonsD>
 }
 class FdmPlaneSupport {
 +Generate(...) PolygonsD
 }
 class FdmTreeSupport {
 +Generate(...) PolygonsD
--GenerateBranches(overhang, layer_height, config) PolygonsD
+-GenerateBranches(...) PolygonsD
 }
 class FdmHoneycombSupport {
 +Generate(...) PolygonsD
--GenerateHoneycomb(overhang, config) PolygonsD
+-GenerateHoneycomb(...) PolygonsD
 }
-class SupportConfig {
-+overhang_angle_threshold float
-+layer_height float
-+support_gap float
-+support_diameter float
-+support_density float
-+support_pattern int
-+tree_branch_angle float
-+tree_max_branch_radius float
-+honeycomb_cell_size float
+class SlaSacrificialSupport {
++Generate(...) PolygonsD
++Generate(current_layer, prev_layer, layer_height, sla_config) PolygonsD
+-SampleSupportPoints(...) PolygonsD
 }
 ISupport <|-- FdmPlaneSupport
 ISupport <|-- FdmTreeSupport
 ISupport <|-- FdmHoneycombSupport
-FdmPlaneSupport --> SupportConfig : "uses"
-FdmTreeSupport --> SupportConfig : "uses"
-FdmHoneycombSupport --> SupportConfig : "uses"
+ISupport <|-- SlaSacrificialSupport
 ```
 
 **Diagram sources**
-- [ISupport.hpp:22-44](file://support/ISupport.hpp#L22-L44)
-- [FdmSupport.hpp:13-63](file://support/FdmSupport.hpp#L13-L63)
-- [SupportConfig.hpp:14-43](file://support/SupportConfig.hpp#L14-L43)
-
-Overhang detection and SLA sacrificial support:
-- Overhang detection is typically performed upstream using layer normals and angles; SupportConfig.overhang_angle_threshold drives classification.
-- SLA sacrificial support is provided by SlaSupport (not detailed here); it complements FDM strategies.
-
-Configuration guidance:
-- Lower overhang_angle_threshold increases support coverage.
-- Increase support_diameter for stronger columns; reduce support_density for lighter structures.
-- Tree supports benefit from tuned branch angle and max radius; honeycomb benefits from cell size tuning.
+- [FdmSupport.hpp:11-63](file://support/FdmSupport.hpp#L11-L63)
+- [SlaSupport.hpp:11-42](file://support/SlaSupport.hpp#L11-L42)
 
 **Section sources**
-- [ISupport.hpp:22-44](file://support/ISupport.hpp#L22-L44)
-- [FdmSupport.hpp:13-63](file://support/FdmSupport.hpp#L13-L63)
-- [SupportConfig.hpp:14-43](file://support/SupportConfig.hpp#L14-L43)
+- [FdmSupport.hpp:11-63](file://support/FdmSupport.hpp#L11-L63)
+- [SlaSupport.hpp:11-42](file://support/SlaSupport.hpp#L11-L42)
 
-### Path Generation and Optimization Module
-G-code generation and multi-firmware support:
-- path_generator.hpp: Generates G-code paths from per-layer data (outlines, fills, supports) with FdmPathConfig; supports standard and V2 firmware-specific output; includes spiral/vase mode via GenerateGCodePathSpiral.
-- gcodepath.hpp: GCodePath extends LayersPath, adds ToGCode(firmware), SaveGCode, Lua post-processing, continuous wall support for spiralized printing, and printer configuration.
+### Path Generation (paths/, LibHsBaSlicer/Path/)
+Path generation converts 2D slices into printable toolpaths and outputs.
+
+- IPath interface:
+  - Abstract base for output products (points, layers, images, robot, G-code).
+  - Supports Save/ToString with inline or file-based Lua post-processing.
+
+- Path generator API:
+  - FdmPathConfig: layer height, line width, speeds, extrusion multiplier, units.
+  - LayerPathData: outlines, fills, supports, z-height per layer.
+  - Functions:
+    - GenerateGCodePath: returns PointsPath.
+    - GenerateGCodePathV2: returns GCodePath with printer config.
+    - GenerateGCodePathSpiral: continuous helical wall for vase mode.
+    - PolygonsToGPoints: helper converting PolygonsD to G-point sequences.
 
 ```mermaid
 sequenceDiagram
+participant Caller as "Caller"
 participant Gen as "Path Generator"
-participant Data as "LayerPathData"
-participant Config as "FdmPathConfig"
-participant Printer as "GCodePrinterConfig"
-participant GPath as "GCodePath"
-Gen->>Gen : GenerateGCodePathV2(layer_data, config, printer_config)
-Gen-->>Data : LayerPathData{outlines, fills, supports, z_height}
-Gen-->>Config : FdmPathConfig{layer_height, line_width, speeds, units}
-Gen-->>Printer : GCodePrinterConfig{nozzle, filament, temps, retraction, etc.}
-Gen-->>GPath : unique_ptr<GCodePath>
-GPath->>GPath : ToGCode(firmware)
-GPath-->>Gen : G-code string
+participant GP as "GCodePath"
+participant PP as "PointsPath"
+participant Out as "IPath"
+Caller->>Gen : GenerateGCodePath(layer_data, config)
+Gen-->>Caller : unique_ptr<PointsPath>
+Caller->>Gen : GenerateGCodePathV2(layer_data, config, printer_config)
+Gen-->>Caller : unique_ptr<GCodePath>
+Caller->>Gen : GenerateGCodePathSpiral(outlines, zs, printer_config)
+Gen-->>Caller : unique_ptr<GCodePath>
+Caller->>Out : Save(path, script, funcName, lua_reg)
+Out-->>Caller : File written
 ```
 
 **Diagram sources**
-- [path_generator.hpp:20-91](file://LibHsBaSlicer/Path/path_generator.hpp#L20-L91)
-- [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
-
-Multi-firmware support:
-- GCodeFirmware enum supports Marlin, RepRap, Klipper.
-- GCodePrinterConfig encapsulates nozzle, filament, temperatures, retraction, speeds, layer height, line width, extrusion multiplier, and relative/absolute extrusion modes.
-
-Spiral/vase mode:
-- GenerateGCodePathSpiral merges outer walls across layers into a continuous helical path; GCodePath.setContinuousWall stores the 3D path points for emission.
-
-Optimization considerations:
-- Tune print/travel speeds and extrusion multiplier for material behavior.
-- Enable retraction to minimize stringing; adjust retract length/speed.
-- Spiral mode avoids per-layer travel moves and infill/supports.
+- [IPath.hpp:29-65](file://paths/IPath.hpp#L29-L65)
+- [path_generator.hpp:23-91](file://LibHsBaSlicer/Path/path_generator.hpp#L23-L91)
 
 **Section sources**
-- [path_generator.hpp:20-91](file://LibHsBaSlicer/Path/path_generator.hpp#L20-L91)
-- [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
+- [IPath.hpp:29-65](file://paths/IPath.hpp#L29-L65)
+- [path_generator.hpp:23-91](file://LibHsBaSlicer/Path/path_generator.hpp#L23-L91)
 
-### Fill Algorithms Module
-Infill pattern generation and polygon fill operations:
-- PolygonFill.hpp: Provides offset-based, line, simple zigzag, advanced zigzag, composite offset, hybrid fill, and Lua-custom fills.
-- LibHsBaSlicer Fill API: Wraps 2D fill engine with FillPolygon, FillWithBorder, and LuaCustomFillByFile.
+### Core Library API (LibHsBaSlicer/)
+The Core Library API exposes the slicing pipeline orchestration and key algorithms as stable C++ entry points.
 
-```mermaid
-flowchart TD
-Input["Polygons (outer + holes)"] --> Mode{"Fill Mode"}
-Mode --> |Line| LineFill["LineFill(spacing, angle_deg, thickness)"]
-Mode --> |SimpleZigzag| SimpleZigzagFill["SimpleZigzagFill(spacing, angle_deg, thickness)"]
-Mode --> |Zigzag| ZigzagFill["ZigzagFill(spacing, angle_deg, thickness)"]
-Mode --> |Composite/Hybrid| CompositeHybrid["CompositeOffsetFill / HybridFill(...)"]
-Mode --> |Lua Custom| LuaFill["LuaCustomFill / LuaCustomFillString"]
-LineFill --> Output["Filled Polygons"]
-SimpleZigzagFill --> Output
-ZigzagFill --> Output
-CompositeHybrid --> Output
-LuaFill --> Output
-```
+- Path generation functions:
+  - GenerateGCodePath, GenerateGCodePathV2, GenerateGCodePathSpiral, PolygonsToGPoints.
+  - Configuration via FdmPathConfig and GCodePrinterConfig.
 
-**Diagram sources**
-- [PolygonFill.hpp:20-117](file://2D/PolygonFill.hpp#L20-L117)
-- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
-
-Configuration and performance considerations:
-- Spacing controls infill density; smaller spacing yields denser infill but longer print times.
-- Angle_deg rotates fill orientation; consider anisotropy and strength implications.
-- Composite/Hybrid fills combine border offsets with internal patterns for improved surface quality and structural integrity.
-- Lua custom fills enable domain-specific patterns; ensure script efficiency to avoid bottlenecks.
+- Integration patterns:
+  - Build LayerPathData from FullTopoModel slices and PolygonFill outputs.
+  - Call path generator to obtain GCodePath/PointsPath.
+  - Use IPath Save/ToString with optional Lua post-processing for customization.
 
 **Section sources**
-- [PolygonFill.hpp:20-117](file://2D/PolygonFill.hpp#L20-L117)
-- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
+- [path_generator.hpp:23-91](file://LibHsBaSlicer/Path/path_generator.hpp#L23-L91)
 
 ## Dependency Analysis
-High-level dependencies among core modules:
-- IModel is consumed by FullTopoModel and OcctModel.
-- 2D geometry (IntPolygon/FloatPolygons) is used by PolygonFill and slicing normalization.
-- Slicing API depends on IModel and FullTopoModel.
-- Path generator consumes PolygonsD and produces GCodePath.
-- Support strategies depend on PolygonsD and SupportConfig.
+The following diagram shows how modules depend on each other:
 
 ```mermaid
 graph LR
-IModel["IModel.hpp"] --> FullTopo["FullTopoModel.hpp"]
-IModel --> Occt["OcctModel.hpp"]
-IntPoly["IntPolygon.hpp"] --> FloatPoly["FloatPolygons.hpp"]
-FloatPoly --> PolyFill["PolygonFill.hpp"]
-FullTopo --> SliceAPI["mesh_slice.hpp"]
-SliceAPI --> PathGen["path_generator.hpp"]
-PathGen --> GCode["gcodepath.hpp"]
-ISupp["ISupport.hpp"] --> FdmSupp["FdmSupport.hpp"]
-FdmSupp --> SuppCfg["SupportConfig.hpp"]
-PolyFill --> FillAPI["polygon_fill.hpp"]
+Base["base/*"] --> D2["2D/*"]
+Base --> Mesh["meshmodel/*"]
+Base --> Paths["paths/*"]
+D2 --> Mesh
+D2 --> Sup["support/*"]
+D2 --> Paths
+Mesh --> Sup
+Mesh --> LPath["LibHsBaSlicer/Path/*"]
+Sup --> LPath
+Paths --> LPath
 ```
 
 **Diagram sources**
 - [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
+- [IntPolygon.hpp:14-27](file://2D/IntPolygon.hpp#L14-L27)
+- [FloatPolygons.hpp:16-25](file://2D/FloatPolygons.hpp#L16-L25)
 - [FullTopoModel.hpp:53-142](file://meshmodel/FullTopoModel.hpp#L53-L142)
-- [OcctModel.hpp:30-124](file://cadmodel/OcctModel.hpp#L30-L124)
-- [IntPolygon.hpp:16-27](file://2D/IntPolygon.hpp#L16-L27)
-- [FloatPolygons.hpp:18-25](file://2D/FloatPolygons.hpp#L18-L25)
-- [PolygonFill.hpp:20-117](file://2D/PolygonFill.hpp#L20-L117)
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [path_generator.hpp:20-91](file://LibHsBaSlicer/Path/path_generator.hpp#L20-L91)
-- [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
-- [ISupport.hpp:22-44](file://support/ISupport.hpp#L22-L44)
-- [FdmSupport.hpp:13-63](file://support/FdmSupport.hpp#L13-L63)
-- [SupportConfig.hpp:14-43](file://support/SupportConfig.hpp#L14-L43)
-- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
+- [ModelLoader.hpp:30-202](file://preprocess/ModelLoader.hpp#L30-L202)
+- [FdmSupport.hpp:11-63](file://support/FdmSupport.hpp#L11-L63)
+- [SlaSupport.hpp:11-42](file://support/SlaSupport.hpp#L11-L42)
+- [IPath.hpp:29-65](file://paths/IPath.hpp#L29-L65)
+- [path_generator.hpp:23-91](file://LibHsBaSlicer/Path/path_generator.hpp#L23-L91)
 
 **Section sources**
 - [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
+- [IntPolygon.hpp:14-27](file://2D/IntPolygon.hpp#L14-L27)
+- [FloatPolygons.hpp:16-25](file://2D/FloatPolygons.hpp#L16-L25)
 - [FullTopoModel.hpp:53-142](file://meshmodel/FullTopoModel.hpp#L53-L142)
-- [OcctModel.hpp:30-124](file://cadmodel/OcctModel.hpp#L30-L124)
-- [IntPolygon.hpp:16-27](file://2D/IntPolygon.hpp#L16-L27)
-- [FloatPolygons.hpp:18-25](file://2D/FloatPolygons.hpp#L18-L25)
-- [PolygonFill.hpp:20-117](file://2D/PolygonFill.hpp#L20-L117)
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [path_generator.hpp:20-91](file://LibHsBaSlicer/Path/path_generator.hpp#L20-L91)
-- [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
-- [ISupport.hpp:22-44](file://support/ISupport.hpp#L22-L44)
-- [FdmSupport.hpp:13-63](file://support/FdmSupport.hpp#L13-L63)
-- [SupportConfig.hpp:14-43](file://support/SupportConfig.hpp#L14-L43)
-- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
+- [ModelLoader.hpp:30-202](file://preprocess/ModelLoader.hpp#L30-L202)
+- [FdmSupport.hpp:11-63](file://support/FdmSupport.hpp#L11-L63)
+- [SlaSupport.hpp:11-42](file://support/SlaSupport.hpp#L11-L42)
+- [IPath.hpp:29-65](file://paths/IPath.hpp#L29-L65)
+- [path_generator.hpp:23-91](file://LibHsBaSlicer/Path/path_generator.hpp#L23-L91)
 
 ## Performance Considerations
-- Memory management: Prefer MemoryPool/StaticMemoryPool for high-frequency allocations; avoid dynamic resizing in hot loops.
-- Threading: Use ThreadPool for independent layer processing; ensure thread safety when sharing topology objects.
-- 2D geometry: Batch boolean and offset operations; tune epsilon and segment counts to balance accuracy and speed.
-- Slicing: Build topology once for multi-layer pipelines; use SliceLayer to avoid repeated rebuilds.
-- Fill algorithms: Choose simpler patterns (line/zigzag) for speed; reserve composite/hybrid for critical regions.
-- Path generation: Optimize print/travel speeds and retraction settings; use spiral mode for uniform-cross-section models to reduce travel moves.
+- Use Fixed-size Pools:
+  - Prefer MemoryPool/StaticMemoryPool for short-lived, high-volume allocations to avoid frequent heap operations.
+  - Use StaticMemoryPool when a process-wide pool is appropriate.
+
+- Concurrency:
+  - Offload heavy computations (e.g., boolean ops, fill generation, slicing) to ThreadPool.
+  - Use ThreadPoolExecutor for coroutine-based pipelines where available.
+
+- 2D Operations:
+  - Simplify polygons before boolean operations to reduce complexity.
+  - Choose appropriate epsilon values for MakeSimple to balance accuracy and speed.
+
+- Mesh Processing:
+  - Validate topology with CheckTopo and consider EulerCharacteristic to detect issues early.
+  - Use SliceFast when topology is known to be complete to avoid rebuild overhead.
+
+- Path Generation:
+  - Tune FdmPathConfig (layer height, line width, speeds) to balance print quality and time.
+  - For vase-mode prints, prefer GenerateGCodePathSpiral to minimize travel and improve continuity.
 
 [No sources needed since this section provides general guidance]
 
 ## Troubleshooting Guide
 Common issues and resolutions:
-- Slicing produces open contours: Use UnSafeSlice when open polylines are expected; normalize via NormalizeUnSafePolygons to clean PolygonsD.
-- Poor boolean results: Ensure polygons are simplified (MakeSimple) and coordinates are integerized for Clipper2; adjust epsilon.
-- Slow slicing: Prebuild topology with BuildSliceTopology; reuse FullTopoModel across layers.
-- Excessive support material: Reduce support_density or switch to tree/honeycomb strategies; tune overhang_angle_threshold.
-- G-code errors: Verify GCodePrinterConfig matches printer capabilities; check firmware-specific settings (Marlin/RRF/Klipper).
+
+- Model loading failures:
+  - Ensure supported formats and correct extensions; ModelLoader dispatches to IglModel/OcctModel based on extension.
+  - Verify USE_OCCT/USE_CGAL/USE_OPENVDB flags match compiled features.
+
+- Topology errors:
+  - Call FullTopoModel::CheckTopo; odd or >2 Euler characteristic indicates non-manifold geometry.
+  - Repair meshes upstream or simplify polygons before slicing.
+
+- Support generation problems:
+  - Adjust SupportConfig parameters (overhang thresholds, spacing, diameter) for better coverage.
+  - For SLA, tune tip/base diameters and sampling spacing.
+
+- Path generation anomalies:
+  - Validate LayerPathData consistency (outlines/fills/supports sizes and Z heights).
+  - Use PolygonsToGPoints to inspect generated points and ensure expected extrude/travel states.
+
+- Lua post-processing:
+  - Provide valid script paths and function names; register additional functions via lua_reg callbacks.
 
 **Section sources**
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [IntPolygon.hpp:28-192](file://2D/IntPolygon.hpp#L28-L192)
-- [FdmSupport.hpp:13-63](file://support/FdmSupport.hpp#L13-L63)
-- [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
+- [ModelLoader.hpp:47-77](file://preprocess/ModelLoader.hpp#L47-L77)
+- [FullTopoModel.hpp:80-127](file://meshmodel/FullTopoModel.hpp#L80-L127)
+- [FdmSupport.hpp:19-63](file://support/FdmSupport.hpp#L19-L63)
+- [SlaSupport.hpp:20-42](file://support/SlaSupport.hpp#L20-L42)
+- [path_generator.hpp:50-91](file://LibHsBaSlicer/Path/path_generator.hpp#L50-L91)
+- [IPath.hpp:34-56](file://paths/IPath.hpp#L34-L56)
 
 ## Conclusion
-HsBaSlicer’s core modules form a cohesive pipeline from model abstraction through 2D geometry, slicing, support generation, fill algorithms, and G-code path generation. The design emphasizes modularity, configurability, and performance, enabling flexible integration across mesh and CAD workflows while supporting multiple firmware targets and advanced features like spiral/vase printing.
+HsBaSlicer’s core modules form a cohesive, extensible architecture:
+- The Foundation Layer supplies robust abstractions and utilities.
+- The 2D Geometry Engine delivers precise polygon operations and fills.
+- Mesh Processing reconstructs topology and prepares models for slicing.
+- The Support System generates practical structures for FDM/SLA.
+- Path Generation translates slices into efficient toolpaths and outputs.
+- The Core Library API ties these pieces together with clear, configurable entry points.
+
+By leveraging the documented interfaces, configuration options, and integration patterns, developers can build reliable, high-performance slicing pipelines tailored to their workflows.
 
 [No sources needed since this section summarizes without analyzing specific files]

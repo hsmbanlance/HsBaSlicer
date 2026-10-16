@@ -1,4 +1,0 @@
-- Each support strategy is a class deriving from `ISupport` and overriding `Generate(const PolygonsD&, const PolygonsD&, float, const SupportConfig&)` returning per-layer `PolygonsD`.
-- Algorithm-specific helpers are exposed as private static member functions (e.g. `GenerateBranches`, `GenerateHoneycomb`, `SampleSupportPoints`) rather than free functions, keeping strategy internals encapsulated.
-- Configuration structs use inheritance: `FdmSupportConfig` and `SlaSupportConfig` extend the base `SupportConfig`, allowing strategies to accept either the generic or the specialized config.
-- Public headers guard against multiple inclusion with `#pragma once` plus a unique macro (`HSBA_SLICER_<NAME>__HPP`) matching the file name.

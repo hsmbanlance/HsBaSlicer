@@ -1,1 +1,0 @@
-CMake ≥ 3.21 helpers + gcov/gcovr for coverage gating; PowerShell Core (`pwsh`) for version generation; Python 3 with `pathspec` for static analysis and wiki conversion; clang-format for batch formatting.

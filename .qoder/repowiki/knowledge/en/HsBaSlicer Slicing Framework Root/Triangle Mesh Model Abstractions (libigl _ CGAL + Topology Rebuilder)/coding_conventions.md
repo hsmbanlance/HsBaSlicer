@@ -1,0 +1,4 @@
+- Each model class implements the same `IModel` contract (Load/Save, Translate/Rotate/Scale/Transform, BoundingBox, Volume, TriangleMesh) so callers can swap backends transparently.
+- Boolean set operations are exposed as free functions (`Union`, `Intersection`, `Difference`, `Xor`) declared as `friend`s of the model class rather than member methods.
+- Primitive geometry creation is centralized in static factory methods named `CreateBox`/`CreateSphere`/`CreateCylinder`/`CreateCone`/`CreateTorus`/`CreatePrime` on each model type.
+- Models store their raw geometry in private `Eigen::MatrixXf` / `MatrixXi` fields and expose them only via `TriangleMesh()` or accessor pairs, keeping internal layout opaque.

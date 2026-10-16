@@ -1,3 +1,0 @@
-- Each documented C++ component has a dedicated Markdown file named after the class/type (e.g. `singleton.md`, `delegate.md`, `coroutine.md`) placed under the matching module subdirectory.
-- Every module subdirectory under `en/` has a corresponding sibling directory under `zh/` with identical filenames, keeping English and Chinese translations side-by-side.
-- Module overviews are authored as plain Markdown pages linked from the top-level `README.md` rather than being embedded inline.

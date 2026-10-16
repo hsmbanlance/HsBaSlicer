@@ -1,0 +1,1 @@
+Minimal Android and iOS demo apps that load the HsBaSlicer native libraries and invoke the FDM/SLA/SLS pipeline example entry points from Java (JNI) and Swift (C bridge).

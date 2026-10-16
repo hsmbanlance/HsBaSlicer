@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: convert
+title: Serialization & Geometry Converters (HsBaSlicerConverter)
+scope:
+    - convert/
+source_files: []
+depends_on: []
+related_to:
+    - path: proto

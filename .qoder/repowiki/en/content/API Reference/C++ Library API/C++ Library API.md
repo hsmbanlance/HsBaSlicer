@@ -1,19 +1,24 @@
-# C++ Library API / C++库API
+# C++ Library API
 
 <cite>
-**Referenced Files in This Document**   
-- [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp)
-- [mesh_slice.cpp](file://LibHsBaSlicer/Slice/mesh_slice.cpp)
-- [path_generator.hpp](file://LibHsBaSlicer/Path/path_generator.hpp)
-- [path_generator.cpp](file://LibHsBaSlicer/Path/path_generator.cpp)
-- [FdmSupport.hpp](file://support/FdmSupport.hpp)
-- [FdmSupport.cpp](file://support/FdmSupport.cpp)
+**Referenced Files in This Document**
+- [export.h](file://LibHsBaSlicer/export.h)
 - [IModel.hpp](file://base/IModel.hpp)
-- [FloatPolygons.hpp](file://2D/FloatPolygons.hpp)
+- [model_preprocess.hpp](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp)
+- [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp)
+- [polygon_fill.hpp](file://LibHsBaSlicer/Fill/polygon_fill.hpp)
+- [path_generator.hpp](file://LibHsBaSlicer/Path/path_generator.hpp)
 - [gcodepath.hpp](file://paths/gcodepath.hpp)
-- [error.hpp](file://base/error.hpp)
-- [thread_pool.hpp](file://base/thread_pool.hpp)
-- [memory_pool.hpp](file://base/memory_pool.hpp)
+- [spiral_path.hpp](file://LibHsBaSlicer/Path/spiral_path.hpp)
+- [robotpath.hpp](file://paths/robotpath.hpp)
+- [fdm_support.hpp](file://LibHsBaSlicer/Support/fdm_support.hpp)
+- [sla_floor.hpp](file://LibHsBaSlicer/Floor/sla_floor.hpp)
+- [sls_export.hpp](file://LibHsBaSlicer/Path/sls_export.hpp)
+- [waam_export.hpp](file://LibHsBaSlicer/Path/waam_export.hpp)
+- [param_store_ops.hpp](file://LibHsBaSlicer/ParamStore/param_store_ops.hpp)
+- [file_transfer.hpp](file://LibHsBaSlicer/Transfer/file_transfer.hpp)
+- [path_optimizer.hpp](file://LibHsBaSlicer/Path/path_optimizer.hpp)
+- [SupportConfig.hpp](file://support/SupportConfig.hpp)
 </cite>
 
 ## Table of Contents
@@ -29,425 +34,587 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document provides a detailed API reference for the HsBaSlicer C++ library, focusing on slicing, path generation, and FDM support generation. It explains high-level interfaces such as planar mesh slicing, G-code path generation, and FDM support strategies, while documenting RAII-based resource management, exception handling patterns, smart pointer usage, namespace organization, class hierarchies, design patterns, threading models, concurrent access patterns, and resource lifecycle management.
+This document describes the LibHsBaSlicer C++ library API for 3D model slicing, path generation, support generation, polygon fill algorithms, and utility functions. It focuses on:
+- Mesh processing APIs (model preprocessing, planar slicing).
+- Path generation APIs (G-code generation, robot paths, spiralized walls).
+- Support generation APIs (FDM and SLA supports).
+- Polygon fill algorithms and region-based path optimization.
+- Utility functions (parameter store, file transfer, version info).
 
-The documentation is grounded in the actual source files:
-- Slicing API is exposed through `HsBa::Slicer` functions in the slice module.
-- Path generation API is exposed through `HsBa::Slicer` functions and data structures in the path module.
-- FDM support generators are exposed through `HsBa::Slicer::Support` classes implementing an `ISupport` interface.
-- Error types, thread pool, and memory pools are provided by base utilities under `HsBa::Slicer`.
+The documentation provides method signatures, parameters, return values, exception handling, usage patterns, object lifetimes, resource cleanup, threading considerations, memory management, and integration notes with external libraries.
 
 ## Project Structure
-The relevant parts of the repository for this API are organized into:
-- `LibHsBaSlicer/Slice`: Planar mesh slicing API and reusable topology helpers.
-- `LibHsBaSlicer/Path`: FDM G-code path generation, including multi-firmware output and spiral/vase mode.
-- `support`: FDM support generator implementations (plane, tree, honeycomb).
-- `base`: Core utilities including model abstraction, error types, thread pool, and memory pools.
-- `2D`: Double-precision polygon types and boolean operations used across slicing and support generation.
-- `paths`: G-code path output types and firmware-specific serialization.
+LibHsBaSlicer exposes a stable C++ API surface organized by feature:
+- Preprocess: model loading, transforms, boolean/thick-solid operations.
+- Slice: planar mesh slicing and reusable topology.
+- Fill: polygon fill modes and Lua custom fills.
+- Path: G-code generation, spiralized walls, robot path export, SLS/WAAM exports.
+- Support: FDM and SLA support generation.
+- Floor: SLA floor/raft generation and image rendering.
+- ParamStore: wide-table parameter persistence.
+- Transfer: remote file transfer utilities.
 
 ```mermaid
 graph TB
-subgraph "Slicing"
-SliceAPI["Slice API<br/>HsBa::Slicer"]
-Topo["FullTopoModel<br/>Reusable topology"]
+subgraph "LibHsBaSlicer"
+PP["Preprocess<br/>model_preprocess.hpp"]
+SL["Slice<br/>mesh_slice.hpp"]
+PF["Fill<br/>polygon_fill.hpp"]
+PG["Path<br/>path_generator.hpp"]
+SO["Support<br/>fdm_support.hpp"]
+FL["Floor<br/>sla_floor.hpp"]
+PS["ParamStore<br/>param_store_ops.hpp"]
+FT["Transfer<br/>file_transfer.hpp"]
+PO["PathOptimizer<br/>path_optimizer.hpp"]
 end
-subgraph "Path Generation"
-PathGen["Path Generator<br/>HsBa::Slicer"]
-GCodePath["GCodePath<br/>Multi-firmware output"]
-end
-subgraph "Support"
-SupportNS["HsBa::Slicer::Support"]
-PlaneSup["FdmPlaneSupport"]
-TreeSup["FdmTreeSupport"]
-HoneySup["FdmHoneycombSupport"]
+subgraph "Paths"
+GC["GCodePath<br/>gcodepath.hpp"]
+RP["RobotPath<br/>robotpath.hpp"]
+SP["SpiralPath<br/>spiral_path.hpp"]
 end
 subgraph "Base"
-IModel["IModel<br/>3D model abstraction"]
-Polygons["PolygonsD<br/>Double-precision polygons"]
-Errors["Error types<br/>RuntimeError hierarchy"]
-ThreadPool["ThreadPool<br/>Concurrent task execution"]
-MemPool["MemoryPool / StaticMemoryPool"]
+IM["IModel<br/>IModel.hpp"]
+SC["SupportConfig<br/>SupportConfig.hpp"]
 end
-SliceAPI --> Topo
-SliceAPI --> Polygons
-PathGen --> GCodePath
-PathGen --> Polygons
-SupportNS --> Polygons
-SupportNS --> IModel
-SliceAPI --> IModel
-PathGen --> IModel
-ThreadPool --> Errors
-MemPool --> Errors
+PP --> IM
+SL --> IM
+PF --> SL
+PG --> PF
+PG --> GC
+PG --> SP
+SO --> PF
+FL --> PF
+PS --> PG
+FT --> PG
+PO --> PF
 ```
 
 **Diagram sources**
-- [mesh_slice.hpp:18-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L18-L103)
-- [path_generator.hpp:18-91](file://LibHsBaSlicer/Path/path_generator.hpp#L18-L91)
-- [FdmSupport.hpp:11-63](file://support/FdmSupport.hpp#L11-L63)
-- [IModel.hpp:63-139](file://base/IModel.hpp#L63-L139)
-- [FloatPolygons.hpp:16-26](file://2D/FloatPolygons.hpp#L16-L26)
-- [gcodepath.hpp:21-107](file://paths/gcodepath.hpp#L21-L107)
-- [error.hpp:15-145](file://base/error.hpp#L15-L145)
-- [thread_pool.hpp:25-162](file://base/thread_pool.hpp#L25-L162)
-- [memory_pool.hpp:19-208](file://base/memory_pool.hpp#L19-L208)
+- [model_preprocess.hpp:1-192](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L1-L192)
+- [mesh_slice.hpp:1-108](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L1-L108)
+- [polygon_fill.hpp:1-58](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L1-L58)
+- [path_generator.hpp:1-96](file://LibHsBaSlicer/Path/path_generator.hpp#L1-L96)
+- [fdm_support.hpp:1-72](file://LibHsBaSlicer/Support/fdm_support.hpp#L1-L72)
+- [sla_floor.hpp:1-200](file://LibHsBaSlicer/Floor/sla_floor.hpp#L1-L200)
+- [param_store_ops.hpp:1-94](file://LibHsBaSlicer/ParamStore/param_store_ops.hpp#L1-L94)
+- [file_transfer.hpp:1-65](file://LibHsBaSlicer/Transfer/file_transfer.hpp#L1-L65)
+- [path_optimizer.hpp:1-191](file://LibHsBaSlicer/Path/path_optimizer.hpp#L1-L191)
+- [gcodepath.hpp:1-112](file://paths/gcodepath.hpp#L1-L112)
+- [robotpath.hpp:1-108](file://paths/robotpath.hpp#L1-L108)
+- [spiral_path.hpp:1-63](file://LibHsBaSlicer/Path/spiral_path.hpp#L1-L63)
+- [IModel.hpp:1-151](file://base/IModel.hpp#L1-L151)
+- [SupportConfig.hpp:1-47](file://support/SupportConfig.hpp#L1-L47)
 
 **Section sources**
+- [export.h:1-22](file://LibHsBaSlicer/export.h#L1-L22)
+- [model_preprocess.hpp:1-192](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L1-L192)
 - [mesh_slice.hpp:1-108](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L1-L108)
+- [polygon_fill.hpp:1-58](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L1-L58)
 - [path_generator.hpp:1-96](file://LibHsBaSlicer/Path/path_generator.hpp#L1-L96)
-- [FdmSupport.hpp:1-67](file://support/FdmSupport.hpp#L1-L67)
-- [IModel.hpp:1-151](file://base/IModel.hpp#L1-L151)
-- [FloatPolygons.hpp:1-271](file://2D/FloatPolygons.hpp#L1-L271)
 - [gcodepath.hpp:1-112](file://paths/gcodepath.hpp#L1-L112)
-- [error.hpp:1-147](file://base/error.hpp#L1-L147)
-- [thread_pool.hpp:1-214](file://base/thread_pool.hpp#L1-L214)
-- [memory_pool.hpp:1-375](file://base/memory_pool.hpp#L1-L375)
+- [spiral_path.hpp:1-63](file://LibHsBaSlicer/Path/spiral_path.hpp#L1-L63)
+- [robotpath.hpp:1-108](file://paths/robotpath.hpp#L1-L108)
+- [fdm_support.hpp:1-72](file://LibHsBaSlicer/Support/fdm_support.hpp#L1-L72)
+- [sla_floor.hpp:1-200](file://LibHsBaSlicer/Floor/sla_floor.hpp#L1-L200)
+- [sls_export.hpp:1-61](file://LibHsBaSlicer/Path/sls_export.hpp#L1-L61)
+- [waam_export.hpp:1-77](file://LibHsBaSlicer/Path/waam_export.hpp#L1-L77)
+- [param_store_ops.hpp:1-94](file://LibHsBaSlicer/ParamStore/param_store_ops.hpp#L1-L94)
+- [file_transfer.hpp:1-65](file://LibHsBaSlicer/Transfer/file_transfer.hpp#L1-L65)
+- [path_optimizer.hpp:1-191](file://LibHsBaSlicer/Path/path_optimizer.hpp#L1-L191)
+- [IModel.hpp:1-151](file://base/IModel.hpp#L1-L151)
+- [SupportConfig.hpp:1-47](file://support/SupportConfig.hpp#L1-L47)
 
 ## Core Components
-This section documents the primary public APIs:
-- Mesh slicing functions: safe and unsafe slicing, Lua-driven slicing, normalization, reusable topology building, and single-layer slicing.
-- Path generation functions: per-layer G-code path generation, multi-firmware output, spiral/vase mode, and helper conversion from polygons to G-points.
-- FDM support generators: plane, tree, and honeycomb strategies via a common interface.
+This section summarizes the primary API classes and free functions exposed by LibHsBaSlicer.
 
-Key characteristics:
-- All slicing entry points use RAII wrappers that translate external exceptions into project-defined errors.
-- Smart pointers (`std::unique_ptr`, `std::shared_ptr`) manage ownership of generated paths and reusable topologies.
-- The `HsBa::Slicer` namespace centralizes slicing and path generation; support generators live under `HsBa::Slicer::Support`.
-- Data types like `PolygonsD`, `LayerPathData`, `FdmPathConfig`, and `GCodePrinterConfig` define configuration and outputs.
+- Model preprocessing
+  - LoadModel, GetModel, InsertModel, RemoveModel, ContainsModel, ModelCount, CleanupModels, TranslateModel, RotateModel, ScaleModel, GetModelInfo.
+  - Advanced boolean/thick-solid operations under USE_CGAL.
+- Planar slicing
+  - Slice, UnSafeSlice, SliceLua, UnSafeSliceLua, NormalizeUnSafePolygons, BuildSliceTopology, SliceLayer.
+- Polygon fill
+  - FillPolygon, FillWithBorder, LuaCustomFillByFile.
+- Path generation
+  - GenerateGCodePath, GenerateGCodePathV2, GenerateGCodePathSpiral, PolygonsToGPoints.
+  - GCodePath class for multi-firmware output; SpiralizeOuterWall for continuous helical walls.
+- Robot path export
+  - RobotPath class for ABB/KUKA/FANUC programs; WAAM export via SaveWaamRobotPath.
+- Support generation
+  - GenerateFdmSupport, GenerateAllFdmSupport, GenerateAllSlaSupport, GenerateAllLuaSupport.
+- SLA floor and package export
+  - GenerateFloorContact/Raft/Border/Fill, LuaCustomFloorByFile/String, RenderPolygonsToImage/Buffer, SaveSlaPackage/Lua.
+- Utilities
+  - Parameter store: SavePipelineParams, LoadPipelineParams, FreeLoadedConfigStrings.
+  - File transfer: TransferFiles with progress callback.
+  - Region path optimizer: RegionPathOptimizer and Lua helpers.
 
 **Section sources**
+- [model_preprocess.hpp:22-120](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L22-L120)
 - [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
+- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
 - [path_generator.hpp:20-91](file://LibHsBaSlicer/Path/path_generator.hpp#L20-L91)
-- [FdmSupport.hpp:13-63](file://support/FdmSupport.hpp#L13-L63)
+- [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
+- [spiral_path.hpp:16-58](file://LibHsBaSlicer/Path/spiral_path.hpp#L16-L58)
+- [robotpath.hpp:15-104](file://paths/robotpath.hpp#L15-L104)
+- [fdm_support.hpp:19-67](file://LibHsBaSlicer/Support/fdm_support.hpp#L19-L67)
+- [sla_floor.hpp:21-195](file://LibHsBaSlicer/Floor/sla_floor.hpp#L21-L195)
+- [sls_export.hpp:17-56](file://LibHsBaSlicer/Path/sls_export.hpp#L17-L56)
+- [waam_export.hpp:17-72](file://LibHsBaSlicer/Path/waam_export.hpp#L17-L72)
+- [param_store_ops.hpp:24-89](file://LibHsBaSlicer/ParamStore/param_store_ops.hpp#L24-L89)
+- [file_transfer.hpp:20-60](file://LibHsBaSlicer/Transfer/file_transfer.hpp#L20-L60)
+- [path_optimizer.hpp:23-186](file://LibHsBaSlicer/Path/path_optimizer.hpp#L23-L186)
 
 ## Architecture Overview
-The slicing pipeline converts a 3D model into 2D layer polygons, which can then be transformed into G-code paths or support structures.
+The LibHsBaSlicer API composes a pipeline from model preprocessing to slicing, filling, support generation, and path export. The following diagram maps major components and their interactions.
 
 ```mermaid
-sequenceDiagram
-participant Client as "Client Code"
-participant Slice as "MeshSlice API"
-participant Topo as "FullTopoModel"
-participant Poly as "PolygonsD"
-participant Path as "PathGenerator"
-participant GCode as "GCodePath"
-Client->>Slice : BuildSliceTopology(model)
-Slice-->>Client : shared_ptr<FullTopoModel>
-loop For each layer z
-Client->>Slice : SliceLayer(topo, z, tolerance)
-Slice->>Topo : UnSafeSlice(z, tolerance)
-Topo-->>Slice : UnSafePolygons
-Slice->>Slice : NormalizeUnSafePolygons()
-Slice-->>Client : PolygonsD
-end
-Client->>Path : GenerateGCodePathV2(layer_data, config, printer_config)
-Path-->>Client : unique_ptr<GCodePath>
-Client->>GCode : ToGCode(firmware)
-GCode-->>Client : string
+graph TB
+Client["Client Application"]
+PP["Preprocess<br/>LoadModel/Transforms"]
+SL["Slice<br/>Planar Slicing"]
+PF["Fill<br/>Polygon Fill"]
+SO["Support<br/>FDM/SLA Supports"]
+PG["Path Gen<br/>GCode/Spiral"]
+GC["GCodePath<br/>Multi-Firmware"]
+RP["RobotPath<br/>ABB/KUKA/FANUC"]
+FL["Floor<br/>SLA Raft/Image"]
+UT["Utilities<br/>ParamStore/Transfer/Optimizer"]
+Client --> PP
+PP --> SL
+SL --> PF
+PF --> SO
+PF --> PG
+PG --> GC
+PG --> RP
+SL --> FL
+Client --> UT
 ```
 
 **Diagram sources**
-- [mesh_slice.cpp:106-116](file://LibHsBaSlicer/Slice/mesh_slice.cpp#L106-L116)
-- [path_generator.cpp:97-118](file://LibHsBaSlicer/Path/path_generator.cpp#L97-L118)
-- [gcodepath.hpp:69-82](file://paths/gcodepath.hpp#L69-L82)
+- [model_preprocess.hpp:22-120](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L22-L120)
+- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
+- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
+- [fdm_support.hpp:19-67](file://LibHsBaSlicer/Support/fdm_support.hpp#L19-L67)
+- [path_generator.hpp:20-91](file://LibHsBaSlicer/Path/path_generator.hpp#L20-L91)
+- [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
+- [robotpath.hpp:15-104](file://paths/robotpath.hpp#L15-L104)
+- [sla_floor.hpp:21-195](file://LibHsBaSlicer/Floor/sla_floor.hpp#L21-L195)
+- [param_store_ops.hpp:24-89](file://LibHsBaSlicer/ParamStore/param_store_ops.hpp#L24-L89)
+- [file_transfer.hpp:20-60](file://LibHsBaSlicer/Transfer/file_transfer.hpp#L20-L60)
 
 ## Detailed Component Analysis
 
-### Mesh Slicing API
-The mesh slicing API exposes functions to slice a model at a given height, with options for safe vs unsafe slicing, Lua-driven slicing, normalization, and reusable topology construction.
+### Model Preprocessing API
+Responsibilities:
+- Load models into an internal pool, apply transforms, query metadata, manage lifecycle.
+- Optional advanced boolean/thick-solid operations when compiled with CGAL.
 
-Public API summary:
-- `Slice(model, height, tolerance = 0.001)` returns closed-contour polygons.
-- `UnSafeSlice(model, height, tolerance = 0.001)` returns polygons including open contours.
-- `SliceLua(model, script, height)` returns closed-contour polygons driven by a Lua script.
-- `UnSafeSliceLua(model, script, height)` returns polygons including open contours driven by a Lua script.
-- `NormalizeUnSafePolygons(unsafe_polys)` filters open polylines and non-simple polygons, converting integer coordinates to double precision.
-- `BuildSliceTopology(model)` builds a reusable topology independent of the source model lifetime.
-- `SliceLayer(topo, z, tolerance = 0.001)` slices a single layer from a prebuilt topology and normalizes to `PolygonsD`.
+Key types and functions:
+- ModelInfo: bounding box and volume.
+- LoadModel(name, filePath): returns shared_ptr<IModel>, throws InvalidArgumentError/RuntimeError.
+- GetModel(name), InsertModel(name, model), RemoveModel(name), ContainsModel(name), ModelCount(), CleanupModels().
+- TranslateModel(name, translation), RotateModel(name, rotation), ScaleModel(name, scale or vector).
+- GetModelInfo(name).
+- ThickSolidModel(BooleanUnion/Intersection/Difference/Xor) under USE_CGAL.
 
-RAII and exception handling:
-- Each exported function wraps geometry calls in a guard that translates foreign exceptions (e.g., CGAL or OCCT failures) into `IOError`, while passing through project-defined `RuntimeError` subclasses unchanged.
-- Reusable topology is returned as `std::shared_ptr<FullTopoModel>` so multiple layers can share the same read-only topology safely.
+Lifecycle and resource management:
+- Models are stored in an internal pool keyed by name. Use RemoveModel or CleanupModels to release unreferenced models.
+- InsertModel transfers ownership via shared_ptr; ensure no dangling references after removal.
 
-Concurrency notes:
-- `SliceLayer` reads the topology only; concurrent calls sharing the same topology are safe if each writes to its own output container.
+Exception handling:
+- LoadModel and InsertModel may throw InvalidArgumentError (duplicate names, unsupported format) or RuntimeError (file load failure).
+- Boolean/thick-solid operations require OcctModel and OCCT availability; otherwise throw RuntimeError.
+
+Usage pattern:
+- LoadModel -> Transform (Translate/Rotate/Scale) -> GetModelInfo -> Slice -> CleanupModels.
 
 ```mermaid
 flowchart TD
-Start(["Function Entry"]) --> Guard["GuardSlice wrapper"]
-Guard --> TryCall["Try geometry call"]
-TryCall --> Success{"Success?"}
-Success --> |Yes| ReturnResult["Return result"]
-Success --> |No| CatchForeign["Catch std::exception"]
-CatchForeign --> ThrowIOError["Throw IOError with message"]
-ReturnResult --> End(["Function Exit"])
-ThrowIOError --> End
+Start(["Start"]) --> Load["LoadModel(name, filePath)"]
+Load --> Transform{"Apply Transforms?"}
+Transform --> |Yes| Apply["Translate/Rotate/ScaleModel"]
+Transform --> |No| Query["GetModelInfo(name)"]
+Apply --> Query
+Query --> Slice["Use in slicing pipeline"]
+Slice --> Cleanup["CleanupModels()"]
+Cleanup --> End(["End"])
 ```
 
 **Diagram sources**
-- [mesh_slice.cpp:28-43](file://LibHsBaSlicer/Slice/mesh_slice.cpp#L28-L43)
+- [model_preprocess.hpp:22-120](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L22-L120)
+
+**Section sources**
+- [model_preprocess.hpp:22-120](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L22-L120)
+- [model_preprocess.hpp:122-187](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L122-L187)
+- [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
+
+### Planar Slicing API
+Responsibilities:
+- Slice models at a given Z height, returning closed or open contours.
+- Provide Lua-driven slicing and reusable topology for multi-layer pipelines.
+
+Key functions:
+- Slice(model, height, tolerance=0.001): returns closed Polygons.
+- UnSafeSlice(model, height, tolerance=0.001): returns UnSafePolygons including open contours.
+- SliceLua/UnSafeSliceLua: inline Lua scripts drive slicing.
+- NormalizeUnSafePolygons(unsafe_polys): cleans and converts to PolygonsD.
+- BuildSliceTopology(model): builds FullTopoModel once for reuse.
+- SliceLayer(topo, z, tolerance=0.001): slices one layer from prebuilt topology.
+
+Threading and performance:
+- SliceLayer is const-safe over a shared FullTopoModel; concurrent calls are safe if outputs are separate.
+- Prefer BuildSliceTopology + SliceLayer for multi-layer workflows to avoid O(total_faces) rebuild per layer.
+
+```mermaid
+sequenceDiagram
+participant App as "Application"
+participant Topo as "FullTopoModel"
+participant Slice as "SliceLayer"
+App->>App : BuildSliceTopology(model)
+App->>Topo : Store topology
+loop For each layer
+App->>Slice : SliceLayer(topo, z, tolerance)
+Slice-->>App : PolygonsD
+end
+```
+
+**Diagram sources**
+- [mesh_slice.hpp:79-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L79-L103)
 
 **Section sources**
 - [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [mesh_slice.cpp:46-116](file://LibHsBaSlicer/Slice/mesh_slice.cpp#L46-L116)
 
-### Path Generation API
-The path generation API transforms per-layer polygons into G-code paths, supporting both simple point sequences and multi-firmware output.
+### Polygon Fill Algorithms
+Responsibilities:
+- Fill polygons using line/zigzag/border modes.
+- Provide Lua custom fill via script files.
 
-Public API summary:
-- `FdmPathConfig`: Configuration for layer height, line width, print/travel speeds, extrusion multiplier, and units.
-- `LayerPathData`: Per-layer data containing outlines, fills, supports, and Z height.
-- `GenerateGCodePath(layer_data, config)` returns `std::unique_ptr<PointsPath>`.
-- `GenerateGCodePathV2(layer_data, config, printer_config)` returns `std::unique_ptr<GCodePath>` for multi-firmware output.
-- `GenerateGCodePathSpiral(layer_outlines, layer_zs, printer_config)` returns `std::unique_ptr<GCodePath>` for vase/spiral mode.
-- `PolygonsToGPoints(polys, z, config, is_extrude)` converts polygons to a sequence of G-points.
+Key functions:
+- FillPolygon(poly, spacing, mode, angle_deg): returns filled Polygons.
+- FillWithBorder(poly, spacing, border_count, fill_mode, angle_deg): returns border + fill.
+- LuaCustomFillByFile(poly, scriptPath, functionName="generate_fill", lineThickness=0.5): returns custom fill.
 
-Smart pointer usage:
-- All path generation functions return `std::unique_ptr`, ensuring clear ownership transfer to the caller.
-
-Spiral/vase mode:
-- Spiralization merges outer walls across layers into a continuous helical wall, emitting header + continuous wall + footer without per-layer travel.
+Data flow:
+- Input Polygons -> Fill algorithm -> Output Polygons.
 
 ```mermaid
-classDiagram
-class FdmPathConfig {
-+float layer_height
-+float line_width
-+float print_speed
-+float travel_speed
-+float extrusion_multiplier
-+GCodeUnits units
-}
-class LayerPathData {
-+PolygonsD outlines
-+PolygonsD fills
-+PolygonsD supports
-+float z_height
-}
-class GCodePath {
-+ToGCode(firmware) string
-+SaveGCode(path, firmware) void
-+setContinuousWall(wall) void
-+hasContinuousWall() bool
-}
-FdmPathConfig <.. LayerPathData : "used by"
-LayerPathData <.. GCodePath : "converted to"
+flowchart TD
+In["Input Polygons"] --> Mode{"Fill Mode"}
+Mode --> |Line| LineFill["Line Fill"]
+Mode --> |SimpleZigzag| ZigzagFill["Zigzag Fill"]
+Mode --> |Zigzag| ZigzagFill
+LineFill --> Out["Output Polygons"]
+ZigzagFill --> Out
 ```
 
 **Diagram sources**
-- [path_generator.hpp:23-42](file://LibHsBaSlicer/Path/path_generator.hpp#L23-L42)
-- [gcodepath.hpp:33-107](file://paths/gcodepath.hpp#L33-L107)
+- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
+
+**Section sources**
+- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
+
+### Path Generation APIs (G-code and Robot Paths)
+Responsibilities:
+- Generate G-code paths for FDM processes.
+- Generate continuous spiralized outer walls.
+- Export robot programs for industrial robots (WAAM).
+
+Key types and functions:
+- FdmPathConfig: layer_height, line_width, print_speed, travel_speed, extrusion_multiplier, units.
+- LayerPathData: outlines, fills, supports, z_height.
+- GenerateGCodePath(layer_data, config): returns PointsPath.
+- GenerateGCodePathV2(layer_data, config, printer_config): returns GCodePath supporting multi-firmware output.
+- GenerateGCodePathSpiral(layer_outlines, layer_zs, printer_config): returns GCodePath with continuous wall.
+- PolygonsToGPoints(polys, z, config, is_extrude): helper to convert polygons to GPoint sequences.
+- GCodePath: ToGCode(firmware), SaveGCode(path, firmware), setContinuousWall(wall), hasContinuousWall().
+- SpiralizeOuterWall(layer_sections, layer_zs): returns SpiralPoint sequence.
+- RobotPath: push_back(RLPoint), Save/ToString for ABB/KUKA/FANUC.
+
+Typical workflow:
+- Prepare LayerPathData per layer -> Configure FdmPathConfig -> GenerateGCodePathV2 -> Set continuous wall if spiral mode -> ToGCode(firmware) or SaveGCode.
+
+```mermaid
+sequenceDiagram
+participant App as "Application"
+participant Gen as "GenerateGCodePathV2"
+participant GC as "GCodePath"
+participant FW as "Firmware"
+App->>Gen : GenerateGCodePathV2(layer_data, config, printer_config)
+Gen-->>App : unique_ptr<GCodePath>
+App->>GC : setContinuousWall(spiral_points)
+App->>GC : ToGCode(FW)
+GC-->>App : GCode string
+```
+
+**Diagram sources**
+- [path_generator.hpp:20-91](file://LibHsBaSlicer/Path/path_generator.hpp#L20-L91)
+- [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
+- [spiral_path.hpp:16-58](file://LibHsBaSlicer/Path/spiral_path.hpp#L16-L58)
 
 **Section sources**
 - [path_generator.hpp:20-91](file://LibHsBaSlicer/Path/path_generator.hpp#L20-L91)
-- [path_generator.cpp:14-140](file://LibHsBaSlicer/Path/path_generator.cpp#L14-L140)
 - [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
+- [spiral_path.hpp:16-58](file://LibHsBaSlicer/Path/spiral_path.hpp#L16-L58)
+- [robotpath.hpp:15-104](file://paths/robotpath.hpp#L15-L104)
 
-### FDM Support Generators
-FDM support generators implement a common interface to produce support polygons from overhang regions.
+### Support Generation APIs (FDM and SLA)
+Responsibilities:
+- Generate FDM supports per layer or across all layers.
+- Generate SLA sacrificial supports.
+- Provide Lua-driven custom support generation.
 
-Class hierarchy:
-- `ISupport` defines the virtual `Generate(current_layer, prev_layer, layer_height, config)` method.
-- `FdmPlaneSupport`: Generates column supports from overhang regions using gap and diameter inflation.
-- `FdmTreeSupport`: Generates tree-like branching supports by placing circular branch tips within overhang regions.
-- `FdmHoneycombSupport`: Fills overhang regions with hexagonal honeycomb cells.
-
-Design pattern:
-- Strategy pattern via `ISupport` allows swapping support algorithms without changing calling code.
+Key functions:
+- GenerateFdmSupport(current_layer, prev_layer, layer_height, config): returns PolygonsD.
+- GenerateAllFdmSupport(layers, config): returns vector<PolygonsD>.
+- GenerateAllSlaSupport(layers, config): returns vector<PolygonsD>.
+- GenerateAllLuaSupport(layers, config, script, functionName="generate_support"): returns vector<PolygonsD>.
 
 Configuration:
-- `SupportConfig` controls overhang angle threshold, support gap, support diameter, and honeycomb cell size.
+- Support::SupportConfig: overhang_angle_threshold, layer_height, support_gap, support_diameter, support_density, support_pattern, tree_branch_angle, tree_max_branch_radius, honeycomb_cell_size.
+- Support::FdmSupportConfig: interface_layers, interface_density.
+- Support::SlaSupportConfig: tip_diameter, raft_thickness.
 
 ```mermaid
-classDiagram
-class ISupport {
-<<interface>>
-+Generate(current_layer, prev_layer, layer_height, config) PolygonsD
-}
-class FdmPlaneSupport {
-+Generate(current_layer, prev_layer, layer_height, config) PolygonsD
-}
-class FdmTreeSupport {
-+Generate(current_layer, prev_layer, layer_height, config) PolygonsD
--GenerateBranches(overhang, layer_height, config) PolygonsD
-}
-class FdmHoneycombSupport {
-+Generate(current_layer, prev_layer, layer_height, config) PolygonsD
--GenerateHoneycomb(overhang, config) PolygonsD
-}
-ISupport <|-- FdmPlaneSupport
-ISupport <|-- FdmTreeSupport
-ISupport <|-- FdmHoneycombSupport
+flowchart TD
+Layers["Layers (bottom to top)"] --> Config["Support::SupportConfig"]
+Config --> Algo{"Algorithm"}
+Algo --> |FDM| FDM["GenerateAllFdmSupport"]
+Algo --> |SLA| SLA["GenerateAllSlaSupport"]
+Algo --> |Lua| LUA["GenerateAllLuaSupport"]
+FDM --> Out["Per-layer support PolygonsD"]
+SLA --> Out
+LUA --> Out
 ```
 
 **Diagram sources**
-- [FdmSupport.hpp:13-63](file://support/FdmSupport.hpp#L13-L63)
+- [fdm_support.hpp:19-67](file://LibHsBaSlicer/Support/fdm_support.hpp#L19-L67)
+- [SupportConfig.hpp:11-43](file://support/SupportConfig.hpp#L11-L43)
 
 **Section sources**
-- [FdmSupport.hpp:13-63](file://support/FdmSupport.hpp#L13-L63)
-- [FdmSupport.cpp:48-267](file://support/FdmSupport.cpp#L48-L267)
+- [fdm_support.hpp:19-67](file://LibHsBaSlicer/Support/fdm_support.hpp#L19-L67)
+- [SupportConfig.hpp:11-43](file://support/SupportConfig.hpp#L11-L43)
 
-### Base Utilities: Model Abstraction, Polygons, Errors, Threading, Memory Pools
-- `IModel`: Abstract interface for 3D models, providing load/save, transformations, bounding box, volume, and triangle mesh extraction.
-- `PolygonsD`: Double-precision polygon type aliasing Clipper2 types, with boolean operations, area calculation, shape generators, and integer/double conversions.
-- Error types: A hierarchy of exceptions derived from `std::runtime_error`, including `RuntimeError`, `InvalidArgumentError`, `IOError`, `OutOfMemoryError`, etc.
-- `ThreadPool`: Thread pool with task submission, waiting, and optional coroutine executor integration.
-- `MemoryPool` and `StaticMemoryPool`: Custom allocators for fixed-size memory pools, thread-safe allocation/deallocation, and element construction/destruction.
+### SLA Floor and Package Export
+Responsibilities:
+- Generate floor contact area, raft, border, and fill.
+- Render polygons to images (file or buffer).
+- Save SLA packages as zip archives with layer images, floor/support images, and configuration.
+
+Key functions:
+- GenerateFloorContact(bottom_layer, config): returns Polygons.
+- GenerateFloorRaft(bottom_layer, config): returns complete raft.
+- GenerateFloorBorder(bottom_layer, config): returns border loops.
+- GenerateFloorFill(bottom_layer, config): returns internal fill.
+- LuaCustomFloorByFile/String(bottom_layer, script/function, config, lua_reg): returns custom floor.
+- RenderPolygonsToImage(polys, width, height, outPath): writes image file.
+- RenderPolygonsToImageBuffer(polys, width, height, ext, outBuffer): returns encoded bytes.
+- SaveSlaPackage(pkg, output_zip): saves zip archive.
+- SaveSlaPackageLua(pkg, output_zip, lua_script, lua_func="export_sla"): Lua-customized export.
+
+Configuration:
+- SlaFloorConfig: raft_offset, border_width, fill_spacing, fill_angle_deg, border_count, use_convex_hull, concave_hull_points.
 
 ```mermaid
-classDiagram
-class IModel {
-<<interface>>
-+Load(fileName) bool
-+Save(fileName, format) bool
-+Translate(translation) void
-+Rotate(rotation) void
-+Scale(scale) void
-+Transform(transform) void
-+BoundingBox(min, max) void
-+Volume() float
-+TriangleMesh() pair
-}
-class ThreadPool {
-+submit(func, args...) future
-+PendingTasks() size_t
-+ActiveTasks() size_t
-+WaitAll() void
-}
-class MemoryPool {
-+allocate(n, hint) pointer
-+deallocate(p, n) void
-+max_size() size_type
-+construct(p, args...) void
-+destroy(p) void
-}
-class StaticMemoryPool {
-+allocate(n, hint) pointer
-+deallocate(p, n) void
-+max_size() size_type
-+construct(p, args...) void
-+destroy(p) void
-+UsedCount() size_t
-}
-IModel <.. ThreadPool : "used by"
-IModel <.. MemoryPool : "can use"
-IModel <.. StaticMemoryPool : "can use"
+flowchart TD
+Bottom["Bottom Layer Polygons"] --> Contact["GenerateFloorContact"]
+Contact --> Raft["GenerateFloorRaft"]
+Raft --> Border["GenerateFloorBorder"]
+Raft --> Fill["GenerateFloorFill"]
+Border --> Image["RenderPolygonsToImage/Buffer"]
+Fill --> Image
+Image --> Package["SaveSlaPackage/Lua"]
 ```
 
 **Diagram sources**
-- [IModel.hpp:111-139](file://base/IModel.hpp#L111-L139)
-- [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
-- [memory_pool.hpp:44-208](file://base/memory_pool.hpp#L44-L208)
-- [memory_pool.hpp:215-372](file://base/memory_pool.hpp#L215-L372)
+- [sla_floor.hpp:21-195](file://LibHsBaSlicer/Floor/sla_floor.hpp#L21-L195)
 
 **Section sources**
-- [IModel.hpp:63-139](file://base/IModel.hpp#L63-L139)
-- [FloatPolygons.hpp:16-26](file://2D/FloatPolygons.hpp#L16-L26)
-- [error.hpp:15-145](file://base/error.hpp#L15-L145)
-- [thread_pool.hpp:25-162](file://base/thread_pool.hpp#L25-L162)
-- [memory_pool.hpp:19-208](file://base/memory_pool.hpp#L19-L208)
-- [memory_pool.hpp:215-372](file://base/memory_pool.hpp#L215-L372)
+- [sla_floor.hpp:21-195](file://LibHsBaSlicer/Floor/sla_floor.hpp#L21-L195)
+
+### SLS and WAAM Export
+Responsibilities:
+- SLS export driven by Lua scripts with layer outlines and optional spiralized wall data.
+- WAAM robot program generation for ABB/KUKA/FANUC with welding parameters.
+
+Key types and functions:
+- SlsPackage: layer_outlines, layer_z_heights, config_json, spiral_mode.
+- SaveSlsPackageLua(pkg, output_zip, lua_script, lua_func="export_sls", error_out): returns bool.
+- WaamRobotPackage: layer_outlines, layer_z_heights, weld(WaamWeldParams), robot_type, bead_width, config_json, spiral_mode.
+- SaveWaamRobotPath(pkg, output_path, lua_script="", lua_func="export_waam", error_out): returns bool.
+
+```mermaid
+sequenceDiagram
+participant App as "Application"
+participant SLS as "SaveSlsPackageLua"
+participant LUA as "Lua Script"
+App->>SLS : SaveSlsPackageLua(pkg, output_zip, lua_script)
+SLS->>LUA : Execute export_sls(config, images, output_path)
+LUA-->>SLS : Success/Failure
+SLS-->>App : bool
+```
+
+**Diagram sources**
+- [sls_export.hpp:17-56](file://LibHsBaSlicer/Path/sls_export.hpp#L17-L56)
+- [waam_export.hpp:17-72](file://LibHsBaSlicer/Path/waam_export.hpp#L17-L72)
+
+**Section sources**
+- [sls_export.hpp:17-56](file://LibHsBaSlicer/Path/sls_export.hpp#L17-L56)
+- [waam_export.hpp:17-72](file://LibHsBaSlicer/Path/waam_export.hpp#L17-L72)
+
+### Parameter Store and File Transfer Utilities
+Responsibilities:
+- Persist and retrieve pipeline configurations in a wide table backend.
+- Transfer files to a remote executor service with progress callbacks.
+
+Key types and functions:
+- ParamPipelineKind: Fdm, Sla, Sls, Slm, Lom, Tdp, Waam, Custom, FileTransfer.
+- ParamBackend: Sqlite, MySql, PostgreSql.
+- ParamStoreConn: backend, sqlitePath, host, user, password, database, port.
+- ParamStoreOutcome: success, paramId, error.
+- SavePipelineParams(conn, kind, table, key, cfg): persists config.
+- LoadPipelineParams(outCfg, conn, kind, table, key): loads config; caller must call FreeLoadedConfigStrings.
+- FreeLoadedConfigStrings(kind, cfg): releases malloc'd strings.
+- FileTransferConfig: host, port, pool_size, files.
+- FileTransferResult: success, files_transferred, total_files, error_message.
+- TransferFiles(config, progress): returns FileTransferResult.
+
+Memory management:
+- Loaded config strings are allocated by std::malloc; always call FreeLoadedConfigStrings after use.
+
+```mermaid
+flowchart TD
+Conn["ParamStoreConn"] --> Save["SavePipelineParams"]
+Conn --> Load["LoadPipelineParams"]
+Load --> Free["FreeLoadedConfigStrings"]
+FTConf["FileTransferConfig"] --> Transfer["TransferFiles"]
+Transfer --> Result["FileTransferResult"]
+```
+
+**Diagram sources**
+- [param_store_ops.hpp:24-89](file://LibHsBaSlicer/ParamStore/param_store_ops.hpp#L24-L89)
+- [file_transfer.hpp:20-60](file://LibHsBaSlicer/Transfer/file_transfer.hpp#L20-L60)
+
+**Section sources**
+- [param_store_ops.hpp:24-89](file://LibHsBaSlicer/ParamStore/param_store_ops.hpp#L24-L89)
+- [file_transfer.hpp:20-60](file://LibHsBaSlicer/Transfer/file_transfer.hpp#L20-L60)
+
+### Region Path Optimizer
+Responsibilities:
+- Optimize visit order of independent polygon regions to minimize air-move cost.
+- Supports pre-fill (polygon mode) and post-fill (fill-result mode).
+
+Key class and functions:
+- RegionPathOptimizer: addRegion(regionId, paths), addPolygonRegion(regionId, polygons), addRoute(fromId, toId, cost), optimizeOrder(), buildPaths(), buildPolygons().
+- RegisterLuaPathOptimizeFunctions(L): registers PathOptimize global table.
+- LuaOptimizeRegionPaths/String(scriptPath/script, functionName="optimize_paths", lua_reg): optimized fill paths.
+- LuaOptimizeRegionPolygons/String(scriptPath/script, functionName="optimize_polygons", lua_reg): optimized polygon order.
+
+Algorithm overview:
+- Models regions as AreaGraph vertices; gates are entry/exit points.
+- Uses genetic TSP for inter-region routing; nearest-neighbor greedy for intra-region ordering.
+
+```mermaid
+classDiagram
+class RegionPathOptimizer {
++addRegion(regionId, paths) void
++addPolygonRegion(regionId, polygons) void
++addRoute(fromId, toId, cost) void
++optimizeOrder() vector<int>
++buildPaths() PolygonsD
++buildPolygons() PolygonsD
+}
+```
+
+**Diagram sources**
+- [path_optimizer.hpp:23-100](file://LibHsBaSlicer/Path/path_optimizer.hpp#L23-L100)
+
+**Section sources**
+- [path_optimizer.hpp:23-186](file://LibHsBaSlicer/Path/path_optimizer.hpp#L23-L186)
 
 ## Dependency Analysis
-The following diagram shows how core components depend on each other:
+Libraries and dependencies:
+- Eigen: used extensively for vectors/quaternions/matrices.
+- IModel: base interface for 3D models.
+- 2D geometry: Polygons, PolygonsD, IntPolygon, FloatPolygons.
+- Paths: GCodePath, LayersPath, RobotPath.
+- External integrations: Lua scripting, CGAL/IGL for boolean/thick-solid, OpenCASCADE for CAD models, SQLite/MySQL/PostgreSQL for parameter store, Bit7z for compression.
 
 ```mermaid
-graph LR
-SliceAPI["Slice API"] --> IModel["IModel"]
-SliceAPI --> Polygons["PolygonsD"]
-SliceAPI --> Topo["FullTopoModel"]
-PathGen["Path Generator"] --> Polygons
-PathGen --> GCodePath["GCodePath"]
-SupportNS["Support Generators"] --> Polygons
-SupportNS --> Overhang["OverhangDetector"]
-ThreadPool --> Errors["Error Types"]
-MemPool --> Errors
+graph TB
+Lib["LibHsBaSlicer"] --> Eigen["Eigen"]
+Lib --> IModel["IModel"]
+Lib --> Poly["2D Polygons"]
+Lib --> Paths["Paths (GCodePath, RobotPath)"]
+Lib --> Lua["Lua Scripts"]
+Lib --> CGAL["CGAL/IGL (optional)"]
+Lib --> OCCT["OpenCASCADE (optional)"]
+Lib --> DB["SQLite/MySQL/PostgreSQL"]
+Lib --> Zip["Bit7z/Zipper"]
 ```
 
 **Diagram sources**
-- [mesh_slice.hpp:18-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L18-L103)
-- [path_generator.hpp:18-91](file://LibHsBaSlicer/Path/path_generator.hpp#L18-L91)
-- [FdmSupport.hpp:11-63](file://support/FdmSupport.hpp#L11-L63)
-- [error.hpp:15-145](file://base/error.hpp#L15-L145)
+- [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
+- [polygon_fill.hpp:11-13](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L11-L13)
+- [gcodepath.hpp:16-17](file://paths/gcodepath.hpp#L16-L17)
+- [robotpath.hpp:11-12](file://paths/robotpath.hpp#L11-L12)
+- [param_store_ops.hpp:1-12](file://LibHsBaSlicer/ParamStore/param_store_ops.hpp#L1-L12)
 
 **Section sources**
-- [mesh_slice.hpp:18-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L18-L103)
-- [path_generator.hpp:18-91](file://LibHsBaSlicer/Path/path_generator.hpp#L18-L91)
-- [FdmSupport.hpp:11-63](file://support/FdmSupport.hpp#L11-L63)
-- [error.hpp:15-145](file://base/error.hpp#L15-L145)
+- [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
+- [polygon_fill.hpp:11-13](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L11-L13)
+- [gcodepath.hpp:16-17](file://paths/gcodepath.hpp#L16-L17)
+- [robotpath.hpp:11-12](file://paths/robotpath.hpp#L11-L12)
+- [param_store_ops.hpp:1-12](file://LibHsBaSlicer/ParamStore/param_store_ops.hpp#L1-L12)
 
 ## Performance Considerations
-- Use `BuildSliceTopology` once and reuse it with `SliceLayer` to avoid rebuilding topology per layer.
-- Prefer `GenerateGCodePathV2` for multi-firmware output when you need structured layer data rather than raw point sequences.
-- For vase/spiral mode, use `GenerateGCodePathSpiral` to generate a continuous wall without per-layer travel overhead.
-- Use `ThreadPool` to parallelize independent layer processing; ensure each thread writes to its own output container.
-- Consider `MemoryPool` or `StaticMemoryPool` for high-frequency allocations in tight loops to reduce heap churn.
+- Multi-layer slicing: prefer BuildSliceTopology + SliceLayer to avoid rebuilding topology per layer.
+- Parallelism: SliceLayer is const-safe over shared FullTopoModel; schedule multiple layers concurrently with separate outputs.
+- Memory: Avoid holding unnecessary copies of Polygons/PolygonsD; pass by reference where possible.
+- Path optimization: Use RegionPathOptimizer to reduce air-move costs; choose pre-fill vs post-fill based on pipeline stage.
+- Rendering: RenderPolygonsToImageBuffer avoids intermediate files for in-memory workflows.
+- Exports: For large datasets, consider streaming or chunked processing where supported.
 
 [No sources needed since this section provides general guidance]
 
 ## Troubleshooting Guide
-Common issues and strategies:
-- Geometry kernel failures (CGAL/OCCT) are translated to `IOError`; catch `IOError` around slicing calls to handle external failures gracefully.
-- Invalid arguments (e.g., zero thread count) throw `InvalidArgumentError`; validate inputs before constructing `ThreadPool`.
-- Out-of-memory conditions may arise from large polygon sets; monitor memory usage and consider reducing polygon complexity or using memory pools.
-- Concurrency issues: Do not share mutable containers across threads; use separate outputs per thread or synchronize access.
-
-Recommended error handling pattern:
-- Wrap slicing and path generation calls in try-catch blocks catching `RuntimeError` subclasses.
-- Log error messages from `what()` and decide whether to retry, skip, or abort the pipeline.
+Common issues and resolutions:
+- Model loading failures: Check file format support and path validity; handle InvalidArgumentError/RuntimeError from LoadModel.
+- Duplicate model names: Ensure unique names for LoadModel/InsertModel; use ContainsModel to check before insertion.
+- Unsupported boolean operations: Verify USE_CGAL and OCCT availability; otherwise ThickSolidModel/Boolean* will throw.
+- Slicing artifacts: Use NormalizeUnSafePolygons after UnSafeSlice to clean open contours and non-simple polygons.
+- G-code generation errors: Validate FdmPathConfig and GCodePrinterConfig; ensure consistent units and dimensions.
+- Parameter store errors: Inspect ParamStoreOutcome.error; verify backend connectivity and credentials.
+- File transfer failures: Check host/port accessibility and file existence; inspect FileTransferResult.error_message.
 
 **Section sources**
-- [mesh_slice.cpp:28-43](file://LibHsBaSlicer/Slice/mesh_slice.cpp#L28-L43)
-- [thread_pool.hpp:37-41](file://base/thread_pool.hpp#L37-L41)
-- [error.hpp:15-145](file://base/error.hpp#L15-L145)
+- [model_preprocess.hpp:32-39](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L32-L39)
+- [model_preprocess.hpp:90-97](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L90-L97)
+- [model_preprocess.hpp:122-134](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L122-L134)
+- [mesh_slice.hpp:67-77](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L67-L77)
+- [param_store_ops.hpp:58-89](file://LibHsBaSlicer/ParamStore/param_store_ops.hpp#L58-L89)
+- [file_transfer.hpp:49-60](file://LibHsBaSlicer/Transfer/file_transfer.hpp#L49-L60)
 
 ## Conclusion
-The HsBaSlicer C++ library provides a robust, RAII-friendly API for slicing, path generation, and FDM support. Its design emphasizes clear ownership via smart pointers, consistent error handling through a unified exception hierarchy, and extensibility via strategy patterns. By leveraging reusable topologies, multi-firmware path generation, and thread pools, users can build efficient and reliable 3D printing pipelines.
+LibHsBaSlicer provides a comprehensive C++ API for slicing, path generation, support creation, and export across multiple manufacturing processes. By leveraging reusable topologies, region-based optimization, and flexible Lua scripting, users can build efficient and customizable pipelines. Proper lifecycle management, error handling, and performance tuning are essential for robust integration.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
 ## Appendices
 
-### Typical Workflow Example
-A typical workflow involves:
-1. Loading a model via `IModel`.
-2. Building a reusable topology with `BuildSliceTopology`.
-3. Iterating over layer heights and calling `SliceLayer`.
-4. Collecting `LayerPathData` and generating G-code via `GenerateGCodePathV2`.
-5. Serializing to G-code strings or files using `GCodePath::ToGCode` or `SaveGCode`.
+### Typical Workflows
 
-```mermaid
-sequenceDiagram
-participant App as "Application"
-participant Model as "IModel"
-participant Slice as "Slice API"
-participant Path as "Path Generator"
-participant GCode as "GCodePath"
-App->>Model : Load(file)
-App->>Slice : BuildSliceTopology(model)
-loop For each layer
-App->>Slice : SliceLayer(topo, z, tolerance)
-Slice-->>App : PolygonsD
-App->>App : Build LayerPathData
-end
-App->>Path : GenerateGCodePathV2(layer_data, config, printer_config)
-Path-->>App : unique_ptr<GCodePath>
-App->>GCode : ToGCode(Marlin)
-GCode-->>App : gcode_string
-```
+#### Loading Models and Preprocessing
+- LoadModel(name, filePath) -> TranslateModel/RotateModel/ScaleModel -> GetModelInfo(name) -> CleanupModels().
 
-**Diagram sources**
-- [mesh_slice.cpp:106-116](file://LibHsBaSlicer/Slice/mesh_slice.cpp#L106-L116)
-- [path_generator.cpp:97-118](file://LibHsBaSlicer/Path/path_generator.cpp#L97-L118)
-- [gcodepath.hpp:74-82](file://paths/gcodepath.hpp#L74-L82)
+#### Configuring Pipelines
+- Define FdmPathConfig/GCodePrinterConfig/Support::SupportConfig.
+- Optionally configure ParamStoreConn for parameter persistence.
 
-### Best Practices for Memory Management
-- Prefer `std::unique_ptr` for exclusive ownership of generated paths.
-- Use `std::shared_ptr` for shared resources like reusable topologies.
-- Avoid raw pointers in public APIs; expose smart pointers or value types.
-- Use memory pools for temporary allocations in performance-critical sections.
+#### Generating Toolpaths
+- BuildSliceTopology(model) -> SliceLayer(topo, z) -> FillPolygon/FillWithBorder -> GenerateAllFdmSupport/GenerateAllSlaSupport -> GenerateGCodePathV2 -> ToGCode(firmware).
 
-**Section sources**
-- [path_generator.hpp:50-62](file://LibHsBaSlicer/Path/path_generator.hpp#L50-L62)
-- [mesh_slice.hpp:89-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L89-L103)
-- [memory_pool.hpp:44-208](file://base/memory_pool.hpp#L44-L208)
+#### Exporting Results
+- SaveSlaPackage(pkg, output_zip) or SaveSlsPackageLua/pkg.
+- SaveWaamRobotPath(pkg, output_path) for robot programs.
+
+[No sources needed since this section provides general guidance]

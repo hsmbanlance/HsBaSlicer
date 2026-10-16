@@ -1,0 +1,5 @@
+- Platform-specific logging backends are selected at compile time via `#ifdef __ANDROID__` / `#if defined(TARGET_OS_IOS)` / else-Boost.Log branches inside each log-level case in `LoggerSingletone::Log`.
+- Public symbols are annotated with the `HSBA_SLICER_LOG_API` macro from `export.h` rather than raw `__declspec` attributes.
+- Singleton access goes through `GetInstance()` which lazily constructs the instance via `std::call_once` on a static `instance_flag_`, and every logging helper re-checks `!instance_` before delegating to `Log`.
+- Source location is captured automatically using a defaulted `const std::source_location& location = std::source_location::current()` parameter on every public logging method.
+- Configuration loading falls back to hard-coded defaults (level, path `/log/log.txt`, format `%Y-%m-%d %H:%M:%S`) when `logcfg.ini` is missing or a key lookup throws `ptree_bad_path`.

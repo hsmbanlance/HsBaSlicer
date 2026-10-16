@@ -1,0 +1,1 @@
+A working `pwsh` or `powershell` executable is required during CMake configure; without it CMake aborts with `FATAL_ERROR`. The `-Copyleft` flag toggles inclusion of CGAL/OpenCascade/libigl[cgal] feature dependencies and flips the project license between MIT and GPL-3.0-or-later based on whether copyleft third parties are present.

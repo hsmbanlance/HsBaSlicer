@@ -1,1 +1,0 @@
-Each subdirectory has its own `CMakeLists.txt` and is intended to be built as part of the parent project's CMake configuration rather than standalone; the user-plugin loaders are excluded when compiled with `- DHSBA_NO_DLL_LOADER=ON`.

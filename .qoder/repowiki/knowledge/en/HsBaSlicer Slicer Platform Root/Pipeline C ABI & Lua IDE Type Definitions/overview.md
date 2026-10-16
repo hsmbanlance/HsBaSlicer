@@ -1,1 +1,0 @@
-Defines the C-compatible ABI structs/enums/callbacks for every HsBaSlicer manufacturing pipeline (FDM/SLA/SLS/SLM/LOM/TDP/WAAM/FileTransfer/Custom) and the EmmyLua type hints consumed by the Lua scripting API.

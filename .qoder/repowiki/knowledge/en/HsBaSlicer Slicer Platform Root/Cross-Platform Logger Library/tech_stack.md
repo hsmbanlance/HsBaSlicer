@@ -1,1 +1,0 @@
-C++17 (`std::source_location`, `std::shared_mutex`, `std::filesystem`); Boost.Log for desktop logging; Android NDK `android/log.h`; iOS `os_log`; Boost.PropertyTree for INI config parsing.

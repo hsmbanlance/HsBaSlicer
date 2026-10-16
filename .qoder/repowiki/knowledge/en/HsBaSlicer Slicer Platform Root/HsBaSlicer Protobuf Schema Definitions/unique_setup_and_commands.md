@@ -1,1 +1,0 @@
-Build requires `find_package(Protobuf REQUIRED)` and an installed `protoc`; set `- DHSBA_PROTOBUF_OUT=<dir>` to generate multi-language bindings into `<dir>/cpp|cs|java|python|php`, or rely on the default native C++ static library target `HsBaSlicerProto` built by `PROTOBUF_GENERATE_CPP`.

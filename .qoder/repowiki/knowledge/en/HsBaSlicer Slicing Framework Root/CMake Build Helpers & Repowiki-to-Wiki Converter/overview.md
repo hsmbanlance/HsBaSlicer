@@ -1,0 +1,1 @@
+CMake helper modules for packaging, coverage gating with gcovr thresholds, and Windows PDB deployment, plus a Python tool that converts repowiki markdown into GitHub Wiki pages.

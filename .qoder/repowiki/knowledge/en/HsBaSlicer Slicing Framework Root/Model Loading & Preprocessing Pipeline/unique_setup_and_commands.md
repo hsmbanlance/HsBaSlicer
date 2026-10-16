@@ -1,0 +1,1 @@
+Build behavior is controlled by CMake flags: `HSBA_COPL` enables OCCT/CAD support (disabled on Android/iOS/game consoles per CMakeLists.txt); `USE_CGAL` and `USE_OPENVDB` toggle the advanced ThickSolid/Boolean and point-cloud method families respectively.

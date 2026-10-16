@@ -1,5 +1,0 @@
-- Concrete archive backends derive from the `IUnzipper<Derived>` CRTP base and expose `ReadFromFileImpl` / `GetStreamImpl` as private methods, keeping the public interface uniform across miniz and bit7z implementations.
-- Optional third-party features are guarded by preprocessor macros (`HSBA_USE_MYSQL`, `HSBA_USE_PGSQL`, `HSBA_USE_BIT7Z`) both in source files and in `CMakeLists.txt` link sections.
-- Database adapters implement the `SQL::ISQLAdapter` interface and hide platform-specific state behind a nested `class Impl` member managed by `std::unique_ptr<Impl>` (PIMPL pattern).
-- Long-running operations expose progress via `Utils::EventSource<T, void, double|string_view, string_view>` so callers can subscribe to percentage/status callbacks.
-- SQL operations use a fluent pipe-operator DSL: free `operator|` overloads accept `SQLSelect`/`SQLInsert`/`SQLUpdate`/`SQLDelete`/`SQLCreateTable`/`SQLRemoveTable` structs and forward to the corresponding `ISQLAdapter` method.

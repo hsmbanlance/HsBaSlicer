@@ -1,0 +1,1 @@
+Google Protocol Buffers proto3 with `protoc`; multi-language code generation (C++/C#/Java/Python/PHP) driven from CMake via `find_package(Protobuf)`.

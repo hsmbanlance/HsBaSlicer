@@ -1,1 +1,0 @@
-Minimal Android application skeleton that packages the prebuilt HsBaSlicer native shared libraries and exposes a single JNI entry point to run FDM/SLA/SLS pipeline examples.

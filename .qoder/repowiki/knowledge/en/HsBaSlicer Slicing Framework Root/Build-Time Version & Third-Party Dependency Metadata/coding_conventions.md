@@ -1,0 +1,2 @@
+- Public types live in `version.hpp` under `namespace HsBa::Slicer::Version`, while the implementation is entirely generated — no hand-written `.cpp` is committed.
+- Third-party library metadata (license identifier and homepage URL) is maintained as a manual mapping table inside the PowerShell generator rather than being auto-discovered from package manifests.

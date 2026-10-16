@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: samples
+title: HsBaSlicer API Samples & Usage Demos
+scope:
+    - samples/
+source_files: []
+depends_on: []
+related_to:
+    - path: dllhsbaslicer
+    - path: modulehsbaslicer

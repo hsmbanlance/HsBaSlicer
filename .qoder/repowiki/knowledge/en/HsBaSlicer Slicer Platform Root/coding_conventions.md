@@ -1,4 +1,0 @@
-- Feature toggles are expressed as CMake options that translate into `HSBA_*` compile-time defines (e.g. `HSBA_COPL`, `HSBA_HAS_CXX_MODULES`, `HSBA_NO_DLL_LOADER`), which child code uses for `#ifdef` branching rather than runtime flags.
-- Public cross-module interfaces are declared as C-compatible ABI headers under `DllHsBaSlicer/` and `pipelinetypes/`, while C++ implementations live behind those boundaries in their respective child modules.
-- Generated artifacts (protobuf sources, version info) are produced during configure time and referenced via `${CMAKE_CURRENT_BINARY_DIR}` paths, keeping source trees free of generated code.
-- Install/export targets are registered centrally in the root `install(EXPORT ...)` block with the `HsBaSlicer::` CMake namespace, ensuring consistent downstream consumption.

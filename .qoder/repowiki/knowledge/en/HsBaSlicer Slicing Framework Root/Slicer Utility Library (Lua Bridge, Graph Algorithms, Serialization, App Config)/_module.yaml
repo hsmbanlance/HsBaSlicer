@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: utils
+title: Slicer Utility Library (Lua Bridge, Graph Algorithms, Serialization, App Config)
+scope:
+    - utils/
+source_files: []
+depends_on: []
+related_to: []

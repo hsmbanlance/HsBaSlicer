@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: version
+title: Build-Time Version & Third-Party Dependency Metadata
+scope:
+    - version/
+source_files: []
+depends_on: []
+related_to: []

@@ -1,0 +1,1 @@
+Consumed via `import hsba.slicer;` rather than `#include`; MSVC requires matching `/fp:strict /fp:except-` and `_SCL_SECURE_NO_WARNINGS` flags because CGAL propagates them through LibHsBaSlicer's INTERFACE properties, otherwise importing the BMI triggers C2572 std-redefinition errors.

@@ -1,1 +1,0 @@
-The library requires Boost.Date_Time (`find_package(boost_date_time CONFIG REQUIRED)`), Lua (`find_package(Lua REQUIRED)`), and uses `target_precompile_headers` against `pch_headers.hpp`; it is built as part of the parent CMake tree — there is no standalone build script.

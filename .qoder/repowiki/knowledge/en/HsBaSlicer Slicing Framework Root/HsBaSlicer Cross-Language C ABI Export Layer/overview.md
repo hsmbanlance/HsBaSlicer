@@ -1,0 +1,1 @@
+C-export DLL that exposes HsBaSlicer's slicing pipelines, Lua extension points, and event callbacks through a stable cross-language interface for C#/Java/Python consumers.

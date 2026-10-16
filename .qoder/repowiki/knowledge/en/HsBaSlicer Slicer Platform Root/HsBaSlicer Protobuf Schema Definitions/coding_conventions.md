@@ -1,5 +1,0 @@
-- Every `.proto` declares `syntax = "proto3"` and `package HsbaProto;` so generated types live in a single namespace across languages.
-- Technology-specific schemas follow a paired naming pattern: a `msg_<tech>_pipeline_config` message carries input parameters and a `msg_<tech>_pipe_result` message carries success flag, layer count, output path, error message, and elapsed seconds.
-- Enums use a `msg_<domain>_<kind>` prefix (e.g. `msg_technology_type`, `msg_fff_material`, `msg_fdm_filltype`) and end with an `Unknown` sentinel value.
-- Shared geometric primitives (`msg_point3`, `msg_vector3`, `msg_stltrimesh`) are defined in dedicated files (`point.proto`, `vector.proto`, `mesh.proto`) and imported by consumers rather than duplicated.
-- Pipeline result messages consistently expose `success`, `total_layers`, `output_path`/`gcode_content`, `error_message`, and `elapsed_seconds` fields so callers can uniformly inspect outcomes.

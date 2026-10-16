@@ -1,0 +1,4 @@
+- Each IModel implementation overrides the same transform surface (`Translate`, `Rotate`, `Scale` float/vector, plus three overloads of `Transform` taking `Eigen::Isometry3f`, `Matrix4f`, and `Transform<float,3,Affine>`).
+- File-format I/O is split per extension with paired private `Read*`/`Write*` helpers (`ReadStep`/`WriteStep`, `ReadIGES`/`WriteIGES`, `ReadVRML`/`WriteVRML`, `ReadBRep`/`WriteBRep`) dispatched from the public `Load`/`Save` entry points.
+- Free-standing boolean/thickness/primitive factory functions (`Union`, `Intersection`, `Difference`, `Xor`, `ThickSolid`, `CreateBox`, `CreateSphere`, `CreateCylinder`, `CreateCone`, `CreateTorus`, `CreatePrime`) are declared as `friend` of `OcctModel` rather than member functions.
+- User-supplied CAD code is isolated behind the `IUserCustomCAD` abstract interface and a `UserCustomCADDll` loader, keeping the plugin ABI decoupled from the host binary.

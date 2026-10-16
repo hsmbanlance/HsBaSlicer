@@ -1,4 +1,0 @@
-- CMake helper modules expose functionality through named functions (e.g. `check_cxx_feature_*`, `check_c_feature_*`) rather than global variables, keeping them reusable across projects.
-- Feature-detection CMake functions wrap a tiny inline source snippet passed to `CheckCXXSourceCompiles`/`CheckCSourceCompiles` and set a boolean result variable via `set(${result} TRUE/FALSE PARENT_SCOPE)`.
-- Python tooling under `static_check/` and `scripts/` follows a uniform pattern: argparse-based CLI, a root-path resolver, `.gitignore` parsing (either via `pathspec.PathSpec` or a hand-rolled parser), recursive file collection, and per-file issue aggregation returned as dicts.
-- Generated artifacts (`version.cpp`, wiki output) are written to a separate output path and never committed directly — they are produced by a generator script invoked from CMake or Python.

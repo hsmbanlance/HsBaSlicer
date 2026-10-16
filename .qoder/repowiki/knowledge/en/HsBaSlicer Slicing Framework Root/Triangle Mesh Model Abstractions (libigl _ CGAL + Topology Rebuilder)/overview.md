@@ -1,0 +1,1 @@
+Provides triangle-mesh model implementations on top of libigl and CGAL plus a topology-rebuilding slicer helper, all implementing the shared IModel interface for the slicing pipeline.

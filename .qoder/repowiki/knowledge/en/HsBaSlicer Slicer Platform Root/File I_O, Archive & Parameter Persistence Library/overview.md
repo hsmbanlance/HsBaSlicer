@@ -1,1 +1,0 @@
-C++ static library providing ZIP/7z compression and extraction, a multi-backend SQL adapter layer, process-parameter persistence via reflection, Lua bindings, and remote file transfer.

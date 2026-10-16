@@ -3,23 +3,21 @@
 <cite>
 **Referenced Files in This Document**
 - [README.md](file://README.md)
-- [IModel.hpp](file://base/IModel.hpp)
-- [OcctModel.hpp](file://cadmodel/OcctModel.hpp)
-- [UserCustomPointCloudModel.hpp](file://pointcloud/UserCustomPointCloudModel.hpp)
-- [FullTopoModel.hpp](file://meshmodel/FullTopoModel.hpp)
-- [ModelLoader.hpp](file://preprocess/ModelLoader.hpp)
-- [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp)
-- [fdm_support.hpp](file://LibHsBaSlicer/Support/fdm_support.hpp)
-- [polygon_fill.hpp](file://LibHsBaSlicer/Fill/polygon_fill.hpp)
-- [path_generator.hpp](file://LibHsBaSlicer/Path/path_generator.hpp)
-- [layerspath.hpp](file://paths/layerspath.hpp)
 - [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
 - [fdm_pipeline.h](file://DllHsBaSlicer/fdm_pipeline.h)
 - [sla_pipeline.h](file://DllHsBaSlicer/sla_pipeline.h)
 - [sls_pipeline.h](file://DllHsBaSlicer/sls_pipeline.h)
-- [slm_pipeline.h](file://DllHsBaSlicer/slm_pipeline.h)
+- [lom_pipeline.h](file://DllHsBaSlicer/lom_pipeline.h)
 - [tdp_pipeline.h](file://DllHsBaSlicer/tdp_pipeline.h)
 - [waam_pipeline.h](file://DllHsBaSlicer/waam_pipeline.h)
+- [concepts.hpp](file://base/concepts.hpp)
+- [coroutine.hpp](file://base/coroutine.hpp)
+- [static_reflect.hpp](file://base/static_reflect.hpp)
+- [IModel.hpp](file://base/IModel.hpp)
+- [model_preprocess.hpp](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp)
+- [mesh_slice.hpp](file://LibHsBaSlicer/Slice/mesh_slice.hpp)
+- [FullTopoModel.hpp](file://meshmodel/FullTopoModel.hpp)
+- [FloatPolygons.hpp](file://2D/FloatPolygons.hpp)
 </cite>
 
 ## Table of Contents
@@ -34,127 +32,167 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document explains HsBaSlicer’s core concepts and fundamental principles for building slicing pipelines across multiple additive manufacturing processes. It covers:
+This document explains the core concepts behind HsBaSlicer’s slicing workflow. It covers:
+- Fundamental 3D printing processes supported by the framework: FDM, SLA, SLS, LOM, TDP, and WAAM.
+- Mesh processing concepts such as topology, geometry operations, and validation.
+- Pipeline architecture principles including stage composition, parameter passing, and event handling.
+- Configuration system design using structured parameters and reflection.
+- C++20 concepts usage for type safety, coroutine-based async operations, and template metaprogramming patterns.
+- Practical examples showing how these concepts work together during slicing.
 
-- Additive manufacturing fundamentals and process-specific requirements.
-- The model abstraction layer built on the IModel interface.
-- Mesh topology, including vertices, edges, faces, and topological manifold reconstruction.
-- Coordinate systems and transformations from world to machine coordinates.
-- Layer-based processing where 3D geometry becomes 2D cross-sections.
-- A configurable pipeline architecture with stages for preprocessing, slicing, support generation, path planning, and output generation.
-- Data flow between stages and how configuration parameters affect behavior.
-- Practical examples showing how models flow through FDM, SLA, SLS, SLM, TDP, and WAAM pipelines.
+The goal is to make these ideas accessible while remaining grounded in the actual codebase.
 
 ## Project Structure
-HsBaSlicer is a modular C++ framework exposing both a C++ library API and a C ABI for external integration. The relevant layers for this document are:
-
-- base: IModel interface and shared primitives.
-- preprocess: ModelLoader dispatches file formats to mesh or CAD kernels.
-- meshmodel: FullTopoModel provides topology-reconstructed meshes for slicing.
-- cadmodel: OcctModel implements BRep CAD operations.
-- pointcloud: UserCustomPointCloudModel supports plugin-backed point clouds.
-- LibHsBaSlicer: Core slicing, support, fill, and path generation APIs.
-- paths: Layered path outputs and G-code/robot outputs.
-- DllHsBaSlicer: Per-process pipeline entry points (FDM, SLA, SLS, SLM, TDP, WAAM).
-- pipelinetypes: Process-specific configuration and result types.
+HsBaSlicer exposes a modular architecture:
+- `base` provides foundational types, C++20 concepts, coroutines, and static reflection utilities.
+- `LibHsBaSlicer` contains core C++ APIs for preprocessing, slicing, support, fill, path generation, and floor generation.
+- `DllHsBaSlicer` exports C ABI functions for each process pipeline (FDM, SLA, SLS, LOM, TDP, WAAM).
+- `pipelinetypes` defines C-compatible configuration and result structs used across the C ABI.
+- `meshmodel`, `2D`, and other modules provide mesh representation, polygon math, and geometric primitives.
 
 ```mermaid
 graph TB
-subgraph "Abstraction"
-IModel["IModel<br/>Unified 3D model interface"]
-end
-subgraph "Preprocessing"
-ModelLoader["ModelLoader<br/>Format dispatcher + named pool"]
-end
-subgraph "Geometry"
-FullTopo["FullTopoModel<br/>Topology reconstruction"]
-Occt["OcctModel<br/>BRep CAD"]
-PointCloud["UserCustomPointCloudModel<br/>Plugin point cloud"]
-end
-subgraph "Slicing Core"
-SliceAPI["MeshSlice API<br/>Safe/Unsafe/Lua slice"]
-SupportAPI["Support API<br/>FDM/SLA/Lua support"]
-FillAPI["Fill API<br/>Line/Zigzag/Border/Lua"]
-PathAPI["Path Generator<br/>G-code/spiral/points"]
-LayersPath["LayersPath<br/>Per-layer polygons"]
-end
-subgraph "Process Pipelines"
-FDM["FDM Pipeline"]
-SLA["SLA Pipeline"]
-SLS["SLS Pipeline"]
-SLM["SLM Pipeline"]
-TDP["TDP Pipeline"]
-WAAM["WAAM Pipeline"]
-end
-IModel --> ModelLoader
-ModelLoader --> FullTopo
-ModelLoader --> Occt
-ModelLoader --> PointCloud
-FullTopo --> SliceAPI
-Occt --> SliceAPI
-PointCloud --> SliceAPI
-SliceAPI --> SupportAPI
-SliceAPI --> FillAPI
-SupportAPI --> PathAPI
-FillAPI --> PathAPI
-PathAPI --> LayersPath
-LayersPath --> FDM
-LayersPath --> SLA
-LayersPath --> SLS
-LayersPath --> SLM
-LayersPath --> TDP
-LayersPath --> WAAM
+Client["Client Application"] --> Dll["DllHsBaSlicer C ABI"]
+Dll --> Types["Pipeline Types<br/>C-compatible configs/results"]
+Dll --> Lib["LibHsBaSlicer Core API"]
+Lib --> Pre["Preprocess<br/>Load / Transform / Boolean"]
+Lib --> Slice["Slice<br/>Mesh slicing & topology"]
+Lib --> Geo["2D Geometry<br/>Polygons, boolean ops"]
+Lib --> Paths["Path Output<br/>G-code / Robot program"]
+Pre --> Model["IModel Interface"]
+Slice --> Topo["FullTopoModel"]
 ```
 
 **Diagram sources**
-- [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
-- [ModelLoader.hpp:23-59](file://preprocess/ModelLoader.hpp#L23-L59)
-- [FullTopoModel.hpp:43-127](file://meshmodel/FullTopoModel.hpp#L43-L127)
-- [OcctModel.hpp:22-81](file://cadmodel/OcctModel.hpp#L22-L81)
-- [UserCustomPointCloudModel.hpp:90-171](file://pointcloud/UserCustomPointCloudModel.hpp#L90-L171)
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [fdm_support.hpp:19-67](file://LibHsBaSlicer/Support/fdm_support.hpp#L19-L67)
-- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
-- [path_generator.hpp:21-91](file://LibHsBaSlicer/Path/path_generator.hpp#L21-L91)
-- [layerspath.hpp:17-60](file://paths/layerspath.hpp#L17-L60)
+- [fdm_pipeline.h:23-35](file://DllHsBaSlicer/fdm_pipeline.h#L23-L35)
+- [sla_pipeline.h:23-34](file://DllHsBaSlicer/sla_pipeline.h#L23-L34)
+- [sls_pipeline.h:23-34](file://DllHsBaSlicer/sls_pipeline.h#L23-L34)
+- [lom_pipeline.h:23-36](file://DllHsBaSlicer/lom_pipeline.h#L23-L36)
+- [tdp_pipeline.h:23-36](file://DllHsBaSlicer/tdp_pipeline.h#L23-L36)
+- [waam_pipeline.h:23-37](file://DllHsBaSlicer/waam_pipeline.h#L23-L37)
+- [model_preprocess.hpp:32-40](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L32-L40)
+- [mesh_slice.hpp:22-33](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L33)
+- [FullTopoModel.hpp:43-53](file://meshmodel/FullTopoModel.hpp#L43-L53)
+- [FloatPolygons.hpp:18-25](file://2D/FloatPolygons.hpp#L18-L25)
 
 **Section sources**
 - [README.md:21-39](file://README.md#L21-L39)
 
 ## Core Components
-This section introduces the foundational components that enable unified model handling, topology-aware slicing, and process-specific pipelines.
+HsBaSlicer organizes its capabilities around reusable components:
+- Model abstraction: `IModel` represents any 3D model with load/save, transforms, bounding box, volume, and triangle mesh access.
+- Preprocessing: Load models into a pool, apply transforms, query info, and perform advanced boolean/thick-solid operations when available.
+- Slicing: Planar slicing along Z producing closed or open polygons; optional Lua-driven slicing; reusable topology building for multi-layer efficiency.
+- 2D geometry: Double-precision polygon types and boolean operations (union, intersection, difference, XOR), area calculation, shape generators, and integer/double conversion.
+- Process pipelines: Each additive manufacturing process has a dedicated C ABI entry point with sync/async execution and progress/result callbacks.
 
-### Additive Manufacturing Fundamentals
-HsBaSlicer supports multiple additive manufacturing processes by configuring common slicing stages differently:
-
-| Process | Abbreviation | Core Requirements | Typical Output |
-|---|---:|---|---|
-| Fused Deposition Modeling | FDM | Layer height, wall count, infill density, support pattern, line width, print speed, extrusion settings, firmware target | G-code per firmware |
-| Stereolithography | SLA | Exposure time, lift distance/speed, floor/raft, support pattern, image format and resolution | Layer images plus optional zip/database |
-| Selective Laser Sintering | SLS | Laser power, scan speed, hatch spacing/rotation, bed temperature; no floor/support needed due to powder bed | Lua-driven export (zip + database) |
-| Selective Laser Melting | SLM | Material, energy source, shielding gas, laser/scanning parameters; mirrors SLS flow | Lua-driven export (zip + database) |
-| Three-Dimensional Printing (Binder Jetting) | TDP | Binder mode, drop spacing, saturation, curing time, head count, bed temperature | Lua-driven export (zip + database) |
-| Wire Arc Additive Manufacturing | WAAM | Bead width, travel/feed speeds, arc current/voltage, protection method, robot controller type | Robot program (ABB/KUKA/FANUC) |
-
-These requirements are represented by process-specific configuration structures such as HsBaFdmPipelineConfig_t, HsBaSlaPipelineConfig_t, HsBaSlsPipelineConfig_t, HsBaSlmPipelineConfig_t, HsBaTdpPipelineConfig_t, and HsBaWaamPipelineConfig_t.
+Key responsibilities:
+- `IModel`: Uniform interface for different model backends.
+- `model_preprocess`: Model lifecycle management and geometry operations.
+- `mesh_slice`: Safe/unsafe slicing, Lua integration, and topology reuse.
+- `FloatPolygons`: Polygon math and conversions.
+- Process headers: Stable C ABI for external integrators.
 
 **Section sources**
-- [pipeline_types.h:23-113](file://pipelinetypes/pipeline_types.h#L23-L113)
-- [pipeline_types.h:146-218](file://pipelinetypes/pipeline_types.h#L146-L218)
-- [pipeline_types.h:249-283](file://pipelinetypes/pipeline_types.h#L249-L283)
-- [pipeline_types.h:312-376](file://pipelinetypes/pipeline_types.h#L312-L376)
-- [pipeline_types.h:403-436](file://pipelinetypes/pipeline_types.h#L403-L436)
-- [pipeline_types.h:463-496](file://pipelinetypes/pipeline_types.h#L463-L496)
-- [pipeline_types.h:523-600](file://pipelinetypes/pipeline_types.h#L523-L600)
+- [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
+- [model_preprocess.hpp:32-40](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L32-L40)
+- [mesh_slice.hpp:22-33](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L33)
+- [FloatPolygons.hpp:18-25](file://2D/FloatPolygons.hpp#L18-L25)
 
-### Model Abstraction Layer: IModel
-The IModel interface provides unified access to different model formats:
+## Architecture Overview
+The slicing architecture follows a layered pipeline:
+- Clients call process-specific C ABI functions from `DllHsBaSlicer`.
+- The ABI layer maps C configs to internal structures and invokes `LibHsBaSlicer` stages.
+- Stages include preprocess, slice, support, fill, floor, and export/path generation.
+- Progress events are emitted via callbacks; results are returned through typed result structs.
 
-- Triangle meshes via implementations such as IglModel/CgalModel (accessed through ModelLoader).
-- CAD models via OcctModel supporting STEP, IGES, VRML, and BREP.
-- Point clouds via UserCustomPointCloudModel backed by user plugins.
+```mermaid
+sequenceDiagram
+participant Client as "Client"
+participant ABI as "DllHsBaSlicer"
+participant Pre as "Preprocess"
+participant Slice as "Slice"
+participant Export as "Export/Path"
+participant Callback as "Progress Callback"
+Client->>ABI : Run pipeline(config, callback)
+ABI->>Callback : percent=0, stage="Preprocess"
+ABI->>Pre : Load/Transform/Validate
+Pre-->>Callback : percent=20, stage="Loaded"
+ABI->>Callback : percent=30, stage="Slice"
+ABI->>Slice : Slice model at layers
+Slice-->>Callback : percent=60, stage="Sliced"
+ABI->>Export : Generate G-code/Robot program/Images
+Export-->>Callback : percent=90, stage="Exporting"
+Export-->>Client : Result struct
+```
 
-Key capabilities include loading/saving, geometric transforms, bounding box queries, volume computation, and triangle mesh extraction.
+**Diagram sources**
+- [fdm_pipeline.h:23-35](file://DllHsBaSlicer/fdm_pipeline.h#L23-L35)
+- [sla_pipeline.h:23-34](file://DllHsBaSlicer/sla_pipeline.h#L23-L34)
+- [sls_pipeline.h:23-34](file://DllHsBaSlicer/sls_pipeline.h#L23-L34)
+- [lom_pipeline.h:23-36](file://DllHsBaSlicer/lom_pipeline.h#L23-L36)
+- [tdp_pipeline.h:23-36](file://DllHsBaSlicer/tdp_pipeline.h#L23-L36)
+- [waam_pipeline.h:23-37](file://DllHsBaSlicer/waam_pipeline.h#L23-L37)
+
+## Detailed Component Analysis
+
+### 3D Printing Process Concepts
+HsBaSlicer supports multiple additive manufacturing processes, each with tailored configuration and output:
+
+- FDM (Fused Deposition Modeling): Extrudes thermoplastic filament layer-by-layer. Outputs G-code targeting firmware like Marlin, RepRap, or Klipper. Supports configurable fill modes, support patterns, wall counts, top/bottom layers, infill density, extrusion settings, and spiral vase mode.
+
+- SLA (Stereolithography): Uses UV light to cure resin layer-by-layer. Outputs layer images (PNG/JPEG/SVG) packaged into a zip. Configurable exposure times, lift/retract speeds, raft/floor parameters, support patterns, and image resolution.
+
+- SLS (Selective Laser Sintering): Powder bed process where a laser sinters powder. No floor/raft/support needed; output format is determined by a required Lua export script. Configurable laser power, scan speed, hatch spacing/rotation, and bed temperature.
+
+- LOM (Laminated Object Manufacturing): Sheets are bonded and cut per layer. Configurable cut speed/power/margin, bonding temperature/pressure/time, seal contour, and cut mode. Requires a Lua export script.
+
+- TDP (Tape Deposition Process / Binder Jetting): Powder bed + liquid binder. Configurable head count, drop spacing, binder saturation, curing time, bed temperature, and binder mode. Optional spiral outer contour mode. Requires a Lua export script.
+
+- WAAM (Wire Arc Additive Manufacturing): Deposits metal bead-by-bead using welding processes. Outputs robot language programs (ABB/KUKA/FANUC) rather than layer zips. Configurable wire feed speed, arc current/voltage, shielding gas flow, material/process/protection/gas, interpass temperature, robot controller type, and optional custom path generator. Spiral outer-wall deposition mode is supported.
+
+```mermaid
+flowchart TD
+Start(["Start"]) --> Choose["Choose Process"]
+Choose --> |FDM| FDM["FDM: Filament extrusion<br/>G-code output"]
+Choose --> |SLA| SLA["SLA: Resin curing<br/>Layer images zip"]
+Choose --> |SLS| SLS["SLS: Powder sintering<br/>Lua export required"]
+Choose --> |LOM| LOM["LOM: Sheet bonding/cutting<br/>Lua export required"]
+Choose --> |TDP| TDP["TDP: Binder jetting<br/>Lua export required"]
+Choose --> |WAAM| WAAM["WAAM: Metal deposition<br/>Robot program output"]
+FDM --> Params["Configure process parameters"]
+SLA --> Params
+SLS --> Params
+LOM --> Params
+TDP --> Params
+WAAM --> Params
+Params --> Run["Run pipeline (sync/async)"]
+Run --> Result["Receive result struct"]
+```
+
+**Diagram sources**
+- [pipeline_types.h:56-113](file://pipelinetypes/pipeline_types.h#L56-L113)
+- [pipeline_types.h:170-218](file://pipelinetypes/pipeline_types.h#L170-L218)
+- [pipeline_types.h:259-283](file://pipelinetypes/pipeline_types.h#L259-L283)
+- [pipeline_types.h:419-436](file://pipelinetypes/pipeline_types.h#L419-L436)
+- [pipeline_types.h:480-496](file://pipelinetypes/pipeline_types.h#L480-L496)
+- [pipeline_types.h:578-600](file://pipelinetypes/pipeline_types.h#L578-L600)
+
+**Section sources**
+- [pipeline_types.h:56-113](file://pipelinetypes/pipeline_types.h#L56-L113)
+- [pipeline_types.h:170-218](file://pipelinetypes/pipeline_types.h#L170-L218)
+- [pipeline_types.h:259-283](file://pipelinetypes/pipeline_types.h#L259-L283)
+- [pipeline_types.h:419-436](file://pipelinetypes/pipeline_types.h#L419-L436)
+- [pipeline_types.h:480-496](file://pipelinetypes/pipeline_types.h#L480-L496)
+- [pipeline_types.h:578-600](file://pipelinetypes/pipeline_types.h#L578-L600)
+
+### Mesh Processing Concepts
+HsBaSlicer separates mesh representation, topology reconstruction, and planar slicing:
+
+- IModel: Abstract interface for loading, saving, transforming, querying bounding boxes/volume, and accessing triangle meshes.
+- FullTopoModel: Reconstructs full topology (vertices, edges, faces) for slicing; supports safe/unsafe slicing, fast slicing, Euler characteristic checks, and Lua-driven slicing.
+- mesh_slice: Provides safe/unsafe slicing, Lua slicing, normalization of unsafe polygons, reusable topology building (`BuildSliceTopology`), and single-layer slicing from prebuilt topology (`SliceLayer`).
+- FloatPolygons: Defines double-precision polygon types and operations (simplify, union, intersection, difference, XOR, area, shape generators, integer/double conversion).
 
 ```mermaid
 classDiagram
@@ -164,471 +202,285 @@ class IModel {
 +Translate(translation) void
 +Rotate(rotation) void
 +Scale(scale) void
-+Scale(scaleVector) void
++Scale(vector_scale) void
 +Transform(transform) void
 +BoundingBox(min, max) void
 +Volume() float
 +TriangleMesh() pair
 }
-class OcctModel {
-+AddShape(shape) void
-+UnionAll() bool
-+CreateBox(size) OcctModel
-+CreateSphere(radius, subdivisions) OcctModel
-+CreateCylinder(radius, height, segments) OcctModel
-+CreateCone(radius, height, segments) OcctModel
-+CreateTorus(majorRadius, minorRadius, majorSegments, minorSegments) OcctModel
-+CreatePrime(polygon, direction) OcctModel
-+CreatePrime(polygons, direction) OcctModel
-}
-class UserCustomPointCloudModel {
-+LoadDll(dllPath, addedFunName) void
-+UnloadDll() void
-+AddPoint(point) void
-+AddPoints(points) void
-+Points() vector
-+PointCount() size_t
-+IsEmpty() bool
-+Clear() void
-+SetFromVertices(vertices) void
-+ToVertices() matrix
-+Voxelize(voxelSize) void
-+Downsample(voxelSize) void
-+Centroid() vector
-+Merge(other) void
-+RemoveStatisticalOutliers(k, multiplier) void
-+ComputeNormals(k) matrix
-}
-IModel <|-- OcctModel
-IModel <|-- UserCustomPointCloudModel
-```
-
-**Diagram sources**
-- [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
-- [OcctModel.hpp:22-81](file://cadmodel/OcctModel.hpp#L22-L81)
-- [UserCustomPointCloudModel.hpp:90-171](file://pointcloud/UserCustomPointCloudModel.hpp#L90-L171)
-
-**Section sources**
-- [IModel.hpp:65-139](file://base/IModel.hpp#L65-L139)
-- [OcctModel.hpp:22-81](file://cadmodel/OcctModel.hpp#L22-L81)
-- [UserCustomPointCloudModel.hpp:90-171](file://pointcloud/UserCustomPointCloudModel.hpp#L90-L171)
-
-### Mesh Topology and Manifold Reconstruction
-FullTopoModel reconstructs full topology from a triangle mesh, enabling robust slicing and analysis:
-
-- Vertices store positions and adjacency lists for faces and edges.
-- Edges connect two vertices and track adjacent faces.
-- Faces store triangle indices, edge indices, and normals.
-- Topological checks include Euler characteristic and completeness validation.
-- Slicing supports safe closed contours, unsafe open contours, fast topology reuse, and Lua-driven custom slicing.
-
-```mermaid
-classDiagram
-class Vertex {
-+vertex : vector3f
-+faces : vector<int>
-+edges : vector<int>
-}
-class Edge {
-+vertices : array<int,2>
-+faces : array<int,2>
-}
-class Face {
-+triangle : array<int,3>
-+edges : array<int,3>
-+normal : vector3f
-}
 class FullTopoModel {
 +CheckTopo() bool
-+GetVertices() vector<Vertex>
-+GetEdges() vector<Edge>
-+GetFaces() vector<Face>
 +EulerCharacteristic() int
 +Slice(height, tolerance) Polygons
 +UnSafeSlice(height, tolerance) UnSafePolygons
 +SliceFast(height) Polygons
 +SliceLua(script, height) Polygons
-+UnSafeSliceLua(script, height) UnSafePolygons
 }
-FullTopoModel --> Vertex : "owns"
-FullTopoModel --> Edge : "owns"
-FullTopoModel --> Face : "owns"
+class FloatPolygons {
++MakeSimple(poly) PolygonsD
++Union(left, right) PolygonsD
++Intersection(left, right) PolygonsD
++Difference(left, right) PolygonsD
++Xor(left, right) PolygonsD
++Area(poly) double
++Integerization(poly) Polygon
++UnIntegerization(poly) PolygonD
+}
+IModel <.. FullTopoModel : "consumes"
+FullTopoModel --> FloatPolygons : "produces"
 ```
 
 **Diagram sources**
-- [FullTopoModel.hpp:43-127](file://meshmodel/FullTopoModel.hpp#L43-L127)
+- [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
+- [FullTopoModel.hpp:43-53](file://meshmodel/FullTopoModel.hpp#L43-L53)
+- [FloatPolygons.hpp:18-25](file://2D/FloatPolygons.hpp#L18-L25)
+
+Validation and topology:
+- `FullTopoModel::CheckTopo` validates topological completeness; incomplete models may affect algorithms.
+- `EulerCharacteristic` helps detect holes or non-manifold conditions.
+- `NormalizeUnSafePolygons` filters open polylines and non-simple polygons, converting integer coordinates to double precision.
+
+Complexity considerations:
+- Rebuilding topology per layer is O(total_faces); use `BuildSliceTopology` once and `SliceLayer` per layer for multi-layer efficiency.
 
 **Section sources**
-- [FullTopoModel.hpp:43-127](file://meshmodel/FullTopoModel.hpp#L43-L127)
+- [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
+- [FullTopoModel.hpp:80-127](file://meshmodel/FullTopoModel.hpp#L80-L127)
+- [mesh_slice.hpp:67-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L67-L103)
+- [FloatPolygons.hpp:27-121](file://2D/FloatPolygons.hpp#L27-L121)
 
-### Coordinate Systems and Transformations
-Coordinate transformation flows from world coordinates to machine coordinates through consistent transform methods on IModel:
+### Pipeline Architecture Principles
+Stage composition:
+- FDM: Preprocess -> Slice -> Support -> Fill -> Path Generation.
+- SLA: Preprocess -> Slice -> Floor -> Support -> Export (zip).
+- SLS/LOM/TDP: Preprocess -> Slice -> Export (Lua-driven).
+- WAAM: Preprocess -> Slice -> Robot path export.
 
-- Translation moves the model origin.
-- Rotation applies a quaternion orientation.
-- Scaling adjusts dimensions uniformly or per-axis.
-- Transform accepts rigid isometries, homogeneous matrices, or affine transforms.
+Parameter passing:
+- Each process uses a C-compatible config struct defined in `pipelinetypes/pipeline_types.h`.
+- Default initializers set sensible defaults; clients modify fields before calling run functions.
+- Results are returned via typed result structs containing success flags, layer counts, output paths/content, error messages, and elapsed time.
 
-For machine-specific coordinate systems, downstream stages interpret these transforms when generating G-code or robot programs. For example, FDM path generation uses units and printer configuration, while WAAM path generation targets specific robot controllers.
+Event handling:
+- Progress callbacks report percentage and stage descriptions.
+- Async variants accept result callbacks to receive completion asynchronously.
 
 ```mermaid
 flowchart TD
-Start(["World Coordinates"]) --> Translate["Apply Translation"]
-Translate --> Rotate["Apply Rotation"]
-Rotate --> Scale["Apply Scale"]
-Scale --> Transform["Apply Isometry/Affine Transform"]
-Transform --> MachineCoords["Machine Coordinates"]
-MachineCoords --> FDM["FDM G-code Paths"]
-MachineCoords --> WAAM["WAAM Robot Programs"]
+A["Create default config"] --> B["Set model_name/model_path"]
+B --> C["Adjust process-specific parameters"]
+C --> D{"Sync or Async?"}
+D --> |Sync| E["Run pipeline(config, callback)"]
+D --> |Async| F["Run pipeline_async(config, callback, result_callback)"]
+E --> G["Handle result struct"]
+F --> G
+G --> H["Free result memory"]
 ```
 
 **Diagram sources**
-- [IModel.hpp:120-130](file://base/IModel.hpp#L120-L130)
-- [path_generator.hpp:21-91](file://LibHsBaSlicer/Path/path_generator.hpp#L21-L91)
-- [pipeline_types.h:523-600](file://pipelinetypes/pipeline_types.h#L523-L600)
+- [fdm_pipeline.h:23-35](file://DllHsBaSlicer/fdm_pipeline.h#L23-L35)
+- [sla_pipeline.h:23-34](file://DllHsBaSlicer/sla_pipeline.h#L23-L34)
+- [sls_pipeline.h:23-34](file://DllHsBaSlicer/sls_pipeline.h#L23-L34)
+- [lom_pipeline.h:23-36](file://DllHsBaSlicer/lom_pipeline.h#L23-L36)
+- [tdp_pipeline.h:23-36](file://DllHsBaSlicer/tdp_pipeline.h#L23-L36)
+- [waam_pipeline.h:23-37](file://DllHsBaSlicer/waam_pipeline.h#L23-L37)
 
 **Section sources**
-- [IModel.hpp:120-130](file://base/IModel.hpp#L120-L130)
+- [fdm_pipeline.h:23-35](file://DllHsBaSlicer/fdm_pipeline.h#L23-L35)
+- [sla_pipeline.h:23-34](file://DllHsBaSlicer/sla_pipeline.h#L23-L34)
+- [sls_pipeline.h:23-34](file://DllHsBaSlicer/sls_pipeline.h#L23-L34)
+- [lom_pipeline.h:23-36](file://DllHsBaSlicer/lom_pipeline.h#L23-L36)
+- [tdp_pipeline.h:23-36](file://DllHsBaSlicer/tdp_pipeline.h#L23-L36)
+- [waam_pipeline.h:23-37](file://DllHsBaSlicer/waam_pipeline.h#L23-L37)
 
-### Layer-Based Processing Paradigm
-HsBaSlicer converts 3D geometry into 2D cross-sections using a layered approach:
+### Configuration System Design
+Structured parameters:
+- Each process has a dedicated config struct (e.g., `HsBaFdmPipelineConfig_t`, `HsBaSlaPipelineConfig_t`, etc.) with clearly documented fields and defaults.
+- Default initializers provide consistent baseline values; clients override only what they need.
 
-- Safe slicing returns only closed contours suitable for material deposition.
-- Unsafe slicing includes open contours for specialized workflows.
-- Normalization cleans unsafe polygons into double-precision polygons.
-- Reusable topology avoids rebuilding topology per layer for multi-layer pipelines.
+Reflection and introspection:
+- Static reflection utilities enable compile-time introspection of classes, fields, and methods without runtime type information.
+- Concepts enforce constraints on types used throughout the system (streams, strings, allocators, arithmetic operations).
 
 ```mermaid
 flowchart TD
-Model["IModel"] --> BuildTopo["BuildSliceTopology"]
-BuildTopo --> Topo["FullTopoModel"]
-Topo --> SliceLayer["SliceLayer(z, tolerance)"]
-SliceLayer --> PolygonsD["PolygonsD"]
-Model --> Slice["Slice(height, tolerance)"]
-Model --> UnSafeSlice["UnSafeSlice(height, tolerance)"]
-UnSafeSlice --> Normalize["NormalizeUnSafePolygons"]
-Normalize --> PolygonsD
+Def["Define Struct Fields"] --> Reflect["Static Reflection Macros<br/>FieldInfo/MethodInfo"]
+Reflect --> Validate["Concepts Enforce Constraints"]
+Validate --> Serialize["Serialization/Config Mapping"]
+Serialize --> Runtime["Runtime Config Usage"]
 ```
 
 **Diagram sources**
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [FullTopoModel.hpp:100-127](file://meshmodel/FullTopoModel.hpp#L100-L127)
+- [static_reflect.hpp:23-57](file://base/static_reflect.hpp#L23-L57)
+- [concepts.hpp:17-26](file://base/concepts.hpp#L17-L26)
+
+Practical example:
+- For FDM, set `layer_height`, `fill_spacing`, `wall_count`, `support_pattern`, `line_width`, `print_speed`, and `output_path`; then call `HsBaRunFdmPipeline`.
+- For SLA, set `layer_height`, `bottom_exposure_time`, `floor_raft_offset`, `image_type`, and `output_path`; then call `HsBaRunSlaPipeline`.
+- For SLS/LOM/TDP, ensure `export_lua_script` is provided; configure process-specific parameters; then call respective run functions.
+- For WAAM, set `material`, `welding_process`, `robot_type`, and optionally `path_lua_script`; then call `HsBaRunWaamPipeline`.
 
 **Section sources**
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
+- [pipeline_types.h:56-113](file://pipelinetypes/pipeline_types.h#L56-L113)
+- [pipeline_types.h:170-218](file://pipelinetypes/pipeline_types.h#L170-L218)
+- [pipeline_types.h:259-283](file://pipelinetypes/pipeline_types.h#L259-L283)
+- [pipeline_types.h:419-436](file://pipelinetypes/pipeline_types.h#L419-L436)
+- [pipeline_types.h:480-496](file://pipelinetypes/pipeline_types.h#L480-L496)
+- [pipeline_types.h:578-600](file://pipelinetypes/pipeline_types.h#L578-L600)
+- [static_reflect.hpp:23-57](file://base/static_reflect.hpp#L23-L57)
+- [concepts.hpp:17-26](file://base/concepts.hpp#L17-L26)
 
-### Pipeline Architecture Pattern
-The pipeline architecture follows a staged pattern:
+### C++20 Concepts, Coroutines, and Template Metaprogramming
+Type safety with concepts:
+- Concepts define requirements for streams, strings, allocators, arithmetic operations, and pointer-like types.
+- They improve compile-time diagnostics and reduce boilerplate.
 
-1. Preprocessing: Load and normalize models via ModelLoader.
-2. Slicing: Convert 3D geometry to 2D polygons per layer.
-3. Support Generation: Compute support structures based on overhangs and process requirements.
-4. Path Planning: Generate toolpaths (outlines, fills, supports) and convert to machine instructions.
-5. Output Generation: Produce G-code, layer images, robot programs, or Lua-driven exports.
+Coroutine-based async operations:
+- `Task<T, Executor>` encapsulates asynchronous computations with executors (`NoopExecutor`, `AsyncExecutor`) and awaiters.
+- Supports chaining (`then`, `catching`, `finally`), completion callbacks, and exception propagation.
+- Custom allocator tasks allow fine-grained memory control.
+
+Template metaprogramming patterns:
+- Static reflection utilities provide field/method introspection via templates and tuples.
+- Concept-based constraints guide generic programming across the codebase.
+
+```mermaid
+classDiagram
+class IExecutor {
++execute(func) void
+}
+class NoopExecutor {
++execute(func) void
+}
+class AsyncExecutor {
++execute(func) void
+}
+class Task~T, Executor~ {
++get_result() T
++then(func) Task&
++catching(func) Task&
++finally(func) Task&
+}
+class TaskAwaiter~T, Executor~ {
++await_ready() bool
++await_suspend(handle) void
++await_resume() T
+}
+IExecutor <|-- NoopExecutor
+IExecutor <|-- AsyncExecutor
+TaskAwaiter~T, Executor~ --> Task~T, Executor~ : "awaits"
+```
+
+**Diagram sources**
+- [coroutine.hpp:47-70](file://base/coroutine.hpp#L47-L70)
+- [coroutine.hpp:71-122](file://base/coroutine.hpp#L71-L122)
+- [coroutine.hpp:205-382](file://base/coroutine.hpp#L205-L382)
+
+Practical example:
+- Use `Task<void, AsyncExecutor>` to run long-running slicing steps off the UI thread.
+- Chain `.then(...)` to continue processing after slicing completes.
+- Use `.catching(...)` to handle exceptions gracefully.
+- Use `.finally(...)` to release resources or update progress.
+
+**Section sources**
+- [coroutine.hpp:47-70](file://base/coroutine.hpp#L47-L70)
+- [coroutine.hpp:71-122](file://base/coroutine.hpp#L71-L122)
+- [coroutine.hpp:205-382](file://base/coroutine.hpp#L205-L382)
+- [concepts.hpp:17-26](file://base/concepts.hpp#L17-L26)
+- [static_reflect.hpp:23-57](file://base/static_reflect.hpp#L23-L57)
+
+### Practical Slicing Workflow Example
+End-to-end FDM workflow:
+1. Create default FDM config and set model name/path.
+2. Adjust layer height, fill spacing, wall count, support pattern, line width, print speed, and output path.
+3. Call `HsBaRunFdmPipeline` synchronously or `HsBaRunFdmPipelineAsync` asynchronously.
+4. Receive result struct with G-code content or exported file path.
+5. Free result memory using `HsBaFreePipelineResult`.
 
 ```mermaid
 sequenceDiagram
 participant App as "Application"
-participant Loader as "ModelLoader"
-participant Model as "IModel"
-participant Slice as "MeshSlice API"
-participant Support as "Support API"
-participant Fill as "Fill API"
-participant Path as "Path Generator"
-participant Output as "LayersPath / Export"
-App->>Loader : LoadModel(name, filePath)
-Loader-->>App : IModel
-App->>Slice : Slice/UnSafeSlice/Normallize
-Slice-->>App : Polygons/PolygonsD
-App->>Support : GenerateFdmSupport/GenerateAllSlaSupport
-Support-->>App : Support PolygonsD
-App->>Fill : FillPolygon/FillWithBorder
-Fill-->>App : Fill Polygons
-App->>Path : GenerateGCodePath/GenerateGCodePathSpiral
-Path-->>App : GCodePath/PointsPath
-App->>Output : Save/ToString
-Output-->>App : G-code/Images/Robot Program
-```
-
-**Diagram sources**
-- [ModelLoader.hpp:47-59](file://preprocess/ModelLoader.hpp#L47-L59)
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [fdm_support.hpp:19-67](file://LibHsBaSlicer/Support/fdm_support.hpp#L19-L67)
-- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
-- [path_generator.hpp:21-91](file://LibHsBaSlicer/Path/path_generator.hpp#L21-L91)
-- [layerspath.hpp:17-60](file://paths/layerspath.hpp#L17-L60)
-
-**Section sources**
-- [ModelLoader.hpp:47-59](file://preprocess/ModelLoader.hpp#L47-L59)
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [fdm_support.hpp:19-67](file://LibHsBaSlicer/Support/fdm_support.hpp#L19-L67)
-- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
-- [path_generator.hpp:21-91](file://LibHsBaSlicer/Path/path_generator.hpp#L21-L91)
-- [layerspath.hpp:17-60](file://paths/layerspath.hpp#L17-L60)
-
-## Detailed Component Analysis
-
-### FDM Pipeline
-FDM adds walls, infill, and supports before generating G-code. Configuration controls layer height, fill mode, support pattern, line width, print speed, spiral mode, and firmware target.
-
-```mermaid
-sequenceDiagram
-participant Client as "Client"
 participant FDM as "FDM Pipeline"
-participant Loader as "ModelLoader"
-participant Slice as "MeshSlice API"
-participant Support as "Support API"
-participant Fill as "Fill API"
-participant Path as "Path Generator"
-Client->>FDM : RunFdmPipeline(config)
-FDM->>Loader : LoadModel(model_path)
-Loader-->>FDM : IModel
-FDM->>Slice : Slice/UnSafeSlice per layer
-Slice-->>FDM : PolygonsD
-FDM->>Support : GenerateFdmSupport(current_layer, prev_layer)
-Support-->>FDM : Support PolygonsD
-FDM->>Fill : FillPolygon/FillWithBorder
-Fill-->>FDM : Fill Polygons
-FDM->>Path : GenerateGCodePath/GenerateGCodePathV2
-Path-->>FDM : GCodePath
-FDM-->>Client : Result(gcode_content, total_layers)
+participant Pre as "Preprocess"
+participant Slice as "Slice"
+participant Path as "Path Generation"
+App->>FDM : HsBaRunFdmPipeline(config, callback)
+FDM->>Pre : Load/Transform model
+Pre-->>FDM : Model ready
+FDM->>Slice : Slice layers
+Slice-->>FDM : Polygons per layer
+FDM->>Path : Generate G-code
+Path-->>App : Result struct
 ```
 
 **Diagram sources**
-- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
-- [ModelLoader.hpp:47-59](file://preprocess/ModelLoader.hpp#L47-L59)
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [fdm_support.hpp:19-67](file://LibHsBaSlicer/Support/fdm_support.hpp#L19-L67)
-- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
-- [path_generator.hpp:21-91](file://LibHsBaSlicer/Path/path_generator.hpp#L21-L91)
+- [fdm_pipeline.h:23-35](file://DllHsBaSlicer/fdm_pipeline.h#L23-L35)
+- [model_preprocess.hpp:32-40](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L32-L40)
+- [mesh_slice.hpp:22-33](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L33)
 
 **Section sources**
-- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
-- [pipeline_types.h:23-113](file://pipelinetypes/pipeline_types.h#L23-L113)
-
-### SLA Pipeline
-SLA generates layer images and optionally a raft/floor plus sacrificial supports. Configuration includes exposure times, lift distances, floor parameters, support patterns, and image format/resolution.
-
-```mermaid
-sequenceDiagram
-participant Client as "Client"
-participant SLA as "SLA Pipeline"
-participant Loader as "ModelLoader"
-participant Slice as "MeshSlice API"
-participant Floor as "Floor Generation"
-participant Support as "Support API"
-participant Export as "Export (Images/Zip)"
-Client->>SLA : RunSlaPipeline(config)
-SLA->>Loader : LoadModel(model_path)
-Loader-->>SLA : IModel
-SLA->>Slice : Slice per layer
-Slice-->>SLA : PolygonsD
-SLA->>Floor : Generate floor/raft
-Floor-->>SLA : Floor PolygonsD
-SLA->>Support : GenerateAllSlaSupport(layers)
-Support-->>SLA : Support PolygonsD
-SLA->>Export : Export images/zip
-Export-->>SLA : export_path
-SLA-->>Client : Result(total_layers, export_path)
-```
-
-**Diagram sources**
-- [sla_pipeline.h:17-56](file://DllHsBaSlicer/sla_pipeline.h#L17-L56)
-- [ModelLoader.hpp:47-59](file://preprocess/ModelLoader.hpp#L47-L59)
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [fdm_support.hpp:39-50](file://LibHsBaSlicer/Support/fdm_support.hpp#L39-L50)
-
-**Section sources**
-- [sla_pipeline.h:17-56](file://DllHsBaSlicer/sla_pipeline.h#L17-L56)
-- [pipeline_types.h:146-218](file://pipelinetypes/pipeline_types.h#L146-L218)
-
-### SLS and SLM Pipelines
-SLS and SLM share a similar flow: preprocess, slice, and Lua-driven export. SLS focuses on polymer sintering; SLM adds metal-specific parameters like material, light source, and shielding gas.
-
-```mermaid
-sequenceDiagram
-participant Client as "Client"
-participant SLS as "SLS Pipeline"
-participant SLM as "SLM Pipeline"
-participant Loader as "ModelLoader"
-participant Slice as "MeshSlice API"
-participant Export as "Lua Export Script"
-Client->>SLS : RunSlsPipeline(config)
-SLS->>Loader : LoadModel(model_path)
-Loader-->>SLS : IModel
-SLS->>Slice : Slice per layer
-Slice-->>SLS : PolygonsD
-SLS->>Export : export_lua_script/export_lua_func
-Export-->>SLS : export_path
-SLS-->>Client : Result(total_layers, export_path)
-Client->>SLM : RunSlmPipeline(config)
-SLM->>Loader : LoadModel(model_path)
-Loader-->>SLM : IModel
-SLM->>Slice : Slice per layer
-Slice-->>SLM : PolygonsD
-SLM->>Export : export_lua_script/export_lua_func
-Export-->>SLM : export_path
-SLM-->>Client : Result(total_layers, export_path)
-```
-
-**Diagram sources**
-- [sls_pipeline.h:17-56](file://DllHsBaSlicer/sls_pipeline.h#L17-L56)
-- [slm_pipeline.h:17-56](file://DllHsBaSlicer/slm_pipeline.h#L17-L56)
-- [ModelLoader.hpp:47-59](file://preprocess/ModelLoader.hpp#L47-L59)
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-
-**Section sources**
-- [sls_pipeline.h:17-56](file://DllHsBaSlicer/sls_pipeline.h#L17-L56)
-- [slm_pipeline.h:17-56](file://DllHsBaSlicer/slm_pipeline.h#L17-L56)
-- [pipeline_types.h:249-283](file://pipelinetypes/pipeline_types.h#L249-L283)
-- [pipeline_types.h:312-376](file://pipelinetypes/pipeline_types.h#L312-L376)
-
-### TDP Pipeline
-TDP (binder jetting) slices per layer and passes binder-jet outlines and head/curing parameters to a Lua export script. Configuration includes binder mode, drop spacing, saturation, curing time, and head count.
-
-```mermaid
-sequenceDiagram
-participant Client as "Client"
-participant TDP as "TDP Pipeline"
-participant Loader as "ModelLoader"
-participant Slice as "MeshSlice API"
-participant Export as "Lua Export Script"
-Client->>TDP : RunTdpPipeline(config)
-TDP->>Loader : LoadModel(model_path)
-Loader-->>TDP : IModel
-TDP->>Slice : Slice per layer
-Slice-->>TDP : PolygonsD
-TDP->>Export : export_lua_script/export_lua_func
-Export-->>TDP : export_path
-TDP-->>Client : Result(total_layers, export_path)
-```
-
-**Diagram sources**
-- [tdp_pipeline.h:17-56](file://DllHsBaSlicer/tdp_pipeline.h#L17-L56)
-- [ModelLoader.hpp:47-59](file://preprocess/ModelLoader.hpp#L47-L59)
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-
-**Section sources**
-- [tdp_pipeline.h:17-56](file://DllHsBaSlicer/tdp_pipeline.h#L17-L56)
-- [pipeline_types.h:463-496](file://pipelinetypes/pipeline_types.h#L463-L496)
-
-### WAAM Pipeline
-WAAM deposits metal bead-by-bead along per-layer contours and outputs a robot language program rather than a layer zip. Configuration includes wire material, welding process, protection method, shielding gas, interpass temperature, and robot controller type. Spiral mode can deposit outer walls as a continuous rising bead.
-
-```mermaid
-sequenceDiagram
-participant Client as "Client"
-participant WAAM as "WAAM Pipeline"
-participant Loader as "ModelLoader"
-participant Slice as "MeshSlice API"
-participant Path as "Path Generator"
-participant Export as "Robot Program Export"
-Client->>WAAM : RunWaamPipeline(config)
-WAAM->>Loader : LoadModel(model_path)
-Loader-->>WAAM : IModel
-WAAM->>Slice : Slice per layer
-Slice-->>WAAM : PolygonsD
-WAAM->>Path : GenerateGCodePathSpiral/Robot path generation
-Path-->>WAAM : Robot paths
-WAAM->>Export : Write robot program
-Export-->>WAAM : output_path
-WAAM-->>Client : Result(total_layers, output_path)
-```
-
-**Diagram sources**
-- [waam_pipeline.h:17-57](file://DllHsBaSlicer/waam_pipeline.h#L17-L57)
-- [ModelLoader.hpp:47-59](file://preprocess/ModelLoader.hpp#L47-L59)
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [path_generator.hpp:64-80](file://LibHsBaSlicer/Path/path_generator.hpp#L64-L80)
-
-**Section sources**
-- [waam_pipeline.h:17-57](file://DllHsBaSlicer/waam_pipeline.h#L17-L57)
-- [pipeline_types.h:523-600](file://pipelinetypes/pipeline_types.h#L523-L600)
+- [fdm_pipeline.h:23-35](file://DllHsBaSlicer/fdm_pipeline.h#L23-L35)
+- [model_preprocess.hpp:32-40](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L32-L40)
+- [mesh_slice.hpp:22-33](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L33)
 
 ## Dependency Analysis
-The following diagram shows key dependencies among core modules used in this document:
+High-level dependencies:
+- `DllHsBaSlicer` depends on `pipelinetypes` for C-compatible configs/results.
+- `LibHsBaSlicer` depends on `base` (IModel, concepts, coroutines), `meshmodel` (FullTopoModel), and `2D` (FloatPolygons).
+- Process pipelines compose preprocessing, slicing, support, fill, floor, and export/path stages.
 
 ```mermaid
-graph LR
-Base["base/IModel.hpp"] --> Preprocess["preprocess/ModelLoader.hpp"]
-Preprocess --> Mesh["meshmodel/FullTopoModel.hpp"]
-Preprocess --> Cad["cadmodel/OcctModel.hpp"]
-Preprocess --> Cloud["pointcloud/UserCustomPointCloudModel.hpp"]
-Mesh --> Slice["LibHsBaSlicer/Slice/mesh_slice.hpp"]
-Cad --> Slice
-Cloud --> Slice
-Slice --> Support["LibHsBaSlicer/Support/fdm_support.hpp"]
-Slice --> Fill["LibHsBaSlicer/Fill/polygon_fill.hpp"]
-Support --> Path["LibHsBaSlicer/Path/path_generator.hpp"]
-Fill --> Path
-Path --> Layers["paths/layerspath.hpp"]
-Layers --> Pipelines["DllHsBaSlicer/*_pipeline.h"]
-Pipelines --> Types["pipelinetypes/pipeline_types.h"]
+graph TB
+Dll["DllHsBaSlicer"] --> Types["pipelinetypes"]
+Dll --> Lib["LibHsBaSlicer"]
+Lib --> Base["base"]
+Lib --> Mesh["meshmodel"]
+Lib --> TwoD["2D"]
+Base --> Concepts["concepts.hpp"]
+Base --> Coroutine["coroutine.hpp"]
+Base --> Reflect["static_reflect.hpp"]
+Mesh --> Topo["FullTopoModel.hpp"]
+TwoD --> Poly["FloatPolygons.hpp"]
 ```
 
 **Diagram sources**
-- [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
-- [ModelLoader.hpp:23-59](file://preprocess/ModelLoader.hpp#L23-L59)
-- [FullTopoModel.hpp:43-127](file://meshmodel/FullTopoModel.hpp#L43-L127)
-- [OcctModel.hpp:22-81](file://cadmodel/OcctModel.hpp#L22-L81)
-- [UserCustomPointCloudModel.hpp:90-171](file://pointcloud/UserCustomPointCloudModel.hpp#L90-L171)
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [fdm_support.hpp:19-67](file://LibHsBaSlicer/Support/fdm_support.hpp#L19-L67)
-- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
-- [path_generator.hpp:21-91](file://LibHsBaSlicer/Path/path_generator.hpp#L21-L91)
-- [layerspath.hpp:17-60](file://paths/layerspath.hpp#L17-L60)
-- [fdm_pipeline.h:17-61](file://DllHsBaSlicer/fdm_pipeline.h#L17-L61)
-- [sla_pipeline.h:17-56](file://DllHsBaSlicer/sla_pipeline.h#L17-L56)
-- [sls_pipeline.h:17-56](file://DllHsBaSlicer/sls_pipeline.h#L17-L56)
-- [slm_pipeline.h:17-56](file://DllHsBaSlicer/slm_pipeline.h#L17-L56)
-- [tdp_pipeline.h:17-56](file://DllHsBaSlicer/tdp_pipeline.h#L17-L56)
-- [waam_pipeline.h:17-57](file://DllHsBaSlicer/waam_pipeline.h#L17-L57)
-- [pipeline_types.h:23-113](file://pipelinetypes/pipeline_types.h#L23-L113)
+- [fdm_pipeline.h:9-10](file://DllHsBaSlicer/fdm_pipeline.h#L9-L10)
+- [pipeline_types.h:5-12](file://pipelinetypes/pipeline_types.h#L5-L12)
+- [model_preprocess.hpp:14-18](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L14-L18)
+- [mesh_slice.hpp:9-16](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L9-L16)
+- [FloatPolygons.hpp:9-12](file://2D/FloatPolygons.hpp#L9-L12)
 
 **Section sources**
-- [IModel.hpp:110-139](file://base/IModel.hpp#L110-L139)
-- [ModelLoader.hpp:23-59](file://preprocess/ModelLoader.hpp#L23-L59)
-- [FullTopoModel.hpp:43-127](file://meshmodel/FullTopoModel.hpp#L43-L127)
-- [OcctModel.hpp:22-81](file://cadmodel/OcctModel.hpp#L22-L81)
-- [UserCustomPointCloudModel.hpp:90-171](file://pointcloud/UserCustomPointCloudModel.hpp#L90-L171)
-- [mesh_slice.hpp:22-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L22-L103)
-- [fdm_support.hpp:19-67](file://LibHsBaSlicer/Support/fdm_support.hpp#L19-L67)
-- [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
-- [path_generator.hpp:21-91](file://LibHsBaSlicer/Path/path_generator.hpp#L21-L91)
-- [layerspath.hpp:17-60](file://paths/layerspath.hpp#L17-L60)
-- [pipeline_types.h:23-113](file://pipelinetypes/pipeline_types.h#L23-L113)
+- [fdm_pipeline.h:9-10](file://DllHsBaSlicer/fdm_pipeline.h#L9-L10)
+- [pipeline_types.h:5-12](file://pipelinetypes/pipeline_types.h#L5-L12)
+- [model_preprocess.hpp:14-18](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L14-L18)
+- [mesh_slice.hpp:9-16](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L9-L16)
+- [FloatPolygons.hpp:9-12](file://2D/FloatPolygons.hpp#L9-L12)
 
 ## Performance Considerations
-- Use BuildSliceTopology once and SliceLayer repeatedly to avoid rebuilding topology per layer.
-- Prefer safe slicing when closed contours are required to reduce downstream errors.
-- Tune fill spacing, wall count, and infill density to balance print time and mechanical strength.
-- Adjust support gap, diameter, and density to minimize material usage while maintaining stability.
-- Choose appropriate layer height and first layer height for surface quality versus build speed.
-- For WAAM, consider spiral mode to reduce travel and improve continuity for prismatic parts.
+- Reuse topology: Build `FullTopoModel` once with `BuildSliceTopology` and slice repeatedly with `SliceLayer` to avoid O(total_faces) rebuilds per layer.
+- Prefer safe slicing for surface-forming processes (SLA) and unsafe slicing only when necessary for material-fed processes.
+- Use double-precision polygons (`PolygonD`, `PolygonsD`) for accurate geometry operations; convert to integer only when required by downstream tools.
+- Offload heavy work to coroutines with `AsyncExecutor` to keep UI responsive.
+- Minimize allocations by reusing buffers and leveraging concept-constrained generics.
 
 [No sources needed since this section provides general guidance]
 
 ## Troubleshooting Guide
-Common issues and remedies:
-
-- Unsupported model format: Ensure the file extension matches supported mesh or CAD formats handled by ModelLoader.
-- Non-manifold geometry: Check topology completeness using FullTopoModel.CheckTopo and EulerCharacteristic; repair or simplify the model if necessary.
-- Open contours in slicing: Use NormalizeUnSafePolygons after UnSafeSlice to filter invalid polylines.
-- Incorrect coordinate system: Verify transforms applied via IModel.Translate/Rotate/Scale/Transform match machine coordinate expectations.
-- Missing Lua export scripts: For SLS/SLM/TDP, ensure export_lua_script and export_lua_func are provided.
-- WAAM robot mismatch: Confirm robot_type matches the target controller (ABB/KUKA/FANUC) or provide a custom path Lua script.
+Common issues and resolutions:
+- Invalid model format or duplicate model names: Ensure unique model names and supported formats when loading models.
+- Open contours or non-simple polygons: Use `NormalizeUnSafePolygons` to filter and clean slices; prefer safe slicing when closed contours are required.
+- Missing Lua export scripts: SLS/LOM/TDP require `export_lua_script`; ensure it is provided and points to a valid script.
+- Memory leaks: Always free result structs using the corresponding `HsBaFree*PipelineResult` function.
+- Asynchronous errors: Use `.catching(...)` on coroutine tasks to handle exceptions and log meaningful messages.
 
 **Section sources**
-- [ModelLoader.hpp:47-59](file://preprocess/ModelLoader.hpp#L47-L59)
-- [FullTopoModel.hpp:80-98](file://meshmodel/FullTopoModel.hpp#L80-L98)
-- [mesh_slice.hpp:67-103](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L67-L103)
-- [IModel.hpp:120-130](file://base/IModel.hpp#L120-L130)
-- [sls_pipeline.h:24-34](file://DllHsBaSlicer/sls_pipeline.h#L24-L34)
-- [slm_pipeline.h:24-36](file://DllHsBaSlicer/slm_pipeline.h#L24-L36)
-- [tdp_pipeline.h:24-36](file://DllHsBaSlicer/tdp_pipeline.h#L24-L36)
-- [waam_pipeline.h:24-37](file://DllHsBaSlicer/waam_pipeline.h#L24-L37)
+- [model_preprocess.hpp:32-40](file://LibHsBaSlicer/Preprocess/model_preprocess.hpp#L32-L40)
+- [mesh_slice.hpp:67-77](file://LibHsBaSlicer/Slice/mesh_slice.hpp#L67-L77)
+- [fdm_pipeline.h:53-61](file://DllHsBaSlicer/fdm_pipeline.h#L53-L61)
+- [coroutine.hpp:338-353](file://base/coroutine.hpp#L338-L353)
 
 ## Conclusion
-HsBaSlicer provides a flexible, layered architecture for additive manufacturing slicing. The IModel abstraction unifies mesh, CAD, and point cloud inputs. FullTopoModel enables robust topology-aware slicing, while the pipeline stages—preprocessing, slicing, support generation, path planning, and output generation—are configurable per process. FDM, SLA, SLS, SLM, TDP, and WAAM pipelines demonstrate how shared core logic adapts to distinct manufacturing requirements through process-specific configurations and optional Lua scripting.
+HsBaSlicer combines robust 3D printing process support, rigorous mesh processing, and a flexible pipeline architecture. By leveraging C++20 concepts, coroutines, and static reflection, it delivers type safety, performance, and extensibility. The structured configuration system and clear separation of concerns make it suitable for both research and production slicing workflows.
 
 [No sources needed since this section summarizes without analyzing specific files]

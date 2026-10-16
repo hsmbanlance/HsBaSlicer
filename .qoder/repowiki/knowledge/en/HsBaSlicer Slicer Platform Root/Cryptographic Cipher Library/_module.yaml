@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: cipher_library
-title: Cryptographic Cipher Library
-scope:
-    - cipher/
-source_files: []
-depends_on: []
-related_to: []

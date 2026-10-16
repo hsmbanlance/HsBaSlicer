@@ -1,1 +1,0 @@
-Build-time feature flags in `CMakeLists.txt`: `HSBA_HSBA_USE_BIT7Z` enables the bit7z backend; `HSBA_USE_MYSQL` / `HSBA_USE_PGSQL` compile in MySQL/PostgreSQL adapters; Android/iOS/game-console targets drop logging, bit7z, and non-SQLite SQL backends.

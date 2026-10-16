@@ -1,4 +1,0 @@
-- Each converter is implemented as a free function taking the source object by const reference and a mutable protobuf pointer as output parameter, rather than returning a new message object.
-- Public API surface is declared inside the `HsBa::Slicer` namespace and guarded by `#pragma once` plus an `HSBA_SLICER_<NAME>__HPP` include guard.
-- Per-pipeline conversions follow a symmetric Config/Result naming pattern (e.g. `FdmConfigToMsg` / `FdmResultToMsg`, `SlaConfigToMsg` / `SlaResultToMsg`) across all supported technologies (FDM, SLA, SLS, SLM, LOM, TDP, WAAM, Custom, FileTransfer).
-- Geometry conversions come in bidirectional pairs named `<Source>2Msg` and `Msg2<Eigen>` (e.g. `EigenVector3f2Msg` / `Msg2Eigen`) covering matching 2D/3D vector, point, quaternion, transform, matrix, and path types.

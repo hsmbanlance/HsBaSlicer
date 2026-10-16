@@ -1,5 +1,0 @@
-- Platform-specific logging backends are selected with `#ifdef __ANDROID__` / `#elif defined(TARGET_OS_IOS)` / `#else` blocks around each sink call, keeping a single `Log()` switch dispatching across all levels.
-- Each public symbol is annotated with the `HSBA_SLICER_LOG_API` macro from `export.h` so Windows consumers get `dllimport` while the library itself gets `dllexport`.
-- The singleton is exposed as `static std::shared_ptr<LoggerSingletone>` constructed lazily via `std::call_once(instance_flag_, ...)` rather than a function-local static.
-- User-defined literals (`_log_debug`, `_log_info`, `_log_warning`, `_log_error`) follow the same signature `(const char*, std::size_t)` and return a `LogState` wrapper instead of calling the logger directly.
-- Source location is captured automatically through default `std::source_location::current()` parameters on every public logging entry point.

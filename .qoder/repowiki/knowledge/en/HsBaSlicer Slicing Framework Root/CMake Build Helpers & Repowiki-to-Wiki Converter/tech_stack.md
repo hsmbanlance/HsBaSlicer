@@ -1,0 +1,1 @@
+CMake ≥ 3.21 for packaging and coverage orchestration (gcov + gcovr ≥ 7); Python 3 with only stdlib (`argparse`, `pathlib`, `re`, `shutil`) for the wiki converter.

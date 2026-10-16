@@ -1,1 +1,0 @@
-C++ library built on Clipper2 (`clipper2/clipper.h`, `clipper.offset.h`) for robust boolean/offset geometry; libpng/libjpeg-turbo for raster I/O; Lua scripting API for custom fill/image generation; optional FreeType for font-to-polygon text rendering (gated by `HSBA_HAVE_FREETYPE`).

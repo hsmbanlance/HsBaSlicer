@@ -1,0 +1,4 @@
+- Each public class exposes a parallel set of point-cloud operations (AddPoint/AddPoints/Points/PointCount/Clear/SetFromVertices/ToVertices/Voxelize/Downsample/Centroid/Merge/RemoveStatisticalOutliers/ComputeNormals) so `OpenVdbModel` and `UserCustomPointCloudModel` are interchangeable drop-in replacements.
+- OpenVDB-specific helpers and particle adapters are kept in the internal `vdb_internal` namespace inside `OpenVdbModel_internal.h` rather than exposed through the public header.
+- Heavy or template-bloated functionality (mesh generation) is split into its own `.cpp` file (`OpenVdbModel_mesh.cpp`) to keep compilation units small and avoid compiler section limits.
+- Plugin entry points are declared as function-pointer typedefs grouped under `IUserCustomPointCloud` and resolved at runtime via `UserCustomPointCloudDll`, keeping the ABI stable across shared-library boundaries.

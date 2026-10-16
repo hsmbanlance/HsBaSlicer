@@ -1,1 +1,0 @@
-Built as the `HsBaPaths` static library by the top-level CMake; requires `LUA_INCLUDE_DIR` and `LUA_LIBRARIES` to be set before including this directory.

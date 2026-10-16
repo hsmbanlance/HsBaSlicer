@@ -1,1 +1,0 @@
-OCCT TopoDS shapes for CAD B-Rep; libigl + Eigen for triangle meshes; CGAL for alternative mesh processing; OpenVDB grids for point clouds; Lua state integration in `FullTopoModel::SliceLua`; optional user plugins loaded at runtime via function-pointer ABI (`HsBaVector3f_t`).

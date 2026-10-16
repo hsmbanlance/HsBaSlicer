@@ -1,1 +1,0 @@
-C++ converter library that serializes Eigen geometric types, FullTopoModel meshes, and C pipeline config structs to/from HsbaProto protobuf messages.

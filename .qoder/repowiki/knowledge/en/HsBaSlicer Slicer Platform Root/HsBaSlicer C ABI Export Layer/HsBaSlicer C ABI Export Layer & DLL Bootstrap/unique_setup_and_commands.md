@@ -1,1 +1,0 @@
-Build behavior is controlled by CMake: on iOS (`IOS` or `CMAKE_SYSTEM_NAME STREQUAL "iOS"`) the target is built as STATIC; otherwise SHARED. Consumers must define `HSBA_SLICER_EXPORTS` when building the DLL so `HSBA_SLICER_API` expands to `__declspec(dllexport)`.

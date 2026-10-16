@@ -1,6 +1,0 @@
-The module centers on a single abstract interface `ISupport` (ISupport.hpp) with a virtual `Generate(current_layer, prev_layer, layer_height, config)` method plus a default `GenerateAll` that iterates layers. Concrete strategies are grouped by printing technology:
-- FDM: `FdmPlaneSupport`, `FdmTreeSupport`, `FdmHoneycombSupport` in FdmSupport.hpp/.cpp implement column, tree-branching, and hexagonal-honeycomb patterns.
-- SLA: `SlaSacrificialSupport` in SlaSupport.hpp/.cpp generates thin sacrificial columns with tip/base diameter tapering.
-- Custom: `LuaSupport` in LuaSupport.hpp/.cpp wraps an embedded Lua state to run user scripts that replace the built-in algorithm; it is paired with `LuaAdapter` (LuaAdapter.hpp/.cpp) which registers 2D polygon helper functions into the Lua global namespace.
-
-Shared building blocks sit at the same level: `OverhangDetector` (OverhangDetector.hpp/.cpp) computes unsupported regions between two adjacent layers using the angle threshold, and `SupportConfig.hpp` defines the shared `SupportConfig` struct plus `FdmSupportConfig`/`SlaSupportConfig` subclasses. Dependency direction is one-way: strategy classes depend on `ISupport` + `OverhangDetector` + `SupportConfig`; `LuaSupport` additionally depends on `LuaAdapter`. The CMakeLists.txt builds these as a cohesive library unit within the slicer.

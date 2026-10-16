@@ -1,0 +1,1 @@
+Android example requires the prebuilt `libHsBaSlicer.so` / `libDllHsBaSlicer.so` for `arm64-v8a` to be present under `app/src/main/jniLibs/arm64-v8a/` before building; run via `./gradlew assembleDebug` or Android Studio. iOS example is a standalone Xcode project under `ios/HsBaSlicerExample/` linked against the same native library.

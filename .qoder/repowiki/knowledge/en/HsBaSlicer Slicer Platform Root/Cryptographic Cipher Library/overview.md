@@ -1,1 +1,0 @@
-Static C++ library providing symmetric/asymmetric encryption, cryptographic hashing, Base64/hex encoding, and Lua bindings for the HsBaSlicer project.

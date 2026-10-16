@@ -1,0 +1,1 @@
+Static C++ utility library providing Lua interop for AnyObject, typed Boost.Graph algorithms over area/gate graphs, multi-format struct serialization, and shared application configuration consumed by the slicer.

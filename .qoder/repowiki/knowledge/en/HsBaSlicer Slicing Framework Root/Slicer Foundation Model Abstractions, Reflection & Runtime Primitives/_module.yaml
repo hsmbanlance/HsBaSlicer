@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: base
+title: 'Slicer Foundation: Model Abstractions, Reflection & Runtime Primitives'
+scope:
+    - base/
+source_files: []
+depends_on: []
+related_to: []

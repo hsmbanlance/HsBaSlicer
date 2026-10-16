@@ -1,0 +1,7 @@
+The module is a static CMake library `HsBaPaths` built from paired `.hpp/.cpp` files under `paths/`. The core abstraction is `IPath` in `IPath.hpp`, declaring uniform `Save(path)` / `ToString()` overloads that accept either raw output or an inline Lua script (with optional named entry function and a `lua_State*` registration callback). Concrete implementations form two inheritance chains:
+- `LayersPath` extends `IPath` to hold per-layer `PolygonsD` plus free-form layer config strings; it provides the shared Lua-based Save/ToString machinery.
+- `GCodePath` extends `LayersPath` and adds firmware-specific G-code emission (`Marlin`/`RepRap`/`Klipper`) via `ToGCode(firmware)`, including continuous spiral-wall support through `PathPoint3D`.
+- `RobotPath` extends `IPath` directly to accumulate `RLPoint` moves and emit brand-specific robot language (ABB/KUKA/FANUC).
+- `WeldRobotPath` extends `RobotPath` to wrap each point with `WeldParam` and emit arc start/end commands per weld seam.
+- `PointsPath` and `ImagesPath` are sibling `IPath` implementations for their respective data types.
+Dependency direction is one-way: all concrete classes depend on `IPath`; `GCodePath` additionally depends on `layerspath.hpp` and `2D/FloatPolygons.hpp`. Lua integration is kept out of the public header surface by forward-declaring `struct lua_State` and linking against `${LUA_LIBRARIES}` only at build time. External consumers link against `HsBaPaths` and its PUBLIC dependencies (`HsBaSlicerBase`, `HsBaSlicerFileOperator`, `HsBaCipher`, `HsBaSlicer2D`, `HsBaSlicerUtils`).

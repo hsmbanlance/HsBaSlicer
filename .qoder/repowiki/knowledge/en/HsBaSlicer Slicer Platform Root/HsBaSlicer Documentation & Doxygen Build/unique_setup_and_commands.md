@@ -1,1 +1,0 @@
-Install Doxygen + Graphviz (`dot`) first; then run `cmake --build . --target docs` from the project root to regenerate API docs into `docs/doxygen/`. Without Doxygen installed the `docs` target is not created.

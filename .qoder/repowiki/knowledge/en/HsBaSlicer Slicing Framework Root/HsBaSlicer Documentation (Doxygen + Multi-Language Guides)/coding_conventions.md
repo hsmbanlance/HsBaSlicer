@@ -1,0 +1,2 @@
+- Every source module under `src/` has a corresponding mirrored folder under both `docs/en/` and `docs/zh/` containing a per-file Markdown page in the same language.
+- Top-level guide files (`README.md`, `cpp_cmake_usage.md`, `lua_pipeline_api.md`, `vcpkg-dependencies.md`, `wiki_maintenance_guide.md`) are duplicated verbatim across `en/` and `zh/` rather than shared, keeping each locale self-contained.

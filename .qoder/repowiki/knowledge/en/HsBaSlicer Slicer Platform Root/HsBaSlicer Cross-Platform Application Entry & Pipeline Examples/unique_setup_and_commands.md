@@ -1,1 +1,0 @@
-Android builds require setting `ANDROID_ABI` (default `arm64-v8a`) and produce `.so` files under `CMAKE_BINARY_DIR/android_libs/<ABI>`, also copying `DllHsBaSlicer/*.so` alongside at post-build time. Desktop runs expect `models/stanford_bunny.stl` and write results to an `output/` directory.

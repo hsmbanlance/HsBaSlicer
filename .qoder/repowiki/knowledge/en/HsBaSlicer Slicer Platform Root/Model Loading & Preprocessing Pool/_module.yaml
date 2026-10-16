@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: preprocess_layer
-title: Model Loading & Preprocessing Pool
-scope:
-    - preprocess/
-source_files: []
-depends_on: []
-related_to: []

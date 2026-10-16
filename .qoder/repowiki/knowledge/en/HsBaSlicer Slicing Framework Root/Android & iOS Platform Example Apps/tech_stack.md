@@ -1,0 +1,1 @@
+Android: Gradle + NDK with ABI filter `arm64-v8a`; iOS: UIKit + Swift bridging header to C/C++ static library.

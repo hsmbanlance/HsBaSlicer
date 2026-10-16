@@ -1,1 +1,0 @@
-Core 2D geometry library providing polygon primitives, boolean/offset operations, raster-to-polygon conversion, and infill pattern generators (line, zigzag, offset, hybrid, Lua-custom) for the slicer.

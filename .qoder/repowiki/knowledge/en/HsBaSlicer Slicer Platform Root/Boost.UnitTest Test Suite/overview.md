@@ -1,1 +1,0 @@
-C++ unit-test suite for HsBaSlicer, organized by feature area and driven by a single CMakeLists that registers each test target with CTest.

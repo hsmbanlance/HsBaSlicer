@@ -1,3 +1,0 @@
-- Every public C ABI function is declared with the `HSBA_SLICER_API` macro from `dllexport.h` rather than raw platform attributes.
-- Each printer technology is exposed as a paired `*_pipeline.{h,cpp}` file following the same C struct ↔ protobuf conversion pattern used by FDM.
-- Cross-cutting pipeline behavior (model preprocessing, parallel execution, file transfer, parameter storage, Lua binding, event source registration) is factored into separate helper files reused by all technology-specific pipeline modules.

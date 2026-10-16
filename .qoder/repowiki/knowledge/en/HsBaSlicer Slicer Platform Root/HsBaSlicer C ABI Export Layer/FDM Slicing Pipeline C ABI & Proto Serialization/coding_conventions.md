@@ -1,6 +1,0 @@
-- Every public function is wrapped in `extern "C"` and marked with `HSBA_SLICER_API` to form the stable C ABI surface.
-- Serialization functions follow a fixed triple: `XxxFromProtoBytes` / `XxxToProtoBytes` returning `int` (1=success, 0=failure), with output buffers allocated via `malloc` and owned by the caller.
-- Each serialized type has a matching `HsBaFree*ConfigStrings` cleanup helper that frees `malloc`'d string fields in the corresponding C struct.
-- The FDM pipeline coroutine reports progress through a `ReportProgress` helper that forwards `(percent, stage_name)` to the optional `HsBaProgressCallback` at each major stage boundary.
-- Ownership of C ABI strings crossing the boundary is transferred via `OwnedCString` RAII guard that wraps `malloc`'d memory and releases it either to the caller or on exception.
-- Lua-based customization (support and infill) is detected by checking whether the script path is non-empty, falling back to the native algorithm when no Lua script is provided.

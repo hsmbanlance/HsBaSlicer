@@ -1,0 +1,4 @@
+- CMake options are exposed as `CACHE STRING` variables (e.g. `HSBA_COVERAGE_THRESHOLD_CORE`, `HSBA_COVERAGE_EXCLUDES`, `HSBA_COVERAGE_JOBS`) so users can override them from the command line.
+- External tools are located at configure time via `find_program` (e.g. `gcovr`) with a friendly warning when missing rather than failing hard, allowing partial builds.
+- Path handling normalizes Windows backslashes to forward slashes before passing absolute paths to gcovr regex filters, ensuring cross-platform compatibility.
+- The wiki converter treats each language independently, producing paired output files (`Home.md`/`Home-zh.md`, `_Sidebar.md`/`_Sidebar-zh.md`) with a cross-link between English and Chinese versions.

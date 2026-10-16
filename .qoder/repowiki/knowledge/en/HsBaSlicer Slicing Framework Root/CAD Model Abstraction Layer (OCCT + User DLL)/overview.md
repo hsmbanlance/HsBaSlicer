@@ -1,0 +1,1 @@
+Provides the IModel implementations for OpenCASCADE BRep shapes and a dynamically-loaded user-supplied CAD library, exposing file I/O, transforms, boolean ops, primitives, and tessellation.
