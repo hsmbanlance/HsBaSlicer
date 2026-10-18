@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "base/error.hpp"
+#include "base/parallel.hpp"
 #include "utils/LuaNewObject.hpp"
 
 namespace HsBa::Slicer
@@ -331,23 +332,39 @@ std::string GCodePath::GenerateContinuousWall() const
 
 std::string GCodePath::ToGCode(GCodeFirmware firmware) const
 {
-    std::ostringstream ss;
-    ss << GenerateHeader(firmware);
+    // Layer body generation is a pure const read of layers_/printer_config_ and
+    // dominates the serialization cost for large models, so fan it out over the
+    // pipeline ThreadPool and stitch header+wall+bodies+footer back on the
+    // caller thread. HSBA_PIPELINE_THREADS=1 preserves the original ordering.
+    const int total = static_cast<int>(layers_.size());
+    std::vector<std::string> bodies = HsBa::Slicer::Pipeline::ParallelMapLayers<std::string>(
+        total, [this, firmware](int i) { return GenerateLayerGCode(i, firmware); });
 
-    // Spiralize/vase mode: emit the continuous rising outer wall first.
+    std::string wall;
     if (!continuous_wall_.empty())
     {
-        ss << GenerateContinuousWall();
+        wall = GenerateContinuousWall();
     }
 
-    // Then any per-layer polygon data (empty in pure vase mode).
-    for (int i = 0; std::cmp_less(i, layers_.size()); ++i)
+    // Reserve exact capacity to avoid ostringstream's incremental growth.
+    std::string header = GenerateHeader(firmware);
+    std::string footer = GenerateFooter(firmware);
+    size_t total_size = header.size() + wall.size() + footer.size();
+    for (const auto& s : bodies)
     {
-        ss << GenerateLayerGCode(i, firmware);
+        total_size += s.size();
     }
 
-    ss << GenerateFooter(firmware);
-    return ss.str();
+    std::string out;
+    out.reserve(total_size);
+    out.append(header);
+    out.append(wall);
+    for (const auto& s : bodies)
+    {
+        out.append(s);
+    }
+    out.append(footer);
+    return out;
 }
 
 void GCodePath::SaveGCode(const std::filesystem::path& path, GCodeFirmware firmware) const

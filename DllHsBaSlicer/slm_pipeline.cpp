@@ -278,7 +278,7 @@ Utils::Task<InternalSlmResult> RunSlmPipelineAsync(const InternalSlmConfig& cfg)
         // Build the slicing topology once and slice layers in parallel: each layer
         // is independent and SliceLayer only const-reads the shared topology.
         auto topo = BuildSliceTopology(*model);
-        ParallelForLayers(
+        co_await ParallelForLayersAsync(
             total_layers,
             [&](int i)
             {

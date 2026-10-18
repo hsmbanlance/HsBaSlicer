@@ -264,7 +264,7 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
         // Build the slicing topology once and slice layers in parallel: each layer
         // is independent and SliceLayer only const-reads the shared topology.
         auto topo = BuildSliceTopology(*model);
-        ParallelForLayers(
+        co_await ParallelForLayersAsync(
             total_layers,
             [&](int i)
             {
@@ -373,12 +373,12 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
         }
         else
         {
-            ParallelForLayers(total_layers, cpp_fill_layer,
-                              [&](int done)
-                              {
-                                  int const progress = 65 + (done * 20) / total_layers;
-                                  ReportProgress(cfg, progress, "Filling layer");
-                              });
+            co_await ParallelForLayersAsync(total_layers, cpp_fill_layer,
+                                            [&](int done)
+                                            {
+                                                int const progress = 65 + (done * 20) / total_layers;
+                                                ReportProgress(cfg, progress, "Filling layer");
+                                            });
         }
         ReportProgress(cfg, 85, "Fill generation complete");
 

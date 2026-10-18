@@ -6,7 +6,10 @@
 
 #include <cmath>
 #include <format>
+#include <string>
+#include <utility>
 
+#include "base/parallel.hpp"
 #include "spiral_path.hpp"
 
 namespace HsBa::Slicer
@@ -65,27 +68,41 @@ HSBA_SLICER_LIB_API std::unique_ptr<PointsPath> GenerateGCodePath(const std::vec
 {
     auto path = std::make_unique<PointsPath>(config.units);
 
-    for (const auto& layer : layer_data)
+    // Each layer's PolygonsToGPoints call is a pure per-layer function of the
+    // three polygon groups + z, so we generate the G-point lists in parallel
+    // and only touch the shared PointsPath on the caller thread to preserve
+    // deterministic ordering and thread safety.
+    const int total = static_cast<int>(layer_data.size());
+    struct LayerPts
     {
-        float const z = layer.z_height;
+        std::vector<GPoint> outlines;
+        std::vector<GPoint> fills;
+        std::vector<GPoint> supports;
+    };
+    auto per_layer = HsBa::Slicer::Pipeline::ParallelMapLayers<LayerPts>(
+        total,
+        [&layer_data, &config](int i) -> LayerPts
+        {
+            const auto& layer = layer_data[static_cast<size_t>(i)];
+            float const z = layer.z_height;
+            LayerPts out;
+            out.outlines = PolygonsToGPoints(layer.outlines, z, config, true);
+            out.fills = PolygonsToGPoints(layer.fills, z, config, true);
+            out.supports = PolygonsToGPoints(layer.supports, z, config, true);
+            return out;
+        });
 
-        // 1. Print outlines (outer wall)
-        auto outline_pts = PolygonsToGPoints(layer.outlines, z, config, true);
-        for (auto& pt : outline_pts)
+    for (auto& lp : per_layer)
+    {
+        for (auto& pt : lp.outlines)
         {
             path->push_back(pt);
         }
-
-        // 2. Print infill (interior)
-        auto fill_pts = PolygonsToGPoints(layer.fills, z, config, true);
-        for (auto& pt : fill_pts)
+        for (auto& pt : lp.fills)
         {
             path->push_back(pt);
         }
-
-        // 3. Print support
-        auto support_pts = PolygonsToGPoints(layer.supports, z, config, true);
-        for (auto& pt : support_pts)
+        for (auto& pt : lp.supports)
         {
             path->push_back(pt);
         }
@@ -100,18 +117,32 @@ HSBA_SLICER_LIB_API std::unique_ptr<GCodePath> GenerateGCodePathV2(const std::ve
 {
     auto path = std::make_unique<GCodePath>(printer_config);
 
-    for (const auto& layer : layer_data)
+    // Building the combined PolygonsD per layer dominates this stage and is
+    // embarrassingly parallel; GCodePath::push_back remains on the caller
+    // thread so layers_ ordering and callback semantics are unchanged.
+    const int total = static_cast<int>(layer_data.size());
+    struct LayerBundle
     {
-        // Encode Z height in layer config string
-        std::string const layer_config = std::format("Z:{:.6f}", layer.z_height);
-
-        // Combine all polygons for this layer: outlines + fills + supports
+        std::string layer_config;
         PolygonsD combined;
-        combined.insert(combined.end(), layer.outlines.begin(), layer.outlines.end());
-        combined.insert(combined.end(), layer.fills.begin(), layer.fills.end());
-        combined.insert(combined.end(), layer.supports.begin(), layer.supports.end());
+    };
+    auto per_layer = HsBa::Slicer::Pipeline::ParallelMapLayers<LayerBundle>(
+        total,
+        [&layer_data](int i) -> LayerBundle
+        {
+            const auto& layer = layer_data[static_cast<size_t>(i)];
+            LayerBundle bundle;
+            bundle.layer_config = std::format("Z:{:.6f}", layer.z_height);
+            bundle.combined.reserve(layer.outlines.size() + layer.fills.size() + layer.supports.size());
+            bundle.combined.insert(bundle.combined.end(), layer.outlines.begin(), layer.outlines.end());
+            bundle.combined.insert(bundle.combined.end(), layer.fills.begin(), layer.fills.end());
+            bundle.combined.insert(bundle.combined.end(), layer.supports.begin(), layer.supports.end());
+            return bundle;
+        });
 
-        path->push_back(layer_config, combined);
+    for (auto& bundle : per_layer)
+    {
+        path->push_back(bundle.layer_config, bundle.combined);
     }
 
     return path;
