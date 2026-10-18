@@ -184,6 +184,7 @@ Use the `gcode_firmware` field to specify the target firmware for standards-comp
 | `retract_speed` | 40.0 | Retraction speed (mm/s) |
 | `first_layer_speed` | 20.0 | First layer speed (mm/s) |
 | `spiral_mode` | 0 | Spiralize the outer wall into a single continuous rising path (vase mode, 0=false, 1=true); when enabled the outer contour is emitted as one extrusion-continuous helix and per-layer infill/support are skipped |
+| `randomize_start_point` | 0 | Start-point randomization (0=false, 1=true); when enabled, each per-layer closed contour/offset loop starts at a uniformly sampled random split point on one of its edges (deterministic per layer), staggering extrusion seams across layers and nested rings; selectable only for wire-deposition processes (FDM/TDP/WAAM) |
 
 ### SLA Pipeline
 
@@ -313,6 +314,7 @@ void HsBaFreeTdpPipelineResult(HsBaTdpPipelineResult_t* result);
 | `bed_temperature` | 40.0 | Powder bed temperature (°C) |
 | `binder_mode` | `HSBA_TDP_SINGLE` | Mode: FULL_COLOR / SINGLE / SINTERING |
 | `spiral_mode` | 0 | Spiralize outer contour into a continuous rising path (0=false, 1=true) |
+| `randomize_start_point` | 0 | Randomize closed-contour start points to edge split points per layer, staggering deposition seams (0=false, 1=true); selectable only for wire-deposition processes |
 | `export_lua_script` | NULL | Export Lua script path (**must not be NULL**) |
 | `export_lua_func` | NULL | Export function name, `export_tdp` when NULL |
 | `output_path` | NULL | Output path |
@@ -350,6 +352,7 @@ void HsBaFreeWaamPipelineResult(HsBaWaamPipelineResult_t* result);
 | `robot_type` | `HSBA_WAAM_ROBOT_ABB` | Robot: ABB / KUKA / FANUC / UNKNOWN (requires a Lua path script) |
 | `path_lua_script` / `path_lua_func` | NULL | Optional custom robot-code generator script and function name (built-in when NULL, default `export_waam`) |
 | `spiral_mode` | 0 | Deposit the outer wall as one continuous, Z-rising bead (0=false, 1=true) |
+| `randomize_start_point` | 0 | Randomize closed-contour start points to edge split points per layer, staggering bead start seams (0=false, 1=true); selectable only for wire-deposition processes |
 | `output_path` | NULL | Output robot-program path |
 
 > The WAAM result struct reports its output through the `output_path` field (the robot-program path), rather than the `export_path` used by the other pipelines.

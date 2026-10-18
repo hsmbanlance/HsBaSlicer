@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "LibHsBaSlicer/Fill/polygon_fill.hpp"
 #include "LibHsBaSlicer/Path/waam_export.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
@@ -56,6 +57,7 @@ struct InternalWaamConfig
     std::string path_lua_func;
     std::string output_path;
     bool spiral_mode = false;
+    bool randomize_start_point = false;
     HsBaWaamProgressCallback progress_cb = nullptr;
     void* progress_user_data = nullptr;
 };
@@ -151,6 +153,7 @@ InternalWaamConfig BuildWaamConfig(const HsBaWaamPipelineConfig_t* cfg, HsBaWaam
     ic.path_lua_func = cfg->path_lua_func ? cfg->path_lua_func : "";
     ic.output_path = cfg->output_path ? cfg->output_path : "";
     ic.spiral_mode = cfg->spiral_mode != 0;
+    ic.randomize_start_point = cfg->randomize_start_point != 0;
     ic.progress_cb = cb;
     ic.progress_user_data = ud;
     return ic;
@@ -221,6 +224,14 @@ Utils::Task<InternalWaamResult> RunWaamPipelineAsync(const InternalWaamConfig& c
                 float const z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
                 layer_z_heights[i] = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height);
                 layer_outlines[i] = SliceLayer(*topo, z);
+                if (cfg.randomize_start_point)
+                {
+                    // Stagger bead start seams: rotate each closed contour to a
+                    // per-layer deterministic random start point on an edge interior.
+                    Polygons const int_polys = Integerization(layer_outlines[i]);
+                    layer_outlines[i] =
+                        UnIntegerization(RandomizePathStartPoints(int_polys, static_cast<std::uint64_t>(i) + 1ULL));
+                }
             },
             [&](int done)
             {

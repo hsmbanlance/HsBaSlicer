@@ -34,6 +34,7 @@ message tdp_pipe_config
     string tdp_pipe_config_output_path = 13; // output path
 
     bool tdp_pipe_config_spiral_mode = 14; // expose a continuous spiralized deposition path to the export script
+    bool tdp_pipe_config_randomize_start_point = 15; // randomize closed contour start points per layer (stagger deposition seams)
 }
 
 message tdp_pipe_result

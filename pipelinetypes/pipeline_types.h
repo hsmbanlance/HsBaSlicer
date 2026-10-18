@@ -90,6 +90,9 @@ extern "C"
         int spiral_mode;             ///< Spiralize outer wall into a single continuous rising path (vase mode)
                                      ///< (0=false, 1=true), default 0. When enabled, the outer wall is emitted as
                                      ///< one extrusion-continuous helix and per-layer infill/support are skipped.
+        int randomize_start_point;   ///< Randomize the start point of closed contours/offset loops (0=false, 1=true),
+                                     ///< default 0. Each loop starts at a per-layer deterministic random point on one
+                                     ///< of its edges, staggering extrusion seams across layers and nested rings.
 
         /* GCode Output Configuration */
         HsBaGCodeFirmware_t gcode_firmware;  ///< Target firmware, default HSBA_GCODE_MARLIN
@@ -493,6 +496,7 @@ extern "C"
         const char* export_lua_func;   ///< Export Lua function name
         const char* output_path;       ///< Output file path (can be NULL)
         int spiral_mode;               ///< Spiralize outer contour into a continuous rising path (0=false, 1=true), default 0
+        int randomize_start_point;     ///< Randomize closed contour start points on edge interiors per layer (0=false, 1=true), default 0
     } HsBaTdpPipelineConfig_t;
 
     /**
@@ -597,6 +601,7 @@ extern "C"
         const char* path_lua_func;     ///< Optional Lua function name
         const char* output_path;       ///< Output file path (can be NULL)
         int spiral_mode;               ///< Deposit the outer wall as one continuous, Z-rising bead (0=false, 1=true), default 0
+        int randomize_start_point;     ///< Randomize closed contour start points on edge interiors per layer (0=false, 1=true), default 0
     } HsBaWaamPipelineConfig_t;
 
     /**
@@ -766,6 +771,7 @@ extern "C"
         cfg.travel_speed = 100.0f;
         cfg.extrusion_multiplier = 1.0f;
         cfg.spiral_mode = 0;
+        cfg.randomize_start_point = 0;
         cfg.gcode_firmware = HSBA_GCODE_MARLIN;
         cfg.nozzle_diameter = 0.4f;
         cfg.filament_diameter = 1.75f;
@@ -917,6 +923,7 @@ extern "C"
         cfg.export_lua_func = 0;
         cfg.output_path = 0;
         cfg.spiral_mode = 0;
+        cfg.randomize_start_point = 0;
         return cfg;
     }
 
@@ -947,6 +954,7 @@ extern "C"
         cfg.path_lua_func = 0;
         cfg.output_path = 0;
         cfg.spiral_mode = 0;
+        cfg.randomize_start_point = 0;
         return cfg;
     }
 

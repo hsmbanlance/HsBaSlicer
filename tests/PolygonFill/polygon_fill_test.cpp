@@ -1,8 +1,11 @@
 #define BOOST_TEST_MODULE polygon_fill_test
 #include <boost/test/included/unit_test.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <numbers>
 
 #undef Polygon
 #include "2D/IntPolygon.hpp"
@@ -197,6 +200,144 @@ BOOST_AUTO_TEST_CASE(offset_fill_public_and_edge_cases)
     // spacing <= 0 returns empty (both the zero and the negative branch)
     BOOST_CHECK(OffsetFill(poly, 0.0).empty());
     BOOST_CHECK(OffsetFill(poly, -5.0).empty());
+}
+
+// RandomizeStartPoints: closed contour/offset loops are rotated onto a deterministic random
+// point ON AN EDGE (uniform arc-length sampling, inserted as a new split vertex) while the
+// original vertices keep their cyclic order/winding and the duplicated closing form is kept;
+// open short paths pass through unchanged.
+BOOST_AUTO_TEST_CASE(randomize_start_points_preserves_loops)
+{
+    PolygonD polyd;
+    polyd.emplace_back(Point2{0, 0});
+    polyd.emplace_back(Point2{10000, 0});
+    polyd.emplace_back(Point2{10000, 10000});
+    polyd.emplace_back(Point2{0, 10000});
+    auto poly = Polygons{Integerization(polyd)};
+    auto rings = OffsetFill(poly, 500.0);
+    BOOST_REQUIRE_GE(rings.size(), 3u);
+
+    auto const r1 = RandomizeStartPoints(rings, 12345, 0.0);
+    auto const r2 = RandomizeStartPoints(rings, 12345, 0.0);
+    BOOST_REQUIRE_EQUAL(r1.size(), rings.size());
+    // same seed -> bit-identical result (mt19937_64 is cross-platform deterministic)
+    BOOST_CHECK(r1 == r2);
+
+    bool any_mid_edge = false;
+    for (size_t i = 0; i < rings.size(); ++i)
+    {
+        const auto& src = rings[i];
+        const auto& dst = r1[i];
+        const size_t n = src.size() - 1;                  // ring vertex count (duplicated closing vertex excluded)
+        BOOST_REQUIRE_EQUAL(dst.size(), src.size() + 1);  // one split vertex inserted at head and tail
+        BOOST_CHECK(dst.front() == dst.back());           // closed form kept
+        // the interior must still be a pure cyclic rotation of the original vertex sequence
+        auto const j_it = std::find(src.begin(), src.begin() + static_cast<std::ptrdiff_t>(n), dst[1]);
+        BOOST_REQUIRE(j_it != src.begin() + static_cast<std::ptrdiff_t>(n));
+        const size_t pos = static_cast<size_t>(std::distance(src.begin(), j_it));
+        for (size_t k = 0; k < n; ++k)
+        {
+            BOOST_CHECK(dst[1 + k] == src[(pos + k) % n]);
+        }
+        // the split start point lies on the closing edge dst[n] -> dst[1] (within rounding)
+        Point2 const sp = dst.front();
+        Point2 const a = dst[n];
+        Point2 const b = dst[1];
+        double const ab = std::hypot(static_cast<double>(b.x - a.x), static_cast<double>(b.y - a.y));
+        BOOST_REQUIRE_GT(ab, 0.0);
+        double const cross = std::abs(static_cast<double>(b.x - a.x) * static_cast<double>(sp.y - a.y) -
+                                      static_cast<double>(b.y - a.y) * static_cast<double>(sp.x - a.x));
+        BOOST_CHECK_LE(cross / ab, 1.0);  // collinear up to sub-integer rounding
+        BOOST_CHECK_GE(sp.x, std::min(a.x, b.x) - 1);
+        BOOST_CHECK_LE(sp.x, std::max(a.x, b.x) + 1);
+        BOOST_CHECK_GE(sp.y, std::min(a.y, b.y) - 1);
+        BOOST_CHECK_LE(sp.y, std::max(a.y, b.y) + 1);
+        any_mid_edge = any_mid_edge || (sp != a && sp != b);
+    }
+    // the seam should land strictly inside an edge for at least one ring
+    BOOST_CHECK(any_mid_edge);
+
+    // a different seed moves at least one ring start (randomization actually happens)
+    auto const r3 = RandomizeStartPoints(rings, 987654321ULL, 0.0);
+    bool any_changed = false;
+    for (size_t i = 0; i < rings.size(); ++i)
+    {
+        any_changed = any_changed || (r3[i].front() != r1[i].front());
+    }
+    BOOST_CHECK(any_changed);
+
+    // open 2-point segments pass through unchanged
+    HsBa::Slicer::Polygon seg;
+    seg.emplace_back(Point2{0, 0});
+    seg.emplace_back(Point2{5000, 0});
+    auto const segs = RandomizeStartPoints(Polygons{seg}, 7, 0.0);
+    BOOST_CHECK(segs[0] == seg);
+}
+
+// min_separation staggers seams of nested rings: with dense candidate vertices the
+// constraint is satisfiable, so all accepted start points stay min_separation apart.
+BOOST_AUTO_TEST_CASE(randomize_start_points_min_separation)
+{
+    auto make_circle = [](int64_t r, int segments)
+    {
+        HsBa::Slicer::Polygon ring;
+        for (int i = 0; i < segments; ++i)
+        {
+            double const a = 2.0 * std::numbers::pi * static_cast<double>(i) / segments;
+            ring.emplace_back(Point2{static_cast<int64_t>(static_cast<double>(r) * std::cos(a)),
+                                     static_cast<int64_t>(static_cast<double>(r) * std::sin(a))});
+        }
+        ring.push_back(ring.front());  // closed form with duplicated vertex
+        return ring;
+    };
+    Polygons rings{make_circle(20000, 64), make_circle(15000, 64), make_circle(10000, 64)};
+    double const sep = 8000.0;
+    auto const res = RandomizeStartPoints(rings, 20260218, sep);
+    BOOST_REQUIRE_EQUAL(res.size(), rings.size());
+    for (size_t i = 0; i < res.size(); ++i)
+    {
+        for (size_t j = i + 1; j < res.size(); ++j)
+        {
+            BOOST_CHECK_GE(std::hypot(static_cast<double>(res[i].front().x - res[j].front().x),
+                                      static_cast<double>(res[i].front().y - res[j].front().y)),
+                           sep);
+        }
+    }
+}
+
+// PolygonFill.randomizeStartPoints Lua binding: rings stay closed with the same vertex
+// count; an omitted seed falls back to the random device.
+BOOST_AUTO_TEST_CASE(lua_randomize_start_points_binding)
+{
+    PolygonD polyd;
+    polyd.emplace_back(Point2{0, 0});
+    polyd.emplace_back(Point2{10000, 0});
+    polyd.emplace_back(Point2{10000, 10000});
+    polyd.emplace_back(Point2{0, 10000});
+    auto poly = Polygons{Integerization(polyd)};
+
+    const char* script = R"lua(
+function gen(poly)
+    -- large spacing keeps only a few nested rings so the binding test stays fast
+    local rings = PolygonFill.offsetFill(poly, 2000000000, { join_type = "Miter" })
+    local fixed = PolygonFill.randomizeStartPoints(rings, 42, { min_separation = 1500 })
+    local loose = PolygonFill.randomizeStartPoints(rings)
+    local out = {}
+    for i = 1, #fixed do out[#out + 1] = fixed[i] end
+    for i = 1, #loose do out[#out + 1] = loose[i] end
+    return out
+end
+)lua";
+
+    auto res = LuaCustomFillString(poly, script, "gen", 300.0);
+    // offsetFill with that spacing yields 2 nested rings; both calls return them all
+    BOOST_REQUIRE_EQUAL(res.size(), 4u);
+    for (const auto& r : res)
+    {
+        BOOST_CHECK_GE(r.size(), 3u);
+        // closed rings stay closed after rotation (first and last vertex coincide exactly)
+        BOOST_CHECK(r.front() == r.back());
+    }
 }
 
 // Exercise every registered PolygonFill.* Lua binding (offsetFill/lineFill/

@@ -157,6 +157,7 @@ The following global libraries are callable from **both the custom pipeline and 
 ### B.2 `PolygonFill` (fill algorithms)
 
 `offsetFill` / `lineFill` / `simpleZigzagFill` / `zigzagFill` / `compositeOffsetFill` / `hybridFill` / `offsetOnly` — accept integer polygon sets plus spacing/angle parameters and return fill-path polygons.
+`randomizeStartPoints(polys, seed?, opts?)` — rotates closed contour/offset loops onto a start point sampled uniformly along the perimeter (a new split vertex is inserted on the chosen edge, not confined to original vertices; vertex order, winding and closed form preserved, vertex count +1); omit `seed` for a random seed or pass a per-layer seed to stagger seams across layers; `opts.min_separation` keeps start points of different rings at least that far apart (integer coordinate units), staggering seams of nested rings.
 
 ### B.3 `PathOptimize` (path ordering optimization)
 

@@ -8,8 +8,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <lua.hpp>
 #include <numbers>
+#include <random>
 #include <sstream>
 #include <utility>
 
@@ -38,6 +40,53 @@ Polygon ClosePath(const Polygon& p)
     }
     Polygon res = p;
     res.push_back(res.front());
+    return res;
+}
+
+// Euclidean distance between two integer-coordinate points (double domain avoids overflow)
+double PointDistance(const Point2& a, const Point2& b)
+{
+    return std::hypot(static_cast<double>(a.x) - static_cast<double>(b.x),
+                      static_cast<double>(a.y) - static_cast<double>(b.y));
+}
+
+// Linear interpolation between two integer-coordinate points at ratio t in [0, 1]
+Point2 LerpPoint(const Point2& a, const Point2& b, double t)
+{
+    return Point2{static_cast<int64_t>(std::llround(static_cast<double>(a.x) + t * static_cast<double>(b.x - a.x))),
+                  static_cast<int64_t>(std::llround(static_cast<double>(a.y) + t * static_cast<double>(b.y - a.y)))};
+}
+
+// Locate the edge [k, k+1] containing arc-length position u measured from vertex 0 over the
+// prefix cumulative length table; t receives the clamped interpolation ratio on that edge
+size_t EdgeAtArcPosition(const Polygon& p, size_t n, const std::vector<double>& prefix, double u, double& t)
+{
+    size_t k = static_cast<size_t>(std::upper_bound(prefix.begin(), prefix.end(), u) - prefix.begin());
+    k = (k == 0) ? 0 : k - 1;
+    k = std::min(k, n - 1);
+    double const len = PointDistance(p[k], p[(k + 1) % n]);
+    t = (len > 0.0) ? std::clamp((u - prefix[k]) / len, 0.0, 0.999999) : 0.0;
+    return k;
+}
+
+// Rotate the loop so it starts at sp, a split point on edge p[k]->p[k+1]; the original vertices
+// keep their winding, sp becomes the new first (and closing) vertex of a duplicated-form loop
+Polygon RotateToEdgeStart(const Polygon& p, size_t k, const Point2& sp)
+{
+    bool const closed_dup = p.size() >= 2 && p.front() == p.back();
+    size_t const n = closed_dup ? p.size() - 1 : p.size();
+    size_t const j = (k + 1) % n;
+    Polygon res;
+    res.reserve(p.size() + 1);
+    res.emplace_back(sp);
+    for (size_t i = 0; i < n; ++i)
+    {
+        res.emplace_back(p[(j + i) % n]);
+    }
+    if (closed_dup)
+    {
+        res.emplace_back(sp);
+    }
     return res;
 }
 
@@ -485,6 +534,38 @@ int l_offsetOnly(lua_State* L)
     return 3;
 }
 
+int l_randomizeStartPoints(lua_State* L)
+{
+    PolygonsD const polyD = LuaTableToPolygonsD(L, 1);
+    Polygons const poly = Integerization(polyD);
+    std::uint64_t seed = 0;
+    if (lua_isnumber(L, 2))
+    {
+        seed = static_cast<std::uint64_t>(lua_tonumber(L, 2));
+    }
+    else
+    {
+        std::random_device rd;
+        seed = (static_cast<std::uint64_t>(rd()) << 32) ^ static_cast<std::uint64_t>(rd());
+    }
+    double min_separation = 0.0;
+    // lua_getfield on a nil/absent opts argument would raise "attempt to index a nil value",
+    // so only read the option table when it is actually present
+    if (lua_istable(L, 3) && lua_getfield(L, 3, "min_separation") == LUA_TNUMBER)
+    {
+        min_separation = lua_tonumber(L, -1);
+        lua_pop(L, 1);
+    }
+    Polygons const res = RandomizeStartPoints(poly, seed, min_separation);
+    PolygonsD resD;
+    for (const auto& p : res)
+    {
+        resD.emplace_back(UnIntegerization(p));
+    }
+    PushPolygonsDToLua(L, resD);
+    return 1;
+}
+
 const luaL_Reg polygonFillLib[] = {{.name = "offsetFill", .func = l_offsetFill},
                                    {.name = "lineFill", .func = l_lineFill},
                                    {.name = "simpleZigzagFill", .func = l_simpleZigzagFill},
@@ -492,6 +573,7 @@ const luaL_Reg polygonFillLib[] = {{.name = "offsetFill", .func = l_offsetFill},
                                    {.name = "compositeOffsetFill", .func = l_compositeOffsetFill},
                                    {.name = "hybridFill", .func = l_hybridFill},
                                    {.name = "offsetOnly", .func = l_offsetOnly},
+                                   {.name = "randomizeStartPoints", .func = l_randomizeStartPoints},
                                    {.name = nullptr, .func = nullptr}};
 }  // namespace
 
@@ -536,6 +618,87 @@ Polygons OffsetFill(const Polygons& poly, double spacing, Clipper2Lib::JoinType 
         {
             break;
         }
+    }
+    return res;
+}
+
+Polygons RandomizeStartPoints(const Polygons& paths, std::uint64_t seed, double min_separation)
+{
+    Polygons res;
+    res.reserve(paths.size());
+    std::mt19937_64 gen(seed);
+    std::vector<Point2> chosen_starts;
+    constexpr int MAX_SEPARATION_TRIES = 32;
+
+    for (const auto& p : paths)
+    {
+        bool const closed_dup = p.size() >= 2 && p.front() == p.back();
+        size_t const n = closed_dup ? p.size() - 1 : p.size();
+        if (n < 3)
+        {
+            // open segments or degenerate loops: pass through unchanged
+            res.emplace_back(p);
+            continue;
+        }
+        // uniform arc-length sampling over the perimeter: the start point may lie anywhere
+        // on an edge, not only on a vertex
+        std::vector<double> prefix(n);
+        double perimeter = 0.0;
+        for (size_t i = 0; i < n; ++i)
+        {
+            prefix[i] = perimeter;
+            perimeter += PointDistance(p[i], p[(i + 1) % n]);
+        }
+        if (perimeter <= 0.0)
+        {
+            res.emplace_back(p);
+            continue;
+        }
+        // draw u uniformly in [0, perimeter) from 53 engine bits directly: unlike
+        // std::uniform_real_distribution this is reproducible across standard libraries
+        auto pick_u = [&gen, perimeter]()
+        { return static_cast<double>(gen() >> 11) * (perimeter / 9007199254740992.0); };
+
+        double chosen_u = pick_u();
+        if (min_separation > 0.0 && !chosen_starts.empty())
+        {
+            // rejection-sample a start far from all accepted starts; keep the farthest
+            // tried candidate as a best-effort fallback when none satisfies the constraint
+            double best_min_dist = -1.0;
+            for (int t = 0; t < MAX_SEPARATION_TRIES; ++t)
+            {
+                const double u = pick_u();
+                Point2 sp{};
+                size_t k = 0;
+                double ratio = 0.0;
+                k = EdgeAtArcPosition(p, n, prefix, u, ratio);
+                sp = LerpPoint(p[k], p[(k + 1) % n], ratio);
+                double min_dist = std::numeric_limits<double>::max();
+                for (const auto& c : chosen_starts)
+                {
+                    min_dist = std::min(min_dist, PointDistance(sp, c));
+                }
+                if (min_dist >= min_separation)
+                {
+                    chosen_u = u;
+                    break;
+                }
+                if (min_dist > best_min_dist)
+                {
+                    best_min_dist = min_dist;
+                    chosen_u = u;
+                }
+            }
+        }
+        Point2 start_point{};
+        size_t edge_idx = 0;
+        {
+            double ratio = 0.0;
+            edge_idx = EdgeAtArcPosition(p, n, prefix, chosen_u, ratio);
+            start_point = LerpPoint(p[edge_idx], p[(edge_idx + 1) % n], ratio);
+        }
+        res.emplace_back(RotateToEdgeStart(p, edge_idx, start_point));
+        chosen_starts.push_back(start_point);
     }
     return res;
 }

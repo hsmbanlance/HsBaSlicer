@@ -76,6 +76,7 @@ message waam_pipe_config
     string waam_pipe_config_output_path = 19; // output robot program path
 
     bool waam_pipe_config_spiral_mode = 20; // deposit outer wall as one continuous rising bead (vase mode)
+    bool waam_pipe_config_randomize_start_point = 21; // randomize closed contour start points per layer (stagger bead start seams)
 }
 
 message waam_pipe_result

@@ -32,6 +32,13 @@ HSBA_SLICER_LIB_API Polygons FillWithBorder(const Polygons& poly, double spacing
     return CompositeOffsetFill(poly, spacing, spacing, 0, border_count, fill_mode, angle_deg);
 }
 
+HSBA_SLICER_LIB_API Polygons RandomizePathStartPoints(const Polygons& paths, std::uint64_t seed, double min_separation)
+{
+    // Forward to the 2D engine: rotate each closed contour/offset loop onto a
+    // pseudo-random start vertex to stagger seams across layers and nested rings
+    return RandomizeStartPoints(paths, seed, min_separation);
+}
+
 HSBA_SLICER_LIB_API Polygons LuaCustomFillByFile(const Polygons& poly, const std::string& scriptPath,
                                                  const std::string& functionName, double lineThickness)
 {

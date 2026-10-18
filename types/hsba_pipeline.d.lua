@@ -59,6 +59,7 @@ PolygonOperations = {}
 ---@field compositeOffsetFill fun(polys: Polygons, spacing: number, offsetStep: number, outwardCount: integer, inwardCount: integer, mode: string, angle: number, lineThickness: number, opts?: table): Polygons
 ---@field hybridFill         fun(polys: Polygons, spacing: number, offsetStep: number, outwardCount: integer, inwardCount: integer, mode: string, angle: number, lineThickness: number, opts?: table): Polygons
 ---@field offsetOnly         fun(polys: Polygons, spacing: number): Polygons
+---@field randomizeStartPoints fun(polys: Polygons, seed?: integer, opts?: {min_separation?: number}): Polygons
 PolygonFill = {}
 
 ---路径顺序优化器（减少空行程）

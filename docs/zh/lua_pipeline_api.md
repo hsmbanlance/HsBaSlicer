@@ -157,6 +157,7 @@ HsBaSlicer 中的 Lua 脚本按用途分为两类：
 ### B.2 `PolygonFill`（填充算法）
 
 `offsetFill` / `lineFill` / `simpleZigzagFill` / `zigzagFill` / `compositeOffsetFill` / `hybridFill` / `offsetOnly` —— 输入整型多边形集合与间距/角度参数，返回填充路径多边形。
+`randomizeStartPoints(polys, seed?, opts?)` —— 将闭合轮廓与偏置路径的起点旋转到周长上均匀采样的随机点（在所选边上插入新的分裂顶点，不限于原顶点；保持顶点顺序、环绕方向与闭合形式，顶点数 +1）；`seed` 省略时用随机种子，可按层传入 seed 实现层间起点错开；`opts.min_separation` 约束不同环起点之间的最小距离（整型坐标单位），用于错开嵌套环的接缝。
 
 ### B.3 `PathOptimize`（路径顺序优化）
 

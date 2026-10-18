@@ -56,6 +56,7 @@ struct InternalConfig
     double infill_density = 0.2;
     bool enable_support = true;
     bool spiral_mode = false;
+    bool randomize_start_point = false;
     std::string support_lua_script;
     std::string support_lua_func;
     std::string infill_lua_script;
@@ -155,6 +156,7 @@ InternalConfig BuildConfig(const HsBaFdmPipelineConfig_t* cfg, HsBaProgressCallb
     ic.infill_density = cfg->infill_density;
     ic.enable_support = cfg->enable_support != 0;
     ic.spiral_mode = cfg->spiral_mode != 0;
+    ic.randomize_start_point = cfg->randomize_start_point != 0;
     ic.support_lua_script = cfg->support_lua_script ? cfg->support_lua_script : "";
     ic.support_lua_func = cfg->support_lua_func ? cfg->support_lua_func : "";
     ic.infill_lua_script = cfg->infill_lua_script ? cfg->infill_lua_script : "";
@@ -339,6 +341,14 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             double const spacing = is_solid ? cfg.fill_spacing : middle_spacing;
             Polygons const fill_result =
                 FillWithBorder(int_polys, spacing, cfg.wall_count, cfg.fill_mode, cfg.fill_angle);
+            if (cfg.randomize_start_point)
+            {
+                // Stagger extrusion seams: rotate contour/offset loops to a per-layer
+                // deterministic random start point located on an edge interior.
+                layer_fills[i] =
+                    UnIntegerization(RandomizePathStartPoints(fill_result, static_cast<std::uint64_t>(i) + 1ULL));
+                return;
+            }
             layer_fills[i] = UnIntegerization(fill_result);
         };
 
