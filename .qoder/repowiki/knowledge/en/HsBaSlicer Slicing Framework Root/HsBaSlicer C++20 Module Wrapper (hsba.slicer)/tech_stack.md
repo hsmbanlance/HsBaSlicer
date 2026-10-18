@@ -1,1 +1,0 @@
-C++20 modules (`export module hsba.slicer;`), built as a STATIC library so consumers link directly against the BMI without DLL issues; links against LibHsBaSlicer, HsBaPipelineTypes, Eigen3, Clipper2, and Lua.

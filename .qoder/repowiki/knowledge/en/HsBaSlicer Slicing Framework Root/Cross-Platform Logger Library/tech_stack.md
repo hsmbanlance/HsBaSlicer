@@ -1,1 +1,0 @@
-C++20 (`std::source_location`, `std::shared_mutex`); Boost.Log for desktop console/file sinks; Android NDK `android/log.h`; Apple `os_log`; INI config via `boost::property_tree` through `fileoperator/rw_ptree.hpp`.

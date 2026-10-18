@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: base_utils
-title: HsBaSlicerBase 基础支撑库
-scope:
-    - base/
-source_files: []
-depends_on: []
-related_to:
-    - path: static_tests

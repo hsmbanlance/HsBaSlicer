@@ -1,0 +1,1 @@
+C++20 slicing engine exposing per-process-layer-parallel FDM/SLA/SLS/SLM/LOM/WAAM/TDP pipelines through a C ABI, backed by a shared ThreadPool and Lua-extensible stages.

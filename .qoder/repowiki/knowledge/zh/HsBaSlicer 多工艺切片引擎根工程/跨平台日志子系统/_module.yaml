@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: logger
-title: 跨平台日志子系统
-scope:
-    - logger/
-source_files: []
-depends_on: []
-related_to:
-    - path: core_library

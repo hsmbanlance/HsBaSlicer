@@ -1,1 +1,0 @@
-To generate cross-language bindings outside the normal build, configure CMake with `-DHSBA_PROTOBUF_OUT=ON -DHSBA_PROTO_OUT_DIRECTORY=<path>`; individual language generators are toggled via `HSBA_PROTO_OUT_CPP`, `HSBA_PROTO_OUT_CSHARP`, `HSBA_PROTO_OUT_JAVA`, `HSBA_PROTO_OUT_PYTHON`, `HSBA_PROTO_OUT_PHP`. The default target `proto_install` depends on all generated sources.

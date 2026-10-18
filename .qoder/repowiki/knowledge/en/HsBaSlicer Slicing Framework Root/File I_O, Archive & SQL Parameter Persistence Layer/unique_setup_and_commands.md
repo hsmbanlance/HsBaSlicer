@@ -1,1 +1,0 @@
-Feature flags controlling compilation: `-DHSBA_HSBA_USE_BIT7Z=ON` pulls in Bit7z zip/unzip implementations; `-DHSBA_USE_MYSQL=ON` / `-DHSBA_USE_PGSQL=ON` compile the corresponding SQL adapters and their Lua registration functions. On Android/iOS/`HSBA_GAME_CONSOLE` targets the build drops Boost.Log and MySQL/PostgreSQL support, keeping only SQLite.

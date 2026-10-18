@@ -2,10 +2,13 @@
 
 <cite>
 **Referenced Files in This Document**
-- [CMakeLists.txt](file://CMakeLists.txt)
-- [README.md](file://README.md)
-- [vcpkg.json](file://vcpkg.json)
-- [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
+- [pipeline_parallel.hpp](file://DllHsBaSlicer/pipeline_parallel.hpp)
+- [parallel.hpp](file://base/parallel.hpp)
+- [thread_pool.hpp](file://base/thread_pool.hpp)
+- [ISupport.hpp](file://support/ISupport.hpp)
+- [ISupport.cpp](file://support/ISupport.cpp)
+- [path_generator.cpp](file://LibHsBaSlicer/Path/path_generator.cpp)
+- [gcodepath.cpp](file://paths/gcodepath.cpp)
 - [fdm_pipeline.h](file://DllHsBaSlicer/fdm_pipeline.h)
 - [sla_pipeline.h](file://DllHsBaSlicer/sla_pipeline.h)
 - [sls_pipeline.h](file://DllHsBaSlicer/sls_pipeline.h)
@@ -19,11 +22,18 @@
 - [path_generator.hpp](file://LibHsBaSlicer/Path/path_generator.hpp)
 - [sla_floor.hpp](file://LibHsBaSlicer/Floor/sla_floor.hpp)
 - [fdm_support.hpp](file://LibHsBaSlicer/Support/fdm_support.hpp)
-- [thread_pool.hpp](file://base/thread_pool.hpp)
-- [memory_pool.hpp](file://base/memory_pool.hpp)
 - [lua_pipeline.cpp](file://LibHsBaSlicer/Extends/lua_pipeline.cpp)
 - [hsba_slicer.cppm](file://ModuleHsBaSlicer/hsba_slicer.cppm)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated parallel processing infrastructure to reflect the new process-wide ThreadPool singleton architecture
+- Added documentation for the atomic cursor-based dynamic load balancing system
+- Updated support generation parallelization with IsLayerIndependent() capability flag
+- Enhanced path generation parallelization documentation
+- Updated G-code serialization parallelization details
+- Revised cross-cutting concerns section to reflect the new parallel runtime
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -126,6 +136,7 @@ SupportAlgo["Support Algorithms<br/>support/"]
 end
 subgraph "Foundation Layer"
 Base["Base Primitives<br/>base/"]
+ParallelRuntime["Parallel Runtime<br/>parallel.hpp + thread_pool.hpp"]
 end
 LuaScripts --> FDM
 LuaScripts --> SLA
@@ -164,6 +175,8 @@ Floor --> TwoD
 MeshModel --> Base
 SupportAlgo --> Base
 TwoD --> Base
+Support --> ParallelRuntime
+PathGen --> ParallelRuntime
 ```
 
 **Diagram sources**
@@ -179,6 +192,7 @@ TwoD --> Base
 - [polygon_fill.hpp:17-53](file://LibHsBaSlicer/Fill/polygon_fill.hpp#L17-L53)
 - [path_generator.hpp:20-91](file://LibHsBaSlicer/Path/path_generator.hpp#L20-L91)
 - [sla_floor.hpp:21-195](file://LibHsBaSlicer/Floor/sla_floor.hpp#L21-L195)
+- [parallel.hpp:1-263](file://base/parallel.hpp#L1-L263)
 
 ### System Context Data Flow
 The typical data flow from model input to exported output is:
@@ -562,30 +576,91 @@ Path --> Robot["Robot Program/G-code"]
 
 ### Cross-Cutting Concerns
 
-#### Parallel Processing
-The foundation layer provides a thread pool with coroutine executor support. This enables concurrent task execution for slicing, support generation, fill computation, and image rendering.
+#### Parallel Processing Infrastructure
+
+**Updated** The parallel processing system has been significantly enhanced with a process-wide ThreadPool singleton and atomic cursor-based dynamic load balancing.
+
+The foundation layer now provides:
+- **Process-wide ThreadPool Singleton**: `PipelinePool()` returns a static ThreadPool instance that lives until process exit, eliminating per-call thread pool creation overhead.
+- **Atomic Cursor Scheduling**: Workers use `std::atomic<int> cursor.fetch_add(1)` for dynamic work distribution, providing better load balancing than fixed block sizes.
+- **Progress Callbacks**: Progress callbacks fire on the calling thread every 32 completed layers to minimize synchronization overhead.
+- **Environment Configuration**: `HSBA_PIPELINE_THREADS` environment variable controls worker count, with fallback to `hardware_concurrency()`.
 
 ```mermaid
 classDiagram
-class ThreadPool {
-+ThreadPool(num_threads)
-+submit(f, args) future
-+PendingTasks() size_t
-+ActiveTasks() size_t
-+WaitAll() void
--WorkerLoop() void
+class PipelinePool {
++static ThreadPool& PipelinePool()
++static size_t ResolvePipelineThreads()
++static size_t PipelineThreadCount()
 }
-class ThreadPoolExecutor {
-+execute(func) void
-+SetDefaultPool(pool) void
--get_pool() ThreadPool*
+class ParallelForLayers {
++void ParallelForLayers(total, work, on_progress)
++template R ParallelMapLayers(total, map)
 }
-ThreadPoolExecutor --> ThreadPool : "uses"
+class RunAtomicIndexed {
++std : : atomic~cursor~
++std : : atomic~done~
++WorkerLoop()
+}
+PipelinePool --> ThreadPool : "manages"
+ParallelForLayers --> RunAtomicIndexed : "uses"
+RunAtomicIndexed --> PipelinePool : "accesses"
 ```
 
 **Diagram sources**
-- [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
-- [thread_pool.hpp:164-209](file://base/thread_pool.hpp#L164-L209)
+- [parallel.hpp:30-75](file://base/parallel.hpp#L30-L75)
+- [parallel.hpp:77-176](file://base/parallel.hpp#L77-L176)
+- [parallel.hpp:178-219](file://base/parallel.hpp#L178-L219)
+
+#### Support Generation Parallelization
+
+**Updated** Support generation now leverages the parallel infrastructure with capability detection.
+
+Key enhancements:
+- **IsLayerIndependent() Capability Flag**: Base class method allows implementations to declare whether they can be parallelized safely.
+- **Automatic Parallelization**: `ISupport::GenerateAll` automatically uses `ParallelMapLayers` when `IsLayerIndependent()` returns true.
+- **Serial Fallback**: Implementations requiring sequential access (like tree supports) override `IsLayerIndependent()` to return false.
+
+```mermaid
+flowchart TD
+Start["GenerateAll(layers, config)"] --> CheckIndependence{"IsLayerIndependent()?"}
+CheckIndependence --> |true| Parallel["ParallelMapLayers<PolygonsD>"]
+CheckIndependence --> |false| Serial["Serial loop"]
+Parallel --> Worker["Worker: Generate(layers[i], prev, height, config)"]
+Worker --> Results["Collect results"]
+Serial --> Sequential["Sequential iteration"]
+Sequential --> Results
+Results --> Return["Return PolygonsD vector"]
+```
+
+**Diagram sources**
+- [ISupport.hpp:46-54](file://support/ISupport.hpp#L46-L54)
+- [ISupport.cpp:14-46](file://support/ISupport.cpp#L14-L46)
+
+#### Path Generation Parallelization
+
+**Updated** Path generation functions now parallelize the computationally intensive per-layer operations while maintaining thread safety.
+
+Enhanced functions:
+- **GenerateGCodePath**: Uses `ParallelMapLayers<LayerPts>` to generate outline/fill/support point lists concurrently, then serially inserts into the shared PointsPath.
+- **GenerateGCodePathV2**: Parallelizes combined polygon assembly using `ParallelMapLayers<LayerBundle>`, preserving GCodePath thread safety.
+- **GenerateGCodePathSpiral**: Remains serial as it operates on a single continuous helix.
+
+**Section sources**
+- [path_generator.cpp:66-112](file://LibHsBaSlicer/Path/path_generator.cpp#L66-L112)
+- [path_generator.cpp:114-149](file://LibHsBaSlicer/Path/path_generator.cpp#L114-L149)
+
+#### G-code Serialization Parallelization
+
+**Updated** G-code string concatenation is now parallelized for large models.
+
+The `ToGCode` method now:
+- Uses `ParallelMapLayers<std::string>` to generate layer bodies concurrently
+- Stitches header + wall + bodies + footer on the caller thread
+- Preserves exact ordering semantics with `HSBA_PIPELINE_THREADS=1`
+
+**Section sources**
+- [gcodepath.cpp:333-368](file://paths/gcodepath.cpp#L333-L368)
 
 #### Memory Management
 The foundation layer includes fixed-size memory pool allocators for predictable allocation behavior and reduced heap fragmentation during intensive geometric computations.
@@ -621,7 +696,7 @@ MemoryPool --> MemoryPoolState : "owns state"
 - [memory_pool.hpp:215-372](file://base/memory_pool.hpp#L215-L372)
 
 ## Dependency Analysis
-The project’s third-party dependencies are declared in the vcpkg manifest and discovered by the root CMake configuration. Copyleft kernels CGAL and OpenCascade are conditionally enabled, affecting both linking and license terms.
+The project's third-party dependencies are declared in the vcpkg manifest and discovered by the root CMake configuration. Copyleft kernels CGAL and OpenCascade are conditionally enabled, affecting both linking and license terms.
 
 ```mermaid
 graph TB
@@ -671,6 +746,8 @@ Project --> OpenVDB["OpenVDB"]
 - Enable parallel task submission through the thread pool for independent layer operations where safe.
 - Tune memory pool sizes and model pool capacity based on available copyleft kernel support.
 - Avoid boolean operations in Debug builds due to performance and memory constraints.
+- **New**: Set `HSBA_PIPELINE_THREADS` environment variable before process startup to control parallelism level.
+- **New**: Use `IsLayerIndependent()` capability flag to safely parallelize support generation.
 
 [No sources needed since this section provides general guidance]
 
@@ -684,14 +761,23 @@ Common issues and their architectural context:
 | Lua script errors | Invalid script path, missing function name, or incompatible Lua API | Validate script path, function name, and Lua table shapes against documented fields |
 | Thread pool exceptions | Submitting tasks after pool shutdown or invalid thread count | Ensure pool lifecycle matches pipeline lifetime; validate thread count |
 | Memory allocation failures | Fixed memory pool exhausted | Increase pool size or reduce per-operation allocations |
+| Poor parallel performance | `HSBA_PIPELINE_THREADS` not set or set too low | Set environment variable before process startup; monitor with `PipelineThreadCount()` |
+| Support generation not parallelizing | `IsLayerIndependent()` returns false | Verify support implementation doesn't require sequential access |
+| G-code serialization bottleneck | Large models with many layers | Leverage built-in parallelization; consider reducing layer count |
 
 **Section sources**
 - [CMakeLists.txt:284-318](file://CMakeLists.txt#L284-L318)
 - [thread_pool.hpp:37-90](file://base/thread_pool.hpp#L37-L90)
 - [memory_pool.hpp:111-141](file://base/memory_pool.hpp#L111-L141)
 - [memory_pool.hpp:266-296](file://base/memory_pool.hpp#L266-L296)
+- [parallel.hpp:37-54](file://base/parallel.hpp#L37-L54)
+- [ISupport.hpp:46-54](file://support/ISupport.hpp#L46-L54)
 
 ## Conclusion
-HsBaSlicer’s architecture cleanly separates concerns across foundation, processing, algorithm, interface, and extension layers. The central type definitions and per-technology pipeline contracts provide a stable surface for external integrations. Lua scripting offers flexible customization for support, fill, floor, export, and fully custom pipelines. The dependency graph reflects a pragmatic balance between modern C++ tooling, established geometry libraries, and platform-specific considerations. For production use, prefer Release builds, leverage prebuilt slicing topology, and configure copyleft kernels according to licensing requirements.
+HsBaSlicer's architecture cleanly separates concerns across foundation, processing, algorithm, interface, and extension layers. The central type definitions and per-technology pipeline contracts provide a stable surface for external integrations. Lua scripting offers flexible customization for support, fill, floor, export, and fully custom pipelines. 
+
+The recent enhancements to the parallel processing infrastructure significantly improve performance through process-wide thread pool management, atomic cursor-based dynamic load balancing, and capability-aware parallelization. These changes maintain backward compatibility while providing substantial performance gains for large models and complex geometries.
+
+The dependency graph reflects a pragmatic balance between modern C++ tooling, established geometry libraries, and platform-specific considerations. For production use, prefer Release builds, leverage prebuilt slicing topology, configure copyleft kernels according to licensing requirements, and tune `HSBA_PIPELINE_THREADS` for optimal parallel performance.
 
 [No sources needed since this section summarizes without analyzing specific files]

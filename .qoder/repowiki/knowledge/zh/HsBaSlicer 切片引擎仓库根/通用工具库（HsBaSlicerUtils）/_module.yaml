@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: utils_runtime
+title: 通用工具库（HsBaSlicerUtils）
+scope:
+    - utils/
+source_files: []
+depends_on: []
+related_to:
+    - path: static_tests

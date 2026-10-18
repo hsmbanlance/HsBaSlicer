@@ -1,1 +1,0 @@
-On iOS the target is forced to STATIC because iOS apps cannot load arbitrary dylibs; on all other platforms it builds as SHARED for dynamic loading by C#/Java/Python. The `HSBA_SLICER_EXPORTS` compile definition gates Windows `__declspec(dllexport)` vs `dllimport`.

@@ -1,1 +1,0 @@
-Foundational C++ layer providing the IModel contract, type-erased reflection (AnyObject), uniform error hierarchy, threading/memory primitives, and format/encoding bridges consumed by every HsBa Slicer subsystem.

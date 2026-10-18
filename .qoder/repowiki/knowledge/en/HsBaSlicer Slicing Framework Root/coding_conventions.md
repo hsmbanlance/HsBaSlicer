@@ -1,5 +1,0 @@
-- Feature availability is exposed as compile-time macros (`HSBA_HAS_*`, `USE_OCCT`, `USE_IGL`, `USE_OPENVDB`, `HSBA_COPL`, `HSBA_DESKTOP`, `HSBA_MOBILE`, `HSBA_GAME_CONSOLE`) rather than runtime flags, so child modules gate code paths with `#ifdef`.
-- Public APIs are split into three stable surfaces per layer: raw C++ headers in `LibHsBaSlicer/`, a C ABI in `DllHsBaSlicer/dllexport.h` plus per-pipeline headers, and a C++20 class-based wrapper in `ModuleHsBaSlicer/`.
-- All internal static libraries are compiled position-independent (`CMAKE_POSITION_INDEPENDENT_CODE ON`) so they can be linked into the shared `DllHsBaSlicer` export DLL.
-- Third-party dependency discovery goes through `find_package(... CONFIG REQUIRED)` (or `pkg_check_modules` for Clipper2) after `vcpkg` toolchain injection, never via manual include/link paths.
-- Generated artifacts (protobuf `.pb.h`, version.cpp) are produced by child `CMakeLists.txt` files and referenced by parents via `${CMAKE_CURRENT_BINARY_DIR}/...` paths rather than hard-coded source locations.

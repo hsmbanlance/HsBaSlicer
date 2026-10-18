@@ -1,1 +1,0 @@
-Markdown-based user documentation; Doxygen + Graphviz (`dot`) for C/C++ API reference generation driven by `Doxyfile`.

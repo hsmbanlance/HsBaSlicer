@@ -1,3 +1,0 @@
-- Each pipeline example follows the same seven-step pattern: create default config, set model name/path, optionally override process parameters, set output path, run the synchronous `HsBaRun*Pipeline` with the shared `OnProgress` callback, handle success/error via `result.success`, and finally call the matching `HsBaFree*Result` before returning.
-- Logging goes exclusively through `HsBa::Slicer::Log::LoggerSingletone` — either the `LogMsg` wrapper or direct `LogInfo`/`LogWarning` calls using the `_log_info` / `_log_warning` literals.
-- Platform-specific entry points are selected via `#if defined(ANDROID)` / `#elif defined(__APPLE__)` / `#else` blocks, each guarded by `extern "C"` where needed for native interop.

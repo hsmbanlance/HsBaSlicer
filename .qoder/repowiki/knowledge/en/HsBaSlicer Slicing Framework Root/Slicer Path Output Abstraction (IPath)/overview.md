@@ -1,1 +1,0 @@
-Defines the IPath interface and concrete output producers for slicer results — points, layers, images, G-code, industrial robot programs, and welding-robot programs — with optional Lua post-processing.

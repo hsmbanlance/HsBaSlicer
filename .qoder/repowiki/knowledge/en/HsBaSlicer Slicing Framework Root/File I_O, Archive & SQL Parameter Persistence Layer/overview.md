@@ -1,1 +1,0 @@
-Static C++ library providing ZIP compression/extraction (miniz + optional Bit7z), SQL-backed process-parameter persistence with typed reflection, INI/JSON/XML config maps, Lua bindings, and remote file transfer for the slicer.

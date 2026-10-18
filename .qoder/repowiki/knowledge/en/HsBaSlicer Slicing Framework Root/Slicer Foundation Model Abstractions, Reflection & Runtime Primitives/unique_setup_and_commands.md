@@ -1,1 +1,0 @@
-Mock support in `AnyObject` is auto-enabled when any of BOOST_TEST_* / GTEST_* / CATCH_* / DOCTEST_* macros are visible, or explicitly via `-DHSBA_ANY_OBJECT_ENABLE_MOCK=1`; without it the `Mock` namespace and `AnyObject::Invoke` dispatch overhead are completely omitted from the build.

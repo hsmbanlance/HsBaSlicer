@@ -1,4 +1,0 @@
-- Compile-time correctness is asserted with `static_assert` against expected string literals or types rather than executed assertions, so failures surface as compilation errors.
-- User-defined types participating in reflection or `AnyObject` expose their metadata by specializing `HsBa::Slicer::Utils::GetTypeInfo<T>()` and returning a `TypeInfo*` with `destroy`/`copy`/`move`/`methods`/`fields` callbacks.
-- Serializable structs register their fields via a `FieldList = std::tuple<...FieldInfo<...>>` member typedef alongside a `ClassName` constexpr, instead of relying on ADL or macros.
-- Optional C++20 coroutine features are wrapped in `#if __cpp_lib_coroutine && __cpp_impl_coroutine` guards so the suite compiles on pre-C++20 toolchains.

@@ -15,19 +15,31 @@
 - [robotpath.cpp](file://paths/robotpath.cpp)
 - [weldrobotpath.hpp](file://paths/weldrobotpath.hpp)
 - [weldrobotpath.cpp](file://paths/weldrobotpath.cpp)
+- [parallel.hpp](file://base/parallel.hpp)
+- [pipeline_parallel.hpp](file://DllHsBaSlicer/pipeline_parallel.hpp)
+- [path_generator.hpp](file://LibHsBaSlicer/Path/path_generator.hpp)
+- [path_generator.cpp](file://LibHsBaSlicer/Path/path_generator.cpp)
 </cite>
+
+## 更新摘要
+**变更内容**   
+- 新增并行处理基础设施章节，介绍 ParallelMapLayers 和进程级线程池
+- 更新路径生成部分，说明 GenerateGCodePath 和 GenerateGCodePathV2 的并行优化
+- 更新 G-code 序列化部分，说明 ToGCode 方法的并行化处理
+- 增强性能优化建议，包含并行处理配置和最佳实践
 
 ## 目录
 1. [引言](#引言)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
 4. [架构总览](#架构总览)
-5. [详细组件分析](#详细组件分析)
-6. [依赖关系分析](#依赖关系分析)
-7. [性能与优化建议](#性能与优化建议)
-8. [故障排除指南](#故障排除指南)
-9. [结论](#结论)
-10. [附录：API 参考与使用示例](#附录api-参考与使用示例)
+5. [并行处理基础设施](#并行处理基础设施)
+6. [详细组件分析](#详细组件分析)
+7. [依赖关系分析](#依赖关系分析)
+8. [性能与优化建议](#性能与优化建议)
+9. [故障排除指南](#故障排除指南)
+10. [结论](#结论)
+11. [附录：API 参考与使用示例](#附录api-参考与使用示例)
 
 ## 引言
 本文件面向 HsBaSlicer 的 paths 模块，系统性说明路径数据管理与输出能力。该模块提供统一的抽象接口 IPath，并在此基础上实现多种工艺路径输出类型：
@@ -38,10 +50,10 @@
 - RobotPath：工业机器人语言程序生成，支持 ABB/KUKA/FANUC。
 - WeldRobotPath：在机器人路径基础上增加焊接参数，生成带起弧/收弧指令的程序。
 
-所有实现均支持原生保存或序列化，以及通过 Lua 脚本进行后处理，便于扩展不同厂商格式和自定义流程。
+所有实现均支持原生保存或序列化，以及通过 Lua 脚本进行后处理，便于扩展不同厂商格式和自定义流程。**最新更新**：路径生成和 G-code 序列化现已采用并行处理技术，显著提升大规模模型的处理性能。
 
 ## 项目结构
-paths 模块位于仓库根目录下的 `paths` 子目录，采用“按输出类型划分”的文件组织方式：每个主要输出类型一个头文件和一个实现文件，并通过 IPath 抽象统一对外暴露 Save/ToString 系列接口。
+paths 模块位于仓库根目录下的 `paths` 子目录，采用"按输出类型划分"的文件组织方式：每个主要输出类型一个头文件和一个实现文件，并通过 IPath 抽象统一对外暴露 Save/ToString 系列接口。
 
 ```mermaid
 graph TB
@@ -99,10 +111,11 @@ RP --> WR
 - [weldrobotpath.hpp:65-96](file://paths/weldrobotpath.hpp#L65-L96)
 
 ## 架构总览
-paths 模块以 IPath 为抽象基类，具体实现围绕“数据模型 + 输出器”模式组织：
+paths 模块以 IPath 为抽象基类，具体实现围绕"数据模型 + 输出器"模式组织：
 - 数据模型：OutPoints3、GPoint、RLPoint、WeldRLPoint、PolygonsD 等。
 - 输出器：各 Path 类的 Save/ToString 方法，负责将数据模型转换为目标格式文本或文件。
 - 扩展点：Lua 脚本注册回调与全局变量注入，允许用户在后处理阶段修改输出内容。
+- **并行处理**：底层使用进程级线程池和原子索引调度，确保层间处理的并发性和顺序一致性。
 
 ```mermaid
 classDiagram
@@ -191,6 +204,53 @@ RobotPath <|-- WeldRobotPath
 - [robotpath.hpp:61-104](file://paths/robotpath.hpp#L61-L104)
 - [weldrobotpath.hpp:65-96](file://paths/weldrobotpath.hpp#L65-L96)
 
+## 并行处理基础设施
+
+### 进程级线程池单例
+系统引入了进程级的 ThreadPool 单例，通过 `PipelinePool()` 函数访问。该线程池具有以下特性：
+- **生命周期管理**：线程池在首次使用时创建，直到进程退出时销毁
+- **动态负载均衡**：使用原子计数器实现抢占式任务分配，避免固定分块的尾延迟
+- **环境变量控制**：通过 `HSBA_PIPELINE_THREADS` 环境变量控制线程数量，默认使用硬件并发数
+
+### 并行映射接口
+`ParallelMapLayers` 模板函数提供了层间并行处理能力：
+- **类型安全**：返回按索引写回的结果向量，保证输出顺序与输入一致
+- **异常处理**：工作线程中的异常会通过 futures 重新抛出到主线程
+- **进度回调**：支持可选的进度回调函数，每完成 32 层触发一次
+
+### 原子索引调度
+底层使用 `std::atomic<int>` 实现的原子索引调度机制：
+- **无锁竞争**：每个工作线程独立获取下一个任务索引，避免锁竞争
+- **内存序优化**：使用 relaxed 内存序提升性能，同时保证正确性
+- **优雅降级**：当线程数为 1 时自动回退到串行执行，保持行为一致性
+
+```mermaid
+flowchart TD
+Start(["并行任务提交"]) --> CheckThreads{"检查线程数"}
+CheckThreads --> |<=1| Serial["串行执行"]
+CheckThreads --> |>1| Parallel["并行执行"]
+Serial --> WorkLoop["for i in 0..total-1"]
+Parallel --> InitAtomic["初始化原子计数器"]
+InitAtomic --> SpawnWorkers["创建工作线程"]
+SpawnWorkers --> AtomicFetch["cursor.fetch_add(1)"]
+AtomicFetch --> ProcessWork["处理当前层"]
+ProcessWork --> DoneCheck{"是否还有任务?"}
+DoneCheck --> |是| AtomicFetch
+DoneCheck --> |否| ProgressUpdate["更新进度计数"]
+ProgressUpdate --> WaitFutures["等待所有future完成"]
+WaitFutures --> End(["任务完成"])
+```
+
+**图示来源**
+- [parallel.hpp:90-174](file://base/parallel.hpp#L90-L174)
+- [parallel.hpp:209-219](file://base/parallel.hpp#L209-L219)
+
+**章节来源**
+- [parallel.hpp:30-75](file://base/parallel.hpp#L30-L75)
+- [parallel.hpp:90-174](file://base/parallel.hpp#L90-L174)
+- [parallel.hpp:192-219](file://base/parallel.hpp#L192-L219)
+- [pipeline_parallel.hpp:1-15](file://DllHsBaSlicer/pipeline_parallel.hpp#L1-L15)
+
 ## 详细组件分析
 
 ### IPath 抽象接口
@@ -246,27 +306,32 @@ GCodePath 继承 LayersPath，新增：
 - ToGCode/SaverGCode：生成标准 G-code 字符串或文件。
 - setContinuousWall：设置连续外壁，用于花瓶模式。
 
+**更新**：ToGCode 方法现已采用并行处理优化，对层序列化处理进行并行化以提升性能。
+
 核心算法：
 - CalcExtrusion：根据线段长度、线宽、层高、线材截面积计算挤出量。
 - GenerateHeader/Footer：按固件类型生成头部/尾部指令。
 - GenerateLayerGCode：解析层 Z 高度，生成逐层 G-code，支持回抽与相对/绝对挤出。
 - GenerateContinuousWall：将连续外壁点序列转换为无中断的挤出路径。
+- **并行 ToGCode**：使用 ParallelMapLayers 并行生成各层 G-code，然后合并结果。
 
 ```mermaid
 sequenceDiagram
 participant App as "应用"
 participant GP as "GCodePath"
+participant PM as "ParallelMapLayers"
 participant FW as "固件选择"
 participant L as "Lua 环境"
 App->>GP : ToGCode(firmware)
+GP->>PM : 并行生成各层G-code
+loop 并行处理各层
+PM->>GP : GenerateLayerGCode(i, firmware)
+end
 GP->>FW : 判断固件类型
 FW-->>GP : Marlin/RepRap/Klipper
 GP->>GP : GenerateHeader(firmware)
 alt 存在连续外壁
 GP->>GP : GenerateContinuousWall()
-end
-loop 遍历层
-GP->>GP : GenerateLayerGCode(i, firmware)
 end
 GP->>GP : GenerateFooter(firmware)
 GP-->>App : 返回 G-code 字符串
@@ -274,6 +339,7 @@ Note over GP,L : 若传入 Lua 脚本，则创建 L 并注入 gcode/firmware/pri
 ```
 
 **图示来源**
+- [gcodepath.cpp:333-368](file://paths/gcodepath.cpp#L333-L368)
 - [gcodepath.cpp:69-158](file://paths/gcodepath.cpp#L69-L158)
 - [gcodepath.cpp:211-289](file://paths/gcodepath.cpp#L211-L289)
 - [gcodepath.cpp:291-330](file://paths/gcodepath.cpp#L291-L330)
@@ -289,6 +355,7 @@ Note over GP,L : 若传入 Lua 脚本，则创建 L 并注入 gcode/firmware/pri
 - [gcodepath.cpp:332-351](file://paths/gcodepath.cpp#L332-L351)
 - [gcodepath.cpp:353-362](file://paths/gcodepath.cpp#L353-L362)
 - [gcodepath.cpp:364-456](file://paths/gcodepath.cpp#L364-L456)
+- [gcodepath.cpp:333-368](file://paths/gcodepath.cpp#L333-L368)
 
 ### PointsPath 点序列 G-code 输出
 PointsPath 维护 GPoint 序列，支持：
@@ -296,6 +363,8 @@ PointsPath 维护 GPoint 序列，支持：
 - GCodeUnits：英寸或毫米。
 - ToString：输出单位声明、绝对定位、起点移动、线性/圆弧运动指令。
 - Lua 后处理：注入 points/startPoint/units 全局变量，支持函数名调用。
+
+**更新**：GenerateGCodePath 函数现已采用并行处理优化，对每层的点生成进行并行化。
 
 ```mermaid
 flowchart TD
@@ -465,6 +534,7 @@ paths 模块内部依赖关系清晰：
 - 各实现依赖 base/error.hpp、utils/LuaNewObject.hpp、lua.hpp 等公共库。
 - ImagesPath 依赖 fileoperator/zipper.hpp、cipher/LuaAdapter.hpp、cipher/encoder.hpp 等。
 - LayersPath 依赖 fileoperator/sql_adapter.hpp。
+- **并行处理**：路径生成和 G-code 序列化依赖 base/parallel.hpp 提供的并行基础设施。
 
 ```mermaid
 graph LR
@@ -478,6 +548,7 @@ ImagesPath --> Zipper
 ImagesPath --> Cipher
 LayersPath --> SQLAdapter
 AllPaths --> LuaEnv
+ParallelBase --> Paths
 ```
 
 **图示来源**
@@ -488,6 +559,7 @@ AllPaths --> LuaEnv
 - [imagespath.hpp:23-61](file://paths/imagespath.hpp#L23-L61)
 - [robotpath.hpp:61-104](file://paths/robotpath.hpp#L61-L104)
 - [weldrobotpath.hpp:65-96](file://paths/weldrobotpath.hpp#L65-L96)
+- [parallel.hpp:1-263](file://base/parallel.hpp#L1-L263)
 
 **章节来源**
 - [layerspath.cpp:13-17](file://paths/layerspath.cpp#L13-L17)
@@ -496,16 +568,33 @@ AllPaths --> LuaEnv
 - [pointspath.cpp:15-18](file://paths/pointspath.cpp#L15-L18)
 - [robotpath.cpp:13-17](file://paths/robotpath.cpp#L13-L17)
 - [weldrobotpath.cpp:12-15](file://paths/weldrobotpath.cpp#L12-L15)
+- [path_generator.cpp:12-13](file://LibHsBaSlicer/Path/path_generator.cpp#L12-L13)
 
 ## 性能与优化建议
-- 批量操作：优先使用 push_back 批量添加点或层，减少多次内存分配。
-- 避免重复序列化：ToString 结果可缓存，尤其在多次 Save 场景下。
-- Lua 后处理开销：Lua 环境创建与脚本加载有固定成本，建议在高频调用时复用脚本或合并处理逻辑。
-- 文件 I/O：大文件输出建议使用流式写入，避免一次性构建超大字符串。
-- 几何计算：GCodePath 的 CalcExtrusion 涉及浮点运算，可在预处理阶段缓存线段长度。
-- 并行输出：对于独立层或图像，可考虑并行生成，但需注意线程安全与资源竞争。
 
-[本节为通用性能指导，不直接分析具体文件]
+### 并行处理优化
+- **线程池配置**：通过 `HSBA_PIPELINE_THREADS` 环境变量调整并行度，默认使用硬件并发数
+- **批量操作**：优先使用 push_back 批量添加点或层，减少多次内存分配
+- **避免重复序列化**：ToString 结果可缓存，尤其在多次 Save 场景下
+- **大模型处理**：对于大型模型，并行处理能显著提升 G-code 生成和序列化性能
+
+### 传统优化策略
+- **Lua 后处理开销**：Lua 环境创建与脚本加载有固定成本，建议在高频调用时复用脚本或合并处理逻辑
+- **文件 I/O**：大文件输出建议使用流式写入，避免一次性构建超大字符串
+- **几何计算**：GCodePath 的 CalcExtrusion 涉及浮点运算，可在预处理阶段缓存线段长度
+- **内存管理**：合理使用 reserve 预分配内存，减少动态扩容开销
+
+### 并行处理最佳实践
+- **线程安全**：确保并行任务中只访问各自的数据槽，避免共享状态竞争
+- **异常处理**：并行任务中的异常会传播到主线程，需要适当处理
+- **进度监控**：利用 on_progress 回调实现细粒度的进度报告
+- **性能调优**：根据模型大小和硬件配置调整 HSBA_PIPELINE_THREADS 参数
+
+**章节来源**
+- [parallel.hpp:37-54](file://base/parallel.hpp#L37-L54)
+- [path_generator.cpp:71-93](file://LibHsBaSlicer/Path/path_generator.cpp#L71-L93)
+- [path_generator.cpp:120-141](file://LibHsBaSlicer/Path/path_generator.cpp#L120-L141)
+- [gcodepath.cpp:335-341](file://paths/gcodepath.cpp#L335-L341)
 
 ## 故障排除指南
 常见错误与处理：
@@ -514,6 +603,7 @@ AllPaths --> LuaEnv
 - Lua 运行时错误：pcall 返回非 LUA_OK 时抛出带错误信息的 RuntimeError。
 - 文件打开失败：ofstream/open 失败时抛出 RuntimeError，提示路径无效或权限问题。
 - 不支持的机器人品牌：RobotPath/WeldRobotPath 在 ToString 中遇到 Unknown/Undefine 会抛出 NotSupportedError。
+- **并行处理异常**：工作线程中的异常会通过 futures 重新抛出到主线程，需要捕获和处理。
 
 调试建议：
 - 检查 Lua 脚本语法与全局变量名称是否正确。
@@ -521,6 +611,7 @@ AllPaths --> LuaEnv
 - 验证配置文件与图像数据是否完整。
 - 对 GCodePath 检查打印机配置是否合理（如层高、线径、温度）。
 - 对 RobotPath/WeldRobotPath 确认品牌枚举与程序块函数名匹配。
+- **并行调试**：设置 HSBA_PIPELINE_THREADS=1 启用串行模式进行对比测试。
 
 **章节来源**
 - [gcodepath.cpp:376-380](file://paths/gcodepath.cpp#L376-L380)
@@ -537,11 +628,10 @@ AllPaths --> LuaEnv
 - [robotpath.cpp:457-468](file://paths/robotpath.cpp#L457-L468)
 - [weldrobotpath.cpp:105-109](file://paths/weldrobotpath.cpp#L105-L109)
 - [weldrobotpath.cpp:164-175](file://paths/weldrobotpath.cpp#L164-L175)
+- [parallel.hpp:170-173](file://base/parallel.hpp#L170-L173)
 
 ## 结论
-HsBaSlicer 的 paths 模块提供了完整的路径数据管理与输出能力，覆盖从分层多边形到 G-code、图像包、机器人程序等多种工艺格式。其设计以 IPath 为抽象核心，结合 Lua 脚本扩展机制，既保证了核心逻辑的稳定性，又赋予了用户高度的定制能力。在实际应用中，建议根据工艺需求选择合适的 Path 类型，并结合 Lua 后处理实现厂商特定格式与优化策略。
-
-[本节为总结性内容，不直接分析具体文件]
+HsBaSlicer 的 paths 模块提供了完整的路径数据管理与输出能力，覆盖从分层多边形到 G-code、图像包、机器人程序等多种工艺格式。其设计以 IPath 为抽象核心，结合 Lua 脚本扩展机制，既保证了核心逻辑的稳定性，又赋予了用户高度的定制能力。**最新改进**：通过引入进程级线程池和并行处理技术，显著提升了大规模模型的处理性能，同时保持了向后兼容性和行为一致性。在实际应用中，建议根据工艺需求选择合适的 Path 类型，并结合 Lua 后处理实现厂商特定格式与优化策略。
 
 ## 附录：API 参考与使用示例
 
@@ -568,7 +658,7 @@ HsBaSlicer 的 paths 模块提供了完整的路径数据管理与输出能力�
 - [layerspath.cpp:26-29](file://paths/layerspath.cpp#L26-L29)
 
 ### GCodePath API
-- ToGCode(firmware)：生成 G-code 字符串。
+- ToGCode(firmware)：生成 G-code 字符串（已并行优化）。
 - SaveGCode(path, firmware)：保存 G-code 文件。
 - ToGCode(firmware, script, lua_reg)：带 Lua 后处理的 G-code 生成。
 - setContinuousWall(wall)：设置连续外壁。
@@ -580,6 +670,7 @@ HsBaSlicer 的 paths 模块提供了完整的路径数据管理与输出能力�
 - [gcodepath.cpp:332-351](file://paths/gcodepath.cpp#L332-L351)
 - [gcodepath.cpp:353-362](file://paths/gcodepath.cpp#L353-L362)
 - [gcodepath.cpp:364-456](file://paths/gcodepath.cpp#L364-L456)
+- [gcodepath.cpp:333-368](file://paths/gcodepath.cpp#L333-L368)
 
 ### PointsPath API
 - push_back(point)：追加点。
@@ -615,3 +706,26 @@ HsBaSlicer 的 paths 模块提供了完整的路径数据管理与输出能力�
 **章节来源**
 - [weldrobotpath.hpp:72-86](file://paths/weldrobotpath.hpp#L72-L86)
 - [weldrobotpath.cpp:60-70](file://paths/weldrobotpath.cpp#L60-L70)
+
+### 并行处理 API
+- ParallelForLayers(total_layers, work, on_progress)：并行执行层间工作。
+- ParallelMapLayers<R>(total_layers, map)：并行映射生成结果向量。
+- PipelinePool()：获取进程级线程池单例。
+- ResolvePipelineThreads()：解析并行线程数配置。
+
+**章节来源**
+- [parallel.hpp:192-219](file://base/parallel.hpp#L192-L219)
+- [parallel.hpp:37-75](file://base/parallel.hpp#L37-L75)
+
+### 路径生成 API
+- GenerateGCodePath(layer_data, config)：生成 PointsPath（已并行优化）。
+- GenerateGCodePathV2(layer_data, config, printer_config)：生成 GCodePath（已并行优化）。
+- GenerateGCodePathSpiral(layer_outlines, layer_zs, printer_config)：生成螺旋路径。
+- PolygonsToGPoints(polys, z, config, is_extrude)：多边形转 G-point 序列。
+
+**章节来源**
+- [path_generator.hpp:50-91](file://LibHsBaSlicer/Path/path_generator.hpp#L50-L91)
+- [path_generator.cpp:66-112](file://LibHsBaSlicer/Path/path_generator.cpp#L66-L112)
+- [path_generator.cpp:114-149](file://LibHsBaSlicer/Path/path_generator.cpp#L114-L149)
+- [path_generator.cpp:151-171](file://LibHsBaSlicer/Path/path_generator.cpp#L151-L171)
+- [path_generator.cpp:17-64](file://LibHsBaSlicer/Path/path_generator.cpp#L17-L64)

@@ -1,1 +1,0 @@
-Provides symmetric/asymmetric encryption, cryptographic hashing, and Base64/hex encoding utilities backed by OpenSSL, with a Lua binding layer for scripting access.

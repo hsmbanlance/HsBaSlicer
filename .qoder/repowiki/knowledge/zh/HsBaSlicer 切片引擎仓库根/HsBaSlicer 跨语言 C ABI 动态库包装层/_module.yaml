@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: dll_wrapper
+title: HsBaSlicer 跨语言 C ABI 动态库包装层
+scope:
+    - DllHsBaSlicer/
+source_files: []
+depends_on: []
+related_to:
+    - path: android_app
+    - path: core_library
+    - path: pipeline_protos
+    - path: samples_apps

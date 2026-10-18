@@ -1,4 +1,0 @@
-- Every `.proto` file declares `syntax = "proto3"` and belongs to the `package HsbaProto;` namespace.
-- Message names use the `msg_` prefix (e.g. `msg_point2`, `msg_point3`, `msg_stlmeshes`, `msg_topo_trimeshes`).
-- Primitive geometry types (`point.proto`, `vector.proto`) are factored out and `import`ed by mesh/path/transform schemas rather than duplicated.
-- Each manufacturing technology gets its own dedicated `_pipeline.proto` file plus a shared `base_config.proto` / `slice_config.proto` for common fields.

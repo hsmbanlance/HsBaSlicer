@@ -1,6 +1,0 @@
-- Concrete archive backends expose a private `Private` tag constructor and a static `Create()` factory returning `std::shared_ptr`, with copy/move constructors deleted — used by both `Unzipper` and `Bit7zUnzipper`.
-- Long-running services (`Zipper`, `Unzipper`, `SQLiteAdapter`, `MySQLAdapter`, `PostgreSQLAdapter`) emit progress/status events by inheriting from `Utils::EventSource<ThisType, void, ...>` rather than using callbacks.
-- Database adapters hide implementation details behind a `class Impl; std::unique_ptr<Impl> impl_;` PIMPL member, keeping the public header free of sqlpp11 internals.
-- Optional third-party backends are guarded by preprocessor macros (`#ifdef HSBA_USE_MYSQL`, `#ifdef HSBA_USE_PGSQL`, `#ifdef HSBA_USE_BIT7Z`) so the same headers compile out unsupported variants.
-- SQL operations use a fluent pipe-operator DSL: free `operator|` overloads accept `SQLSelect`/`SQLInsert`/`SQLUpdate`/`SQLDelete`/`SQLCreateTable`/`SQLRemoveTable` structs chained off an `ISQLAdapter&`.
-- Configuration maps provide paired typed/type-erased interfaces (`VariantConfigMap<T...>` ↔ `AnyConfigMap`) with symmetric `GetOptional<T>`, `AddOrChangeValue`, `ToPtree`, and `AddValueInPtree` methods.

@@ -1,3 +1,0 @@
-- Coverage: enable via `-DHSBA_COVERAGE=ON` or the `linux-coverage` CMake preset; run tests then `cmake --build . --target coverage`; requires `gcovr` installed (`apt install gcovr` or `pip install gcovr`).
-- PDB deploy: `cmake -DTARGET_BIN=<exe_path> -DPDB_FILES=<pdb1;pdb2;...> -P cmake/deploy_dlls.cmake`.
-- Wiki generation: `python scripts/repowiki_to_github_wiki.py [--lang en|zh|both] [--src .qoder/repowiki] [--out wiki-output]`.

@@ -1,1 +1,0 @@
-C++20 concepts + CRTP; Boost.Graph for the graph layer and Boost.DLL for runtime symbol loading; RapidJSON, TinyXML2, and yaml-cpp for three serialization backends; Lua C API for type bridging; precompiled headers via `pch_headers.hpp`.

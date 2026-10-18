@@ -1,2 +1,0 @@
-- Both examples explicitly mark their native entry points as non-production — Javadoc/Swift comments state they are for demonstration and testing only.
-- Native calls are invoked off the UI thread: Android catches exceptions around the direct call, while iOS uses `DispatchQueue.global(qos: .userInitiated).async` and marshals results back to the main queue.

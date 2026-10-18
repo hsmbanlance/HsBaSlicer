@@ -1,1 +1,0 @@
-Static library providing bidirectional converters between Eigen geometry types, protobuf messages, FullTopoModel meshes, and C pipeline configuration structs.

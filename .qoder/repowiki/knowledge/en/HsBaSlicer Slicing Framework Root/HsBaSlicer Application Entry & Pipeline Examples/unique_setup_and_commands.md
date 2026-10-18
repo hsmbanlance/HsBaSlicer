@@ -1,1 +1,0 @@
-On Windows, a POST_BUILD step invokes `${CMAKE_SOURCE_DIR}/cmake/deploy_dlls.cmake` to copy PDBs from `DllHsBaSlicer` and `HsBaSlicerLog` next to the executable. On Android, the build copies `DllHsBaSlicer/*.so` into `${CMAKE_BINARY_DIR}/android_libs/${ANDROID_ABI}` alongside the shared library.

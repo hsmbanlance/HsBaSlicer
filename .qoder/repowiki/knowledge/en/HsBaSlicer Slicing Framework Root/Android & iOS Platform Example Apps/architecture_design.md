@@ -1,5 +1,0 @@
-Two independent platform examples, each a thin UI shell over the prebuilt native library:
-- Android (`android/app`): Gradle application targeting API 21–34, `arm64-v8a` only. `MainActivity.java` loads `libHsBaSlicer.so` via `System.loadLibrary` and calls the JNI method `runPipelineExamples()` (native side in the bundled `.so`). Prebuilt `libDllHsBaSlicer.so` and `libHsBaSlicer.so` are shipped under `src/main/jniLibs/arm64-v8a/`.
-- iOS (`ios/HsBaSlicerExample`): A single-view UIKit app bridged to C++ through `HsBaSlicerBridge.h`, which exposes `void HsBaRunPipelineExamples(void)` as an `extern "C"` symbol. `ViewController.swift` dispatches the call on a background queue and updates the UI on the main thread.
-
-Dependency direction is one-way: both examples depend on the compiled native artifacts produced by the core HsBaSlicer build; they contain no slicing logic themselves.

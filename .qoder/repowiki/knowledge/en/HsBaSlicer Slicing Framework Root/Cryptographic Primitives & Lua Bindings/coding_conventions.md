@@ -1,4 +1,0 @@
-- Each utility surface is exposed as a stateless class under `HsBa::Slicer::Cipher` whose methods are all `static` — no instance construction is needed.
-- Overloaded convenience entry points accept `std::string_view` and internally convert to `std::vector<unsigned char>` before delegating to the byte-oriented implementation.
-- Binary data is passed as `std::vector<unsigned char>` while text inputs use `std::string_view`, keeping raw bytes and string views distinct at the API boundary.
-- Header files carry Doxygen-style `@file` / `@brief` / `@class` comments describing the purpose of each unit.

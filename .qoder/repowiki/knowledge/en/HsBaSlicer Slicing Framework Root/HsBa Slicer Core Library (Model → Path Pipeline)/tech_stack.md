@@ -1,1 +1,0 @@
-C++ library built with CMake; optional Lua scripting integration for fully scriptable pipelines; conditional OpenCASCADE (OCCT) CAD kernel behind `HSBA_COPL` flag; Windows DLL export via `__declspec(dllexport/import)` through `export.h`.

@@ -1,1 +1,0 @@
-C++ wrapper over OpenSSL (AES-256-CBC/ECB, DES-EDE3, RSA-OAEP, MD5/SHA1/SHA256); Lua C API for script exposure; built as a static library via CMake.

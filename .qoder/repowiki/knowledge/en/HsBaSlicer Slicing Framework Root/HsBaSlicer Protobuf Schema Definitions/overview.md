@@ -1,1 +1,0 @@
-Protocol Buffers schema definitions for HsBaSlicer's core data types (points, vectors, meshes, paths) and per-technology pipeline configurations.

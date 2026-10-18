@@ -1,1 +1,0 @@
-Boost.Test (`BOOST_TEST_MODULE` + `BOOST_AUTO_TEST_SUITE`/`CASE`, `BOOST_CHECK_EQUAL`, `BOOST_FAIL`, `BOOST_REQUIRE_EQUAL`); CTest as the runner; optional Lua scripting embedded in tests via `luaL_dostring`; Eigen3 for geometry fixtures; conditional CGAL/OpenCASCADE/Fontconfig/Freetype discovery for model tests.

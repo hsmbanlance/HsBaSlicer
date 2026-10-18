@@ -1,4 +1,0 @@
-- Optional kernel functionality is split into `#ifdef USE_CGAL` / `#ifdef USE_OPENVDB` blocks in both the header declarations and the implementation, so methods disappear entirely when the corresponding backend is disabled.
-- Runtime errors from missing or unsupported models are reported through typed exceptions (`InvalidArgumentError` for bad names/format, `RuntimeError` for load failures, `NotSupportedError` for disabled backends) rather than error codes.
-- Every public operation follows a uniform pattern: resolve the source name via `GetModel`, validate existence, `dynamic_cast` to the concrete kernel type (`OcctModel` / `OpenVdbModel` / `IglModel`), perform the operation, then store the result back into the pool under a caller-provided `resultName`.
-- Kernel-specific helpers (`ToIglModel`, `ToOcctModel`, `AsOpenVdbModel`) centralize cross-kernel conversion and type-checking, keeping the public API free of repeated casting logic.

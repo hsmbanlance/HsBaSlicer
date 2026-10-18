@@ -1,6 +1,0 @@
-- Every public C++ API function and struct is declared inside `namespace HsBa::Slicer` and prefixed with the `HSBA_SLICER_LIB_API` macro from `export.h`.
-- Public headers use a unique include guard named after the header file (e.g. `HSBA_SLICER_MESH_SLICE_HPP`, `HSBA_SLICER_PATH_GENERATOR_HPP`) rather than relying solely on `#pragma once`.
-- Each functional area lives in its own subdirectory (`Slice/`, `Path/`, `Fill/`, etc.) with paired `.hpp` / `.cpp` files, and all sources are explicitly enumerated in `CMakeLists.txt` rather than auto-discovered.
-- Configuration-heavy APIs expose plain POD structs (e.g. `FdmPathConfig`, `LayerPathData`, `LuaPipelineContext`) with default member initializers instead of builder patterns.
-- Lua extensibility is centralized in `Extends/`: the Lua environment is bootstrapped via `SetupLuaPipelineEnvironment` which installs a global `HsBa` table, while individual capabilities are registered through dedicated `LuaAddFunction` / `EventSourceFunction` modules grouped by pipeline dimension (2D / 3D / File).
-- Complex optimizers hide implementation details behind a PIMPL `Impl` struct and `std::unique_ptr<Impl>` (e.g. `RegionPathOptimizer`) to keep public headers free of internal graph types.

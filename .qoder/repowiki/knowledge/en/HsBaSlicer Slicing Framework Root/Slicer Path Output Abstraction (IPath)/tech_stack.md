@@ -1,1 +1,0 @@
-C++ with CMake (`add_library(HsBaPaths STATIC ...)`); Lua scripting engine integrated via `target_include_directories` on `${LUA_INCLUDE_DIR}` and linked through `${LUA_LIBRARIES}` for optional post-processing scripts invoked from every Save/ToString overload.

@@ -1,1 +1,0 @@
-C++ with OpenVDB (Vec3fGrid + particlesToSdf + LevelSetFilter + volumeToMesh), Eigen for vectors/matrices, Intel TBB and Imath as dependencies; optional dynamic loading of user plugins via Boost.DLL on desktop builds.

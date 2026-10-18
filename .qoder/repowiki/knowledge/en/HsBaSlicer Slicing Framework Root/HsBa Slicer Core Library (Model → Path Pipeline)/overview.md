@@ -1,1 +1,0 @@
-CMake-built shared/static library exposing the HsBa slicer's model preprocessing, mesh slicing, support generation, polygon filling, FDM/SLA/SLS path planning, and fully Lua-driven custom pipeline under a stable HSBA_SLICER_LIB_API surface.

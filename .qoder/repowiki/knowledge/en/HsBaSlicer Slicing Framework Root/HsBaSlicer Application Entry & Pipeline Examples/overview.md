@@ -1,1 +1,0 @@
-Cross-platform application entry point that initializes the HsBa slicer and runs FDM/SLA/SLS pipeline example drivers for desktop, Android, and iOS.

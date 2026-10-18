@@ -1,1 +1,0 @@
-Unified model loader that dispatches files to IGL mesh, OCCT BRep, or OpenVDB point-cloud kernels and exposes thick-solid / boolean / point-cloud preprocessing operations over a named model pool.

@@ -1,5 +1,0 @@
-- Every C++ sample wraps logging behind a `#ifndef HSBA_GAME_CONSOLE` guard that falls back to no-op, allowing the same source to compile for game consoles and desktop alike.
-- Pipeline configuration follows a create-config → populate fields → run → free-result lifecycle using paired `HsBa*CreateDefault*Config` / `HsBaRun*Pipeline` / `HsBaFree*Result` functions.
-- Lua-driven workflows expose a global `machine` table injected via `cfg.pipeline_lua_source` before the script file runs, and scripts read it through a local `param(name, default)` helper that falls back to hard-coded defaults.
-- Custom pipeline scripts implement a single `run_pipeline()` entry point and report progress via `HsBa.progress(percent, stage)` at regular intervals.
-- Each technology-specific sample ships its own `scripts/` directory containing Lua files named `my_<feature>.lua` (e.g. `my_support.lua`, `my_infill.lua`, `my_sla_export.lua`) that plug into the corresponding pipeline hook.

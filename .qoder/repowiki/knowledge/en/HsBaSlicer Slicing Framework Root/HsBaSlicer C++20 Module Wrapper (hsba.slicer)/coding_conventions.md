@@ -1,5 +1,0 @@
-- Each process pipeline class takes a `HsBaXxxPipelineConfig_t` defaulting to the corresponding `HsBaXxxConfigDefault()` factory and exposes a `run(const Model&)` method that throws `SlicerError` on failure.
-- Lua-driven stages are selected at runtime by checking a `*_lua_script` config field and falling back to the native C++ algorithm when absent (see FDM support/fill, SLA floor/export, SLS/SLM/LOM/3DP export).
-- Layer generation follows a uniform pattern: compute layer count from `model.info().bbox_max.z() - bbox_min.z()` divided by `cfg_.layer_height`, then iterate z = first_layer_height + i * layer_height, calling `Slice(model.raw(), z)` and converting via `UnIntegerization` to double polygons.
-- Type aliases re-export Clipper2 types (`Point2`, `Polygon`, `Polygons`, `Point2D`, `PolygonD`, `PolygonsD`) and all `HsBaXxxPipelineConfig_t` / `HsBaXxxPipelineResult_t` structs into `HsBa::Slicer` so consumers never include `pipelinetypes/pipeline_types.h` directly.
-- Module sources are kept in a single `.cppm` file (interface + definitions together) to avoid MSVC C2572 implicit-import std redefinition errors across translation units.

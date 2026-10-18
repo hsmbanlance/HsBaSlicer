@@ -1,1 +1,0 @@
-OpenCASCADE (OCCT) BRep kernel for native CAD operations; Boost.DLL for loading user-supplied CAD plugins on desktop platforms; Eigen3 for vector/quaternion/affine math; libigl-style vertex+face mesh representation.

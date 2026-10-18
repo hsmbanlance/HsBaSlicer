@@ -1,1 +1,0 @@
-The library requires Boost (date_time, dll, graph, pfr, container_hash), rapidjson, tinyxml2, yaml-cpp, and a system Lua installation — all resolved through CMake's `find_package` in `utils/CMakeLists.txt` before building.

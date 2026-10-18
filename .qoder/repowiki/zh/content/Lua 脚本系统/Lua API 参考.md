@@ -14,7 +14,16 @@
 - [my_fdm_pipeline.lua](file://samples/Custom/scripts/my_fdm_pipeline.lua)
 - [my_infill.lua](file://samples/FDM/scripts/my_infill.lua)
 - [my_sls_export.lua](file://samples/SLS/scripts/my_sls_export.lua)
+- [PolygonFill.cpp](file://2D/PolygonFill.cpp)
+- [PolygonFill.hpp](file://2D/PolygonFill.hpp)
+- [hsba_pipeline.d.lua](file://types/hsba_pipeline.d.lua)
 </cite>
+
+## 更新摘要
+**变更内容**   
+- 新增 `PolygonFill.randomizeStartPoints()` 函数文档
+- 更新 B.2 节 PolygonFill 部分，添加随机起点重定位功能说明
+- 新增配置参数 `min_separation` 的使用示例和说明
 
 ## 目录
 
@@ -47,7 +56,7 @@
 | 几何操作 | 点、线、多边形、布尔运算、偏移、凸包、凹包、面积、文本转多边形 |
 | 模型处理 | 加载、查询信息、平移、旋转、缩放、移除、枚举名称 |
 | 切片与坐标 | 层数计算、Z 高度、安全切片、非安全切片、整型/浮点转换 |
-| 填充与支撑 | FDM/SLA 支撑、SLA 地板、填充模式、壁厚+填充 |
+| 填充与支撑 | FDM/SLA 支撑、SLA 地板、填充模式、壁厚+填充、路径起点随机化 |
 | 路径生成 | 螺旋路径、G-code 输出、机器人路径打包 |
 | 文件与打包 | 压缩、7z 压缩、数据库访问、参数持久化 |
 | 类型映射 | Lua table、基本类型、Eigen 向量/矩阵/四元数、Clipper 多边形、AnyObject |
@@ -369,7 +378,81 @@ PushResult --> Return["返回结果多边形表"]
 
 ### B.2 `PolygonFill`（填充算法）
 
-`offsetFill` / `lineFill` / `simpleZigzagFill` / `zigzagFill` / `compositeOffsetFill` / `hybridFill` / `offsetOnly` —— 输入整型多边形集合与间距/角度参数，返回填充路径多边形。
+`PolygonFill` 模块提供多种填充算法和路径优化功能：
+
+#### 基础填充算法
+
+| 函数 | 说明 |
+|------|------|
+| `offsetFill(polys, spacing[, opts])` | 偏移填充，`opts` 可包含 `join_type`（"Miter"/"Square"/"Bevel"/"Round"） |
+| `lineFill(polys, spacing, angle, lineThickness)` | 平行线填充 |
+| `simpleZigzagFill(polys, spacing, angle, lineThickness)` | 简单之字形填充 |
+| `zigzagFill(polys, spacing, angle, lineThickness)` | 之字形填充 |
+| `compositeOffsetFill(polys, spacing, offsetStep, outwardCount, inwardCount, mode, angle, lineThickness[, opts])` | 复合偏移填充 |
+| `hybridFill(polys, spacing, offsetStep, outwardCount, inwardCount, mode, angle, lineThickness[, opts])` | 混合填充 |
+| `offsetOnly(polys, spacing[, opts])` | 仅偏移填充 |
+
+#### 路径起点随机化
+
+**新增** `randomizeStartPoints(polys, seed?, opts?)` —— 将闭合轮廓与偏置路径的起点旋转到周长上均匀采样的随机点（在所选边上插入新的分裂顶点，不限于原顶点；保持顶点顺序、环绕方向与闭合形式，顶点数 +1）；`seed` 省略时用随机种子，可按层传入 seed 实现层间起点错开；`opts.min_separation` 约束不同环起点之间的最小距离（整型坐标单位），用于错开嵌套环的接缝。
+
+**参数说明**：
+- `polys`: 输入多边形集合（整型）
+- `seed?`: 可选随机种子（整数），省略时使用随机设备生成
+- `opts?`: 可选配置表，支持字段：
+  - `min_separation`: 不同环起点之间的最小距离（数值），默认 0（不约束）
+
+**返回值**：处理后的多边形集合（浮点），每个多边形顶点数 +1（因插入分裂顶点）
+
+**使用示例**：
+```lua
+-- 基础用法：随机起点
+local randomized = PolygonFill.randomizeStartPoints(rings)
+
+-- 固定种子：确保可重复性
+local fixed = PolygonFill.randomizeStartPoints(rings, 42)
+
+-- 带间距约束：错开嵌套环的接缝
+local spaced = PolygonFill.randomizeStartPoints(rings, 42, { min_separation = 1500 })
+
+-- 结合偏移填充：生成带随机起点的多层路径
+local rings = PolygonFill.offsetFill(poly, 2000000000, { join_type = "Miter" })
+local result = PolygonFill.randomizeStartPoints(rings, layer_index, { min_separation = 1000 })
+```
+
+**技术特性**：
+- 使用 Mersenne Twister 64 位随机引擎保证跨平台可重现性
+- 支持拒绝采样策略，当 `min_separation > 0` 时尝试找到满足间距要求的起点
+- 最多尝试 32 次寻找满足间距约束的候选点
+- 对退化多边形（少于 3 个顶点）直接透传不变
+
+```mermaid
+flowchart TD
+Input["输入多边形集合"] --> SeedCheck{"是否有指定种子？"}
+SeedCheck --> |是| UseSeed["使用指定种子初始化随机引擎"]
+SeedCheck --> |否| RandomSeed["使用随机设备生成种子"]
+UseSeed --> ProcessLoop["遍历每个多边形"]
+RandomSeed --> ProcessLoop
+ProcessLoop --> MinSepCheck{"是否设置最小间距？"}
+MinSepCheck --> |是| RejectionSample["拒绝采样寻找满足间距的起点"]
+MinSepCheck --> |否| UniformSample["均匀采样选择起点"]
+RejectionSample --> RotateStart["旋转多边形到新起点"]
+UniformSample --> RotateStart
+RotateStart --> AddChosen["记录已选起点"]
+AddChosen --> NextPoly{"还有下一个多边形？"}
+NextPoly --> |是| ProcessLoop
+NextPoly --> |否| ConvertOutput["转换为浮点多边形"]
+ConvertOutput --> Return["返回结果"]
+```
+
+**图示来源**   
+- [PolygonFill.cpp:537-567](file://2D/PolygonFill.cpp#L537-L567)
+- [PolygonFill.cpp:625-704](file://2D/PolygonFill.cpp#L625-L704)
+
+**章节来源**   
+- [PolygonFill.cpp:537-577](file://2D/PolygonFill.cpp#L537-L577)
+- [PolygonFill.hpp:115-124](file://2D/PolygonFill.hpp#L115-L124)
+- [hsba_pipeline.d.lua:62](file://types/hsba_pipeline.d.lua#L62)
 
 ### B.3 `PathOptimize`（路径顺序优化）
 
@@ -679,6 +762,43 @@ function generate_fill(current_layer)
 end
 ```
 
+### 路径起点随机化示例
+
+**新增** 使用 `randomizeStartPoints` 进行路径起点随机化，避免多层打印时接缝对齐：
+
+```lua
+function generate_fill_with_randomized_start(current_layer)
+    if #current_layer == 0 then
+        return {}
+    end
+
+    -- 生成偏移路径（多层同心环）
+    local rings = PolygonFill.offsetFill(current_layer, 2000, { join_type = "Miter" })
+    
+    -- 使用层索引作为种子，确保每层起点不同但可重现
+    local layer_seed = current_layer_index or 0
+    
+    -- 基础随机化：无间距约束
+    local basic_randomized = PolygonFill.randomizeStartPoints(rings, layer_seed)
+    
+    -- 带间距约束：错开嵌套环的接缝
+    local spaced_randomized = PolygonFill.randomizeStartPoints(rings, layer_seed, { 
+        min_separation = 1500 
+    })
+    
+    -- 合并结果：基础随机化 + 间距约束随机化
+    local result = {}
+    for i = 1, #basic_randomized do
+        result[#result + 1] = basic_randomized[i]
+    end
+    for i = 1, #spaced_randomized do
+        result[#result + 1] = spaced_randomized[i]
+    end
+    
+    return result
+end
+```
+
 ### SLS 导出脚本示例
 
 导出脚本负责打包层数据和配置文件，并可记录数据库：
@@ -733,6 +853,7 @@ return export_sls()
 - [my_fdm_pipeline.lua:52-171](file://samples/Custom/scripts/my_fdm_pipeline.lua#L52-L171)
 - [my_infill.lua:20-88](file://samples/FDM/scripts/my_infill.lua#L20-L88)
 - [my_sls_export.lua:23-79](file://samples/SLS/scripts/my_sls_export.lua#L23-L79)
+- [polygon_fill_test.cpp:308-341](file://tests/PolygonFill/polygon_fill_test.cpp#L308-L341)
 
 ## 架构总览图
 
@@ -867,11 +988,27 @@ Note over Pool,LuaState : 各流水线阶段初始化时从池中安装函数
 - 验证连接参数；
 - 确认文件权限。
 
+### 问题 5：`PolygonFill.randomizeStartPoints` 效果不符合预期
+
+**现象**：随机化后的路径起点分布不理想。
+
+**原因**：
+- `min_separation` 参数设置过大，导致拒绝采样失败；
+- 种子值选择不当，导致随机性不足；
+- 输入多边形过于简单，无法产生有意义的随机化效果。
+
+**解决方案**：
+- 调整 `min_separation` 参数，通常设置为路径间距的 1-2 倍；
+- 使用层索引作为种子，确保每层有不同的随机化效果；
+- 检查输入多边形是否包含足够的几何复杂度；
+- 对于简单的单环多边形，随机化效果有限，建议先使用 `offsetFill` 生成多层环。
+
 **章节来源**   
 - [lua_pipeline.cpp:293-308](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L293-L308)
 - [lua_pipeline.cpp:435-461](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L435-L461)
 - [lua_pipeline.cpp:626-691](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L626-L691)
 - [LuaAdapter.cpp:312-332](file://fileoperator/LuaAdapter.cpp#L312-L332)
+- [PolygonFill.cpp:537-567](file://2D/PolygonFill.cpp#L537-L567)
 
 ## 结论
 
@@ -882,7 +1019,8 @@ HsBaSlicer 的 Lua API 提供了完整的 3D 打印流水线可编程能力，�
 1. **两种运行环境**：自定义流水线提供完整控制，内置阶段替换提供局部定制。
 2. **统一数据类型**：Lua table 与 C++ 几何容器之间有明确的转换规则。
 3. **丰富的 API 分类**：从基础的几何操作到复杂的流水线编排，API 层次清晰。
-4. **完善的错误处理**：Lua 错误与 C++ 异常相结合，提供可靠的错误反馈。
-5. **可扩展架构**：通过 C ABI 接口支持第三方插件和自定义函数注入。
+4. **路径起点随机化**：新增的 `randomizeStartPoints` 功能可有效避免多层打印时的接缝对齐问题，支持可选的间距约束。
+5. **完善的错误处理**：Lua 错误与 C++ 异常相结合，提供可靠的错误反馈。
+6. **可扩展架构**：通过 C ABI 接口支持第三方插件和自定义函数注入。
 
-开发者可以根据具体需求选择合适的 API 组合，构建从简单脚本到复杂流水线的各种解决方案。
+开发者可以根据具体需求选择合适的 API 组合，构建从简单脚本到复杂流水线的各种解决方案。特别是新增的路径起点随机化功能，为改善打印质量和减少可见接缝提供了强大的工具支持。

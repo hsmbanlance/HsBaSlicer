@@ -14,23 +14,35 @@
 - [spiral_path.hpp](file://LibHsBaSlicer/Path/spiral_path.hpp)
 - [sls_export.hpp](file://LibHsBaSlicer/Path/sls_export.hpp)
 - [waam_export.hpp](file://LibHsBaSlicer/Path/waam_export.hpp)
+- [pipeline_parallel.hpp](file://DllHsBaSlicer/pipeline_parallel.hpp)
+- [parallel.hpp](file://base/parallel.hpp)
+- [thread_pool.hpp](file://base/thread_pool.hpp)
 </cite>
+
+## Update Summary
+**Changes Made**   
+- Updated Performance Considerations section to document ParallelMapLayers optimization
+- Added new section on Concurrent Layer Processing Architecture
+- Enhanced Detailed Component Analysis with parallel processing details
+- Updated Performance Considerations with specific parallelization benefits
+- Added troubleshooting guidance for parallel execution issues
 
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
-5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Dependency Analysis](#dependency-analysis)
-7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
+5. [Concurrent Layer Processing Architecture](#concurrent-layer-processing-architecture)
+6. [Detailed Component Analysis](#detailed-component-analysis)
+7. [Dependency Analysis](#dependency-analysis)
+8. [Performance Considerations](#performance-considerations)
+9. [Troubleshooting Guide](#troubleshooting-guide)
+10. [Conclusion](#conclusion)
+11. [Appendices](#appendices)
 
 ## Introduction
 This document explains the Path Generation module that combines the `paths/` and `LibHsBaSlicer/Path/` directories. It covers:
-- The G-code generation system for FDM printers.
+- The G-code generation system for FDM printers with concurrent layer processing.
 - Robot path output for ABB, KUKA, and FANUC industrial robots.
 - Weld robot path generation for WAAM and other additive welding processes.
 - Path optimization algorithms for reducing travel distance and improving print quality.
@@ -38,8 +50,9 @@ This document explains the Path Generation module that combines the `paths/` and
 - The relationship between 2D slice contours and 3D toolpaths.
 - Parameter tuning for materials and geometries.
 - Export formats and integration with the overall slicing pipeline.
+- **ParallelMapLayers-based concurrent processing for significantly improved serialization performance on large models.**
 
-The module is designed so that 2D polygon slices can be converted into executable machine instructions, whether those are G-code for desktop printers or robot programs for industrial equipment.
+The module is designed so that 2D polygon slices can be converted into executable machine instructions, whether those are G-code for desktop printers or robot programs for industrial equipment, with modern parallel processing capabilities for optimal performance.
 
 ## Project Structure
 The Path Generation module is split into two complementary layers:
@@ -48,7 +61,7 @@ The Path Generation module is split into two complementary layers:
   - Abstract interface and base types.
   - Layer-based, point-based, image-based, robot-based, weld-robot-based, and G-code path classes.
 - `LibHsBaSlicer/Path/`: High-level APIs used by pipelines and scripts.
-  - FDM path generation API.
+  - FDM path generation API with parallel processing.
   - Region-based path optimizer.
   - Spiral/vase wall generator.
   - SLS and WAAM export packages.
@@ -65,11 +78,15 @@ WRP["WeldRobotPath<br/>weld parameters"]
 IMP["ImagesPath<br/>config + images"]
 end
 subgraph "LibHsBaSlicer/Path/"
-PG["path_generator.hpp<br/>FDM G-code API"]
+PG["path_generator.hpp<br/>FDM G-code API<br/>with ParallelMapLayers"]
 PO["path_optimizer.hpp<br/>RegionPathOptimizer"]
 SP["spiral_path.hpp<br/>SpiralizeOuterWall"]
 SLSE["sls_export.hpp<br/>SLS package"]
 WAE["waam_export.hpp<br/>WAAM package"]
+end
+subgraph "Base Infrastructure"
+PPH["parallel.hpp<br/>ParallelForLayers<br/>ParallelMapLayers"]
+TPH["thread_pool.hpp<br/>ThreadPool"]
 end
 IP --> LP
 IP --> PP
@@ -83,6 +100,9 @@ PO --> LP
 SP --> GP
 SLSE --> IMP
 WAE --> WRP
+PPH --> PG
+PPH --> GP
+TPH --> PPH
 ```
 
 **Diagram sources**
@@ -98,6 +118,8 @@ WAE --> WRP
 - [spiral_path.hpp:16-58](file://LibHsBaSlicer/Path/spiral_path.hpp#L16-L58)
 - [sls_export.hpp:17-56](file://LibHsBaSlicer/Path/sls_export.hpp#L17-L56)
 - [waam_export.hpp:17-72](file://LibHsBaSlicer/Path/waam_export.hpp#L17-L72)
+- [parallel.hpp:178-219](file://base/parallel.hpp#L178-L219)
+- [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
 
 **Section sources**
 - [IPath.hpp:20-65](file://paths/IPath.hpp#L20-L65)
@@ -119,6 +141,7 @@ The Path Generation module centers on a small set of well-defined components:
 | `RegionPathOptimizer` | Region visit-order pre-optimizer | Polygon or fill-result regions | Optimized polygon/fill order |
 | `SpiralizeOuterWall` | Continuous helical outer wall | Per-layer closed contours | 3D spiral polyline |
 | `WaamRobotPackage` / `SlsPackage` | Pipeline export packages | Contours, heights, settings | Lua-driven export |
+| `ParallelMapLayers` | Concurrent layer processing engine | Atomic cursor + ThreadPool | Parallel result vectors |
 
 **Section sources**
 - [IPath.hpp:20-65](file://paths/IPath.hpp#L20-L65)
@@ -132,31 +155,36 @@ The Path Generation module centers on a small set of well-defined components:
 - [spiral_path.hpp:16-58](file://LibHsBaSlicer/Path/spiral_path.hpp#L16-L58)
 - [sls_export.hpp:17-56](file://LibHsBaSlicer/Path/sls_export.hpp#L17-L56)
 - [waam_export.hpp:17-72](file://LibHsBaSlicer/Path/waam_export.hpp#L17-L72)
+- [parallel.hpp:209-219](file://base/parallel.hpp#L209-L219)
 
 ## Architecture Overview
-The architecture separates concerns into three layers:
+The architecture separates concerns into three layers with integrated parallel processing:
 
 1. **Geometry layer**: 2D polygons from slicing (`PolygonsD`) and shared 3D point types.
 2. **Path representation layer**: `IPath` subclasses store either layered polygons, point sequences, or robot moves.
 3. **Export layer**: Firmware-specific G-code, robot-brand code, or Lua-driven export packages.
+4. **Parallel processing layer**: Process-wide ThreadPool with atomic cursor scheduling for concurrent layer operations.
 
 ```mermaid
 graph LR
-Slice["Slice contours<br/>PolygonsD"] --> Generator["FDM path generator<br/>GenerateGCodePath / V2"]
+Slice["Slice contours<br/>PolygonsD"] --> Generator["FDM path generator<br/>GenerateGCodePath / V2<br/>with ParallelMapLayers"]
 Slice --> Spiral["Spiralizer<br/>SpiralizeOuterWall"]
 Generator --> Points["PointsPath"]
 Generator --> Layers["LayersPath"]
 Spiral --> GCode["GCodePath"]
 Layers --> GCode
-GCode --> Marlin["Marlin G-code"]
-GCode --> RepRap["RepRap G-code"]
-GCode --> Klipper["Klipper G-code"]
+GCode --> Serial["ToGCode() with<br/>ParallelMapLayers"]
+Serial --> Marlin["Marlin G-code"]
+Serial --> RepRap["RepRap G-code"]
+Serial --> Klipper["Klipper G-code"]
 Robot["RobotPath"] --> ABB["ABB code"]
 Robot --> KUKA["KUKA code"]
 Robot --> FANUC["FANUC code"]
 Weld["WeldRobotPath"] --> WeldABB["Welding-aware ABB"]
 Weld --> WeldKUKA["Welding-aware KUKA"]
 Weld --> WeldFanuc["Welding-aware FANUC"]
+PipelinePool["Process-wide ThreadPool"] --> Generator
+PipelinePool --> Serial
 ```
 
 **Diagram sources**
@@ -165,6 +193,70 @@ Weld --> WeldFanuc["Welding-aware FANUC"]
 - [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
 - [robotpath.hpp:15-104](file://paths/robotpath.hpp#L15-L104)
 - [weldrobotpath.hpp:16-96](file://paths/weldrobotpath.hpp#L16-L96)
+- [parallel.hpp:64-68](file://base/parallel.hpp#L64-L68)
+
+## Concurrent Layer Processing Architecture
+
+**Updated** The Path Generation module now leverages `ParallelMapLayers` for concurrent processing of independent layers, significantly optimizing serialization performance for large models.
+
+### Process-Wide Thread Pool Infrastructure
+The parallel infrastructure is built around a process-wide `ThreadPool` singleton accessed via `PipelinePool()`:
+
+- **Single instance**: Created lazily on first use and lives until process exit
+- **Dynamic sizing**: Respects `HSBA_PIPELINE_THREADS` environment variable, falls back to hardware concurrency
+- **Atomic cursor scheduling**: Workers compete for work items using `std::atomic<int> cursor.fetch_add(1)`
+- **Progress reporting**: Main thread polls completion counter every 32 layers for efficient progress updates
+- **Exception safety**: Worker exceptions are rethrown via futures on the calling thread
+
+```mermaid
+flowchart TD
+Start(["ParallelMapLayers call"]) --> Check{"total_layers > 0?"}
+Check --> |No| ReturnEmpty["Return empty vector"]
+Check --> |Yes| Resolve["ResolvePipelineThreads()"]
+Resolve --> CreatePool["PipelinePool() - process-wide singleton"]
+CreatePool --> Submit["Submit nthreads worker tasks"]
+Submit --> Cursor["cursor = fetch_add(1)"]
+Cursor --> Valid{"i < total?"}
+Valid --> |Yes| Work["work(i) -> out[i] = result"]
+Work --> Done["done++"]
+Done --> Cursor
+Valid --> |No| Complete["All workers complete"]
+Complete --> Wait["Wait for futures.get()"]
+Wait --> Progress["on_progress callbacks if provided"]
+Progress --> Return["Return ordered results"]
+```
+
+**Diagram sources**
+- [parallel.hpp:90-174](file://base/parallel.hpp#L90-L174)
+- [parallel.hpp:209-219](file://base/parallel.hpp#L209-L219)
+
+### Path Generation Parallelization
+Both `GenerateGCodePath` and `GenerateGCodePathV2` utilize `ParallelMapLayers` to parallelize the most computationally intensive parts:
+
+#### GenerateGCodePath Parallelization
+- **Per-layer G-point generation**: Outlines, fills, and supports are processed independently
+- **Thread-safe assembly**: Results are collected in local vectors then appended to shared `PointsPath`
+- **Order preservation**: Final insertion maintains deterministic layer ordering
+
+#### GenerateGCodePathV2 Parallelization  
+- **Polygon combination**: Outlines, fills, and supports are merged per layer concurrently
+- **Bundle collection**: Each layer returns a `LayerBundle` containing config and combined polygons
+- **Safe accumulation**: `GCodePath::push_back` remains on caller thread for thread safety
+
+### G-Code Serialization Parallelization
+The `GCodePath::ToGCode` method parallelizes firmware-specific G-code generation:
+
+- **Independent layer serialization**: Each layer's G-code generation is pure const read operation
+- **String concatenation**: Header + continuous wall + parallel layer bodies + footer assembled on main thread
+- **Memory optimization**: Pre-calculates total size to avoid incremental string growth
+
+**Section sources**
+- [parallel.hpp:37-75](file://base/parallel.hpp#L37-L75)
+- [parallel.hpp:90-174](file://base/parallel.hpp#L90-L174)
+- [parallel.hpp:209-219](file://base/parallel.hpp#L209-L219)
+- [path_generator.cpp:75-112](file://LibHsBaSlicer/Path/path_generator.cpp#L75-L112)
+- [path_generator.cpp:123-149](file://LibHsBaSlicer/Path/path_generator.cpp#L123-L149)
+- [gcodepath.cpp:333-368](file://paths/gcodepath.cpp#L333-L368)
 
 ## Detailed Component Analysis
 
@@ -246,11 +338,12 @@ RunLua --> Write
 - [layerspath.hpp:17-60](file://paths/layerspath.hpp#L17-L60)
 
 ### G-Code Path System for FDM Printers
-`GCodePath` extends `LayersPath` and adds multi-firmware G-code generation. It supports:
+`GCodePath` extends `LayersPath` and adds multi-firmware G-code generation with parallel serialization support. It supports:
 - Firmware selection: Marlin, RepRap, Klipper.
 - Printer configuration such as nozzle diameter, filament diameter, temperatures, speeds, retraction, extrusion mode, and layer height.
 - Optional continuous spiral wall emission before per-layer data.
 - Extrusion calculation based on segment length and printer configuration.
+- **Parallel layer serialization via ParallelMapLayers for improved performance**.
 
 ```mermaid
 sequenceDiagram
@@ -258,14 +351,19 @@ participant User as "User Code"
 participant Gen as "GenerateGCodePathV2"
 participant Lyr as "LayersPath"
 participant GC as "GCodePath"
+participant PM as "ParallelMapLayers"
 participant FW as "Firmware Encoder"
 User->>Gen : Provide LayerPathData + FdmPathConfig + GCodePrinterConfig
+Gen->>PM : ParallelMapLayers(LayerBundle)
+PM-->>Gen : Per-layer bundles (outlines+fills+supports)
 Gen->>Lyr : Build layered path
 Gen->>GC : Create GCodePath with printer config
 User->>GC : ToGCode(firmware)
+GC->>PM : ParallelMapLayers(GenLayerGCode)
+PM-->>GC : Parallel layer G-code strings
 GC->>FW : GenerateHeader(firmware)
 GC->>GC : GenerateContinuousWall() if present
-GC->>FW : GenerateLayerGCode(layer_idx, firmware)
+GC->>FW : Concatenate parallel layer bodies
 GC->>FW : GenerateFooter(firmware)
 FW-->>User : Firmware-specific G-code string
 ```
@@ -273,13 +371,14 @@ FW-->>User : Firmware-specific G-code string
 **Diagram sources**
 - [path_generator.hpp:53-62](file://LibHsBaSlicer/Path/path_generator.hpp#L53-L62)
 - [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
+- [parallel.hpp:209-219](file://base/parallel.hpp#L209-L219)
 
 Concrete example workflow for FDM:
 1. Prepare per-layer outlines, fills, and supports as `LayerPathData`.
 2. Configure `FdmPathConfig` with layer height, line width, print speed, travel speed, extrusion multiplier, and units.
 3. Configure `GCodePrinterConfig` with nozzle diameter, filament diameter, temperatures, speeds, retraction, and extrusion mode.
 4. Call `GenerateGCodePathV2` to obtain a `GCodePath`.
-5. Call `ToGCode(Marlin)` or another firmware to produce printable G-code.
+5. Call `ToGCode(Marlin)` or another firmware to produce printable G-code with automatic parallel serialization.
 
 Parameter tuning guidance:
 - Increase `line_width` or decrease `nozzle_diameter` carefully to maintain volumetric flow limits.
@@ -290,6 +389,8 @@ Parameter tuning guidance:
 **Section sources**
 - [path_generator.hpp:20-62](file://LibHsBaSlicer/Path/path_generator.hpp#L20-L62)
 - [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
+- [path_generator.cpp:114-149](file://LibHsBaSlicer/Path/path_generator.cpp#L114-L149)
+- [gcodepath.cpp:333-368](file://paths/gcodepath.cpp#L333-L368)
 
 ### Point-Based G-Code Representation
 `PointsPath` represents a sequence of G-code motion commands. Each `GPoint` includes:
@@ -522,12 +623,13 @@ Lua-->>Pipeline : Success or error message
 - [sls_export.hpp:17-56](file://LibHsBaSlicer/Path/sls_export.hpp#L17-L56)
 
 ## Dependency Analysis
-The following diagram shows how high-level APIs depend on core path types and exporters.
+The following diagram shows how high-level APIs depend on core path types, exporters, and the parallel processing infrastructure.
 
 ```mermaid
 graph TB
 PG["path_generator.hpp"] --> GP["gcodepath.hpp"]
 PG --> PP["pointspath.hpp"]
+PG --> PH["parallel.hpp"]
 PO["path_optimizer.hpp"] --> LP["layerspath.hpp"]
 SP["spiral_path.hpp"] --> GP
 WAE["waam_export.hpp"] --> WRP["weldrobotpath.hpp"]
@@ -538,6 +640,9 @@ RP --> IP["IPath.hpp"]
 LP --> IP
 PP --> IP
 IMP --> IP
+PH --> TPH["thread_pool.hpp"]
+PH --> PG
+PH --> GP
 ```
 
 **Diagram sources**
@@ -553,6 +658,8 @@ IMP --> IP
 - [weldrobotpath.hpp:10-96](file://paths/weldrobotpath.hpp#L10-L96)
 - [imagespath.hpp:10-61](file://paths/imagespath.hpp#L10-L61)
 - [IPath.hpp:10-65](file://paths/IPath.hpp#L10-L65)
+- [parallel.hpp:178-219](file://base/parallel.hpp#L178-L219)
+- [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
 
 **Section sources**
 - [path_generator.hpp:10-91](file://LibHsBaSlicer/Path/path_generator.hpp#L10-L91)
@@ -567,16 +674,46 @@ IMP --> IP
 - [weldrobotpath.hpp:10-96](file://paths/weldrobotpath.hpp#L10-L96)
 - [imagespath.hpp:10-61](file://paths/imagespath.hpp#L10-L61)
 - [IPath.hpp:10-65](file://paths/IPath.hpp#L10-L65)
+- [parallel.hpp:178-219](file://base/parallel.hpp#L178-L219)
+- [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
 
 ## Performance Considerations
+
+**Updated** The Path Generation module now incorporates significant parallel processing optimizations that dramatically improve performance for large models:
+
+### Parallel Processing Benefits
+- **Concurrent layer processing**: `ParallelMapLayers` enables simultaneous processing of independent layers during both path generation and G-code serialization
+- **Process-wide thread pool**: Single `ThreadPool` instance eliminates repeated initialization overhead across multiple parallel operations
+- **Atomic cursor scheduling**: Dynamic load balancing prevents thread starvation and improves utilization efficiency
+- **Memory-efficient string assembly**: Pre-calculation of total output size avoids incremental string growth during concatenation
+
+### Performance Optimization Strategies
 - Prefer region-based path optimization before filling to reduce total travel distance.
 - Use spiral/vase mode for uniform cross-sections to eliminate retractions and per-layer travel jumps.
 - Tune print speed and travel speed separately: higher travel speed reduces non-print time, but excessive values may cause vibration or missed steps.
 - Keep extrusion consistent by matching line width, nozzle diameter, and extrusion multiplier.
 - For robot paths, minimize unnecessary circular moves and program-block overhead.
 - For welding paths, ensure travel speed and wire feed speed are balanced to avoid undercutting or excess buildup.
+- **Configure HSBA_PIPELINE_THREADS environment variable to optimize parallelism for your hardware**:
+  - Default uses hardware_concurrency() for automatic scaling
+  - Set to 1 for serial execution (debugging/regression testing)
+  - Set to specific value for fine-tuned performance control
 
-[No sources needed since this section provides general guidance]
+### Memory Management
+- **Pre-sized result vectors**: `ParallelMapLayers` allocates output vectors upfront to avoid reallocation
+- **Reserve capacity**: String concatenation pre-calculates total size to prevent memory fragmentation
+- **Local temporary storage**: Parallel workers use local vectors that are moved to final destinations
+
+### Scaling Characteristics
+- **Linear scaling**: Performance scales approximately linearly with number of cores for CPU-bound operations
+- **Memory bandwidth bound**: Very large models may become limited by memory bandwidth rather than CPU cores
+- **Diminishing returns**: Beyond hardware concurrency, additional threads provide no benefit and may increase overhead
+
+**Section sources**
+- [parallel.hpp:37-75](file://base/parallel.hpp#L37-L75)
+- [parallel.hpp:90-174](file://base/parallel.hpp#L90-L174)
+- [path_generator.cpp:120-141](file://LibHsBaSlicer/Path/path_generator.cpp#L120-L141)
+- [gcodepath.cpp:335-368](file://paths/gcodepath.cpp#L335-L368)
 
 ## Troubleshooting Guide
 Common issues and resolution strategies:
@@ -591,6 +728,9 @@ Common issues and resolution strategies:
 | Robot program errors | Incorrect motion type or missing via point for circular moves | Use `MoveL` for straight segments, provide `middle` for `MoveC` |
 | Weld defects | Travel speed and wire feed speed mismatch | Balance `travelSpeed` and `wireFeedSpeed`; verify `process` and `arcEnd` settings |
 | SLS export fails | Lua script error or missing image payload | Validate Lua script, confirm `AddImage` calls and `config_json` content |
+| **Slow G-code generation** | Insufficient parallelism or memory constraints | Set `HSBA_PIPELINE_THREADS` appropriately, monitor memory usage |
+| **Inconsistent layer ordering** | Race conditions in custom parallel code | Ensure only main thread modifies shared state, use proper synchronization |
+| **Thread pool exhaustion** | Nested parallel operations or resource leaks | Avoid submitting work from within parallel callbacks, check for proper cleanup |
 
 **Section sources**
 - [gcodepath.hpp:32-49](file://paths/gcodepath.hpp#L32-L49)
@@ -599,19 +739,19 @@ Common issues and resolution strategies:
 - [weldrobotpath.hpp:16-57](file://paths/weldrobotpath.hpp#L16-L57)
 - [imagespath.hpp:32-50](file://paths/imagespath.hpp#L32-L50)
 - [sls_export.hpp:35-56](file://LibHsBaSlicer/Path/sls_export.hpp#L35-L56)
+- [parallel.hpp:56-68](file://base/parallel.hpp#L56-L68)
 
 ## Conclusion
-The Path Generation module provides a cohesive system for turning 2D slice contours into executable manufacturing instructions. It supports:
-- FDM G-code generation for multiple firmware targets.
+The Path Generation module provides a cohesive system for turning 2D slice contours into executable manufacturing instructions, now enhanced with advanced parallel processing capabilities. It supports:
+- FDM G-code generation for multiple firmware targets with concurrent layer serialization.
 - Industrial robot program generation for ABB, KUKA, and FANUC.
 - Welding-aware robot paths for WAAM and related processes.
 - Region-based path optimization to reduce travel and improve quality.
 - Spiral/vase mode for continuous helical walls.
 - Flexible export through native formats and Lua-driven scripts.
+- **Process-wide parallel infrastructure with dynamic load balancing for optimal performance on large models.**
 
-By combining layered polygon data, point-based motion primitives, and brand-specific exporters, the module bridges slicing geometry and real-world production equipment.
-
-[No sources needed since this section summarizes without analyzing specific files]
+By combining layered polygon data, point-based motion primitives, brand-specific exporters, and modern parallel processing techniques, the module bridges slicing geometry and real-world production equipment with significantly improved performance characteristics.
 
 ## Appendices
 
@@ -656,3 +796,13 @@ By combining layered polygon data, point-based motion primitives, and brand-spec
 **Section sources**
 - [spiral_path.hpp:31-58](file://LibHsBaSlicer/Path/spiral_path.hpp#L31-L58)
 - [gcodepath.hpp:87-96](file://paths/gcodepath.hpp#L87-L96)
+
+#### Configure Parallel Processing Performance
+1. Set `HSBA_PIPELINE_THREADS` environment variable before pipeline execution.
+2. Monitor performance with different thread counts.
+3. Use serial mode (`HSBA_PIPELINE_THREADS=1`) for debugging and regression testing.
+4. Leverage automatic hardware detection for optimal default performance.
+
+**Section sources**
+- [parallel.hpp:37-54](file://base/parallel.hpp#L37-L54)
+- [parallel.hpp:56-75](file://base/parallel.hpp#L56-L75)

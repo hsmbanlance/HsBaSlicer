@@ -1,1 +1,0 @@
-Boost.Test-driven test suite exercising HsBaSlicer's core libraries (AnyObject, paths, polygon fill, models, support, cipher, config, etc.) as one standalone executable per feature.

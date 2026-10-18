@@ -1,1 +1,0 @@
-C++ test binaries that exercise template helpers, reflection, serialization, and Lua bindings at compile time via static_assert to catch regressions in constexpr/templated code.

@@ -1,1 +1,0 @@
-CMake `execute_process` + PowerShell Core (`pwsh`) script; consumes `vcpkg.json` via `ConvertFrom-Json` to enumerate dependencies and their platform conditions.

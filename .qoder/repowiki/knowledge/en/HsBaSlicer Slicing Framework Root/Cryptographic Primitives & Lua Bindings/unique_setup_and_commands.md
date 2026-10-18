@@ -1,1 +1,0 @@
-Requires OpenSSL and Lua to be discoverable by CMake (`find_package(Lua REQUIRED)`); building this module alone needs both libraries present on the system or configured via CMake's package config paths.

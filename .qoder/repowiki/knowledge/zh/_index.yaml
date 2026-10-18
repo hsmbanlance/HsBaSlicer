@@ -3,11 +3,11 @@ schema_version: 1
 locale: zh-CN
 branch: dev
 nodes_managed: true
-exported_at: "2026-10-15T12:37:11Z"
+exported_at: "2026-10-18T13:14:56Z"
 modules:
     "":
-        dir_name: HsBaSlicer 多工艺切片引擎根工程
-        title: HsBaSlicer 多工艺切片引擎根工程
+        dir_name: HsBaSlicer 切片引擎仓库根
+        title: HsBaSlicer 切片引擎仓库根
         scope:
             - README.md
             - LICENSE.txt
@@ -58,8 +58,7 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: build_tooling
+        related_to: []
     android_app:
         dir_name: HsBaSlicer Android 示例应用
         title: HsBaSlicer Android 示例应用
@@ -71,8 +70,8 @@ modules:
         related_to:
             - path: dll_wrapper
     base_utils:
-        dir_name: HsBaSlicerBase 基础支撑库
-        title: HsBaSlicerBase 基础支撑库
+        dir_name: HsBaSlicerBase 基础运行时库
+        title: HsBaSlicerBase 基础运行时库
         scope:
             - base/
         source_files: []
@@ -91,9 +90,7 @@ modules:
         children: []
         depends_on: []
         related_to:
-            - path: agent_skills
             - path: documentation
-            - path: version_gen
     cipher_crypto:
         dir_name: 加密与编码工具库 (HsBaCipher)
         title: 加密与编码工具库 (HsBaCipher)
@@ -103,28 +100,25 @@ modules:
         children: []
         depends_on: []
         related_to:
-            - path: core_library
+            - path: file_operations
             - path: tests_suite
     core_library:
-        dir_name: HsBaSlicer 核心切片库
-        title: HsBaSlicer 核心切片库
+        dir_name: HsBaSlicer 切片核心库（LibHsBaSlicer）
+        title: HsBaSlicer 切片核心库（LibHsBaSlicer）
         scope:
             - LibHsBaSlicer/
         source_files: []
         children: []
         depends_on: []
         related_to:
-            - path: cipher_crypto
             - path: dll_wrapper
-            - path: file_operations
+            - path: documentation
             - path: geometry_algorithms
-            - path: logger
-            - path: model_backends
             - path: path_output_types
-            - path: utils_runtime
+            - path: samples_apps
     dll_wrapper:
-        dir_name: HsBaSlicer C ABI 动态库封装层
-        title: HsBaSlicer C ABI 动态库封装层
+        dir_name: HsBaSlicer 跨语言 C ABI 动态库包装层
+        title: HsBaSlicer 跨语言 C ABI 动态库包装层
         scope:
             - DllHsBaSlicer/
         source_files: []
@@ -133,15 +127,11 @@ modules:
         related_to:
             - path: android_app
             - path: core_library
-            - path: hsba_slicer_module
-            - path: message_converters
             - path: pipeline_protos
-            - path: preprocess_loader
             - path: samples_apps
-            - path: tests_suite
     documentation:
-        dir_name: HsBaSlicer 多语言文档与 Doxygen API 文档
-        title: HsBaSlicer 多语言文档与 Doxygen API 文档
+        dir_name: HsBaSlicer 多语言用户文档与 Doxygen API 手册
+        title: HsBaSlicer 多语言用户文档与 Doxygen API 手册
         scope:
             - docs/
         source_files: []
@@ -149,6 +139,7 @@ modules:
         depends_on: []
         related_to:
             - path: build_tooling
+            - path: core_library
     file_operations:
         dir_name: 文件操作与参数持久化库（HsBaSlicerFileOperator）
         title: 文件操作与参数持久化库（HsBaSlicerFileOperator）
@@ -158,10 +149,10 @@ modules:
         children: []
         depends_on: []
         related_to:
-            - path: core_library
+            - path: cipher_crypto
     geometry_algorithms:
-        dir_name: 2D 几何与支撑生成子系统
-        title: 2D 几何与支撑生成子系统
+        dir_name: 2D 几何原语与层间支撑生成器
+        title: 2D 几何原语与层间支撑生成器
         scope:
             - 2D/
             - support/
@@ -180,7 +171,7 @@ modules:
         children: []
         depends_on: []
         related_to:
-            - path: dll_wrapper
+            - path: samples_apps
     logger:
         dir_name: 跨平台日志子系统
         title: 跨平台日志子系统
@@ -189,18 +180,18 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: core_library
+        related_to: []
     message_converters:
-        dir_name: 几何与拓扑消息转换器
-        title: 几何与拓扑消息转换器
+        dir_name: 几何_拓扑_流水线配置双向转换库
+        title: 几何/拓扑/流水线配置双向转换库
         scope:
             - convert/
         source_files: []
         children: []
         depends_on: []
         related_to:
-            - path: dll_wrapper
+            - path: model_backends
+            - path: pipeline_protos
     model_backends:
         dir_name: 三维模型后端实现（CAD_网格_点云）
         title: 三维模型后端实现（CAD/网格/点云）
@@ -212,10 +203,11 @@ modules:
         children: []
         depends_on: []
         related_to:
-            - path: core_library
+            - path: message_converters
+            - path: preprocess_loader
     path_output_types:
-        dir_name: 切片路径输出类型库 (HsBaPaths)
-        title: 切片路径输出类型库 (HsBaPaths)
+        dir_name: 切片器路径输出抽象与多格式实现
+        title: 切片器路径输出抽象与多格式实现
         scope:
             - paths/
         source_files: []
@@ -223,10 +215,9 @@ modules:
         depends_on: []
         related_to:
             - path: core_library
-            - path: tests_suite
     pipeline_protos:
-        dir_name: 流水线协议定义与 C ABI 类型
-        title: 流水线协议定义与 C ABI 类型
+        dir_name: 流水线协议定义与 C ABI 暴露层
+        title: 流水线协议定义与 C ABI 暴露层
         scope:
             - proto/
             - pipelinetypes/
@@ -235,6 +226,7 @@ modules:
         depends_on: []
         related_to:
             - path: dll_wrapper
+            - path: message_converters
     preprocess_loader:
         dir_name: 模型预处理与格式加载器
         title: 模型预处理与格式加载器
@@ -244,7 +236,7 @@ modules:
         children: []
         depends_on: []
         related_to:
-            - path: dll_wrapper
+            - path: model_backends
     samples_apps:
         dir_name: HsBaSlicer 多工艺示例与可嵌入库演示
         title: HsBaSlicer 多工艺示例与可嵌入库演示
@@ -254,7 +246,9 @@ modules:
         children: []
         depends_on: []
         related_to:
+            - path: core_library
             - path: dll_wrapper
+            - path: hsba_slicer_module
     static_tests:
         dir_name: 编译期静态测试套件
         title: 编译期静态测试套件
@@ -276,8 +270,6 @@ modules:
         depends_on: []
         related_to:
             - path: cipher_crypto
-            - path: dll_wrapper
-            - path: path_output_types
     utils_runtime:
         dir_name: 通用工具库（HsBaSlicerUtils）
         title: 通用工具库（HsBaSlicerUtils）
@@ -287,7 +279,6 @@ modules:
         children: []
         depends_on: []
         related_to:
-            - path: core_library
             - path: static_tests
     version_gen:
         dir_name: 版本与依赖元数据生成
@@ -297,5 +288,4 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: build_tooling
+        related_to: []

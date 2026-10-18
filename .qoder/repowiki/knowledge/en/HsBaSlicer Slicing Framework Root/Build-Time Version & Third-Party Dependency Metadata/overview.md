@@ -1,1 +1,0 @@
-Generates a compiled-in version.cpp exposing HsBaSlicer's product metadata, build configuration, and the third-party libraries used in the current vcpkg triplet.
