@@ -60,8 +60,8 @@ int lua_zipper_new(lua_State* L)
 int lua_zipper_add_file(lua_State* L)
 {
     auto* zipper = (Zipper*)lua_topointer(L, 1);
-    std::string name = luaL_checkstring(L, 2);
-    std::string path = luaL_checkstring(L, 3);
+    std::string const name = luaL_checkstring(L, 2);
+    std::string const path = luaL_checkstring(L, 3);
     if (!zipper)
     {
         lua_pushstring(L, std::format("Invalid {} object", ZipperTypeName).c_str());
@@ -83,8 +83,8 @@ int lua_zipper_add_file(lua_State* L)
 int lua_zipper_add_byte_file(lua_State* L)
 {
     auto* zipper = (Zipper*)lua_topointer(L, 1);
-    std::string name = luaL_checkstring(L, 2);
-    std::string data = luaL_checkstring(L, 3);
+    std::string const name = luaL_checkstring(L, 2);
+    std::string const data = luaL_checkstring(L, 3);
     if (!zipper)
     {
         lua_pushstring(L, std::format("Invalid {} object", ZipperTypeName).c_str());
@@ -106,7 +106,7 @@ int lua_zipper_add_byte_file(lua_State* L)
 int lua_zipper_save(lua_State* L)
 {
     auto* zipper = (Zipper*)lua_topointer(L, 1);
-    std::string path = luaL_checkstring(L, 2);
+    std::string const path = luaL_checkstring(L, 2);
     if (!zipper)
     {
         lua_pushstring(L, std::format("Invalid {} object", ZipperTypeName).c_str());
@@ -131,9 +131,12 @@ int lua_zipper_gc(lua_State* L)
     return 0;
 }
 
-static const luaL_Reg zipperLib[] = {
-    {"new", lua_zipper_new},   {"AddFile", lua_zipper_add_file}, {"AddByteFile", lua_zipper_add_byte_file},
-    {"Save", lua_zipper_save}, {"__gc", lua_zipper_gc},          {NULL, NULL}};
+const luaL_Reg zipperLib[] = {{.name = "new", .func = lua_zipper_new},
+                              {.name = "AddFile", .func = lua_zipper_add_file},
+                              {.name = "AddByteFile", .func = lua_zipper_add_byte_file},
+                              {.name = "Save", .func = lua_zipper_save},
+                              {.name = "__gc", .func = lua_zipper_gc},
+                              {.name = nullptr, .func = nullptr}};
 
 
 #ifdef HSBA_USE_BIT7Z
@@ -143,24 +146,56 @@ int lua_bit7z_zipper_new(lua_State* L)
 {
     // first arg: format
     luaL_checktype(L, 1, LUA_TSTRING);
-    std::string format_str = luaL_checkstring(L, 1);
+    std::string const format_str = luaL_checkstring(L, 1);
     ZipperFormat zipper_format = ZipperFormat::Undefine;
     if (format_str == "Zip")
-        zipper_format = ZipperFormat::Zip;
+    {
+        {
+            zipper_format = ZipperFormat::Zip;
+        }
+    }
     else if (format_str == "SevenZip")
-        zipper_format = ZipperFormat::SevenZip;
+    {
+        {
+            zipper_format = ZipperFormat::SevenZip;
+        }
+    }
     else if (format_str == "XZ")
-        zipper_format = ZipperFormat::XZ;
+    {
+        {
+            zipper_format = ZipperFormat::XZ;
+        }
+    }
     else if (format_str == "BZIP2")
-        zipper_format = ZipperFormat::BZIP2;
+    {
+        {
+            zipper_format = ZipperFormat::BZIP2;
+        }
+    }
     else if (format_str == "GZIP")
-        zipper_format = ZipperFormat::GZIP;
+    {
+        {
+            zipper_format = ZipperFormat::GZIP;
+        }
+    }
     else if (format_str == "TAR")
-        zipper_format = ZipperFormat::TAR;
+    {
+        {
+            zipper_format = ZipperFormat::TAR;
+        }
+    }
     else if (format_str == "TarGz")
-        zipper_format = ZipperFormat::TarGz;
+    {
+        {
+            zipper_format = ZipperFormat::TarGz;
+        }
+    }
     else if (format_str == "TarXz")
-        zipper_format = ZipperFormat::TarXz;
+    {
+        {
+            zipper_format = ZipperFormat::TarXz;
+        }
+    }
     else
     {
         lua_pushstring(L, "Unsupported Bit7z Zipper format");
@@ -173,7 +208,7 @@ int lua_bit7z_zipper_new(lua_State* L)
         dll_path = luaL_checkstring(L, 2);
     }
     // third arg: password (optional)
-    std::string password = "";
+    std::string password;
     if (lua_gettop(L) >= 3 && lua_isstring(L, 3))
     {
         password = luaL_checkstring(L, 3);
@@ -185,8 +220,8 @@ int lua_bit7z_zipper_new(lua_State* L)
 int lua_bit7z_zipper_add_file(lua_State* L)
 {
     auto* zipper = (Bit7zZipper*)lua_topointer(L, 1);
-    std::string name = luaL_checkstring(L, 2);
-    std::string path = luaL_checkstring(L, 3);
+    std::string const name = luaL_checkstring(L, 2);
+    std::string const path = luaL_checkstring(L, 3);
     if (!zipper)
     {
         lua_pushstring(L, std::format("Invalid {} object", Bit7zZipperTypeName).c_str());
@@ -208,8 +243,8 @@ int lua_bit7z_zipper_add_file(lua_State* L)
 int lua_bit7z_zipper_add_byte_file(lua_State* L)
 {
     auto* zipper = (Bit7zZipper*)lua_topointer(L, 1);
-    std::string name = luaL_checkstring(L, 2);
-    size_t len;
+    std::string const name = luaL_checkstring(L, 2);
+    size_t len = 0;
     const char* data = luaL_checklstring(L, 3, &len);
     if (!zipper)
     {
@@ -232,7 +267,7 @@ int lua_bit7z_zipper_add_byte_file(lua_State* L)
 int lua_bit7z_zipper_save(lua_State* L)
 {
     auto* zipper = (Bit7zZipper*)lua_topointer(L, 1);
-    std::string path = luaL_checkstring(L, 2);
+    std::string const path = luaL_checkstring(L, 2);
     if (!zipper)
     {
         lua_pushstring(L, std::format("Invalid {} object", Bit7zZipperTypeName).c_str());
@@ -257,12 +292,12 @@ int lua_bit7z_zipper_gc(lua_State* L)
     return 0;
 }
 
-static const luaL_Reg bit7z_zipperLib[] = {{"new", lua_bit7z_zipper_new},
-                                           {"AddFile", lua_bit7z_zipper_add_file},
-                                           {"AddByteFile", lua_bit7z_zipper_add_byte_file},
-                                           {"Save", lua_bit7z_zipper_save},
-                                           {"__gc", lua_bit7z_zipper_gc},
-                                           {NULL, NULL}};
+const luaL_Reg bit7z_zipperLib[] = {{.name = "new", .func = lua_bit7z_zipper_new},
+                                    {.name = "AddFile", .func = lua_bit7z_zipper_add_file},
+                                    {.name = "AddByteFile", .func = lua_bit7z_zipper_add_byte_file},
+                                    {.name = "Save", .func = lua_bit7z_zipper_save},
+                                    {.name = "__gc", .func = lua_bit7z_zipper_gc},
+                                    {.name = nullptr, .func = nullptr}};
 
 #endif  // HSBA_USE_BIT7Z
 
@@ -277,7 +312,7 @@ int lua_sqlite_new(lua_State* L)
 int lua_sqlite_connect(lua_State* L)
 {
     auto* db = (SQL::SQLiteAdapter*)lua_topointer(L, 1);
-    std::string path = luaL_checkstring(L, 2);
+    std::string const path = luaL_checkstring(L, 2);
     if (!db)
     {
         lua_pushstring(L, std::format("Invalid {} object", SQLiteAdapterTypeName).c_str());
@@ -299,7 +334,7 @@ int lua_sqlite_connect(lua_State* L)
 int lua_sqlite_execute(lua_State* L)
 {
     auto* db = (SQL::SQLiteAdapter*)lua_topointer(L, 1);
-    std::string query = luaL_checkstring(L, 2);
+    std::string const query = luaL_checkstring(L, 2);
     if (!db)
     {
         lua_pushstring(L, std::format("Invalid {} object", SQLiteAdapterTypeName).c_str());
@@ -321,7 +356,7 @@ int lua_sqlite_execute(lua_State* L)
 int lua_sqlite_query(lua_State* L)
 {
     auto* db = (SQL::SQLiteAdapter*)lua_topointer(L, 1);
-    std::string query = luaL_checkstring(L, 2);
+    std::string const query = luaL_checkstring(L, 2);
     if (!db)
     {
         lua_pushstring(L, std::format("Invalid {} object", SQLiteAdapterTypeName).c_str());
@@ -330,16 +365,16 @@ int lua_sqlite_query(lua_State* L)
     try
     {
         auto rows = db->Query(query);
-        lua_createtable(L, rows.size(), 0);
+        lua_createtable(L, static_cast<int>(rows.size()), 0);
         for (size_t i = 0; i < rows.size(); ++i)
         {
-            lua_createtable(L, 0, rows[i].size());
+            lua_createtable(L, 0, static_cast<int>(rows[i].size()));
             for (const auto& [key, val] : rows[i])
             {
                 PushAnyToLua(L, val);
                 lua_setfield(L, -2, key.c_str());
             }
-            lua_rawseti(L, -2, i + 1);
+            lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
         }
         return 1;
     }
@@ -353,7 +388,7 @@ int lua_sqlite_query(lua_State* L)
 int lua_sqlite_insert(lua_State* L)
 {
     auto* db = (SQL::SQLiteAdapter*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
+    std::string const table = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TTABLE);
     if (!db)
     {
@@ -366,14 +401,20 @@ int lua_sqlite_insert(lua_State* L)
         lua_pushnil(L);
         while (lua_next(L, 3))
         {
-            std::string key = lua_tostring(L, -2);
+            std::string const key = lua_tostring(L, -2);
             std::any val;
             if (lua_isnumber(L, -1))
-                val = (int64_t)lua_tointeger(L, -1);
+            {
+                val = static_cast<int64_t>(lua_tointeger(L, -1));
+            }
             else if (lua_isstring(L, -1))
+            {
                 val = std::string(lua_tostring(L, -1));
+            }
             else if (lua_isboolean(L, -1))
-                val = (int64_t)(lua_toboolean(L, -1) ? 1 : 0);
+            {
+                val = static_cast<int64_t>(lua_toboolean(L, -1) ? 1 : 0);
+            }
             data[key] = val;
             lua_pop(L, 1);
         }
@@ -391,7 +432,7 @@ int lua_sqlite_insert(lua_State* L)
 int lua_sqlite_update(lua_State* L)
 {
     auto* db = (SQL::SQLiteAdapter*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
+    std::string const table = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TTABLE);
     luaL_checktype(L, 4, LUA_TTABLE);
     if (!db)
@@ -407,12 +448,16 @@ int lua_sqlite_update(lua_State* L)
             lua_pushnil(L);
             while (lua_next(L, idx))
             {
-                std::string key = lua_tostring(L, -2);
+                std::string const key = lua_tostring(L, -2);
                 std::any val;
                 if (lua_isnumber(L, -1))
-                    val = (int64_t)lua_tointeger(L, -1);
+                {
+                    val = static_cast<int64_t>(lua_tointeger(L, -1));
+                }
                 else if (lua_isstring(L, -1))
+                {
                     val = std::string(lua_tostring(L, -1));
+                }
                 result[key] = val;
                 lua_pop(L, 1);
             }
@@ -434,7 +479,7 @@ int lua_sqlite_update(lua_State* L)
 int lua_sqlite_delete(lua_State* L)
 {
     auto* db = (SQL::SQLiteAdapter*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
+    std::string const table = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TTABLE);
     if (!db)
     {
@@ -447,12 +492,16 @@ int lua_sqlite_delete(lua_State* L)
         lua_pushnil(L);
         while (lua_next(L, 3))
         {
-            std::string key = lua_tostring(L, -2);
+            std::string const key = lua_tostring(L, -2);
             std::any val;
             if (lua_isnumber(L, -1))
-                val = (int64_t)lua_tointeger(L, -1);
+            {
+                val = static_cast<int64_t>(lua_tointeger(L, -1));
+            }
             else if (lua_isstring(L, -1))
+            {
                 val = std::string(lua_tostring(L, -1));
+            }
             data[key] = val;
             lua_pop(L, 1);
         }
@@ -470,7 +519,7 @@ int lua_sqlite_delete(lua_State* L)
 int lua_sqlite_create_table(lua_State* L)
 {
     auto* db = (SQL::SQLiteAdapter*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
+    std::string const table = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TTABLE);
     if (!db)
     {
@@ -483,8 +532,8 @@ int lua_sqlite_create_table(lua_State* L)
         lua_pushnil(L);
         while (lua_next(L, 3))
         {
-            std::string key = lua_tostring(L, -2);
-            std::string col_type = lua_tostring(L, -1);
+            std::string const key = lua_tostring(L, -2);
+            std::string const col_type = lua_tostring(L, -1);
             columns[key] = col_type;
             lua_pop(L, 1);
         }
@@ -505,15 +554,15 @@ int lua_sqlite_gc(lua_State* L)
     return 0;
 }
 
-static const luaL_Reg sqlite_adapter_methods[] = {{"Connect", lua_sqlite_connect},
-                                                  {"Execute", lua_sqlite_execute},
-                                                  {"Query", lua_sqlite_query},
-                                                  {"Insert", lua_sqlite_insert},
-                                                  {"Update", lua_sqlite_update},
-                                                  {"Delete", lua_sqlite_delete},
-                                                  {"CreateTable", lua_sqlite_create_table},
-                                                  {"__gc", lua_sqlite_gc},
-                                                  {nullptr, nullptr}};
+const luaL_Reg sqlite_adapter_methods[] = {{.name = "Connect", .func = lua_sqlite_connect},
+                                           {.name = "Execute", .func = lua_sqlite_execute},
+                                           {.name = "Query", .func = lua_sqlite_query},
+                                           {.name = "Insert", .func = lua_sqlite_insert},
+                                           {.name = "Update", .func = lua_sqlite_update},
+                                           {.name = "Delete", .func = lua_sqlite_delete},
+                                           {.name = "CreateTable", .func = lua_sqlite_create_table},
+                                           {.name = "__gc", .func = lua_sqlite_gc},
+                                           {.name = nullptr, .func = nullptr}};
 
 #ifdef HSBA_USE_MYSQL
 // ============= MySQLAdapter Wrapper =============
@@ -527,13 +576,13 @@ int lua_mysql_connect(lua_State* L)
 {
     auto* db = (SQL::MySQLAdapter*)lua_topointer(L, 1);
     // first host
-    std::string host = luaL_checkstring(L, 2);
+    std::string const host = luaL_checkstring(L, 2);
     // second user
-    std::string user = luaL_checkstring(L, 3);
+    std::string const user = luaL_checkstring(L, 3);
     // third password
-    std::string password = luaL_checkstring(L, 4);
+    std::string const password = luaL_checkstring(L, 4);
     // fourth database
-    std::string database = luaL_checkstring(L, 5);
+    std::string const database = luaL_checkstring(L, 5);
     // fifth port (optional)
     unsigned int port = SQL::MYSQL_DEFAULT_PORT;
     if (lua_gettop(L) >= 6 && lua_isinteger(L, 6))
@@ -561,7 +610,7 @@ int lua_mysql_connect(lua_State* L)
 int lua_mysql_execute(lua_State* L)
 {
     auto* db = (SQL::MySQLAdapter*)lua_topointer(L, 1);
-    std::string query = luaL_checkstring(L, 2);
+    std::string const query = luaL_checkstring(L, 2);
     if (!db)
     {
         lua_pushstring(L, std::format("Invalid {} object", MySQLAdapterTypeName).c_str());
@@ -582,7 +631,7 @@ int lua_mysql_execute(lua_State* L)
 int lua_mysql_query(lua_State* L)
 {
     auto* db = (SQL::MySQLAdapter*)lua_topointer(L, 1);
-    std::string query = luaL_checkstring(L, 2);
+    std::string const query = luaL_checkstring(L, 2);
     if (!db)
     {
         lua_pushstring(L, std::format("Invalid {} object", MySQLAdapterTypeName).c_str());
@@ -591,16 +640,16 @@ int lua_mysql_query(lua_State* L)
     try
     {
         auto rows = db->Query(query);
-        lua_createtable(L, rows.size(), 0);
+        lua_createtable(L, static_cast<int>(rows.size()), 0);
         for (size_t i = 0; i < rows.size(); ++i)
         {
-            lua_createtable(L, 0, rows[i].size());
+            lua_createtable(L, 0, static_cast<int>(rows[i].size()));
             for (const auto& [key, val] : rows[i])
             {
                 PushAnyToLua(L, val);
                 lua_setfield(L, -2, key.c_str());
             }
-            lua_rawseti(L, -2, i + 1);
+            lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
         }
         return 1;
     }
@@ -613,7 +662,7 @@ int lua_mysql_query(lua_State* L)
 int lua_mysql_insert(lua_State* L)
 {
     auto* db = (SQL::MySQLAdapter*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
+    std::string const table = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TTABLE);
     if (!db)
     {
@@ -626,14 +675,20 @@ int lua_mysql_insert(lua_State* L)
         lua_pushnil(L);
         while (lua_next(L, 3))
         {
-            std::string key = lua_tostring(L, -2);
+            std::string const key = lua_tostring(L, -2);
             std::any val;
             if (lua_isnumber(L, -1))
-                val = (int64_t)lua_tointeger(L, -1);
+            {
+                val = static_cast<int64_t>(lua_tointeger(L, -1));
+            }
             else if (lua_isstring(L, -1))
+            {
                 val = std::string(lua_tostring(L, -1));
+            }
             else if (lua_isboolean(L, -1))
-                val = (int64_t)(lua_toboolean(L, -1) ? 1 : 0);
+            {
+                val = static_cast<int64_t>(lua_toboolean(L, -1) ? 1 : 0);
+            }
             data[key] = val;
             lua_pop(L, 1);
         }
@@ -650,7 +705,7 @@ int lua_mysql_insert(lua_State* L)
 int lua_mysql_update(lua_State* L)
 {
     auto* db = (SQL::MySQLAdapter*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
+    std::string const table = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TTABLE);
     luaL_checktype(L, 4, LUA_TTABLE);
     if (!db)
@@ -666,12 +721,16 @@ int lua_mysql_update(lua_State* L)
             lua_pushnil(L);
             while (lua_next(L, idx))
             {
-                std::string key = lua_tostring(L, -2);
+                std::string const key = lua_tostring(L, -2);
                 std::any val;
                 if (lua_isnumber(L, -1))
-                    val = (int64_t)lua_tointeger(L, -1);
+                {
+                    val = static_cast<int64_t>(lua_tointeger(L, -1));
+                }
                 else if (lua_isstring(L, -1))
+                {
                     val = std::string(lua_tostring(L, -1));
+                }
                 result[key] = val;
                 lua_pop(L, 1);
             }
@@ -692,7 +751,7 @@ int lua_mysql_update(lua_State* L)
 int lua_mysql_delete(lua_State* L)
 {
     auto* db = (SQL::MySQLAdapter*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
+    std::string const table = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TTABLE);
     if (!db)
     {
@@ -705,12 +764,16 @@ int lua_mysql_delete(lua_State* L)
         lua_pushnil(L);
         while (lua_next(L, 3))
         {
-            std::string key = lua_tostring(L, -2);
+            std::string const key = lua_tostring(L, -2);
             std::any val;
             if (lua_isnumber(L, -1))
-                val = (int64_t)lua_tointeger(L, -1);
+            {
+                val = static_cast<int64_t>(lua_tointeger(L, -1));
+            }
             else if (lua_isstring(L, -1))
+            {
                 val = std::string(lua_tostring(L, -1));
+            }
             data[key] = val;
             lua_pop(L, 1);
         }
@@ -727,7 +790,7 @@ int lua_mysql_delete(lua_State* L)
 int lua_mysql_create_table(lua_State* L)
 {
     auto* db = (SQL::MySQLAdapter*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
+    std::string const table = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TTABLE);
     if (!db)
     {
@@ -740,8 +803,8 @@ int lua_mysql_create_table(lua_State* L)
         lua_pushnil(L);
         while (lua_next(L, 3))
         {
-            std::string key = lua_tostring(L, -2);
-            std::string col_type = lua_tostring(L, -1);
+            std::string const key = lua_tostring(L, -2);
+            std::string const col_type = lua_tostring(L, -1);
             columns[key] = col_type;
             lua_pop(L, 1);
         }
@@ -760,15 +823,15 @@ int lua_mysql_gc(lua_State* L)
     LuaGC<SQL::MySQLAdapter, MySQLAdapterTypeName>(L);
     return 0;
 }
-static const luaL_Reg mysql_adapter_methods[] = {{"Connect", lua_mysql_connect},
-                                                 {"Execute", lua_mysql_execute},
-                                                 {"Query", lua_mysql_query},
-                                                 {"Insert", lua_mysql_insert},
-                                                 {"Update", lua_mysql_update},
-                                                 {"Delete", lua_mysql_delete},
-                                                 {"CreateTable", lua_mysql_create_table},
-                                                 {"__gc", lua_mysql_gc},
-                                                 {nullptr, nullptr}};
+const luaL_Reg mysql_adapter_methods[] = {{.name = "Connect", .func = lua_mysql_connect},
+                                          {.name = "Execute", .func = lua_mysql_execute},
+                                          {.name = "Query", .func = lua_mysql_query},
+                                          {.name = "Insert", .func = lua_mysql_insert},
+                                          {.name = "Update", .func = lua_mysql_update},
+                                          {.name = "Delete", .func = lua_mysql_delete},
+                                          {.name = "CreateTable", .func = lua_mysql_create_table},
+                                          {.name = "__gc", .func = lua_mysql_gc},
+                                          {.name = nullptr, .func = nullptr}};
 #endif  // HSBA_USE_MYSQL
 #ifdef HSBA_USE_PGSQL
 // ============= PostgreSQLAdapter Wrapper =============
@@ -783,13 +846,13 @@ int lua_pgsql_connect(lua_State* L)
 {
     auto* db = (SQL::PostgreSQLAdapter*)lua_topointer(L, 1);
     // first host
-    std::string host = luaL_checkstring(L, 2);
+    std::string const host = luaL_checkstring(L, 2);
     // second user
-    std::string user = luaL_checkstring(L, 3);
+    std::string const user = luaL_checkstring(L, 3);
     // third password
-    std::string password = luaL_checkstring(L, 4);
+    std::string const password = luaL_checkstring(L, 4);
     // fourth database
-    std::string database = luaL_checkstring(L, 5);
+    std::string const database = luaL_checkstring(L, 5);
     // fifth port (optional)
     unsigned int port = SQL::POSTGRESQL_DEFAULT_PORT;
     if (lua_gettop(L) >= 6 && lua_isinteger(L, 6))
@@ -817,7 +880,7 @@ int lua_pgsql_connect(lua_State* L)
 int lua_pgsql_execute(lua_State* L)
 {
     auto* db = (SQL::PostgreSQLAdapter*)lua_topointer(L, 1);
-    std::string query = luaL_checkstring(L, 2);
+    std::string const query = luaL_checkstring(L, 2);
     if (!db)
     {
         lua_pushstring(L, std::format("Invalid {} object", PostgreSQLAdapterTypeName).c_str());
@@ -838,7 +901,7 @@ int lua_pgsql_execute(lua_State* L)
 int lua_pgsql_query(lua_State* L)
 {
     auto* db = (SQL::PostgreSQLAdapter*)lua_topointer(L, 1);
-    std::string query = luaL_checkstring(L, 2);
+    std::string const query = luaL_checkstring(L, 2);
     if (!db)
     {
         lua_pushstring(L, std::format("Invalid {} object", PostgreSQLAdapterTypeName).c_str());
@@ -847,16 +910,16 @@ int lua_pgsql_query(lua_State* L)
     try
     {
         auto rows = db->Query(query);
-        lua_createtable(L, rows.size(), 0);
+        lua_createtable(L, static_cast<int>(rows.size()), 0);
         for (size_t i = 0; i < rows.size(); ++i)
         {
-            lua_createtable(L, 0, rows[i].size());
+            lua_createtable(L, 0, static_cast<int>(rows[i].size()));
             for (const auto& [key, val] : rows[i])
             {
                 PushAnyToLua(L, val);
                 lua_setfield(L, -2, key.c_str());
             }
-            lua_rawseti(L, -2, i + 1);
+            lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
         }
         return 1;
     }
@@ -869,7 +932,7 @@ int lua_pgsql_query(lua_State* L)
 int lua_pgsql_insert(lua_State* L)
 {
     auto* db = (SQL::PostgreSQLAdapter*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
+    std::string const table = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TTABLE);
     if (!db)
     {
@@ -882,14 +945,20 @@ int lua_pgsql_insert(lua_State* L)
         lua_pushnil(L);
         while (lua_next(L, 3))
         {
-            std::string key = lua_tostring(L, -2);
+            std::string const key = lua_tostring(L, -2);
             std::any val;
             if (lua_isnumber(L, -1))
-                val = (int64_t)lua_tointeger(L, -1);
+            {
+                val = static_cast<int64_t>(lua_tointeger(L, -1));
+            }
             else if (lua_isstring(L, -1))
+            {
                 val = std::string(lua_tostring(L, -1));
+            }
             else if (lua_isboolean(L, -1))
-                val = (int64_t)(lua_toboolean(L, -1) ? 1 : 0);
+            {
+                val = static_cast<int64_t>(lua_toboolean(L, -1) ? 1 : 0);
+            }
             data[key] = val;
             lua_pop(L, 1);
         }
@@ -906,7 +975,7 @@ int lua_pgsql_insert(lua_State* L)
 int lua_pgsql_update(lua_State* L)
 {
     auto* db = (SQL::PostgreSQLAdapter*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
+    std::string const table = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TTABLE);
     luaL_checktype(L, 4, LUA_TTABLE);
     if (!db)
@@ -922,12 +991,16 @@ int lua_pgsql_update(lua_State* L)
             lua_pushnil(L);
             while (lua_next(L, idx))
             {
-                std::string key = lua_tostring(L, -2);
+                std::string const key = lua_tostring(L, -2);
                 std::any val;
                 if (lua_isnumber(L, -1))
-                    val = (int64_t)lua_tointeger(L, -1);
+                {
+                    val = static_cast<int64_t>(lua_tointeger(L, -1));
+                }
                 else if (lua_isstring(L, -1))
+                {
                     val = std::string(lua_tostring(L, -1));
+                }
                 result[key] = val;
                 lua_pop(L, 1);
             }
@@ -948,7 +1021,7 @@ int lua_pgsql_update(lua_State* L)
 int lua_pgsql_delete(lua_State* L)
 {
     auto* db = (SQL::PostgreSQLAdapter*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
+    std::string const table = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TTABLE);
     if (!db)
     {
@@ -961,12 +1034,16 @@ int lua_pgsql_delete(lua_State* L)
         lua_pushnil(L);
         while (lua_next(L, 3))
         {
-            std::string key = lua_tostring(L, -2);
+            std::string const key = lua_tostring(L, -2);
             std::any val;
             if (lua_isnumber(L, -1))
-                val = (int64_t)lua_tointeger(L, -1);
+            {
+                val = static_cast<int64_t>(lua_tointeger(L, -1));
+            }
             else if (lua_isstring(L, -1))
+            {
                 val = std::string(lua_tostring(L, -1));
+            }
             data[key] = val;
             lua_pop(L, 1);
         }
@@ -983,7 +1060,7 @@ int lua_pgsql_delete(lua_State* L)
 int lua_pgsql_create_table(lua_State* L)
 {
     auto* db = (SQL::PostgreSQLAdapter*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
+    std::string const table = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TTABLE);
     if (!db)
     {
@@ -996,8 +1073,8 @@ int lua_pgsql_create_table(lua_State* L)
         lua_pushnil(L);
         while (lua_next(L, 3))
         {
-            std::string key = lua_tostring(L, -2);
-            std::string col_type = lua_tostring(L, -1);
+            std::string const key = lua_tostring(L, -2);
+            std::string const col_type = lua_tostring(L, -1);
             columns[key] = col_type;
             lua_pop(L, 1);
         }
@@ -1016,15 +1093,15 @@ int lua_pgsql_gc(lua_State* L)
     LuaGC<SQL::PostgreSQLAdapter, PostgreSQLAdapterTypeName>(L);
     return 0;
 }
-static const luaL_Reg pgsql_adapter_methods[] = {{"Connect", lua_pgsql_connect},
-                                                 {"Execute", lua_pgsql_execute},
-                                                 {"Query", lua_pgsql_query},
-                                                 {"Insert", lua_pgsql_insert},
-                                                 {"Update", lua_pgsql_update},
-                                                 {"Delete", lua_pgsql_delete},
-                                                 {"CreateTable", lua_pgsql_create_table},
-                                                 {"__gc", lua_pgsql_gc},
-                                                 {nullptr, nullptr}};
+const luaL_Reg pgsql_adapter_methods[] = {{.name = "Connect", .func = lua_pgsql_connect},
+                                          {.name = "Execute", .func = lua_pgsql_execute},
+                                          {.name = "Query", .func = lua_pgsql_query},
+                                          {.name = "Insert", .func = lua_pgsql_insert},
+                                          {.name = "Update", .func = lua_pgsql_update},
+                                          {.name = "Delete", .func = lua_pgsql_delete},
+                                          {.name = "CreateTable", .func = lua_pgsql_create_table},
+                                          {.name = "__gc", .func = lua_pgsql_gc},
+                                          {.name = nullptr, .func = nullptr}};
 #endif  // HSBA_USE_PGSQL
 
 }  // namespace
@@ -1282,17 +1359,21 @@ constexpr Utils::TemplateString ParamStoreTypeName = "ParamStore";
 PipelineConfigTag ResolveTag(std::string_view name)
 {
     PipelineConfigTag tag = TagFromName(name);
-    if (tag == PipelineConfigTag::Unknown && name.rfind("hsba_param_", 0) == 0)
+    if (tag == PipelineConfigTag::Unknown && name.starts_with("hsba_param_"))
+    {
         tag = TagFromName(name.substr(std::string_view("hsba_param_").size()));
+    }
     return tag;
 }
 
 // Normalize a table name: expand a short label to its default table name; return unknown names unchanged.
 std::string ActualTable(std::string_view name)
 {
-    PipelineConfigTag tag = ResolveTag(name);
+    PipelineConfigTag const tag = ResolveTag(name);
     if (tag != PipelineConfigTag::Unknown)
+    {
         return std::string(DefaultTableName(tag));
+    }
     return std::string(name);
 }
 
@@ -1337,14 +1418,18 @@ void* CreateConfigByTag(PipelineConfigTag tag, Utils::TypeInfo** out_ti)
 std::any LuaValueToAny(lua_State* L, int idx, Utils::TypeInfo* field_ti)
 {
     if (lua_isnoneornil(L, idx))
+    {
         return std::any(nullptr);
+    }
     switch (ParamSchema::KindOf(field_ti))
     {
     case ColumnKind::Double:
         return std::any(static_cast<double>(lua_tonumber(L, idx)));
     case ColumnKind::Int64:
         if (lua_isboolean(L, idx))
+        {
             return std::any(static_cast<int64_t>(lua_toboolean(L, idx) ? 1 : 0));
+        }
         return std::any(static_cast<int64_t>(lua_tointeger(L, idx)));
     case ColumnKind::Text:
     default:
@@ -1358,10 +1443,10 @@ std::any LuaValueToAny(lua_State* L, int idx, Utils::TypeInfo* field_ti)
 void FillConfigFromLua(lua_State* L, int tbl, Utils::AnyObject cfg, StringArena& arena)
 {
     cfg.ForeachField(
-        [L, tbl, &arena](std::string_view name, Utils::AnyObject child)
+        [L, tbl, &arena](std::string_view name, const Utils::AnyObject& child)
         {
             lua_getfield(L, tbl, std::string(name).c_str());
-            std::any v = LuaValueToAny(L, -1, child.get_type_info());
+            std::any const v = LuaValueToAny(L, -1, child.get_type_info());
             AnyToField(v, child.get_type_info(), child.get_data(), arena);
             lua_pop(L, 1);
         });
@@ -1372,9 +1457,9 @@ void PushConfigToLua(lua_State* L, Utils::AnyObject cfg)
 {
     lua_createtable(L, 0, 16);
     cfg.ForeachField(
-        [L](std::string_view name, Utils::AnyObject child)
+        [L](std::string_view name, const Utils::AnyObject& child)
         {
-            std::any v = FieldToAny(name, child.get_type_info(), child.get_data());
+            std::any const v = FieldToAny(name, child.get_type_info(), child.get_data());
             PushAnyToLua(L, v);
             lua_setfield(L, -2, std::string(name).c_str());
         });
@@ -1426,11 +1511,32 @@ int lua_paramstore_ensure_schema(lua_State* L)
     }
 }
 
+// Enable or disable at-rest encryption for subsequent Save/Load/Update calls; nil or "" disables it.
+int lua_paramstore_set_crypto_key(lua_State* L)
+{
+    auto* store = (ParamStore*)lua_topointer(L, 1);
+    if (!store)
+    {
+        lua_pushstring(L, std::format("Invalid {} object", ParamStoreTypeName).c_str());
+        return lua_error(L);
+    }
+    std::string_view key;
+    size_t len = 0;
+    const char* s = lua_isnil(L, 2) ? nullptr : lua_tolstring(L, 2, &len);
+    if (s)
+    {
+        key = std::string_view(s, len);
+    }
+    store->SetCryptoKey(key);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 int lua_paramstore_save(lua_State* L)
 {
     auto* store = (ParamStore*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
-    std::string key = luaL_checkstring(L, 3);
+    std::string const table = luaL_checkstring(L, 2);
+    std::string const key = luaL_checkstring(L, 3);
     luaL_checktype(L, 4, LUA_TTABLE);
     if (!store)
     {
@@ -1442,11 +1548,13 @@ int lua_paramstore_save(lua_State* L)
         Utils::TypeInfo* ti = nullptr;
         void* s = CreateConfigByTag(ResolveTag(table), &ti);
         if (!s)
+        {
             throw std::runtime_error("ParamStore.Save: unknown config table '" + table + "'");
+        }
         StringArena arena;
-        Utils::AnyObject cfg(ti, s);
+        Utils::AnyObject const cfg(ti, s);
         FillConfigFromLua(L, 4, cfg, arena);
-        int64_t id = store->Save(DefaultTableName(ti), key, cfg);
+        int64_t const id = store->Save(DefaultTableName(ti), key, cfg);
         ti->destroy(s);
         lua_pushinteger(L, static_cast<lua_Integer>(id));
         return 1;
@@ -1461,8 +1569,8 @@ int lua_paramstore_save(lua_State* L)
 int lua_paramstore_load(lua_State* L)
 {
     auto* store = (ParamStore*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
-    std::string key = luaL_checkstring(L, 3);
+    std::string const table = luaL_checkstring(L, 2);
+    std::string const key = luaL_checkstring(L, 3);
     if (!store)
     {
         lua_pushstring(L, std::format("Invalid {} object", ParamStoreTypeName).c_str());
@@ -1473,10 +1581,12 @@ int lua_paramstore_load(lua_State* L)
         Utils::TypeInfo* ti = nullptr;
         void* s = CreateConfigByTag(ResolveTag(table), &ti);
         if (!s)
+        {
             throw std::runtime_error("ParamStore.Load: unknown config table '" + table + "'");
+        }
         StringArena arena;
-        Utils::AnyObject cfg(ti, s);
-        bool ok = store->Load(DefaultTableName(ti), key, cfg, arena);
+        Utils::AnyObject const cfg(ti, s);
+        bool const ok = store->Load(DefaultTableName(ti), key, cfg, arena);
         if (!ok)
         {
             ti->destroy(s);
@@ -1500,8 +1610,8 @@ int lua_paramstore_load(lua_State* L)
 int lua_paramstore_list(lua_State* L)
 {
     auto* store = (ParamStore*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
-    std::string where_json = lua_isstring(L, 3) ? std::string(lua_tostring(L, 3)) : std::string();
+    std::string const table = luaL_checkstring(L, 2);
+    std::string const where_json = lua_isstring(L, 3) ? std::string(lua_tostring(L, 3)) : std::string();
     if (!store)
     {
         lua_pushstring(L, std::format("Invalid {} object", ParamStoreTypeName).c_str());
@@ -1529,8 +1639,8 @@ int lua_paramstore_list(lua_State* L)
 int lua_paramstore_update(lua_State* L)
 {
     auto* store = (ParamStore*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
-    std::string key = luaL_checkstring(L, 3);
+    std::string const table = luaL_checkstring(L, 2);
+    std::string const key = luaL_checkstring(L, 3);
     luaL_checktype(L, 4, LUA_TTABLE);
     luaL_checktype(L, 5, LUA_TTABLE);
     if (!store)
@@ -1546,17 +1656,21 @@ int lua_paramstore_update(lua_State* L)
         {
             lua_rawgeti(L, 5, i);
             if (lua_isstring(L, -1))
+            {
                 changed.emplace_back(lua_tostring(L, -1));
+            }
             lua_pop(L, 1);
         }
         Utils::TypeInfo* ti = nullptr;
         void* s = CreateConfigByTag(ResolveTag(table), &ti);
         if (!s)
+        {
             throw std::runtime_error("ParamStore.Update: unknown config table '" + table + "'");
+        }
         StringArena arena;
-        Utils::AnyObject cfg(ti, s);
+        Utils::AnyObject const cfg(ti, s);
         FillConfigFromLua(L, 4, cfg, arena);
-        bool ok = store->Update(DefaultTableName(ti), key, cfg, changed);
+        bool const ok = store->Update(DefaultTableName(ti), key, cfg, changed);
         ti->destroy(s);
         lua_pushboolean(L, ok ? 1 : 0);
         return 1;
@@ -1571,8 +1685,8 @@ int lua_paramstore_update(lua_State* L)
 int lua_paramstore_delete(lua_State* L)
 {
     auto* store = (ParamStore*)lua_topointer(L, 1);
-    std::string table = luaL_checkstring(L, 2);
-    std::string key = luaL_checkstring(L, 3);
+    std::string const table = luaL_checkstring(L, 2);
+    std::string const key = luaL_checkstring(L, 3);
     if (!store)
     {
         lua_pushstring(L, std::format("Invalid {} object", ParamStoreTypeName).c_str());
@@ -1580,7 +1694,7 @@ int lua_paramstore_delete(lua_State* L)
     }
     try
     {
-        bool ok = store->Delete(ActualTable(table), key);
+        bool const ok = store->Delete(ActualTable(table), key);
         lua_pushboolean(L, ok ? 1 : 0);
         return 1;
     }
@@ -1621,6 +1735,8 @@ void RegisterLuaParamStore(lua_State* L)
     lua_setfield(L, -2, "__gc");
     lua_pushcfunction(L, lua_paramstore_ensure_schema);
     lua_setfield(L, -2, "EnsureSchema");
+    lua_pushcfunction(L, lua_paramstore_set_crypto_key);
+    lua_setfield(L, -2, "SetCryptoKey");
     lua_pushcfunction(L, lua_paramstore_save);
     lua_setfield(L, -2, "Save");
     lua_pushcfunction(L, lua_paramstore_load);

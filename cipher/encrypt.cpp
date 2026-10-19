@@ -46,9 +46,11 @@ void derive_3des_key_iv(std::string_view password, unsigned char key[24], unsign
 
 std::string openssl_err()
 {
-    unsigned long e = ERR_get_error();
+    unsigned long const e = ERR_get_error();
     if (e == 0)
+    {
         return std::string();
+    }
     char buf[256];
     ERR_error_string_n(e, buf, sizeof(buf));
     return std::string(buf);
@@ -64,7 +66,9 @@ std::vector<unsigned char> Encrypt::aes256_cbc_encrypt(const std::vector<unsigne
 
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx)
+    {
         throw RuntimeError("EVP_CIPHER_CTX_new failed");
+    }
 
     if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key, iv) != 1)
     {
@@ -102,7 +106,9 @@ std::vector<unsigned char> Encrypt::aes256_cbc_decrypt(const std::vector<unsigne
 
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx)
+    {
         throw RuntimeError("EVP_CIPHER_CTX_new failed");
+    }
 
     if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key, iv) != 1)
     {
@@ -140,7 +146,9 @@ std::vector<unsigned char> Encrypt::aes256_ecb_encrypt(const std::vector<unsigne
 
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx)
+    {
         throw RuntimeError("EVP_CIPHER_CTX_new failed");
+    }
 
     if (EVP_EncryptInit_ex(ctx, EVP_aes_256_ecb(), nullptr, key, nullptr) != 1)
     {
@@ -178,7 +186,9 @@ std::vector<unsigned char> Encrypt::aes256_ecb_decrypt(const std::vector<unsigne
 
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx)
+    {
         throw RuntimeError("EVP_CIPHER_CTX_new failed");
+    }
 
     if (EVP_DecryptInit_ex(ctx, EVP_aes_256_ecb(), nullptr, key, nullptr) != 1)
     {
@@ -212,7 +222,9 @@ std::vector<unsigned char> Encrypt::aes256_cbc_encrypt_with_iv(const std::vector
                                                                const std::vector<unsigned char>& iv_in)
 {
     if (iv_in.size() != AES_IV_SIZE)
+    {
         throw std::invalid_argument("IV must be " + std::to_string(AES_IV_SIZE) + " bytes for AES-256-CBC");
+    }
     unsigned char key[AES_KEY_SIZE];
     unsigned char iv[AES_IV_SIZE];
     derive_key_iv(password, key, iv);  // we'll ignore derived iv and use iv_in
@@ -220,7 +232,9 @@ std::vector<unsigned char> Encrypt::aes256_cbc_encrypt_with_iv(const std::vector
 
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx)
+    {
         throw RuntimeError("EVP_CIPHER_CTX_new failed");
+    }
 
     if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key, iv) != 1)
     {
@@ -254,7 +268,9 @@ std::vector<unsigned char> Encrypt::aes256_cbc_decrypt_with_iv(const std::vector
                                                                const std::vector<unsigned char>& iv_in)
 {
     if (iv_in.size() != AES_IV_SIZE)
+    {
         throw std::invalid_argument("IV must be " + std::to_string(AES_IV_SIZE) + " bytes for AES-256-CBC");
+    }
     unsigned char key[AES_KEY_SIZE];
     unsigned char iv[AES_IV_SIZE];
     derive_key_iv(password, key, iv);
@@ -262,7 +278,9 @@ std::vector<unsigned char> Encrypt::aes256_cbc_decrypt_with_iv(const std::vector
 
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx)
+    {
         throw RuntimeError("EVP_CIPHER_CTX_new failed");
+    }
 
     if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key, iv) != 1)
     {
@@ -300,7 +318,9 @@ std::vector<unsigned char> Encrypt::des3_ecb_encrypt(const std::vector<unsigned 
 
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx)
+    {
         throw RuntimeError("EVP_CIPHER_CTX_new failed");
+    }
 
     if (EVP_EncryptInit_ex(ctx, EVP_des_ede3_ecb(), nullptr, key, nullptr) != 1)
     {
@@ -338,7 +358,9 @@ std::vector<unsigned char> Encrypt::des3_ecb_decrypt(const std::vector<unsigned 
 
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx)
+    {
         throw RuntimeError("EVP_CIPHER_CTX_new failed");
+    }
 
     if (EVP_DecryptInit_ex(ctx, EVP_des_ede3_ecb(), nullptr, key, nullptr) != 1)
     {
@@ -372,7 +394,9 @@ std::vector<unsigned char> Encrypt::des3_cbc_encrypt_with_iv(const std::vector<u
                                                              const std::vector<unsigned char>& iv_in)
 {
     if (iv_in.size() != DES3_IV_SIZE)
+    {
         throw std::invalid_argument("IV must be " + std::to_string(DES3_IV_SIZE) + " bytes for 3DES-CBC");
+    }
     unsigned char key[DES3_KEY_SIZE];
     unsigned char iv[DES3_IV_SIZE];
     derive_3des_key_iv(password, key, iv);
@@ -380,7 +404,9 @@ std::vector<unsigned char> Encrypt::des3_cbc_encrypt_with_iv(const std::vector<u
 
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx)
+    {
         throw RuntimeError("EVP_CIPHER_CTX_new failed");
+    }
 
     if (EVP_EncryptInit_ex(ctx, EVP_des_ede3_cbc(), nullptr, key, iv) != 1)
     {
@@ -414,7 +440,9 @@ std::vector<unsigned char> Encrypt::des3_cbc_decrypt_with_iv(const std::vector<u
                                                              const std::vector<unsigned char>& iv_in)
 {
     if (iv_in.size() != 8)
+    {
         throw std::invalid_argument("IV must be 8 bytes for 3DES-CBC");
+    }
     unsigned char key[24];
     unsigned char iv[8];
     derive_3des_key_iv(password, key, iv);
@@ -422,7 +450,9 @@ std::vector<unsigned char> Encrypt::des3_cbc_decrypt_with_iv(const std::vector<u
 
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx)
+    {
         throw RuntimeError("EVP_CIPHER_CTX_new failed");
+    }
 
     if (EVP_DecryptInit_ex(ctx, EVP_des_ede3_cbc(), nullptr, key, iv) != 1)
     {
@@ -456,11 +486,15 @@ std::vector<unsigned char> Encrypt::rsa_public_encrypt_pem(std::string_view publ
 {
     BIO* bio = BIO_new_mem_buf(public_pem.data(), static_cast<int>(public_pem.size()));
     if (!bio)
+    {
         throw RuntimeError("BIO_new_mem_buf failed");
+    }
     EVP_PKEY* pkey = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
     BIO_free(bio);
     if (!pkey)
+    {
         throw RuntimeError(std::string("PEM_read_bio_PUBKEY failed: ") + openssl_err());
+    }
 
     EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(pkey, nullptr);
     if (!ctx)
@@ -506,7 +540,9 @@ std::pair<std::string, std::string> Encrypt::rsa_generate_keypair_pem(int bits)
     EVP_PKEY* pkey = nullptr;
     EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
     if (!pctx)
+    {
         throw RuntimeError("EVP_PKEY_CTX_new_id failed");
+    }
     if (EVP_PKEY_keygen_init(pctx) <= 0)
     {
         EVP_PKEY_CTX_free(pctx);
@@ -529,9 +565,13 @@ std::pair<std::string, std::string> Encrypt::rsa_generate_keypair_pem(int bits)
     if (!bio_priv || !bio_pub)
     {
         if (bio_priv)
+        {
             BIO_free(bio_priv);
+        }
         if (bio_pub)
+        {
             BIO_free(bio_pub);
+        }
         EVP_PKEY_free(pkey);
         throw RuntimeError("BIO_new failed");
     }
@@ -552,12 +592,12 @@ std::pair<std::string, std::string> Encrypt::rsa_generate_keypair_pem(int bits)
     }
 
     char* priv_data = nullptr;
-    long priv_len = BIO_get_mem_data(bio_priv, &priv_data);
-    std::string priv_pem(priv_data, priv_len);
+    long const priv_len = BIO_get_mem_data(bio_priv, &priv_data);
+    std::string const priv_pem(priv_data, priv_len);
 
     char* pub_data = nullptr;
-    long pub_len = BIO_get_mem_data(bio_pub, &pub_data);
-    std::string pub_pem(pub_data, pub_len);
+    long const pub_len = BIO_get_mem_data(bio_pub, &pub_data);
+    std::string const pub_pem(pub_data, pub_len);
 
     BIO_free(bio_priv);
     BIO_free(bio_pub);
@@ -570,11 +610,15 @@ std::vector<unsigned char> Encrypt::rsa_private_decrypt_pem(std::string_view pri
 {
     BIO* bio = BIO_new_mem_buf(private_pem.data(), static_cast<int>(private_pem.size()));
     if (!bio)
+    {
         throw RuntimeError("BIO_new_mem_buf failed");
+    }
     EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
     BIO_free(bio);
     if (!pkey)
+    {
         throw RuntimeError(std::string("PEM_read_bio_PrivateKey failed: ") + openssl_err());
+    }
 
     EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(pkey, nullptr);
     if (!ctx)

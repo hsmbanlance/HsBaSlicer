@@ -53,6 +53,7 @@ struct ParamStoreConn
     std::string password;
     std::string database;
     unsigned port = 0;  ///< 0 means use the adapter's default port
+    std::string cryptoKey;  ///< Optional at-rest encryption password; empty means plaintext storage
 };
 
 /** @brief Result of one Save/Load; a non-empty error indicates failure (the error code is not swallowed). */

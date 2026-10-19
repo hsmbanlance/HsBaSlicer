@@ -17,6 +17,7 @@ namespace HsBa::Slicer
  * Ends the miniz reader when an archive is still open and removes the temporary cache directory
  * if one had been created for large entries.
  */
+// NOLINTNEXTLINE(bugprone-exception-escape) C-API cleanup (mz_zip_reader_end) is conservatively treated as may-throw
 Unzipper::~Unzipper()
 {
     if (is_open_)
@@ -26,9 +27,10 @@ Unzipper::~Unzipper()
     }
     if (use_cache_dir_)
     {
-        if (std::filesystem::exists(cache_dir_))
+        std::error_code ec;
+        if (std::filesystem::exists(cache_dir_, ec) && !ec)
         {
-            std::filesystem::remove_all(cache_dir_);
+            std::filesystem::remove_all(cache_dir_, ec);
         }
     }
 }
@@ -56,7 +58,8 @@ void Unzipper::ReadFromFileImpl(std::string_view path, bool reopen)
         is_open_ = false;
     }
     memset(&zip_archive_, 0, sizeof(zip_archive_));
-    if (!mz_zip_reader_init_file(&zip_archive_, path.data(), 0))
+    std::string const path_str{path};
+    if (!mz_zip_reader_init_file(&zip_archive_, path_str.c_str(), 0))
     {
         throw IOError("Failed to open zip file: " + std::string(path));
     }
@@ -92,14 +95,15 @@ std::shared_ptr<UnzipperStream> Unzipper::GetStreamImpl(std::string_view part_fi
         throw IOError(std::format("Zip file {} is not opened.", archiver_path_));
     }
     RaiseEvent(archiver_path_, part_file);
-    if (memory_cache_.find(std::string{part_file}) != memory_cache_.end())
+    if (memory_cache_.contains(std::string{part_file}))
     {
         const auto& cache = memory_cache_.at(std::string{part_file});
         auto stream = UnzipperStream::MakeUnzipperStream(cache);
         stream->SetFrom(shared_from_this());
         return stream;
     }
-    int file_index = mz_zip_reader_locate_file(&zip_archive_, part_file.data(), nullptr, 0);
+    std::string const part_str{part_file};
+    int const file_index = mz_zip_reader_locate_file(&zip_archive_, part_str.c_str(), nullptr, 0);
     if (file_index < 0)
     {
         throw IOError("File not found in zip: " + std::string(part_file));
@@ -158,10 +162,10 @@ void Unzipper::CreateBuffDir()
     {
         return;
     }
-    boost::uuids::name_generator_latest gen{boost::uuids::ns::url()};
+    boost::uuids::name_generator_latest const gen{boost::uuids::ns::url()};
     auto uuid = gen(archiver_path_.c_str());
-    std::filesystem::path cur_path = std::filesystem::current_path();
-    std::filesystem::path cache_path = cur_path / boost::uuids::to_string(uuid);
+    std::filesystem::path const cur_path = std::filesystem::current_path();
+    std::filesystem::path const cache_path = cur_path / boost::uuids::to_string(uuid);
     if (std::filesystem::exists(cache_path))
     {
         std::filesystem::remove_all(cache_path);
@@ -187,14 +191,14 @@ std::shared_ptr<UnzipperStream> Unzipper::ReadFileToFile(int file_index, const s
     {
         CreateBuffDir();
     }
-    boost::uuids::name_generator_latest gen{boost::uuids::ns::url()};
+    boost::uuids::name_generator_latest const gen{boost::uuids::ns::url()};
     auto uuid = gen(part_name.c_str());
-    std::filesystem::path cur_path = std::filesystem::path{cache_dir_} / boost::uuids::to_string(uuid);
+    std::filesystem::path const cur_path = std::filesystem::path{cache_dir_} / boost::uuids::to_string(uuid);
     if (std::filesystem::exists(cur_path))
     {
         std::filesystem::remove_all(cur_path);
     }
-    if (!mz_zip_reader_extract_to_file(&zip_archive_, file_index, cur_path.string().c_str(), 0))
+    if (mz_zip_reader_extract_to_file(&zip_archive_, file_index, cur_path.string().c_str(), 0) == 0)
     {
         throw IOError(std::format("Failed to extract file {}", part_name));
     }

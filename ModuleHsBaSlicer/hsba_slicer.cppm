@@ -415,6 +415,7 @@ struct ParamStoreConnection
     std::string password;
     std::string database;
     unsigned port = 0;  ///< 0 means use the adapter's default port
+    std::string cryptoKey;  ///< Optional at-rest encryption password; empty means plaintext storage
 };
 
 /// @brief Process-parameter persistence pipeline: write (Save) and read (Load) a
@@ -1107,6 +1108,7 @@ ParamStoreConn ToLibConn(const ParamStoreConnection& c)
     o.user = c.user;
     o.password = c.password;
     o.database = c.database;
+    o.cryptoKey = c.cryptoKey;
     o.port = c.port;
     return o;
 }

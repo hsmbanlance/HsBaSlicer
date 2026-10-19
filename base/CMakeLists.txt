@@ -25,6 +25,7 @@
     static_reflect.hpp
     object_pool.hpp
     thread_pool.hpp
+    parallel.hpp
     memory_pool.hpp
     InplaceVector.hpp
     )

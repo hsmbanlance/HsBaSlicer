@@ -39,7 +39,7 @@ namespace
 #ifdef _WIN32
 void EnsureSocketInitialized()
 {
-    static bool initialized = []() -> bool
+    static bool const initialized = []() -> bool
     {
         WSADATA wsaData;
         return WSAStartup(MAKEWORD(2, 2), &wsaData) == 0;
@@ -54,7 +54,7 @@ void EnsureSocketInitialized()
 // Return a human-readable message for the last socket error on the current platform.
 std::string GetLastSocketError()
 {
-    int error = WSAGetLastError();
+    int const error = WSAGetLastError();
     char message[256] = {};
     FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, error,
                    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), message, static_cast<DWORD>(sizeof(message)), nullptr);
@@ -83,7 +83,7 @@ std::string GetAddressInfoError(int error)
 
 #ifdef _WIN32
 using SocketHandle = SOCKET;
-static constexpr SocketHandle InvalidSocketHandle = INVALID_SOCKET;
+constexpr SocketHandle InvalidSocketHandle = INVALID_SOCKET;
 #else
 using SocketHandle = int;
 static constexpr SocketHandle InvalidSocketHandle = -1;
@@ -97,15 +97,15 @@ void SendAll(SocketHandle socket, const void* data, std::size_t size)
 
     while (remaining > 0)
     {
-        int toSend = static_cast<int>(
+        int const toSend = static_cast<int>(
             std::min<std::size_t>(remaining, static_cast<std::size_t>(std::numeric_limits<int>::max())));
-        int result = ::send(socket, buffer, toSend, 0);
+        int const result = ::send(socket, buffer, toSend, 0);
 
         if (result < 0)
         {
             throw IOError(std::string("RemoteExecutorConnection send failed: ") + GetLastSocketError());
         }
-        else if (result == 0)
+        if (result == 0)
         {
             throw IOError("RemoteExecutorConnection send failed: connection closed by peer");
         }
@@ -132,7 +132,7 @@ std::uint64_t ByteSwap64(std::uint64_t value) noexcept
 }
 
 // Convert a 64-bit host-order value to network (big-endian) byte order.
-static std::uint64_t HostToNetwork64(std::uint64_t value) noexcept
+std::uint64_t HostToNetwork64(std::uint64_t value) noexcept
 {
     if constexpr (std::endian::native == std::endian::big)
     {
@@ -171,7 +171,7 @@ struct RemoteExecutorConnection::Impl
         input.seekg(0, std::ios::beg);
 
         std::string fileName = filePath.filename().string();
-        std::uint64_t nameSize = static_cast<std::uint64_t>(fileName.size());
+        auto nameSize = static_cast<std::uint64_t>(fileName.size());
 
         std::uint64_t nameSizeNet = HostToNetwork64(nameSize);
         SendAll(socket_, &nameSizeNet, sizeof(nameSizeNet));
@@ -180,12 +180,12 @@ struct RemoteExecutorConnection::Impl
         std::uint64_t fileSizeNet = HostToNetwork64(fileSize);
         SendAll(socket_, &fileSizeNet, sizeof(fileSizeNet));
 
-        constexpr std::size_t chunkSize = 64 * 1024;
+        constexpr std::size_t chunkSize = static_cast<std::size_t>(64) * 1024;
         std::vector<char> buffer(chunkSize);
         while (input)
         {
             input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
-            std::streamsize readSize = input.gcount();
+            std::streamsize const readSize = input.gcount();
             if (readSize <= 0)
             {
                 break;
@@ -213,13 +213,13 @@ private:
         hints.ai_protocol = IPPROTO_TCP;
 
         addrinfo* result = nullptr;
-        int error = ::getaddrinfo(host_.c_str(), port_.c_str(), &hints, &result);
+        int const error = ::getaddrinfo(host_.c_str(), port_.c_str(), &hints, &result);
         if (error != 0)
         {
             throw IOError(std::string("RemoteExecutorConnection resolve failed: ") + GetAddressInfoError(error));
         }
 
-        for (addrinfo* ptr = result; ptr != nullptr; ptr = ptr->ai_next)
+        for (addrinfo const* ptr = result; ptr != nullptr; ptr = ptr->ai_next)
         {
             socket_ = ::socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
             if (socket_ == InvalidSocketHandle)
@@ -298,7 +298,7 @@ RemoteExecutorConnectionPool::~RemoteExecutorConnectionPool() = default;
 
 RemoteExecutorConnectionPool::ConnectionPtr RemoteExecutorConnectionPool::AcquireConnection()
 {
-    std::lock_guard lock(connectionMutex_);
+    std::scoped_lock const lock(connectionMutex_);
     auto& connection = connections_[nextConnection_];
     nextConnection_ = (nextConnection_ + 1) % poolSize_;
     return connection;

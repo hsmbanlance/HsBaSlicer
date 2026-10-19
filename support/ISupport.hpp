@@ -42,6 +42,16 @@ public:
      * @return Vector of support polygons per layer (same size as input).
      */
     virtual std::vector<PolygonsD> GenerateAll(const std::vector<PolygonsD>& layers, const SupportConfig& config);
+
+    /**
+     * @brief Whether Generate can be called independently for each layer.
+     *
+     * When true (default) the base GenerateAll parallelizes per-layer calls in
+     * the pipeline thread pool. Subclasses whose Generate relies on state
+     * accumulated from previous layers (e.g. tree branch growth) must override
+     * this to false so GenerateAll falls back to a serial loop.
+     */
+    virtual bool IsLayerIndependent() const { return true; }
 };
 }  // namespace HsBa::Slicer::Support
 

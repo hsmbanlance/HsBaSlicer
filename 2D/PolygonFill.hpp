@@ -8,6 +8,7 @@
 
 #include "FloatPolygons.hpp"
 #include "IntPolygon.hpp"
+#include <cstdint>
 #include <functional>
 
 // forward-declare lua state to avoid including lua.hpp in this header
@@ -100,6 +101,27 @@ Polygons CompositeOffsetFill(const Polygons& poly, double spacing, double offset
 Polygons HybridFill(const Polygons& poly, double spacing, double offsetStep, int outwardCount, int inwardCount,
                     FillMode mode, double angle_deg, double lineThickness = 0.5,
                     Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square);
+
+/**
+ * @brief Randomize the start points of closed contour and offset paths.
+ *
+ * Each closed loop is rotated onto a pseudo-random start point sampled uniformly along its
+ * perimeter (a new split vertex is inserted on the chosen edge, so the seam is not confined
+ * to original vertices); the original vertex sequence keeps its cyclic order and winding, and
+ * the closed form (duplicated closing vertex) is preserved.
+ * Typical use: stagger extrusion seams of contours/offset rings across layers or nested
+ * rings so they do not pile up into a visible weak line.
+ * @param paths Closed loops (outlines from Offset/OffsetOnly, rings from OffsetFill, ...);
+ *              paths with fewer than 3 ring points pass through unchanged.
+ * @param seed Seed for the random engine; the same seed gives the same result
+ *             (e.g. seed by layer index for deterministic per-layer randomization).
+ * @param min_separation Minimum distance to keep between the start points of different
+ *                       loops (same integer coordinate units as paths); best-effort when no
+ *                       candidate satisfies it. Pass 0 or less for unconstrained randomization.
+ * @return Loops starting at their new edge split point; vertex content, winding direction
+ *         and closed form are preserved (vertex count grows by one per rotated loop).
+ */
+Polygons RandomizeStartPoints(const Polygons& paths, std::uint64_t seed, double min_separation = 0.0);
 
 // others defined in lua script
 

@@ -1,5 +1,6 @@
 ﻿/** @file Graph.hpp
- * @brief Header-only graph library: typed directed/undirected graph wrappers over Boost.Graph plus shortest-path, MST, flow, connectivity and genetic-TSP algorithms.
+ * @brief Header-only graph library: typed directed/undirected graph wrappers over Boost.Graph plus shortest-path, MST,
+ * flow, connectivity and genetic-TSP algorithms.
  * @author HsBa
  */
 #ifndef HSBA_SLICER_GRAPH_HPP
@@ -449,7 +450,8 @@ namespace graph::algorithm
 
 using namespace graph::concepts;
 
-/// @brief Multi-source Dijkstra over arbitrary TSPWeight graphs, returning distance and predecessor maps keyed by descriptor.
+/// @brief Multi-source Dijkstra over arbitrary TSPWeight graphs, returning distance and predecessor maps keyed by
+/// descriptor.
 template <typename Graph>
 requires TSPWeight<typename Graph::WeightType>
     std::pair<std::unordered_map<typename Graph::VertexDescriptor, typename Graph::WeightType>,
@@ -1072,13 +1074,13 @@ private:
     }
 
     const Graph& graph_;
-    std::size_t popSize_, maxGen_, n_;
+    std::size_t popSize_, maxGen_, n_{};
     double mutRate_, cxRate_;
     std::vector<Id> cities_;
     std::vector<std::vector<std::optional<W>>> dist_;
     std::vector<std::vector<std::size_t>> population_;
     std::vector<W> fitness_;
-    std::size_t bestIdx_;
+    std::size_t bestIdx_{};
 };
 }  // namespace graph::algorithm
 }  // namespace HsBa::Slicer

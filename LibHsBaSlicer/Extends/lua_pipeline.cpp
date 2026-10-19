@@ -4,6 +4,7 @@
  */
 #include "lua_pipeline.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -56,12 +57,9 @@ struct PipelineRunState
 // LUA_REGISTRYINDEX pseudo-index) used to bind the `HsBa` table to the current
 // run. They must always be used as the *key* argument, never as the table
 // index: the table index is LUA_REGISTRYINDEX itself.
-enum : int
-{
-    REG_CTX = 1000001,  // lightuserdata: PipelineRunState*
-    REG_LAYERS,         // integer: total layer count reported by the script
-    REG_OUTPATH,        // string: output path reported by the script
-};
+constexpr int REG_CTX = 1000001;             // lightuserdata: PipelineRunState*
+constexpr int REG_LAYERS = REG_CTX + 1;      // integer: total layer count reported by the script
+constexpr int REG_OUTPATH = REG_LAYERS + 1;  // string: output path reported by the script
 
 PipelineRunState* GetState(lua_State* L)
 {
@@ -79,7 +77,9 @@ double GetNumberField(lua_State* L, int index, const char* name, double def)
 {
     double v = def;
     if (lua_getfield(L, index, name) == LUA_TNUMBER)
+    {
         v = lua_tonumber(L, -1);
+    }
     lua_pop(L, 1);
     return v;
 }
@@ -88,7 +88,9 @@ int GetIntField(lua_State* L, int index, const char* name, int def)
 {
     int v = def;
     if (lua_getfield(L, index, name) == LUA_TNUMBER)
+    {
         v = static_cast<int>(lua_tointeger(L, -1));
+    }
     lua_pop(L, 1);
     return v;
 }
@@ -96,9 +98,11 @@ int GetIntField(lua_State* L, int index, const char* name, int def)
 bool GetBoolField(lua_State* L, int index, const char* name, bool def)
 {
     bool v = def;
-    int t = lua_getfield(L, index, name);
+    int const t = lua_getfield(L, index, name);
     if (t == LUA_TBOOLEAN)
+    {
         v = lua_toboolean(L, -1) != 0;
+    }
     lua_pop(L, 1);
     return v;
 }
@@ -107,7 +111,9 @@ std::string GetStringField(lua_State* L, int index, const char* name, std::strin
 {
     std::string v(def);
     if (lua_getfield(L, index, name) == LUA_TSTRING)
+    {
         v = lua_tostring(L, -1);
+    }
     lua_pop(L, 1);
     return v;
 }
@@ -128,18 +134,26 @@ Eigen::Vector3f GetVector3Field(lua_State* L, int index, const char* name, const
 FillMode ParseFillMode(std::string_view mode)
 {
     if (mode == "line" || mode == "Line")
+    {
         return FillMode::Line;
+    }
     if (mode == "simpleZigzag" || mode == "SimpleZigzag")
+    {
         return FillMode::SimpleZigzag;
+    }
     return FillMode::Zigzag;
 }
 
 GCodeFirmware ParseFirmware(std::string_view fw)
 {
     if (fw == "reprap" || fw == "RRF")
+    {
         return GCodeFirmware::RepRap;
+    }
     if (fw == "klipper" || fw == "Klipper")
+    {
         return GCodeFirmware::Klipper;
+    }
     return GCodeFirmware::Marlin;
 }
 
@@ -178,7 +192,9 @@ std::vector<PolygonsD> ReadLayerList(lua_State* L, int index)
 {
     std::vector<PolygonsD> layers;
     if (!lua_istable(L, index))
+    {
         return layers;
+    }
     const size_t len = lua_rawlen(L, index);
     layers.reserve(len);
     for (size_t i = 1; i <= len; ++i)
@@ -214,9 +230,11 @@ int Lp_progress(lua_State* L)
 {
     auto* state = GetState(L);
     const int percent = static_cast<int>(luaL_checkinteger(L, 1));
-    std::string_view stage = lua_isstring(L, 2) ? lua_tostring(L, 2) : "";
+    std::string_view const stage = lua_isstring(L, 2) ? lua_tostring(L, 2) : "";
     if (state && state->ctx && state->ctx->progress_cb)
+    {
         state->ctx->progress_cb(percent, stage);
+    }
     return 0;
 }
 
@@ -240,8 +258,8 @@ int Lp_setOutputPath(lua_State* L)
 // HsBa.readFile(path) -> string|nil
 int Lp_readFile(lua_State* L)
 {
-    std::string path = luaL_checkstring(L, 1);
-    std::ifstream ifs(path, std::ios::binary);
+    std::string const path = luaL_checkstring(L, 1);
+    std::ifstream const ifs(path, std::ios::binary);
     if (!ifs)
     {
         lua_pushnil(L);
@@ -257,11 +275,13 @@ int Lp_readFile(lua_State* L)
 // HsBa.writeFile(path, content) -> true
 int Lp_writeFile(lua_State* L)
 {
-    std::string path = luaL_checkstring(L, 1);
+    std::string const path = luaL_checkstring(L, 1);
     std::string content = luaL_checkstring(L, 2);
     std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
     if (!ofs)
+    {
         return luaL_error(L, "Failed to open file for writing: %s", path.c_str());
+    }
     ofs.write(content.data(), static_cast<std::streamsize>(content.size()));
     lua_pushboolean(L, 1);
     return 1;
@@ -272,13 +292,17 @@ int Lp_writeFile(lua_State* L)
 // HsBa.loadModel(name, path) -> true
 int Lp_loadModel(lua_State* L)
 {
-    std::string name = luaL_checkstring(L, 1);
-    std::string_view path = luaL_checkstring(L, 2);
+    std::string const name = luaL_checkstring(L, 1);
+    std::string_view const path = luaL_checkstring(L, 2);
     auto model = GetModel(name);
     if (!model)
+    {
         model = LoadModel(name, path);
+    }
     if (!model)
+    {
         return luaL_error(L, "Failed to load model '%s' from '%s'", name.c_str(), std::string(path).c_str());
+    }
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -286,9 +310,11 @@ int Lp_loadModel(lua_State* L)
 // HsBa.modelInfo(name) -> {bbox_min={x,y,z}, bbox_max={x,y,z}, volume, layerHeight, firstLayerHeight}
 int Lp_modelInfo(lua_State* L)
 {
-    std::string name = luaL_checkstring(L, 1);
+    std::string const name = luaL_checkstring(L, 1);
     if (!ContainsModel(name))
+    {
         return luaL_error(L, "Model '%s' not found in pool", name.c_str());
+    }
     const ModelInfo info = GetModelInfo(name);
 
     lua_newtable(L);  // result
@@ -316,7 +342,7 @@ int Lp_modelInfo(lua_State* L)
 // HsBa.translateModel(name, {x,y,z}) / HsBa.rotateModel(name, {x,y,z,w}) / HsBa.scaleModel(name, s | {x,y,z})
 int Lp_translateModel(lua_State* L)
 {
-    std::string name = luaL_checkstring(L, 1);
+    std::string const name = luaL_checkstring(L, 1);
     luaL_checktype(L, 2, LUA_TTABLE);
     const Eigen::Vector3f t = GetVector3Field(L, 2, "", Eigen::Vector3f::Zero());
     TranslateModel(name, t);
@@ -325,9 +351,9 @@ int Lp_translateModel(lua_State* L)
 
 int Lp_rotateModel(lua_State* L)
 {
-    std::string name = luaL_checkstring(L, 1);
+    std::string const name = luaL_checkstring(L, 1);
     luaL_checktype(L, 2, LUA_TTABLE);
-    Eigen::Quaternionf q(1.f, 0.f, 0.f, 0.f);
+    Eigen::Quaternionf q(1.F, 0.F, 0.F, 0.F);
     q.x() = static_cast<float>(GetNumberField(L, 2, "x", 0.0));
     q.y() = static_cast<float>(GetNumberField(L, 2, "y", 0.0));
     q.z() = static_cast<float>(GetNumberField(L, 2, "z", 0.0));
@@ -338,7 +364,7 @@ int Lp_rotateModel(lua_State* L)
 
 int Lp_scaleModel(lua_State* L)
 {
-    std::string name = luaL_checkstring(L, 1);
+    std::string const name = luaL_checkstring(L, 1);
     if (lua_istable(L, 2))
     {
         const Eigen::Vector3f s = GetVector3Field(L, 2, "", Eigen::Vector3f::Ones());
@@ -375,11 +401,13 @@ int Lp_modelNames(lua_State* L)
 // HsBa.layerCount(name, layerHeight, firstLayerHeight) -> int
 int Lp_layerCount(lua_State* L)
 {
-    std::string name = luaL_checkstring(L, 1);
+    std::string const name = luaL_checkstring(L, 1);
     const double layer_height = luaL_checknumber(L, 2);
     const double first_layer_height = luaL_checknumber(L, 3);
     if (!ContainsModel(name) || layer_height <= 0.0)
+    {
         return luaL_error(L, "layerCount: invalid model or layer height");
+    }
     const ModelInfo info = GetModelInfo(name);
     const double model_height = info.bbox_max.z() - info.bbox_min.z();
     if (model_height <= 0.0)
@@ -407,11 +435,13 @@ int Lp_layerZ(lua_State* L)
 // HsBa.slice(name, z) -> polygons (safe, closed contours only)
 int Lp_slice(lua_State* L)
 {
-    std::string name = luaL_checkstring(L, 1);
+    std::string const name = luaL_checkstring(L, 1);
     const double z = luaL_checknumber(L, 2);
     auto model = GetModel(name);
     if (!model)
+    {
         return luaL_error(L, "Model '%s' not loaded", name.c_str());
+    }
     PushPolygonsD(L, UnIntegerization(Slice(*model, static_cast<float>(z))));
     return 1;
 }
@@ -419,11 +449,13 @@ int Lp_slice(lua_State* L)
 // HsBa.sliceUnsafe(name, z) -> polygons (normalized, may drop open contours)
 int Lp_sliceUnsafe(lua_State* L)
 {
-    std::string name = luaL_checkstring(L, 1);
+    std::string const name = luaL_checkstring(L, 1);
     const double z = luaL_checknumber(L, 2);
     auto model = GetModel(name);
     if (!model)
+    {
         return luaL_error(L, "Model '%s' not loaded", name.c_str());
+    }
     PushPolygonsD(L, NormalizeUnSafePolygons(UnSafeSlice(*model, static_cast<float>(z))));
     return 1;
 }
@@ -464,9 +496,13 @@ int Lp_fill(lua_State* L)
     }
     Polygons result;
     if (border_count > 0)
+    {
         result = FillWithBorder(polys, spacing, border_count, mode, angle);
+    }
     else
+    {
         result = FillPolygon(polys, spacing, mode, angle);
+    }
     PushPolygonsToLua(L, result);
     return 1;
 }
@@ -512,7 +548,9 @@ int Lp_floor(lua_State* L)
     const Polygons polys = LuaTableToPolygons(L, 1);
     SlaFloorConfig config;
     if (lua_istable(L, 2))
+    {
         ReadSlaFloorConfig(L, 2, config);
+    }
     PushPolygonsToLua(L, GenerateFloorRaft(polys, config));
     return 1;
 }
@@ -560,10 +598,7 @@ int Lp_spiralize(lua_State* L)
         {
             explicit_z = true;
             size_t n = lua_rawlen(L, -1);
-            if (n > sections.size())
-            {
-                n = sections.size();
-            }
+            n = std::min(n, sections.size());
             for (size_t i = 1; i <= n; ++i)
             {
                 lua_rawgeti(L, -1, static_cast<int>(i));
@@ -647,7 +682,9 @@ int Lp_toGcode(lua_State* L)
 
     auto path = GenerateGCodePathV2(layer_data, path_config, printer_config);
     if (!path)
+    {
         return luaL_error(L, "toGcode: failed to generate path");
+    }
     const std::string gcode = path->ToGCode(firmware);
     lua_pushlstring(L, gcode.data(), gcode.size());
     return 1;
@@ -682,7 +719,9 @@ int Lp_saveSlsPackage(lua_State* L)
     const std::string script = GetStringField(L, 1, "script");
     const std::string func = GetStringField(L, 1, "func", "export_sls");
     if (output.empty() || script.empty())
+    {
         return luaL_error(L, "saveSlsPackage: 'output' and 'script' fields are required");
+    }
     const bool ok = SaveSlsPackageLua(pkg, output, script, func);
     lua_pushboolean(L, ok ? 1 : 0);
     return 1;
@@ -733,13 +772,17 @@ int Lp_saveWaamPackage(lua_State* L)
     const std::string script = GetStringField(L, 1, "script");
     const std::string func = GetStringField(L, 1, "func", "export_waam");
     if (output.empty())
+    {
         return luaL_error(L, "saveWaamPackage: 'output' field is required");
+    }
 
     std::string error;
     const bool ok = SaveWaamRobotPath(pkg, output, script, func, &error);
     lua_pushboolean(L, ok ? 1 : 0);
     if (!ok)
+    {
         lua_pushstring(L, error.c_str());
+    }
     return ok ? 1 : 2;
 }
 
@@ -764,7 +807,9 @@ int Lp_saveSlaPackage(lua_State* L)
     pkg.image_extension = GetStringField(L, 1, "imageExtension", ".png");
     const std::string output = GetStringField(L, 1, "output");
     if (output.empty())
+    {
         return luaL_error(L, "saveSlaPackage: 'output' field is required");
+    }
     const bool ok = SaveSlaPackage(pkg, output);
     lua_pushboolean(L, ok ? 1 : 0);
     return 1;
@@ -776,42 +821,42 @@ int Lp_renderImage(lua_State* L)
     const PolygonsD polys = ReadPolygonsD(L, 1);
     const int width = static_cast<int>(luaL_checkinteger(L, 2));
     const int height = static_cast<int>(luaL_checkinteger(L, 3));
-    std::string path = luaL_checkstring(L, 4);
+    std::string const path = luaL_checkstring(L, 4);
     const bool ok = RenderPolygonsToImage(polys, width, height, path);
     lua_pushboolean(L, ok ? 1 : 0);
     return 1;
 }
 
 const luaL_Reg hsba_ops[] = {
-    {"progress", Lp_progress},
-    {"setLayers", Lp_setLayers},
-    {"setOutputPath", Lp_setOutputPath},
-    {"readFile", Lp_readFile},
-    {"writeFile", Lp_writeFile},
-    {"loadModel", Lp_loadModel},
-    {"modelInfo", Lp_modelInfo},
-    {"translateModel", Lp_translateModel},
-    {"rotateModel", Lp_rotateModel},
-    {"scaleModel", Lp_scaleModel},
-    {"removeModel", Lp_removeModel},
-    {"modelNames", Lp_modelNames},
-    {"layerCount", Lp_layerCount},
-    {"layerZ", Lp_layerZ},
-    {"slice", Lp_slice},
-    {"sliceUnsafe", Lp_sliceUnsafe},
-    {"toInt", Lp_toInt},
-    {"toDouble", Lp_toDouble},
-    {"fill", Lp_fill},
-    {"fdmSupport", Lp_fdmSupport},
-    {"slaSupport", Lp_slaSupport},
-    {"floor", Lp_floor},
-    {"toGcode", Lp_toGcode},
-    {"spiralize", Lp_spiralize},
-    {"saveSlsPackage", Lp_saveSlsPackage},
-    {"saveWaamPackage", Lp_saveWaamPackage},
-    {"saveSlaPackage", Lp_saveSlaPackage},
-    {"renderImage", Lp_renderImage},
-    {nullptr, nullptr},
+    {.name = "progress", .func = Lp_progress},
+    {.name = "setLayers", .func = Lp_setLayers},
+    {.name = "setOutputPath", .func = Lp_setOutputPath},
+    {.name = "readFile", .func = Lp_readFile},
+    {.name = "writeFile", .func = Lp_writeFile},
+    {.name = "loadModel", .func = Lp_loadModel},
+    {.name = "modelInfo", .func = Lp_modelInfo},
+    {.name = "translateModel", .func = Lp_translateModel},
+    {.name = "rotateModel", .func = Lp_rotateModel},
+    {.name = "scaleModel", .func = Lp_scaleModel},
+    {.name = "removeModel", .func = Lp_removeModel},
+    {.name = "modelNames", .func = Lp_modelNames},
+    {.name = "layerCount", .func = Lp_layerCount},
+    {.name = "layerZ", .func = Lp_layerZ},
+    {.name = "slice", .func = Lp_slice},
+    {.name = "sliceUnsafe", .func = Lp_sliceUnsafe},
+    {.name = "toInt", .func = Lp_toInt},
+    {.name = "toDouble", .func = Lp_toDouble},
+    {.name = "fill", .func = Lp_fill},
+    {.name = "fdmSupport", .func = Lp_fdmSupport},
+    {.name = "slaSupport", .func = Lp_slaSupport},
+    {.name = "floor", .func = Lp_floor},
+    {.name = "toGcode", .func = Lp_toGcode},
+    {.name = "spiralize", .func = Lp_spiralize},
+    {.name = "saveSlsPackage", .func = Lp_saveSlsPackage},
+    {.name = "saveWaamPackage", .func = Lp_saveWaamPackage},
+    {.name = "saveSlaPackage", .func = Lp_saveSlaPackage},
+    {.name = "renderImage", .func = Lp_renderImage},
+    {.name = nullptr, .func = nullptr},
 };
 
 // ============================================================================
@@ -845,7 +890,8 @@ bool RunLuaSource(lua_State* L, std::string_view source, std::string_view chunk_
     if (luaL_dostring(L, std::string(source).c_str()) != LUA_OK)
     {
         const char* err = lua_tostring(L, -1);
-        std::string message = std::string("Lua error in ") + std::string(chunk_name) + ": " + (err ? err : "unknown");
+        std::string const message =
+            std::string("Lua error in ") + std::string(chunk_name) + ": " + (err ? err : "unknown");
         lua_pop(L, 1);
         throw RuntimeError(message);
     }
@@ -863,11 +909,17 @@ HSBA_SLICER_LIB_API void SetupLuaPipelineEnvironment(lua_State* L, LuaPipelineCo
     // consuming them (same contract as the built-in pipelines).
     InstallCommonAnyObjectTypes();
     for (auto& reg : Get2DFunctions())
+    {
         reg(L);
+    }
     for (auto& reg : Get3DFunctions())
+    {
         reg(L);
+    }
     for (auto& reg : GetFileFunctions())
+    {
         reg(L);
+    }
 
     // Stage-independent libraries used by the pipeline building blocks.
     RegisterLuaPolygonOperations(L);
@@ -923,11 +975,13 @@ HSBA_SLICER_LIB_API LuaPipelineOutput RunLuaPipeline(const LuaPipelineContext& c
 
         // Execute the inline source first as a parameter prelude for the script file, then load the script file.
         if (!ctx.script.empty())
+        {
             RunLuaSource(L.get(), ctx.script, "=(custom pipeline prelude)");
+        }
 
         if (!ctx.script_file.empty())
         {
-            std::ifstream ifs(ctx.script_file, std::ios::binary);
+            std::ifstream const ifs(ctx.script_file, std::ios::binary);
             if (!ifs)
             {
                 out.error_message = "Failed to open Lua script file: " + ctx.script_file;
@@ -955,9 +1009,12 @@ HSBA_SLICER_LIB_API LuaPipelineOutput RunLuaPipeline(const LuaPipelineContext& c
             lua_pop(L.get(), 1);
             return out;
         }
-        const bool truthy = !(lua_isnil(L.get(), -1) || (lua_isboolean(L.get(), -1) && !lua_toboolean(L.get(), -1)));
+        const bool truthy =
+            !lua_isnil(L.get(), -1) && (!lua_isboolean(L.get(), -1) || (lua_toboolean(L.get(), -1) != 0));
         if (lua_isstring(L.get(), -1))
+        {
             out.result_string = lua_tostring(L.get(), -1);
+        }
         lua_pop(L.get(), 1);
 
         lua_geti(L.get(), LUA_REGISTRYINDEX, REG_LAYERS);
@@ -965,12 +1022,16 @@ HSBA_SLICER_LIB_API LuaPipelineOutput RunLuaPipeline(const LuaPipelineContext& c
         lua_pop(L.get(), 1);
         lua_geti(L.get(), LUA_REGISTRYINDEX, REG_OUTPATH);
         if (lua_isstring(L.get(), -1))
+        {
             out.output_path = lua_tostring(L.get(), -1);
+        }
         lua_pop(L.get(), 1);
 
         out.success = truthy;
         if (!truthy && out.result_string.empty())
+        {
             out.error_message = "Lua pipeline reported failure (entry function returned false/nil)";
+        }
     }
     catch (const RuntimeError& e)
     {

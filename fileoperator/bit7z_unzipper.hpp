@@ -98,8 +98,8 @@ private:
     bool is_open_{false};
     bool use_cache_dir_{false};
     using It = bit7z::BitInputArchive::ConstIterator;
-    std::shared_ptr<UnzipperStream> ReadFileTobuff(It it, size_t uncompsize, const std::string& part_name);
-    std::shared_ptr<UnzipperStream> ReadFileToFile(It it, const std::string& part_name);
+    std::shared_ptr<UnzipperStream> ReadFileTobuff(const It& it, size_t uncompsize, const std::string& part_name);
+    std::shared_ptr<UnzipperStream> ReadFileToFile(const It& it, const std::string& part_name);
     void CreateBuffDir();
 };
 #endif  // HSBA_USE_BIT7Z

@@ -88,6 +88,7 @@ inline TypeInfo* GetTypeInfo<HsBaFdmPipelineConfig_t>()
     HSBA_PARAM_FIELD(info, HsBaFdmPipelineConfig_t, travel_speed);
     HSBA_PARAM_FIELD(info, HsBaFdmPipelineConfig_t, extrusion_multiplier);
     HSBA_PARAM_FIELD(info, HsBaFdmPipelineConfig_t, spiral_mode);
+    HSBA_PARAM_FIELD(info, HsBaFdmPipelineConfig_t, randomize_start_point);
     HSBA_PARAM_FIELD(info, HsBaFdmPipelineConfig_t, gcode_firmware);
     HSBA_PARAM_FIELD(info, HsBaFdmPipelineConfig_t, nozzle_diameter);
     HSBA_PARAM_FIELD(info, HsBaFdmPipelineConfig_t, filament_diameter);
@@ -279,6 +280,7 @@ inline TypeInfo* GetTypeInfo<HsBaTdpPipelineConfig_t>()
     HSBA_PARAM_FIELD(info, HsBaTdpPipelineConfig_t, export_lua_func);
     HSBA_PARAM_FIELD(info, HsBaTdpPipelineConfig_t, output_path);
     HSBA_PARAM_FIELD(info, HsBaTdpPipelineConfig_t, spiral_mode);
+    HSBA_PARAM_FIELD(info, HsBaTdpPipelineConfig_t, randomize_start_point);
     return &info;
 }
 
@@ -317,6 +319,7 @@ inline TypeInfo* GetTypeInfo<HsBaWaamPipelineConfig_t>()
     HSBA_PARAM_FIELD(info, HsBaWaamPipelineConfig_t, path_lua_func);
     HSBA_PARAM_FIELD(info, HsBaWaamPipelineConfig_t, output_path);
     HSBA_PARAM_FIELD(info, HsBaWaamPipelineConfig_t, spiral_mode);
+    HSBA_PARAM_FIELD(info, HsBaWaamPipelineConfig_t, randomize_start_point);
     return &info;
 }
 
@@ -393,7 +396,8 @@ enum class PipelineConfigTag : int
 };
 
 /** @brief Force-instantiate the TypeInfo static object of every PipelineConfig type so its fields table is populated.
- *  Thread-safe: the underlying GetTypeInfo<T>() uses a function-local static, so repeated calls have no side effects. */
+ *  Thread-safe: the underlying GetTypeInfo<T>() uses a function-local static, so repeated calls have no side effects.
+ */
 void RegisterPipelineConfigTypes();
 
 /** @brief Whether the given TypeInfo* belongs to one of the 9 PipelineConfig structs. */

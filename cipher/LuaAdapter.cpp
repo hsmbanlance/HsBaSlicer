@@ -12,12 +12,12 @@ namespace
 {
 int l_base64_encode(lua_State* L)
 {
-    size_t len;
+    size_t len = 0;
     const char* data = luaL_checklstring(L, 1, &len);
     try
     {
-        std::string_view sv(data, len);
-        std::string out = Encoder::base64_encode(sv);
+        std::string_view const sv(data, len);
+        std::string const out = Encoder::base64_encode(sv);
         lua_pushlstring(L, out.c_str(), out.size());
         return 1;
     }
@@ -30,11 +30,11 @@ int l_base64_encode(lua_State* L)
 
 int l_base64_decode(lua_State* L)
 {
-    size_t len;
+    size_t len = 0;
     const char* data = luaL_checklstring(L, 1, &len);
     try
     {
-        std::string_view sv(data, len);
+        std::string_view const sv(data, len);
         auto vec = Encoder::base64_decode(sv);
         lua_pushlstring(L, reinterpret_cast<const char*>(vec.data()), vec.size());
         return 1;
@@ -48,12 +48,12 @@ int l_base64_decode(lua_State* L)
 
 int l_hex_encode(lua_State* L)
 {
-    size_t len;
+    size_t len = 0;
     const char* data = luaL_checklstring(L, 1, &len);
     try
     {
-        std::string_view sv(data, len);
-        std::string out = Encoder::hex_encode(sv);
+        std::string_view const sv(data, len);
+        std::string const out = Encoder::hex_encode(sv);
         lua_pushlstring(L, out.c_str(), out.size());
         return 1;
     }
@@ -66,11 +66,11 @@ int l_hex_encode(lua_State* L)
 
 int l_hex_decode(lua_State* L)
 {
-    size_t len;
+    size_t len = 0;
     const char* data = luaL_checklstring(L, 1, &len);
     try
     {
-        std::string_view sv(data, len);
+        std::string_view const sv(data, len);
         auto vec = Encoder::hex_decode(sv);
         lua_pushlstring(L, reinterpret_cast<const char*>(vec.data()), vec.size());
         return 1;
@@ -82,11 +82,11 @@ int l_hex_decode(lua_State* L)
     }
 }
 
-static const luaL_Reg cipherLib[] = {{"base64_encode", l_base64_encode},
-                                     {"base64_decode", l_base64_decode},
-                                     {"hex_encode", l_hex_encode},
-                                     {"hex_decode", l_hex_decode},
-                                     {nullptr, nullptr}};
+const luaL_Reg cipherLib[] = {{.name = "base64_encode", .func = l_base64_encode},
+                              {.name = "base64_decode", .func = l_base64_decode},
+                              {.name = "hex_encode", .func = l_hex_encode},
+                              {.name = "hex_decode", .func = l_hex_decode},
+                              {.name = nullptr, .func = nullptr}};
 }  // namespace
 
 void RegisterLuaCipher(lua_State* L)

@@ -21,12 +21,18 @@ namespace
 char* DupToHeap(std::string_view s)
 {
     if (s.empty())
+    {
         return nullptr;
+    }
     char* data = static_cast<char*>(std::malloc(s.size() + 1));
     if (data)
+    {
         std::memcpy(data, s.data(), s.size());
+    }
     if (data)
+    {
         data[s.size()] = '\0';
+    }
     return data;
 }
 
@@ -86,6 +92,7 @@ ParamStoreConn ToLibConn(const HsBaParamStoreConn_t* c)
     o.password = Safe(c->password);
     o.database = Safe(c->database);
     o.port = c->port;
+    o.cryptoKey = Safe(c->crypto_password);
     return o;
 }
 
@@ -125,14 +132,16 @@ HSBA_SLICER_API HsBaParamStoreResult_t HsBaSavePipelineParams(const HsBaParamSto
                                                               const char* table, const char* key, const void* config)
 {
     if (!conn || !key || !config || !HsBa::Slicer::Pipeline::ValidKind(kind))
+    {
         return HsBa::Slicer::Pipeline::MakeFailure("invalid arguments to HsBaSavePipelineParams", 0.0);
+    }
 
     auto start = std::chrono::steady_clock::now();
     auto lib_conn = HsBa::Slicer::Pipeline::ToLibConn(conn);
     auto outcome = HsBa::Slicer::SavePipelineParams(lib_conn, HsBa::Slicer::Pipeline::ToLibKind(kind),
                                                     table ? table : "", key, config);
     auto end = std::chrono::steady_clock::now();
-    double elapsed = std::chrono::duration<double>(end - start).count();
+    double const elapsed = std::chrono::duration<double>(end - start).count();
     return HsBa::Slicer::Pipeline::ToCResult(outcome, elapsed);
 }
 
@@ -140,28 +149,34 @@ HSBA_SLICER_API HsBaParamStoreResult_t HsBaLoadPipelineParams(const HsBaParamSto
                                                               const char* table, const char* key, void* out_config)
 {
     if (!conn || !key || !out_config || !HsBa::Slicer::Pipeline::ValidKind(kind))
+    {
         return HsBa::Slicer::Pipeline::MakeFailure("invalid arguments to HsBaLoadPipelineParams", 0.0);
+    }
 
     auto start = std::chrono::steady_clock::now();
     auto lib_conn = HsBa::Slicer::Pipeline::ToLibConn(conn);
     auto outcome = HsBa::Slicer::LoadPipelineParams(lib_conn, HsBa::Slicer::Pipeline::ToLibKind(kind),
                                                     table ? table : "", key, out_config);
     auto end = std::chrono::steady_clock::now();
-    double elapsed = std::chrono::duration<double>(end - start).count();
+    double const elapsed = std::chrono::duration<double>(end - start).count();
     return HsBa::Slicer::Pipeline::ToCResult(outcome, elapsed);
 }
 
 HSBA_SLICER_API void HsBaFreeLoadedPipelineConfig(HsBaPipelineKind kind, void* config)
 {
     if (!config || !HsBa::Slicer::Pipeline::ValidKind(kind))
+    {
         return;
+    }
     HsBa::Slicer::FreeLoadedConfigStrings(HsBa::Slicer::Pipeline::ToLibKind(kind), config);
 }
 
 HSBA_SLICER_API void HsBaFreeParamStoreResult(HsBaParamStoreResult_t* result)
 {
     if (!result)
+    {
         return;
+    }
     std::free(result->error_message);
     result->error_message = nullptr;
 }

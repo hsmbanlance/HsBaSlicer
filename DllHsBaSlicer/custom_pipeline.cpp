@@ -17,6 +17,8 @@
 
 namespace HsBa::Slicer::Pipeline
 {
+namespace
+{
 
 struct InternalCustomResult
 {
@@ -41,9 +43,6 @@ struct InternalCustomConfig
     void* progress_user_data = nullptr;
 };
 
-namespace
-{
-
 struct OwnedCString
 {
     char* data = nullptr;
@@ -55,9 +54,13 @@ struct OwnedCString
         {
             data = static_cast<char*>(std::malloc(str.size() + 1));
             if (data)
+            {
                 std::memcpy(data, str.data(), str.size());
+            }
             if (data)
+            {
                 data[str.size()] = '\0';
+            }
         }
     }
 
@@ -79,8 +82,6 @@ struct OwnedCString
 
     char* release() { return std::exchange(data, nullptr); }
 };
-
-}  // anonymous namespace
 
 InternalCustomConfig BuildCustomConfig(const HsBaCustomPipelineConfig_t* cfg, HsBaCustomProgressCallback cb, void* ud)
 {
@@ -113,9 +114,11 @@ HsBaCustomPipelineResult_t ToCCustomResult(const InternalCustomResult& ir)
     return cr;
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-reference-coroutine-parameters) caller keeps cfg alive
 Utils::Task<InternalCustomResult> RunCustomPipelineAsync(const InternalCustomConfig& cfg)
 {
-    // Load the AnyObject/Lua registration functions for common custom types into the generic registry pool for the pipeline Lua environment to use
+    // Load the AnyObject/Lua registration functions for common custom types into the generic registry pool for the
+    // pipeline Lua environment to use
     HsBa::Slicer::InstallCommonAnyObjectTypes();
 
     InternalCustomResult result;
@@ -140,7 +143,9 @@ Utils::Task<InternalCustomResult> RunCustomPipelineAsync(const InternalCustomCon
     ctx.progress_cb = [&cfg](int percent, std::string_view stage)
     {
         if (cfg.progress_cb)
+        {
             cfg.progress_cb(percent, std::string(stage).c_str(), cfg.progress_user_data);
+        }
     };
 
     const LuaPipelineOutput out = RunLuaPipeline(ctx);
@@ -156,6 +161,8 @@ Utils::Task<InternalCustomResult> RunCustomPipelineAsync(const InternalCustomCon
 
     co_return result;
 }
+
+}  // anonymous namespace
 
 }  // namespace HsBa::Slicer::Pipeline
 
@@ -183,20 +190,22 @@ HSBA_SLICER_API void HsBaRunCustomPipelineAsync(const HsBaCustomPipelineConfig_t
         HsBa::Slicer::Pipeline::BuildCustomConfig(config, callback, user_data));
     auto task = HsBa::Slicer::Pipeline::RunCustomPipelineAsync(*shared_cfg);
     task.then(
-        [shared_cfg, result_callback, result_user_data](HsBa::Slicer::Pipeline::InternalCustomResult ir)
+        [shared_cfg, result_callback, result_user_data](const HsBa::Slicer::Pipeline::InternalCustomResult& ir)
         {
             auto cr = HsBa::Slicer::Pipeline::ToCCustomResult(ir);
             if (result_callback)
             {
                 result_callback(cr, result_user_data);
             }
-        });
+        });  // NOLINT(clang-analyzer-unix.Malloc) C-ABI ownership transfer: result_callback frees cr strings
 }
 
 HSBA_SLICER_API void HsBaFreeCustomPipelineResult(HsBaCustomPipelineResult_t* result)
 {
     if (!result)
+    {
         return;
+    }
     std::free(std::exchange(result->output_path, nullptr));
     std::free(std::exchange(result->result_string, nullptr));
     std::free(std::exchange(result->error_message, nullptr));

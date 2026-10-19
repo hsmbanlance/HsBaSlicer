@@ -37,6 +37,13 @@ int lua_any_object_invoke(lua_State* L)
             auto integer_value = lua_tointeger(L, i);
             args.emplace_back(integer_value);
         }
+        else if (lua_isboolean(L, i))
+        {
+            // Lua 5.4 treats booleans as numeric (lua_isnumber(true) == 1), so
+            // the boolean test must run before the number test or this branch
+            // would be unreachable.
+            args.emplace_back((bool)lua_toboolean(L, i));
+        }
         else if (lua_isnumber(L, i))
         {
             auto number_value = lua_tonumber(L, i);
@@ -45,10 +52,6 @@ int lua_any_object_invoke(lua_State* L)
         else if (lua_isstring(L, i))
         {
             args.emplace_back(std::string(lua_tostring(L, i)));
-        }
-        else if (lua_isboolean(L, i))
-        {
-            args.emplace_back((bool)lua_toboolean(L, i));
         }
         else
         {

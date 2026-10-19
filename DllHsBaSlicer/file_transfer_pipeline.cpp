@@ -19,6 +19,8 @@
 
 namespace HsBa::Slicer::Pipeline
 {
+namespace
+{
 
 struct InternalFileTransferResult
 {
@@ -36,9 +38,6 @@ struct InternalFileTransferConfig
     void* progress_user_data = nullptr;
 };
 
-namespace
-{
-
 struct OwnedCString
 {
     char* data = nullptr;
@@ -50,7 +49,9 @@ struct OwnedCString
         {
             data = static_cast<char*>(std::malloc(str.size() + 1));
             if (data)
+            {
                 std::memcpy(data, str.c_str(), str.size() + 1);
+            }
         }
     }
 
@@ -72,8 +73,6 @@ struct OwnedCString
 
     char* release() { return std::exchange(data, nullptr); }
 };
-
-}  // anonymous namespace
 
 InternalFileTransferConfig BuildFileTransferConfig(const HsBaFileTransferPipelineConfig_t* cfg,
                                                    HsBaFileTransferProgressCallback cb, void* ud)
@@ -113,6 +112,7 @@ HsBaFileTransferPipelineResult_t ToCResult(const InternalFileTransferResult& ir)
     return cr;
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-reference-coroutine-parameters) caller keeps cfg alive
 Utils::Task<InternalFileTransferResult> RunFileTransferPipelineAsync(const InternalFileTransferConfig& cfg)
 {
     InternalFileTransferResult result;
@@ -129,7 +129,7 @@ Utils::Task<InternalFileTransferResult> RunFileTransferPipelineAsync(const Inter
             { cfg.progress_cb(percent, std::string(stage).c_str(), cfg.progress_user_data); };
         }
 
-        FileTransferResult lib_result = TransferFiles(cfg.lib_config, progress_func);
+        FileTransferResult const lib_result = TransferFiles(cfg.lib_config, progress_func);
 
         result.success = lib_result.success;
         result.files_transferred = lib_result.files_transferred;
@@ -147,6 +147,8 @@ Utils::Task<InternalFileTransferResult> RunFileTransferPipelineAsync(const Inter
 
     co_return result;
 }
+
+}  // anonymous namespace
 
 }  // namespace HsBa::Slicer::Pipeline
 
@@ -175,19 +177,21 @@ HSBA_SLICER_API void HsBaRunFileTransferPipelineAsync(const HsBaFileTransferPipe
         HsBa::Slicer::Pipeline::BuildFileTransferConfig(config, callback, user_data));
     auto task = HsBa::Slicer::Pipeline::RunFileTransferPipelineAsync(*shared_cfg);
     task.then(
-        [shared_cfg, result_callback, result_user_data](HsBa::Slicer::Pipeline::InternalFileTransferResult ir)
+        [shared_cfg, result_callback, result_user_data](const HsBa::Slicer::Pipeline::InternalFileTransferResult& ir)
         {
             auto cr = HsBa::Slicer::Pipeline::ToCResult(ir);
             if (result_callback)
             {
                 result_callback(cr, result_user_data);
             }
-        });
+        });  // NOLINT(clang-analyzer-unix.Malloc) C-ABI ownership transfer: result_callback frees cr strings
 }
 
 HSBA_SLICER_API void HsBaFreeFileTransferPipelineResult(HsBaFileTransferPipelineResult_t* result)
 {
     if (!result)
+    {
         return;
+    }
     std::free(std::exchange(result->error_message, nullptr));
 }

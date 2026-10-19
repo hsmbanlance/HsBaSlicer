@@ -22,21 +22,33 @@ void l_booleanError(lua_State* L, const char* fname, const char* msg)
 int l_booleanOperation(lua_State* L)
 {
     if (lua_gettop(L) != 3 || !lua_istable(L, 1) || !lua_istable(L, 2) || !lua_isstring(L, 3))
+    {
         l_booleanError(L, "booleanOperation", "Expected two polygon tables and a string operation name");
-    PolygonsD left = LuaTableToPolygonsD(L, 1);
-    PolygonsD right = LuaTableToPolygonsD(L, 2);
+    }
+    PolygonsD const left = LuaTableToPolygonsD(L, 1);
+    PolygonsD const right = LuaTableToPolygonsD(L, 2);
     std::string operation = lua_tostring(L, 3);
     PolygonsD result;
     if (operation == "union")
+    {
         result = Union(left, right);
+    }
     else if (operation == "intersection")
+    {
         result = Intersection(left, right);
+    }
     else if (operation == "difference")
+    {
         result = Difference(left, right);
+    }
     else if (operation == "xor")
+    {
         result = Xor(left, right);
+    }
     else
+    {
         l_booleanError(L, "booleanOperation", std::format("Unknown operation '{}'", operation).c_str());
+    }
     PushPolygonsDToLua(L, result);
     return 1;  // return the result table
 }
@@ -44,10 +56,12 @@ int l_booleanOperation(lua_State* L)
 int l_union(lua_State* L)
 {
     if (lua_gettop(L) != 2 || !lua_istable(L, 1) || !lua_istable(L, 2))
+    {
         l_booleanError(L, "union", "Expected two polygon tables");
-    PolygonsD left = LuaTableToPolygonsD(L, 1);
-    PolygonsD right = LuaTableToPolygonsD(L, 2);
-    PolygonsD result = Union(left, right);
+    }
+    PolygonsD const left = LuaTableToPolygonsD(L, 1);
+    PolygonsD const right = LuaTableToPolygonsD(L, 2);
+    PolygonsD const result = Union(left, right);
     PushPolygonsDToLua(L, result);
     return 1;  // return the result table
 }
@@ -55,10 +69,12 @@ int l_union(lua_State* L)
 int l_intersection(lua_State* L)
 {
     if (lua_gettop(L) != 2 || !lua_istable(L, 1) || !lua_istable(L, 2))
+    {
         l_booleanError(L, "intersection", "Expected two polygon tables");
-    PolygonsD left = LuaTableToPolygonsD(L, 1);
-    PolygonsD right = LuaTableToPolygonsD(L, 2);
-    PolygonsD result = Intersection(left, right);
+    }
+    PolygonsD const left = LuaTableToPolygonsD(L, 1);
+    PolygonsD const right = LuaTableToPolygonsD(L, 2);
+    PolygonsD const result = Intersection(left, right);
     PushPolygonsDToLua(L, result);
     return 1;  // return the result table
 }
@@ -66,10 +82,12 @@ int l_intersection(lua_State* L)
 int l_difference(lua_State* L)
 {
     if (lua_gettop(L) != 2 || !lua_istable(L, 1) || !lua_istable(L, 2))
+    {
         l_booleanError(L, "difference", "Expected two polygon tables");
-    PolygonsD left = LuaTableToPolygonsD(L, 1);
-    PolygonsD right = LuaTableToPolygonsD(L, 2);
-    PolygonsD result = Difference(left, right);
+    }
+    PolygonsD const left = LuaTableToPolygonsD(L, 1);
+    PolygonsD const right = LuaTableToPolygonsD(L, 2);
+    PolygonsD const result = Difference(left, right);
     PushPolygonsDToLua(L, result);
     return 1;  // return the result table
 }
@@ -77,10 +95,12 @@ int l_difference(lua_State* L)
 int l_xor(lua_State* L)
 {
     if (lua_gettop(L) != 2 || !lua_istable(L, 1) || !lua_istable(L, 2))
+    {
         l_booleanError(L, "xor", "Expected two polygon tables");
-    PolygonsD left = LuaTableToPolygonsD(L, 1);
-    PolygonsD right = LuaTableToPolygonsD(L, 2);
-    PolygonsD result = Xor(left, right);
+    }
+    PolygonsD const left = LuaTableToPolygonsD(L, 1);
+    PolygonsD const right = LuaTableToPolygonsD(L, 2);
+    PolygonsD const result = Xor(left, right);
     PushPolygonsDToLua(L, result);
     return 1;  // return the result table
 }
@@ -88,9 +108,11 @@ int l_xor(lua_State* L)
 int l_offsetOperation(lua_State* L)
 {
     if (lua_gettop(L) != 2 || !lua_istable(L, 1) || !lua_isnumber(L, 2))
+    {
         l_booleanError(L, "offsetOperation", "Expected a polygon table and a number offset");
-    Polygons polys = LuaTableToPolygons(L, 1);
-    double delta = lua_tonumber(L, 2);
+    }
+    Polygons const polys = LuaTableToPolygons(L, 1);
+    double const delta = lua_tonumber(L, 2);
     auto resultI = Offset(polys, delta);
     PushPolygonsToLua(L, resultI);
     return 1;  // return the result table
@@ -99,8 +121,10 @@ int l_offsetOperation(lua_State* L)
 int l_convexHullOperation(lua_State* L)
 {
     if (lua_gettop(L) != 1 || !lua_istable(L, 1))
+    {
         l_booleanError(L, "convexHullOperation", "Expected a polygon table");
-    PolygonsD polys = LuaTableToPolygonsD(L, 1);
+    }
+    PolygonsD const polys = LuaTableToPolygonsD(L, 1);
     PolygonsD result;
     for (const auto& p : polys)
     {
@@ -113,10 +137,12 @@ int l_convexHullOperation(lua_State* L)
 int l_concaveHullOperation(lua_State* L)
 {
     if (lua_gettop(L) != 2 || !lua_istable(L, 1) || !lua_isnumber(L, 2))
+    {
         l_booleanError(L, "concaveHullOperation",
                        "Expected a polygon table and an integer number of additional points");
-    PolygonsD polys = LuaTableToPolygonsD(L, 1);
-    int numAdditionalPoints = static_cast<int>(lua_tointeger(L, 2));
+    }
+    PolygonsD const polys = LuaTableToPolygonsD(L, 1);
+    int const numAdditionalPoints = static_cast<int>(lua_tointeger(L, 2));
     PolygonsD result;
     for (const auto& p : polys)
     {
@@ -129,9 +155,11 @@ int l_concaveHullOperation(lua_State* L)
 int l_area(lua_State* L)
 {
     if (lua_gettop(L) != 1 || !lua_istable(L, 1))
+    {
         l_booleanError(L, "area", "Expected a polygon table");
-    PolygonD poly = LuaTableToPolygonD(L, 1);
-    double area = Clipper2Lib::Area(poly);
+    }
+    PolygonD const poly = LuaTableToPolygonD(L, 1);
+    double const area = Clipper2Lib::Area(poly);
     lua_pushnumber(L, area);
     return 1;  // return the area
 }
@@ -139,12 +167,14 @@ int l_area(lua_State* L)
 int l_makeRectangle(lua_State* L)
 {
     if (lua_gettop(L) != 4 || !lua_isnumber(L, 1) || !lua_isnumber(L, 2) || !lua_isnumber(L, 3) || !lua_isnumber(L, 4))
+    {
         l_booleanError(L, "makeRectangle", "Expected x, y, width, height");
-    double x = lua_tonumber(L, 1);
-    double y = lua_tonumber(L, 2);
-    double width = lua_tonumber(L, 3);
-    double height = lua_tonumber(L, 4);
-    PolygonD result = MakeRectangle(x, y, width, height);
+    }
+    double const x = lua_tonumber(L, 1);
+    double const y = lua_tonumber(L, 2);
+    double const width = lua_tonumber(L, 3);
+    double const height = lua_tonumber(L, 4);
+    PolygonD const result = MakeRectangle(x, y, width, height);
     PushPolygonsDToLua(L, PolygonsD{result});
     return 1;
 }
@@ -152,14 +182,18 @@ int l_makeRectangle(lua_State* L)
 int l_makeCircle(lua_State* L)
 {
     if (lua_gettop(L) < 3 || !lua_isnumber(L, 1) || !lua_isnumber(L, 2) || !lua_isnumber(L, 3))
+    {
         l_booleanError(L, "makeCircle", "Expected cx, cy, radius [, segments]");
-    double cx = lua_tonumber(L, 1);
-    double cy = lua_tonumber(L, 2);
-    double radius = lua_tonumber(L, 3);
+    }
+    double const cx = lua_tonumber(L, 1);
+    double const cy = lua_tonumber(L, 2);
+    double const radius = lua_tonumber(L, 3);
     int segments = 64;
     if (lua_gettop(L) >= 4)
+    {
         segments = static_cast<int>(lua_tointeger(L, 4));
-    PolygonD result = MakeCircle(cx, cy, radius, segments);
+    }
+    PolygonD const result = MakeCircle(cx, cy, radius, segments);
     PushPolygonsDToLua(L, PolygonsD{result});
     return 1;
 }
@@ -167,18 +201,24 @@ int l_makeCircle(lua_State* L)
 int l_makeEllipse(lua_State* L)
 {
     if (lua_gettop(L) < 4 || !lua_isnumber(L, 1) || !lua_isnumber(L, 2) || !lua_isnumber(L, 3) || !lua_isnumber(L, 4))
+    {
         l_booleanError(L, "makeEllipse", "Expected cx, cy, rx, ry [, segments [, rotation]]");
-    double cx = lua_tonumber(L, 1);
-    double cy = lua_tonumber(L, 2);
-    double rx = lua_tonumber(L, 3);
-    double ry = lua_tonumber(L, 4);
+    }
+    double const cx = lua_tonumber(L, 1);
+    double const cy = lua_tonumber(L, 2);
+    double const rx = lua_tonumber(L, 3);
+    double const ry = lua_tonumber(L, 4);
     int segments = 64;
     double rotation = 0.0;
     if (lua_gettop(L) >= 5)
+    {
         segments = static_cast<int>(lua_tointeger(L, 5));
+    }
     if (lua_gettop(L) >= 6)
+    {
         rotation = lua_tonumber(L, 6);
-    PolygonD result = MakeEllipse(cx, cy, rx, ry, segments, rotation);
+    }
+    PolygonD const result = MakeEllipse(cx, cy, rx, ry, segments, rotation);
     PushPolygonsDToLua(L, PolygonsD{result});
     return 1;
 }
@@ -186,15 +226,19 @@ int l_makeEllipse(lua_State* L)
 int l_makeRegularPolygon(lua_State* L)
 {
     if (lua_gettop(L) < 4 || !lua_isnumber(L, 1) || !lua_isnumber(L, 2) || !lua_isnumber(L, 3) || !lua_isnumber(L, 4))
+    {
         l_booleanError(L, "makeRegularPolygon", "Expected cx, cy, radius, sides [, rotation]");
-    double cx = lua_tonumber(L, 1);
-    double cy = lua_tonumber(L, 2);
-    double radius = lua_tonumber(L, 3);
-    int sides = static_cast<int>(lua_tointeger(L, 4));
+    }
+    double const cx = lua_tonumber(L, 1);
+    double const cy = lua_tonumber(L, 2);
+    double const radius = lua_tonumber(L, 3);
+    int const sides = static_cast<int>(lua_tointeger(L, 4));
     double rotation = 0.0;
     if (lua_gettop(L) >= 5)
+    {
         rotation = lua_tonumber(L, 5);
-    PolygonD result = MakeRegularPolygon(cx, cy, radius, sides, rotation);
+    }
+    PolygonD const result = MakeRegularPolygon(cx, cy, radius, sides, rotation);
     PushPolygonsDToLua(L, PolygonsD{result});
     return 1;
 }
@@ -202,20 +246,28 @@ int l_makeRegularPolygon(lua_State* L)
 int l_textToPolygons(lua_State* L)
 {
     if (lua_gettop(L) < 3 || !lua_isstring(L, 1) || !lua_isstring(L, 2) || !lua_isnumber(L, 3))
+    {
         l_booleanError(L, "textToPolygons", "Expected text, font_file, font_size [, x [, y [, curve_segments]]]");
-    std::string text = lua_tostring(L, 1);
-    std::string font_file = lua_tostring(L, 2);
-    double font_size = lua_tonumber(L, 3);
+    }
+    std::string const text = lua_tostring(L, 1);
+    std::string const font_file = lua_tostring(L, 2);
+    double const font_size = lua_tonumber(L, 3);
     double x = 0.0;
     double y = 0.0;
     int curve_segments = 8;
     if (lua_gettop(L) >= 4)
+    {
         x = lua_tonumber(L, 4);
+    }
     if (lua_gettop(L) >= 5)
+    {
         y = lua_tonumber(L, 5);
+    }
     if (lua_gettop(L) >= 6)
+    {
         curve_segments = static_cast<int>(lua_tointeger(L, 6));
-    PolygonsD result = TextToPolygons(text, font_file, font_size, x, y, curve_segments);
+    }
+    PolygonsD const result = TextToPolygons(text, font_file, font_size, x, y, curve_segments);
     PushPolygonsDToLua(L, result);
     return 1;
 }
@@ -224,12 +276,16 @@ int l_textToPolygons(lua_State* L)
 int l_dumpPolygon(lua_State* L)
 {
     if (lua_gettop(L) < 2 || !lua_istable(L, 1) || !lua_isstring(L, 2))
+    {
         l_booleanError(L, "dumpPolygon", "Expected a polygon table and a filename string");
-    Polygon poly = LuaTableToPolygon(L, 1);
+    }
+    Polygon const poly = LuaTableToPolygon(L, 1);
     const char* filename = lua_tostring(L, 2);
     bool close_path = true;
     if (lua_gettop(L) >= 3)
-        close_path = lua_toboolean(L, 3);
+    {
+        close_path = (lua_toboolean(L, 3) != 0);
+    }
     DumpPolygon(poly, filename, close_path);
     return 0;
 }
@@ -237,36 +293,40 @@ int l_dumpPolygon(lua_State* L)
 int l_dumpPolygons(lua_State* L)
 {
     if (lua_gettop(L) < 2 || !lua_istable(L, 1) || !lua_isstring(L, 2))
+    {
         l_booleanError(L, "dumpPolygons", "Expected a polygons table and a filename string");
-    Polygons polys = LuaTableToPolygons(L, 1);
+    }
+    Polygons const polys = LuaTableToPolygons(L, 1);
     const char* filename = lua_tostring(L, 2);
     bool close_path = true;
     if (lua_gettop(L) >= 3)
-        close_path = lua_toboolean(L, 3);
+    {
+        close_path = (lua_toboolean(L, 3) != 0);
+    }
     DumpPolygons(polys, filename, close_path);
     return 0;
 }
 #endif
 
-const luaL_Reg booleanLib[] = {{"booleanOperation", l_booleanOperation},
-                               {"union", l_union},
-                               {"intersection", l_intersection},
-                               {"difference", l_difference},
-                               {"xor", l_xor},
-                               {"offsetOperation", l_offsetOperation},
-                               {"convexHullOperation", l_convexHullOperation},
-                               {"concaveHullOperation", l_concaveHullOperation},
-                               {"area", l_area},
-                               {"makeRectangle", l_makeRectangle},
-                               {"makeCircle", l_makeCircle},
-                               {"makeEllipse", l_makeEllipse},
-                               {"makeRegularPolygon", l_makeRegularPolygon},
-                               {"textToPolygons", l_textToPolygons},
+const luaL_Reg booleanLib[] = {{.name = "booleanOperation", .func = l_booleanOperation},
+                               {.name = "union", .func = l_union},
+                               {.name = "intersection", .func = l_intersection},
+                               {.name = "difference", .func = l_difference},
+                               {.name = "xor", .func = l_xor},
+                               {.name = "offsetOperation", .func = l_offsetOperation},
+                               {.name = "convexHullOperation", .func = l_convexHullOperation},
+                               {.name = "concaveHullOperation", .func = l_concaveHullOperation},
+                               {.name = "area", .func = l_area},
+                               {.name = "makeRectangle", .func = l_makeRectangle},
+                               {.name = "makeCircle", .func = l_makeCircle},
+                               {.name = "makeEllipse", .func = l_makeEllipse},
+                               {.name = "makeRegularPolygon", .func = l_makeRegularPolygon},
+                               {.name = "textToPolygons", .func = l_textToPolygons},
 #ifdef HSBA_POLYGON_DUMP
-                               {"dumpPolygon", l_dumpPolygon},
-                               {"dumpPolygons", l_dumpPolygons},
+                               {.name = "dumpPolygon", .func = l_dumpPolygon},
+                               {.name = "dumpPolygons", .func = l_dumpPolygons},
 #endif
-                               {NULL, NULL}};
+                               {.name = nullptr, .func = nullptr}};
 }  // namespace
 
 void PushPolygonDToLua(lua_State* L, const PolygonD& poly)
@@ -327,8 +387,10 @@ PolygonD LuaTableToPolygonD(lua_State* L, int index)
 {
     PolygonD poly;
     if (!lua_istable(L, index))
+    {
         return poly;
-    size_t len = lua_rawlen(L, index);
+    }
+    size_t const len = lua_rawlen(L, index);
     for (size_t i = 1; i <= len; ++i)
     {
         lua_rawgeti(L, index, static_cast<int>(i));  // point table
@@ -338,8 +400,8 @@ PolygonD LuaTableToPolygonD(lua_State* L, int index)
             lua_getfield(L, -2, "y");
             if (lua_isnumber(L, -2) && lua_isnumber(L, -1))
             {
-                double x = lua_tonumber(L, -2);
-                double y = lua_tonumber(L, -1);
+                double const x = lua_tonumber(L, -2);
+                double const y = lua_tonumber(L, -1);
                 poly.emplace_back(Point2D{x, y});
             }
             lua_pop(L, 2);  // pop x,y
@@ -354,14 +416,18 @@ PolygonsD LuaTableToPolygonsD(lua_State* L, int index)
 {
     PolygonsD polys;
     if (!lua_istable(L, index))
+    {
         return polys;
-    size_t len = lua_rawlen(L, index);
+    }
+    size_t const len = lua_rawlen(L, index);
     for (size_t i = 1; i <= len; ++i)
     {
         lua_rawgeti(L, index, static_cast<int>(i));  // polygon table
         PolygonD poly = LuaTableToPolygonD(L, -1);
         if (!poly.empty())
+        {
             polys.emplace_back(std::move(poly));
+        }
         lua_pop(L, 1);  // pop polygon table
     }
     return polys;
@@ -372,8 +438,10 @@ Polygon LuaTableToPolygon(lua_State* L, int index)
 {
     Polygon poly;
     if (!lua_istable(L, index))
+    {
         return poly;
-    size_t len = lua_rawlen(L, index);
+    }
+    size_t const len = lua_rawlen(L, index);
     for (size_t i = 1; i <= len; ++i)
     {
         lua_rawgeti(L, index, static_cast<int>(i));  // point table
@@ -383,8 +451,8 @@ Polygon LuaTableToPolygon(lua_State* L, int index)
             lua_getfield(L, -2, "y");
             if (lua_isnumber(L, -2) && lua_isnumber(L, -1))
             {
-                double x = lua_tonumber(L, -2);
-                double y = lua_tonumber(L, -1);
+                double const x = lua_tonumber(L, -2);
+                double const y = lua_tonumber(L, -1);
                 poly.emplace_back(Point2{static_cast<int64_t>(std::llround(x * integerization)),
                                          static_cast<int64_t>(std::llround(y * integerization))});
             }
@@ -399,14 +467,18 @@ Polygons LuaTableToPolygons(lua_State* L, int index)
 {
     Polygons polys;
     if (!lua_istable(L, index))
+    {
         return polys;
-    size_t len = lua_rawlen(L, index);
+    }
+    size_t const len = lua_rawlen(L, index);
     for (size_t i = 1; i <= len; ++i)
     {
         lua_rawgeti(L, index, static_cast<int>(i));  // polygon table
         Polygon poly = LuaTableToPolygon(L, -1);
         if (!poly.empty())
+        {
             polys.emplace_back(std::move(poly));
+        }
         lua_pop(L, 1);  // pop polygon table
     }
     return polys;

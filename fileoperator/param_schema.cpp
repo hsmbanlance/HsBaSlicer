@@ -21,6 +21,22 @@ constexpr const char* kColKey = "param_key";
 constexpr const char* kColVersion = "schema_version";
 constexpr const char* kColCreated = "created_at";
 constexpr const char* kColUpdated = "updated_at";
+constexpr const char* kColBlob = ParamSchema::BlobColumn();
+
+// Column type for the dedicated binary-encrypted column map (raw bytes / large object).
+const char* BlobTypeName(Backend backend)
+{
+    switch (backend)
+    {
+    case Backend::MySQL:
+        return "LONGBLOB";
+    case Backend::PostgreSQL:
+        return "BYTEA";
+    case Backend::SQLite:
+    default:
+        return "BLOB";
+    }
+}
 
 // Map a converged column kind plus backend to its concrete SQL column type name.
 const char* TypeName(ColumnKind kind, Backend backend)
@@ -28,7 +44,15 @@ const char* TypeName(ColumnKind kind, Backend backend)
     switch (kind)
     {
     case ColumnKind::Double:
-        return backend == Backend::SQLite ? "REAL" : (backend == Backend::MySQL ? "DOUBLE" : "DOUBLE PRECISION");
+        if (backend == Backend::SQLite)
+        {
+            return "REAL";
+        }
+        if (backend == Backend::MySQL)
+        {
+            return "DOUBLE";
+        }
+        return "DOUBLE PRECISION";
     case ColumnKind::Int64:
         return "BIGINT";
     case ColumnKind::Text:
@@ -63,11 +87,17 @@ std::string IdColumnType(Backend backend)
 ColumnKind ParamSchema::KindOf(Utils::TypeInfo* field_ti)
 {
     if (!field_ti)
+    {
         throw SQL::SQLAdapterInvalidArgumentError("ParamSchema::KindOf: null field type");
+    }
     if (field_ti == Utils::GetTypeInfo<float>() || field_ti == Utils::GetTypeInfo<double>())
+    {
         return ColumnKind::Double;
+    }
     if (field_ti == Utils::GetTypeInfo<const char*>() || field_ti == Utils::GetTypeInfo<std::string>())
+    {
         return ColumnKind::Text;
+    }
     // int / int64_t / any supported enum -> Int64
     return ColumnKind::Int64;
 }
@@ -75,11 +105,13 @@ ColumnKind ParamSchema::KindOf(Utils::TypeInfo* field_ti)
 ParamSchema::ParamSchema(Utils::TypeInfo* cfgType)
 {
     if (!cfgType)
+    {
         throw SQL::SQLAdapterInvalidArgumentError("ParamSchema: null config TypeInfo");
+    }
     type_name_ = std::string(cfgType->Name);
     for (const auto& [name, field] : cfgType->fields)
     {
-        ColumnKind kind = KindOf(field.first);
+        ColumnKind const kind = KindOf(field.first);
         columns_.emplace_back(std::string(name), kind);
         field_columns_.emplace_back(std::string(name));
     }
@@ -89,10 +121,12 @@ ParamSchema& ParamSchema::forConfig(Utils::TypeInfo* cfgType)
 {
     static std::mutex mu;
     static std::unordered_map<Utils::TypeInfo*, std::unique_ptr<ParamSchema>> cache;
-    std::lock_guard<std::mutex> lock(mu);
+    std::scoped_lock const lock(mu);
     auto it = cache.find(cfgType);
     if (it != cache.end())
+    {
         return *it->second;
+    }
     auto schema = std::unique_ptr<ParamSchema>(new ParamSchema(cfgType));
     ParamSchema* raw = schema.get();
     cache.emplace(cfgType, std::move(schema));
@@ -107,6 +141,7 @@ std::unordered_map<std::string, std::string> ParamSchema::BuildDdl(Backend backe
     ddl[kColVersion] = std::string("BIGINT NOT NULL");
     ddl[kColCreated] = "BIGINT";
     ddl[kColUpdated] = "BIGINT";
+    ddl[kColBlob] = BlobTypeName(backend);
     for (const auto& [name, kind] : columns_)
     {
         ddl[name] = TypeName(kind, backend);
@@ -114,7 +149,7 @@ std::unordered_map<std::string, std::string> ParamSchema::BuildDdl(Backend backe
     return ddl;
 }
 
-std::string ParamSchema::ExistenceCheck(const std::string& table, Backend backend) const
+std::string ParamSchema::ExistenceCheck(const std::string& table, Backend backend)
 {
     switch (backend)
     {
@@ -135,7 +170,9 @@ std::string ParamSchema::CreateStatement(const std::string& table, Backend backe
     sql << "CREATE TABLE ";
     // PG defers existence handling to a prior ExistenceCheck and so omits IF NOT EXISTS; SQLite/MySQL carry it inline.
     if (backend != Backend::PostgreSQL)
+    {
         sql << "IF NOT EXISTS ";
+    }
     sql << table << " (";
     auto ddl = BuildDdl(backend);
     bool first = true;
@@ -144,9 +181,13 @@ std::string ParamSchema::CreateStatement(const std::string& table, Backend backe
     {
         auto it = ddl.find(col);
         if (it == ddl.end())
+        {
             return;
+        }
         if (!first)
+        {
             sql << ", ";
+        }
         first = false;
         sql << col << " " << it->second;
     };
@@ -155,6 +196,7 @@ std::string ParamSchema::CreateStatement(const std::string& table, Backend backe
     append(kColVersion);
     append(kColCreated);
     append(kColUpdated);
+    append(kColBlob);
     for (const auto& [name, kind] : columns_)
     {
         (void)kind;
@@ -162,21 +204,29 @@ std::string ParamSchema::CreateStatement(const std::string& table, Backend backe
     }
     sql << ")";
     if (backend == Backend::MySQL)
+    {
         sql << " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    }
     return sql.str();
 }
 
 Backend ParamSchema::DetectBackend(const SQL::ISQLAdapter& db)
 {
     if (dynamic_cast<const SQL::SQLiteAdapter*>(&db) != nullptr)
+    {
         return Backend::SQLite;
+    }
 #ifdef HSBA_USE_MYSQL
     if (dynamic_cast<const SQL::MySQLAdapter*>(&db) != nullptr)
+    {
         return Backend::MySQL;
+    }
 #endif
 #ifdef HSBA_USE_PGSQL
     if (dynamic_cast<const SQL::PostgreSQLAdapter*>(&db) != nullptr)
+    {
         return Backend::PostgreSQL;
+    }
 #endif
     throw SQL::SQLAdapterInvalidArgumentError("ParamSchema::DetectBackend: unknown ISQLAdapter implementation");
 }

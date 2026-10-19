@@ -11,6 +11,7 @@
 #include "utils/LuaNewObject.hpp"
 #include <lua.hpp>
 
+#include "base/encoding_convert.hpp"
 #include "base/error.hpp"
 #include "cipher/LuaAdapter.hpp"
 #include "cipher/encoder.hpp"
@@ -22,7 +23,7 @@ namespace HsBa::Slicer
 {
 ImagesPath::ImagesPath(std::string_view config_file, std::string_view config_str,
                        const std::vector<std::function<void(double, std::string_view)>>& callbacks)
-    : config_{std::string{config_file}, std::string{config_str}}, images_{}, callbacks_{callbacks}
+    : config_{.path = std::string{config_file}, .configStr = std::string{config_str}}, callbacks_{callbacks}
 {
 }
 
@@ -43,7 +44,9 @@ void ImagesPath::Save(const std::filesystem::path& path) const
     {
         zipper.AddByteFile(path, image);
     }
-    zipper.Save(path.string());
+    // Zipper::Save expects a UTF-8 archive path, so re-encode the native path as UTF-8 instead of
+    // path.string() (the ANSI-code-page narrow form on Windows, which corrupts non-ASCII names).
+    zipper.Save(path_to_utf8(path));
 }
 
 void ImagesPath::Save(const std::filesystem::path& path, std::string_view script,
@@ -51,7 +54,9 @@ void ImagesPath::Save(const std::filesystem::path& path, std::string_view script
 {
     auto L = MakeUniqueLuaState();
     if (!L)
+    {
         throw RuntimeError("Lua init failed");
+    }
     luaL_openlibs(L.get());
     // register helpers
     RegisterLuaZipper(L.get());
@@ -61,7 +66,9 @@ void ImagesPath::Save(const std::filesystem::path& path, std::string_view script
 #endif
     // call user-provided registrar (if any)
     if (lua_reg)
+    {
         lua_reg(L.get());
+    }
 
     // push config global
     lua_newtable(L.get());
@@ -86,34 +93,38 @@ void ImagesPath::Save(const std::filesystem::path& path, std::string_view script
     }
     lua_setglobal(L.get(), "images");
 
-    // push output path
-    lua_pushstring(L.get(), path.string().c_str());
+    // push output path (UTF-8, so a Lua Zipper.Save call receives a non-mangled path on Windows)
+    lua_pushstring(L.get(), path_to_utf8(path).c_str());
     lua_setglobal(L.get(), "output_path");
 
     if (script.empty())
+    {
         return;
+    }
 
-    int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "ImagesPathSaveScript");
+    int const loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "ImagesPathSaveScript");
     if (loadStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
         throw RuntimeError(std::format("-- Lua load error: {}", err));
     }
-    int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
+    int const callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
     if (callStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
         throw RuntimeError(std::format("-- Lua runtime error: {}", err));
     }
     // if returned string, write to output_path
-    int nret = lua_gettop(L.get());
+    int const nret = lua_gettop(L.get());
     if (nret > 0 && lua_isstring(L.get(), -1))
     {
         size_t len = 0;
         const char* s = lua_tolstring(L.get(), -1, &len);
         std::ofstream ofs(path, std::ios::binary);
         if (!ofs)
+        {
             throw RuntimeError("Failed to open output file: " + path.string());
+        }
         ofs.write(s, static_cast<std::streamsize>(len));
     }
 }
@@ -125,7 +136,9 @@ void ImagesPath::Save(const std::filesystem::path& path, std::string_view script
     // set funcName global and call same
     auto L = MakeUniqueLuaState();
     if (!L)
+    {
         throw RuntimeError("Lua init failed");
+    }
     luaL_openlibs(L.get());
     RegisterLuaZipper(L.get());
     Cipher::RegisterLuaCipher(L.get());
@@ -133,7 +146,9 @@ void ImagesPath::Save(const std::filesystem::path& path, std::string_view script
     RegisterLuaBit7zZipper(L.get());
 #endif
     if (lua_reg)
+    {
         lua_reg(L.get());
+    }
 
     // push config
     lua_newtable(L.get());
@@ -157,29 +172,35 @@ void ImagesPath::Save(const std::filesystem::path& path, std::string_view script
     }
     lua_setglobal(L.get(), "images");
     // push path and funcName
-    lua_pushstring(L.get(), path.string().c_str());
+    lua_pushstring(L.get(), path_to_utf8(path).c_str());
     lua_setglobal(L.get(), "output_path");
+    // expose funcName as a global, mirroring ToString(script, funcName, lua_reg)
+    lua_pushlstring(L.get(), funcName.data(), funcName.size());
+    lua_setglobal(L.get(), "funcName");
 
-    int loadStatus = luaL_loadbuffer(L.get(), script_copy.data(), script_copy.size(), "ImagesPathSaveScriptWithFunc");
+    int const loadStatus =
+        luaL_loadbuffer(L.get(), script_copy.data(), script_copy.size(), "ImagesPathSaveScriptWithFunc");
     if (loadStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
         throw RuntimeError(std::format("-- Lua load error: {}", err));
     }
-    int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
+    int const callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
     if (callStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
         throw RuntimeError(std::format("-- Lua runtime error: {}", err));
     }
-    int nret = lua_gettop(L.get());
+    int const nret = lua_gettop(L.get());
     if (nret > 0 && lua_isstring(L.get(), -1))
     {
         size_t len = 0;
         const char* s = lua_tolstring(L.get(), -1, &len);
         std::ofstream ofs(path, std::ios::binary);
         if (!ofs)
+        {
             throw RuntimeError("Failed to open output file: " + path.string());
+        }
         ofs.write(s, static_cast<std::streamsize>(len));
     }
 }
@@ -187,28 +208,36 @@ void ImagesPath::Save(const std::filesystem::path& path, std::string_view script
 void ImagesPath::Save(const std::filesystem::path& path, const std::filesystem::path& script_file,
                       std::string_view funcName, const std::function<void(lua_State*)>& lua_reg) const
 {
-    std::ifstream ifs(script_file, std::ios::binary);
+    std::ifstream const ifs(script_file, std::ios::binary);
     if (!ifs)
+    {
         throw RuntimeError("Failed to open Lua script file: " + script_file.string());
+    }
     std::ostringstream oss;
     oss << ifs.rdbuf();
-    std::string script = oss.str();
+    std::string const script = oss.str();
     Save(path, std::string_view{script}, funcName, lua_reg);
 }
 
 std::string ImagesPath::ToString(std::string_view script, const std::function<void(lua_State*)>& lua_reg) const
 {
     if (script.empty())
+    {
         return ToString();
+    }
 
     auto L = MakeUniqueLuaState();
     if (!L)
+    {
         throw RuntimeError("Lua init failed");
+    }
     luaL_openlibs(L.get());
     // register helpers
     Cipher::RegisterLuaCipher(L.get());
     if (lua_reg)
+    {
         lua_reg(L.get());
+    }
 
     // push config global
     lua_newtable(L.get());
@@ -233,19 +262,19 @@ std::string ImagesPath::ToString(std::string_view script, const std::function<vo
     }
     lua_setglobal(L.get(), "images");
 
-    int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "ImagesPathToStringScript");
+    int const loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "ImagesPathToStringScript");
     if (loadStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
         throw RuntimeError(std::format("-- Lua load error: {}", err));
     }
-    int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
+    int const callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
     if (callStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
         throw RuntimeError(std::format("-- Lua runtime error: {}", err));
     }
-    int nret = lua_gettop(L.get());
+    int const nret = lua_gettop(L.get());
     if (nret > 0 && lua_isstring(L.get(), -1))
     {
         size_t len = 0;
@@ -260,15 +289,21 @@ std::string ImagesPath::ToString(const std::string_view script, const std::strin
 {
     std::string script_copy(script);
     if (script_copy.empty())
+    {
         return ToString();
+    }
 
     auto L = MakeUniqueLuaState();
     if (!L)
+    {
         throw RuntimeError("Lua init failed");
+    }
     luaL_openlibs(L.get());
     Cipher::RegisterLuaCipher(L.get());
     if (lua_reg)
+    {
         lua_reg(L.get());
+    }
     // push config
     lua_newtable(L.get());
     lua_pushstring(L.get(), config_.path.c_str());
@@ -291,23 +326,23 @@ std::string ImagesPath::ToString(const std::string_view script, const std::strin
     }
     lua_setglobal(L.get(), "images");
     // push funcName
-    lua_pushstring(L.get(), funcName.data());
+    lua_pushlstring(L.get(), funcName.data(), funcName.size());
     lua_setglobal(L.get(), "funcName");
 
-    int loadStatus =
+    int const loadStatus =
         luaL_loadbuffer(L.get(), script_copy.data(), script_copy.size(), "ImagesPathToStringScriptWithFunc");
     if (loadStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
         throw RuntimeError(std::format("-- Lua load error: {}", err));
     }
-    int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
+    int const callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
     if (callStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
         throw RuntimeError(std::format("-- Lua runtime error: {}", err));
     }
-    int nret = lua_gettop(L.get());
+    int const nret = lua_gettop(L.get());
     if (nret > 0 && lua_isstring(L.get(), -1))
     {
         size_t len = 0;
@@ -320,12 +355,14 @@ std::string ImagesPath::ToString(const std::string_view script, const std::strin
 std::string ImagesPath::ToString(const std::filesystem::path& script_file, const std::string_view funcName,
                                  const std::function<void(lua_State*)>& lua_reg) const
 {
-    std::ifstream ifs(script_file, std::ios::binary);
+    std::ifstream const ifs(script_file, std::ios::binary);
     if (!ifs)
+    {
         throw RuntimeError("Failed to open Lua script file: " + script_file.string());
+    }
     std::ostringstream oss;
     oss << ifs.rdbuf();
-    std::string script = oss.str();
+    std::string const script = oss.str();
     return ToString(std::string_view{script}, funcName, lua_reg);
 }
 

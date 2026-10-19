@@ -37,6 +37,18 @@ HSBA_SLICER_LIB_API Polygons FillWithBorder(const Polygons& poly, double spacing
                                             double angle_deg);
 
 /**
+ * @brief Randomize the start points of closed contour/offset paths (wrapper of the 2D engine).
+ *        The start is a uniformly sampled point on a loop edge, inserted as a new split vertex.
+ * @param paths Closed loops (contours or offset rings); open short paths pass through unchanged.
+ * @param seed Deterministic seed (e.g. combine with layer index for per-layer randomization).
+ * @param min_separation Optional minimum distance between start points of different loops
+ *        (integer coordinate units); best-effort when unsatisfiable, 0 or less disables it.
+ * @return Loops rotated to new edge start points with winding and closed form preserved.
+ */
+HSBA_SLICER_LIB_API Polygons RandomizePathStartPoints(const Polygons& paths, std::uint64_t seed,
+                                                      double min_separation = 0.0);
+
+/**
  * @brief Generate custom fill pattern using a Lua script file.
  *
  * Wrapper around 2D LuaCustomFill, providing the fill capability through

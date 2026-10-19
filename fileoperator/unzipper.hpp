@@ -71,7 +71,7 @@ private:
     std::string cache_dir_;
     bool is_open_{false};
     bool use_cache_dir_{false};
-    std::shared_ptr<UnzipperStream> ReadFileTobuff(int file_index, size_t uncompsize, const std::string& part_name);
+    std::shared_ptr<UnzipperStream> ReadFileTobuff(int file_index, size_t uncomp_size, const std::string& part_name);
     std::shared_ptr<UnzipperStream> ReadFileToFile(int file_index, const std::string& part_name);
     void CreateBuffDir();
 };

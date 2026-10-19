@@ -7,12 +7,15 @@
 #include <cmath>
 #include <format>
 #include <fstream>
+#include <numbers>
 #include <sstream>
 #include <stdexcept>
 
 #include <lua.hpp>
+#include <utility>
 
 #include "base/error.hpp"
+#include "base/parallel.hpp"
 #include "utils/LuaNewObject.hpp"
 
 namespace HsBa::Slicer
@@ -20,8 +23,8 @@ namespace HsBa::Slicer
 
 namespace
 {
-constexpr float kSpeedFactor = 60.0f;  // mm/s -> mm/min
-constexpr float kPi = 3.14159265358979323846f;
+constexpr float kSpeedFactor = 60.0F;  // mm/s -> mm/min
+constexpr float kPi = std::numbers::pi_v<float>;
 
 /// @brief Parse Z height from layer config string (format: "Z:<value>")
 float ParseLayerZ(const std::string& config)
@@ -32,14 +35,16 @@ float ParseLayerZ(const std::string& config)
         {
             return std::stof(config.substr(2));
         }
+        // NOLINTNEXTLINE(bugprone-empty-catch) malformed "Z:" payload falls through to default height
         catch (const std::invalid_argument&)
         {
         }
+        // NOLINTNEXTLINE(bugprone-empty-catch) out-of-range height falls through to default height
         catch (const std::out_of_range&)
         {
         }
     }
-    return 0.0f;
+    return 0.0F;
 }
 
 }  // namespace
@@ -53,11 +58,11 @@ GCodePath::GCodePath(const GCodePrinterConfig& config,
 double GCodePath::CalcExtrusion(double segment_length) const
 {
     // Volume of filament extruded = line_width * layer_height * segment_length
-    double volume = static_cast<double>(printer_config_.line_width) *
-                    static_cast<double>(printer_config_.layer_height) * segment_length;
+    double const volume = static_cast<double>(printer_config_.line_width) *
+                          static_cast<double>(printer_config_.layer_height) * segment_length;
     // Filament cross-section area
-    double radius = static_cast<double>(printer_config_.filament_diameter) / 2.0;
-    double area = kPi * radius * radius;
+    double const radius = static_cast<double>(printer_config_.filament_diameter) / 2.0;
+    double const area = kPi * radius * radius;
     // E value = volume / area * multiplier
     return (volume / area) * static_cast<double>(printer_config_.extrusion_multiplier);
 }
@@ -95,9 +100,13 @@ std::string GCodePath::GenerateHeader(GCodeFirmware fw) const
         ss << "M190 S" << static_cast<int>(cfg.bed_temp) << " ; wait for bed temp\n";
         ss << "G92 E0 ; reset extruder\n";
         if (cfg.relative_extrusion)
+        {
             ss << "M83 ; relative extrusion\n";
+        }
         else
+        {
             ss << "M82 ; absolute extrusion\n";
+        }
         ss << "G1 Z5.0 F" << static_cast<int>(cfg.travel_speed * kSpeedFactor) << " ; lift nozzle\n";
         ss << "\n";
         break;
@@ -110,9 +119,13 @@ std::string GCodePath::GenerateHeader(GCodeFirmware fw) const
         ss << "M190 S" << static_cast<int>(cfg.bed_temp) << " ; wait for bed temp\n";
         ss << "G92 E0 ; reset extruder\n";
         if (cfg.relative_extrusion)
+        {
             ss << "M83 ; relative extrusion\n";
+        }
         else
+        {
             ss << "M82 ; absolute extrusion\n";
+        }
         ss << "M106 S255 ; fan on full\n";
         ss << "G1 Z5.0 F" << static_cast<int>(cfg.travel_speed * kSpeedFactor) << " ; lift nozzle\n";
         ss << "\n";
@@ -126,9 +139,13 @@ std::string GCodePath::GenerateHeader(GCodeFirmware fw) const
         ss << "M190 S" << static_cast<int>(cfg.bed_temp) << " ; wait for bed temp\n";
         ss << "G92 E0 ; reset extruder\n";
         if (cfg.relative_extrusion)
+        {
             ss << "M83 ; relative extrusion\n";
+        }
         else
+        {
             ss << "M82 ; absolute extrusion\n";
+        }
         ss << "SET_PRESSURE_ADVANCE ADVANCE=0.05 ; pressure advance\n";
         ss << "M220 S100 ; set speed factor 100%\n";
         ss << "M221 S100 ; set flow factor 100%\n";
@@ -192,17 +209,19 @@ std::string GCodePath::GenerateFooter(GCodeFirmware fw) const
     return ss.str();
 }
 
-std::string GCodePath::GenerateLayerGCode(int layer_idx, GCodeFirmware fw) const
+std::string GCodePath::GenerateLayerGCode(int layer_idx, GCodeFirmware /*fw*/) const
 {
-    if (layer_idx < 0 || layer_idx >= static_cast<int>(layers_.size()))
+    if (layer_idx < 0 || std::cmp_greater_equal(layer_idx, layers_.size()))
+    {
         return "";
+    }
 
     std::ostringstream ss;
     const auto& layer_data = layers_[layer_idx];
     float z = ParseLayerZ(layer_data.layerConfig);
     const auto& cfg = printer_config_;
 
-    float speed = (layer_idx == 0) ? cfg.first_layer_speed : cfg.print_speed;
+    float const speed = (layer_idx == 0) ? cfg.first_layer_speed : cfg.print_speed;
     float feed_rate = speed * kSpeedFactor;
     float travel_feed = cfg.travel_speed * kSpeedFactor;
 
@@ -215,7 +234,9 @@ std::string GCodePath::GenerateLayerGCode(int layer_idx, GCodeFirmware fw) const
     for (const auto& polygon : layer_data.layer)
     {
         if (polygon.empty())
+        {
             continue;
+        }
 
         // Travel to start of polygon (with retraction)
         if (cfg.enable_retraction && !first_move)
@@ -246,9 +267,9 @@ std::string GCodePath::GenerateLayerGCode(int layer_idx, GCodeFirmware fw) const
             const auto& pt = polygon[i % polygon.size()];
             const auto& prev = polygon[(i - 1) % polygon.size()];
 
-            double dx = pt.x - prev.x;
-            double dy = pt.y - prev.y;
-            double seg_len = std::sqrt(dx * dx + dy * dy);
+            double const dx = pt.x - prev.x;
+            double const dy = pt.y - prev.y;
+            double const seg_len = std::sqrt(dx * dx + dy * dy);
             double e_value = CalcExtrusion(seg_len);
 
             if (cfg.relative_extrusion)
@@ -271,7 +292,9 @@ std::string GCodePath::GenerateLayerGCode(int layer_idx, GCodeFirmware fw) const
 std::string GCodePath::GenerateContinuousWall() const
 {
     if (continuous_wall_.size() < 2)
+    {
         return "";
+    }
 
     std::ostringstream ss;
     const auto& cfg = printer_config_;
@@ -288,9 +311,9 @@ std::string GCodePath::GenerateContinuousWall() const
     {
         const auto& a = continuous_wall_[i - 1];
         const auto& b = continuous_wall_[i];
-        double dx = b.x - a.x;
-        double dy = b.y - a.y;
-        double seg_len = std::sqrt(dx * dx + dy * dy);
+        double const dx = b.x - a.x;
+        double const dy = b.y - a.y;
+        double const seg_len = std::sqrt(dx * dx + dy * dy);
         double e_value = CalcExtrusion(seg_len);
 
         if (cfg.relative_extrusion)
@@ -309,21 +332,39 @@ std::string GCodePath::GenerateContinuousWall() const
 
 std::string GCodePath::ToGCode(GCodeFirmware firmware) const
 {
-    std::ostringstream ss;
-    ss << GenerateHeader(firmware);
+    // Layer body generation is a pure const read of layers_/printer_config_ and
+    // dominates the serialization cost for large models, so fan it out over the
+    // pipeline ThreadPool and stitch header+wall+bodies+footer back on the
+    // caller thread. HSBA_PIPELINE_THREADS=1 preserves the original ordering.
+    const int total = static_cast<int>(layers_.size());
+    std::vector<std::string> bodies = HsBa::Slicer::Pipeline::ParallelMapLayers<std::string>(
+        total, [this, firmware](int i) { return GenerateLayerGCode(i, firmware); });
 
-    // Spiralize/vase mode: emit the continuous rising outer wall first.
+    std::string wall;
     if (!continuous_wall_.empty())
-        ss << GenerateContinuousWall();
-
-    // Then any per-layer polygon data (empty in pure vase mode).
-    for (int i = 0; i < static_cast<int>(layers_.size()); ++i)
     {
-        ss << GenerateLayerGCode(i, firmware);
+        wall = GenerateContinuousWall();
     }
 
-    ss << GenerateFooter(firmware);
-    return ss.str();
+    // Reserve exact capacity to avoid ostringstream's incremental growth.
+    std::string header = GenerateHeader(firmware);
+    std::string footer = GenerateFooter(firmware);
+    size_t total_size = header.size() + wall.size() + footer.size();
+    for (const auto& s : bodies)
+    {
+        total_size += s.size();
+    }
+
+    std::string out;
+    out.reserve(total_size);
+    out.append(header);
+    out.append(wall);
+    for (const auto& s : bodies)
+    {
+        out.append(s);
+    }
+    out.append(footer);
+    return out;
 }
 
 void GCodePath::SaveGCode(const std::filesystem::path& path, GCodeFirmware firmware) const
@@ -341,7 +382,9 @@ std::string GCodePath::ToGCode(GCodeFirmware firmware, std::string_view script,
                                const std::function<void(lua_State*)>& lua_reg) const
 {
     if (script.empty())
+    {
         return ToGCode(firmware);
+    }
 
     // Generate base GCode
     std::string base_gcode = ToGCode(firmware);
@@ -349,10 +392,14 @@ std::string GCodePath::ToGCode(GCodeFirmware firmware, std::string_view script,
     // Run Lua post-processing
     auto L = MakeUniqueLuaState();
     if (!L)
+    {
         throw RuntimeError("Lua init failed");
+    }
     luaL_openlibs(L.get());
     if (lua_reg)
+    {
         lua_reg(L.get());
+    }
 
     // Push GCode as global
     lua_pushlstring(L.get(), base_gcode.c_str(), base_gcode.size());
@@ -361,9 +408,13 @@ std::string GCodePath::ToGCode(GCodeFirmware firmware, std::string_view script,
     // Push firmware name
     const char* fw_name = "marlin";
     if (firmware == GCodeFirmware::RepRap)
+    {
         fw_name = "reprap";
+    }
     else if (firmware == GCodeFirmware::Klipper)
+    {
         fw_name = "klipper";
+    }
     lua_pushstring(L.get(), fw_name);
     lua_setglobal(L.get(), "firmware");
 
@@ -385,14 +436,14 @@ std::string GCodePath::ToGCode(GCodeFirmware firmware, std::string_view script,
     lua_setfield(L.get(), -2, "total_layers");
     lua_setglobal(L.get(), "printer_config");
 
-    int loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "GCodePostProcess");
+    int const loadStatus = luaL_loadbuffer(L.get(), script.data(), script.size(), "GCodePostProcess");
     if (loadStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
         throw RuntimeError(std::format("-- Lua load error: {}", err));
     }
 
-    int callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
+    int const callStatus = lua_pcall(L.get(), 0, LUA_MULTRET, 0);
     if (callStatus != LUA_OK)
     {
         std::string err = lua_tostring(L.get(), -1);
@@ -400,7 +451,7 @@ std::string GCodePath::ToGCode(GCodeFirmware firmware, std::string_view script,
     }
 
     // If Lua returned a string, use it as the final GCode
-    int nret = lua_gettop(L.get());
+    int const nret = lua_gettop(L.get());
     if (nret > 0 && lua_isstring(L.get(), -1))
     {
         size_t len = 0;

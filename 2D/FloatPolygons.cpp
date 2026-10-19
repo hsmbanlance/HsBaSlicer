@@ -84,7 +84,9 @@ std::string MakeSvgPathData(const std::vector<PointT>& poly, bool close_path, do
     std::ostringstream out;
     out << std::fixed << std::setprecision(6);
     if (poly.empty())
+    {
         return {};
+    }
     out << "M " << (static_cast<double>(poly.front().x) / scale) << ' '
         << (static_cast<double>(poly.front().y) / scale);
     for (size_t i = 1; i < poly.size(); ++i)
@@ -92,7 +94,9 @@ std::string MakeSvgPathData(const std::vector<PointT>& poly, bool close_path, do
         out << " L " << (static_cast<double>(poly[i].x) / scale) << ' ' << (static_cast<double>(poly[i].y) / scale);
     }
     if (close_path)
+    {
         out << " Z";
+    }
     return out.str();
 }
 
@@ -103,8 +107,10 @@ void DumpSvgPaths(const std::vector<std::vector<PointT>>& polys, std::ofstream& 
     {
         auto data = MakeSvgPathData(poly, close_path, scale);
         if (data.empty())
+        {
             continue;
-        file << "  <path d=\"" << data << "\" fill=\"none\" stroke=\"#000\" stroke-width=0.5";
+        }
+        file << R"(  <path d=")" << data << R"(" fill="none" stroke="#000" stroke-width=0.5)";
         file << " fill-rule=\"evenodd\" />\n";
     }
 }
@@ -115,7 +121,9 @@ void WriteSvgFile(std::string_view filename, const std::vector<std::vector<Point
 {
     std::ofstream file(std::string(filename), std::ios::binary);
     if (!file)
+    {
         return;
+    }
 
     double min_x = 0;
     double min_y = 0;
@@ -126,8 +134,8 @@ void WriteSvgFile(std::string_view filename, const std::vector<std::vector<Point
     {
         for (const auto& point : poly)
         {
-            double x = static_cast<double>(point.x) / scale;
-            double y = static_cast<double>(point.y) / scale;
+            const double x = static_cast<double>(point.x) / scale;
+            const double y = static_cast<double>(point.y) / scale;
             if (first)
             {
                 min_x = max_x = x;
@@ -148,13 +156,13 @@ void WriteSvgFile(std::string_view filename, const std::vector<std::vector<Point
         min_x = min_y = 0.0;
         max_x = max_y = 1.0;
     }
-    double width = std::max(1e-6, max_x - min_x);
-    double height = std::max(1e-6, max_y - min_y);
+    const double width = std::max(1e-6, max_x - min_x);
+    const double height = std::max(1e-6, max_y - min_y);
 
     file << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
     file << "<!-- HsBaSlicer polygon dump -->\n";
     file << "<!-- " << type_comment << " -->\n";
-    file << "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"" << min_x << " " << min_y << " " << width << " "
+    file << R"(<svg xmlns="http://www.w3.org/2000/svg" viewBox=")" << min_x << " " << min_y << " " << width << " "
          << height << "\" preserveAspectRatio=\"xMinYMin meet\">\n";
     DumpSvgPaths(polys, file, close_path, scale);
     file << "</svg>\n";
@@ -197,7 +205,7 @@ PolygonD UnIntegerization(const Polygon& poly)
     PolygonD res;
     for (const auto& p : poly)
     {
-        res.emplace_back(Point2D{p.x / integerization, p.y / integerization});
+        res.emplace_back(Point2D{static_cast<double>(p.x) / integerization, static_cast<double>(p.y) / integerization});
     }
     return res;
 }
@@ -229,7 +237,9 @@ struct OutlineBuilder
         if (!current.empty())
         {
             if (current.front().x != current.back().x || current.front().y != current.back().y)
+            {
                 current.push_back(current.front());
+            }
             polygons.push_back(std::move(current));
             current.clear();
         }
@@ -254,16 +264,18 @@ struct OutlineBuilder
     {
         auto* self = static_cast<OutlineBuilder*>(user);
         if (self->current.empty())
+        {
             return 0;
-        Point2D p0 = self->current.back();
-        Point2D p1 = ToPointD(*control);
-        Point2D p2 = ToPointD(*to);
+        }
+        const Point2D p0 = self->current.back();
+        const Point2D p1 = ToPointD(*control);
+        const Point2D p2 = ToPointD(*to);
         for (int step = 1; step <= self->curveSegments; ++step)
         {
-            double t = static_cast<double>(step) / self->curveSegments;
-            double u = 1.0 - t;
-            double x = u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x;
-            double y = u * u * p0.y + 2 * u * t * p1.y + t * t * p2.y;
+            const double t = static_cast<double>(step) / self->curveSegments;
+            const double u = 1.0 - t;
+            const double x = u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x;
+            const double y = u * u * p0.y + 2 * u * t * p1.y + t * t * p2.y;
             self->current.emplace_back(Point2D{x, y});
         }
         return 0;
@@ -273,17 +285,19 @@ struct OutlineBuilder
     {
         auto* self = static_cast<OutlineBuilder*>(user);
         if (self->current.empty())
+        {
             return 0;
-        Point2D p0 = self->current.back();
-        Point2D p1 = ToPointD(*control1);
-        Point2D p2 = ToPointD(*control2);
-        Point2D p3 = ToPointD(*to);
+        }
+        const Point2D p0 = self->current.back();
+        const Point2D p1 = ToPointD(*control1);
+        const Point2D p2 = ToPointD(*control2);
+        const Point2D p3 = ToPointD(*to);
         for (int step = 1; step <= self->curveSegments; ++step)
         {
-            double t = static_cast<double>(step) / self->curveSegments;
-            double u = 1.0 - t;
-            double x = u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x;
-            double y = u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y;
+            const double t = static_cast<double>(step) / self->curveSegments;
+            const double u = 1.0 - t;
+            const double x = u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x;
+            const double y = u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y;
             self->current.emplace_back(Point2D{x, y});
         }
         return 0;
@@ -295,18 +309,20 @@ PolygonD MakeEllipsePath(double cx, double cy, double rx, double ry, int segment
 {
     PolygonD poly;
     poly.reserve(segments + 1);
-    double angle_step = 2.0 * std::numbers::pi / segments;
+    const double angle_step = 2.0 * std::numbers::pi / segments;
     for (int i = 0; i < segments; ++i)
     {
-        double angle = i * angle_step;
-        double px = rx * std::cos(angle);
-        double py = ry * std::sin(angle);
-        double rxp = std::cos(rotation) * px - std::sin(rotation) * py;
-        double ryp = std::sin(rotation) * px + std::cos(rotation) * py;
+        const double angle = i * angle_step;
+        const double px = rx * std::cos(angle);
+        const double py = ry * std::sin(angle);
+        const double rxp = std::cos(rotation) * px - std::sin(rotation) * py;
+        const double ryp = std::sin(rotation) * px + std::cos(rotation) * py;
         poly.emplace_back(Point2D{cx + rxp, cy + ryp});
     }
     if (!poly.empty())
+    {
         poly.push_back(poly.front());
+    }
     return poly;
 }
 }  // namespace
@@ -331,12 +347,14 @@ PolygonD MakeRegularPolygon(double cx, double cy, double radius, int sides, doub
 {
     PolygonD poly;
     if (sides < 3)
+    {
         return poly;
-    double angle_step = 2.0 * std::numbers::pi / sides;
+    }
+    const double angle_step = 2.0 * std::numbers::pi / sides;
     poly.reserve(sides + 1);
     for (int i = 0; i < sides; ++i)
     {
-        double angle = rotation + i * angle_step;
+        const double angle = rotation + i * angle_step;
         poly.emplace_back(Point2D{cx + radius * std::cos(angle), cy + radius * std::sin(angle)});
     }
     poly.push_back(poly.front());
@@ -350,11 +368,13 @@ PolygonsD TextToPolygons(const std::string& utf8_text, const std::string& font_f
 #ifndef HSBA_HAVE_FREETYPE
     throw NotSupportedError("Need FreeType support");
 #else
-    FT_Library library;
+    FT_Library library = nullptr;
     if (FT_Init_FreeType(&library) != 0)
+    {
         throw RuntimeError("Failed to initialize FreeType library");
+    }
 
-    FT_Face face;
+    FT_Face face = nullptr;
     if (FT_New_Face(library, font_file.c_str(), 0, &face) != 0)
     {
         FT_Done_FreeType(library);
@@ -364,7 +384,7 @@ PolygonsD TextToPolygons(const std::string& utf8_text, const std::string& font_f
     FT_Set_Char_Size(face, 0, static_cast<FT_F26Dot6>(font_size * 64.0), 0, 0);
 
     double penX = x;
-    double penY = y;
+    const double penY = y;
     PolygonsD result;
     OutlineBuilder builder;
     builder.curveSegments = std::max(1, curve_segments);
@@ -377,9 +397,9 @@ PolygonsD TextToPolygons(const std::string& utf8_text, const std::string& font_f
     funcs.shift = 0;
     funcs.delta = 0;
 
-    for (unsigned char c : utf8_text)
+    for (const unsigned char c : utf8_text)
     {
-        FT_UInt glyph_index = FT_Get_Char_Index(face, c);
+        const FT_UInt glyph_index = FT_Get_Char_Index(face, c);
         if (FT_Load_Glyph(face, glyph_index, FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING) != 0)
         {
             continue;
@@ -394,7 +414,9 @@ PolygonsD TextToPolygons(const std::string& utf8_text, const std::string& font_f
             FT_Outline_Decompose(outline, &funcs, &builder);
             builder.CloseContour();
             for (auto& poly : builder.polygons)
+            {
                 result.push_back(std::move(poly));
+            }
         }
 
         penX += static_cast<double>(face->glyph->advance.x) / 64.0;
@@ -424,7 +446,7 @@ std::size_t std::hash<HsBa::Slicer::PolygonsD>::operator()(const HsBa::Slicer::P
     size_t seed = 0;
     for (const auto& poly : p)
     {
-        std::hash<HsBa::Slicer::PolygonD> hasher;
+        const std::hash<HsBa::Slicer::PolygonD> hasher;
         boost::hash_combine(seed, hasher(poly));
     }
     return seed;

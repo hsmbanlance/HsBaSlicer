@@ -1,6 +1,8 @@
 ﻿#define BOOST_TEST_MODULE any_object_test
 #include <boost/test/included/unit_test.hpp>
 
+#include <atomic>
+
 #include "base/any_object.hpp"
 #include "utils/LuaAnyObject.hpp"
 #include <lua.hpp>
@@ -496,6 +498,356 @@ BOOST_AUTO_TEST_CASE(lua_anyobject_test)
     BOOST_CHECK_EQUAL(str_result, "Hello World");
 
     lua_close(L);
+}
+
+// ---------------------------------------------------------------------------
+// Mock-driven tests for the AnyObject Lua consumer (utils/LuaAnyObject.cpp).
+// The Mockit-like stubbing facility lets us replace Standard::Add at the
+// AnyObject::Invoke dispatch point, so the error/nil/argument-conversion
+// branches of lua_any_object_invoke become reachable without real failures.
+// ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(any_object_invoke_empty_and_missing_method)
+{
+    using namespace HsBa::Slicer::Utils;
+    std::span<AnyObject> no_args{};
+    AnyObject empty_obj;
+    BOOST_CHECK_THROW(empty_obj.Invoke("Add", no_args), HsBa::Slicer::RuntimeError);
+
+    Standard src{1};
+    AnyObject obj(src);
+    BOOST_CHECK_THROW(obj.Invoke("NoSuchMethod", no_args), HsBa::Slicer::RuntimeError);
+}
+
+#ifdef HSBA_ANY_OBJECT_ENABLE_MOCK
+namespace
+{
+// Bootstraps a Lua state with the AnyObject table (invoke/foreach_field and
+// new_int/new_string/... casts) plus the Standard metatable used above.
+lua_State* CreateAnyObjectLuaState()
+{
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+    RegisterStandardType(L);
+
+    std::vector<HsBa::Slicer::LuaAnyObjectNewCastBase*> types;
+    static HsBa::Slicer::LuaAnyObjectNewCastImpl<Standard, "Standard"> standard_type;
+    static HsBa::Slicer::LuaInt int_type;
+    static HsBa::Slicer::LuaDouble double_type;
+    static HsBa::Slicer::LuaString string_type;
+    static HsBa::Slicer::LuaBool bool_type;
+    types = {&standard_type, &int_type, &double_type, &string_type, &bool_type};
+    HsBa::Slicer::RegisterAnyObject(L, types);
+    return L;
+}
+
+// RAII wrapper so every mock-driven Lua test closes its state on all exits.
+struct LuaStateGuard
+{
+    lua_State* L = nullptr;
+    explicit LuaStateGuard(lua_State* s) : L(s) {}
+    ~LuaStateGuard() { lua_close(L); }
+    LuaStateGuard(const LuaStateGuard&) = delete;
+    LuaStateGuard& operator=(const LuaStateGuard&) = delete;
+};
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(any_object_mock_lua_invoke_error_propagation)
+{
+    using namespace HsBa::Slicer::Utils;
+    Mock::MockRegistry::ScopedStubs scope;
+    // Every Standard::Add invocation now raises a project RuntimeError.
+    Mock::StubThrow<Standard, HsBa::Slicer::RuntimeError>("Add", "mock boom");
+
+    LuaStateGuard guard{CreateAnyObjectLuaState()};
+    lua_State* L = guard.L;
+    const char* script = R"(
+        local any_obj = AnyObject.new_Standard(Standard.new(42))
+        any_obj:invoke("Add", AnyObject.new_int(8)) -- stubbed to throw
+        _G.after_error = true
+    )";
+    BOOST_CHECK(luaL_dostring(L, script) != LUA_OK);
+    const char* err = lua_tostring(L, -1);
+    BOOST_REQUIRE(err != nullptr);
+    BOOST_CHECK(std::string(err).find("mock boom") != std::string::npos);
+    lua_pop(L, 1);
+
+    // The exception aborted the script before the statement after invoke().
+    lua_getglobal(L, "after_error");
+    BOOST_CHECK(lua_isnil(L, -1));
+    lua_pop(L, 1);
+    BOOST_CHECK_EQUAL(scope.registry().call_count<Standard>("Add"), 1u);
+}
+
+BOOST_AUTO_TEST_CASE(any_object_mock_lua_invoke_nil_result)
+{
+    using namespace HsBa::Slicer::Utils;
+    Mock::MockRegistry::ScopedStubs scope;
+    // Return a value-less AnyObject: lua_any_object_invoke must push nil.
+    scope.registry().stub<Standard>("Add", [](void*, std::span<AnyObject>) -> AnyObject { return AnyObject{}; });
+
+    LuaStateGuard guard{CreateAnyObjectLuaState()};
+    lua_State* L = guard.L;
+    const char* script = R"(
+        local any_obj = AnyObject.new_Standard(Standard.new(1))
+        _G.is_nil = (any_obj:invoke("Add", AnyObject.new_int(2)) == nil)
+    )";
+    if (luaL_dostring(L, script) != LUA_OK)
+    {
+        BOOST_FAIL(std::string("Lua script error: ") + lua_tostring(L, -1));
+    }
+    lua_getglobal(L, "is_nil");
+    BOOST_CHECK(lua_toboolean(L, -1) == 1);
+    lua_pop(L, 1);
+}
+
+BOOST_AUTO_TEST_CASE(any_object_mock_lua_arg_conversion)
+{
+    using namespace HsBa::Slicer::Utils;
+    Mock::MockRegistry::ScopedStubs scope;
+
+    size_t probed_arg_count = 0;
+    bool int_ok = false;
+    bool double_ok = false;
+    bool string_ok = false;
+    bool bool_ok = false;
+    bool subobj_ok = false;
+    bool nil_ok = false;
+
+    // Capture the converted argument list instead of running the real method.
+    scope.registry().stub<Standard>(
+        "Add",
+        [&](void*, std::span<AnyObject> a) -> AnyObject
+        {
+            probed_arg_count = a.size();
+            try
+            {
+                int_ok = (a[0].get_type_info() == GetTypeInfo<lua_Integer>()) && a[0].cast<lua_Integer>() == 5;
+                double_ok = (a[1].get_type_info() == GetTypeInfo<double>()) && a[1].cast<double>() == 2.5;
+                string_ok = (a[2].get_type_info() == GetTypeInfo<std::string>()) && a[2].cast<std::string>() == "abc";
+                bool_ok = (a[3].get_type_info() == GetTypeInfo<bool>()) && a[3].cast<bool>();
+                // new_int wraps the value as a plain int inside the AnyObject.
+                subobj_ok = (a[4].get_type_info() == GetTypeInfo<int>()) && a[4].cast<int>() == 9;
+                nil_ok = (a[5].get_type_info() == nullptr);
+            }
+            catch (const std::exception&)
+            {
+                // A mismatched cast<T> keeps the corresponding *_ok flag false.
+            }
+            return AnyObject{0};
+        });
+
+    LuaStateGuard guard{CreateAnyObjectLuaState()};
+    lua_State* L = guard.L;
+    const char* script = R"(
+        local any_obj = AnyObject.new_Standard(Standard.new(0))
+        any_obj:invoke("Add", 5, 2.5, "abc", true, AnyObject.new_int(9), nil)
+    )";
+    if (luaL_dostring(L, script) != LUA_OK)
+    {
+        BOOST_FAIL(std::string("Lua script error: ") + lua_tostring(L, -1));
+    }
+
+    BOOST_REQUIRE_EQUAL(probed_arg_count, 6u);
+    BOOST_CHECK(int_ok);     // lua_isinteger branch
+    BOOST_CHECK(double_ok);  // lua_isnumber branch
+    BOOST_CHECK(string_ok);  // lua_isstring branch
+    BOOST_CHECK(bool_ok);    // lua_isboolean branch
+    BOOST_CHECK(subobj_ok);  // AnyObject userdata copy branch
+    BOOST_CHECK(nil_ok);     // non-pointer value -> default AnyObject branch
+    BOOST_CHECK_EQUAL(scope.registry().call_count<Standard>("Add"), 1u);
+}
+#endif  // HSBA_ANY_OBJECT_ENABLE_MOCK
+
+// ---------------------------------------------------------------------------
+// Coverage for the scalar adapters declared in utils/LuaAnyObject.hpp that the
+// primary lua_anyobject_test does not register: the float / long / long long
+// specialisations (round trip) plus the input-validation error branch of every
+// new_* function and the type-mismatch / null-object branches of cast_*.
+// ---------------------------------------------------------------------------
+namespace
+{
+// Reads a boolean global set by a Lua script.
+bool AnyBoolGlobal(lua_State* L, const char* name)
+{
+    lua_getglobal(L, name);
+    bool value = lua_toboolean(L, -1) != 0;
+    lua_pop(L, 1);
+    return value;
+}
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(lua_anyobject_long_float_round_trip)
+{
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+
+    using namespace HsBa::Slicer;
+    static LuaFloat float_type;
+    static LuaLong long_type;
+    static LuaLongLong longlong_type;
+    std::vector<LuaAnyObjectNewCastBase*> types{&float_type, &long_type, &longlong_type};
+    RegisterAnyObject(L, types);
+
+    const char* script = R"(
+        _G.ok_float = (AnyObject.new_float(2.5):cast_float() == 2.5)
+        _G.ok_long  = (AnyObject.new_long(100):cast_long() == 100)
+        _G.ok_llong = (AnyObject.new_longlong(1234567890123):cast_longlong() == 1234567890123)
+    )";
+    if (luaL_dostring(L, script) != LUA_OK)
+    {
+        BOOST_FAIL("Lua script error: " << lua_tostring(L, -1));
+    }
+
+    BOOST_CHECK(AnyBoolGlobal(L, "ok_float"));
+    BOOST_CHECK(AnyBoolGlobal(L, "ok_long"));
+    BOOST_CHECK(AnyBoolGlobal(L, "ok_llong"));
+
+    lua_close(L);
+}
+
+BOOST_AUTO_TEST_CASE(lua_anyobject_scalar_new_validation_errors)
+{
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+
+    using namespace HsBa::Slicer;
+    static LuaInt int_type;
+    static LuaDouble double_type;
+    static LuaFloat float_type;
+    static LuaBool bool_type;
+    static LuaString string_type;
+    static LuaCString cstring_type;
+    static LuaSize_t size_t_type;
+    static LuaLong long_type;
+    static LuaLongLong longlong_type;
+    std::vector<LuaAnyObjectNewCastBase*> types{&int_type,   &double_type, &float_type, &bool_type,  &string_type,
+                                               &cstring_type, &size_t_type, &long_type, &longlong_type};
+    RegisterAnyObject(L, types);
+
+    // A table is never an integer / number / boolean / string, so every new_*
+    // adapter must take its `if (!lua_is...)` error branch and raise a Lua error.
+    const char* script = R"(
+        local bad = {}
+        local function fails(fn) return not pcall(fn) end
+        _G.ok =
+            fails(function() return AnyObject.new_int(bad) end) and
+            fails(function() return AnyObject.new_long(bad) end) and
+            fails(function() return AnyObject.new_longlong(bad) end) and
+            fails(function() return AnyObject.new_size_t(bad) end) and
+            fails(function() return AnyObject.new_double(bad) end) and
+            fails(function() return AnyObject.new_float(bad) end) and
+            fails(function() return AnyObject.new_bool(bad) end) and
+            fails(function() return AnyObject.new_string(bad) end) and
+            fails(function() return AnyObject.new_cstring(bad) end)
+    )";
+    if (luaL_dostring(L, script) != LUA_OK)
+    {
+        BOOST_FAIL("Lua script error: " << lua_tostring(L, -1));
+    }
+
+    BOOST_CHECK(AnyBoolGlobal(L, "ok"));
+
+    lua_close(L);
+}
+
+BOOST_AUTO_TEST_CASE(lua_anyobject_cast_type_mismatch_and_null)
+{
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+
+    using namespace HsBa::Slicer;
+    static LuaInt int_type;
+    static LuaDouble double_type;
+    static LuaBool bool_type;
+    static LuaString string_type;
+    std::vector<LuaAnyObjectNewCastBase*> types{&int_type, &double_type, &bool_type, &string_type};
+    RegisterAnyObject(L, types);
+
+    const char* script = R"(
+        local function fails(fn) return not pcall(fn) end
+        local n = AnyObject.new_int(5)
+        local s = AnyObject.new_string("hello")
+        _G.ok =
+            fails(function() return n:cast_string() end) and        -- int stored, cast to string -> catch
+            fails(function() return n:cast_bool() end) and          -- int stored, cast to bool  -> catch
+            fails(function() return s:cast_double() end) and        -- string stored, cast to double -> catch
+            fails(function() return AnyObject.cast_int() end) and   -- no argument -> null object branch
+            fails(function() return AnyObject.cast_string() end)    -- no argument -> null object branch
+    )";
+    if (luaL_dostring(L, script) != LUA_OK)
+    {
+        BOOST_FAIL("Lua script error: " << lua_tostring(L, -1));
+    }
+
+    BOOST_CHECK(AnyBoolGlobal(L, "ok"));
+
+    lua_close(L);
+}
+
+// ---------------------------------------------------------------------------
+// utils/LuaNewObject.hpp: the runtime-metatable-name overloads of NewLuaObject
+// and LuaGC.  support/LuaAdapter.cpp uses the runtime NewLuaObject but wires its
+// __gc to a hand-written finaliser, so the two-argument `LuaGC<T>(L, mt)`
+// overload had no caller anywhere.  These cases exercise both runtime overloads
+// and assert the destructor actually runs (proving LuaGC executed, not merely
+// instantiated), and use MakeUniqueLuaState to cover the UniqueLua deleter.
+// ---------------------------------------------------------------------------
+namespace
+{
+// Tracks live instances so the __gc finaliser effect is observable.
+struct NewObjProbe
+{
+    static std::atomic<int> live;
+    int value;
+    explicit NewObjProbe(int v)
+        : value(v)
+    {
+        ++live;
+    }
+    ~NewObjProbe() { --live; }
+};
+std::atomic<int> NewObjProbe::live{0};
+
+// __gc that finalises through the runtime-name LuaGC<T>(L, mt) overload.
+int probe_gc_runtime_name(lua_State* L)
+{
+    return HsBa::Slicer::LuaGC<NewObjProbe>(L, "NewObjProbe");
+}
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(lua_newobject_runtime_metatable_name_gc)
+{
+    using namespace HsBa::Slicer;
+    NewObjProbe::live = 0;
+
+    {
+        // MakeUniqueLuaState() -> UniqueLua -> LuaStateDeleter::operator() on scope exit.
+        UniqueLua holder = MakeUniqueLuaState();
+        BOOST_REQUIRE(holder != nullptr);
+        lua_State* L = holder.get();
+        luaL_openlibs(L);
+
+        // Metatable whose __gc uses the runtime-name LuaGC overload.
+        luaL_newmetatable(L, "NewObjProbe");
+        lua_pushcfunction(L, probe_gc_runtime_name);
+        lua_setfield(L, -2, "__gc");
+        lua_pop(L, 1);
+
+        // Runtime-name NewLuaObject overload (const char* mt + constructor args).
+        NewObjProbe* p = NewLuaObject<NewObjProbe>(L, "NewObjProbe", 7);
+        BOOST_REQUIRE(p != nullptr);
+        BOOST_CHECK_EQUAL(p->value, 7);
+        BOOST_CHECK_EQUAL(NewObjProbe::live.load(), 1);  // constructed in the userdata
+
+        // Drop the only stack reference, then force a full collection so Lua
+        // runs the __gc finaliser (-> LuaGC<T>(L, mt) -> ~NewObjProbe).
+        lua_pop(L, 1);
+        lua_gc(L, LUA_GCCOLLECT, 0);
+        BOOST_CHECK_EQUAL(NewObjProbe::live.load(), 0);  // destructed by the runtime LuaGC
+    }
+
+    // State closed by the deleter; no further finalisers should be pending.
+    BOOST_CHECK_EQUAL(NewObjProbe::live.load(), 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

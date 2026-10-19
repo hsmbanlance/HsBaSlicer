@@ -4,26 +4,36 @@
  */
 #include "encoding_convert.hpp"
 
-//use qt for qstring
-#ifdef QT_VERSION 
+// Windows.h is required for the UTF-8 <-> UTF-16 path conversion helpers below, which must
+// work regardless of whether the Qt (USE_QSTRING) or boost code path is selected. Its own
+// include guards make the later conditional include harmless.
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
+// use qt for qstring
+#ifdef QT_VERSION
 #define USE_QSTRING
 #include <QString>
 #include <QStringConverter>
 #else
-#if defined(__APPLE__)
+#ifdef __APPLE__
 #include <TargetConditionals.h>
 #endif
 #if !defined(__ANDROID__) && !(defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
 #include <boost/locale.hpp>
 #if _WIN32
-#include <Windows.h>
+// <Windows.h> is already included at the top of this file, so it precedes <VersionHelpers.h>:
+// the version-helper inline functions rely on types and macros (BOOL, OSVERSIONINFOEX,
+// VerSetConditionMask, _WIN32_WINNT_*) declared by the base Windows headers.
 #include <VersionHelpers.h>
+
 #endif
 #else
-#include <vector>
-#include <iconv.h>
 #include <errno.h>
-#endif // ANDROID or iOS
+#include <iconv.h>
+#include <vector>
+#endif  // ANDROID or iOS
 #endif
 
 #include "base/error.hpp"
@@ -31,162 +41,224 @@
 namespace HsBa::Slicer
 {
 #ifndef USE_QSTRING
-	//boost system locale may error if use qt
-	static std::string SystemLocaleStr()
-	{
+// boost system locale may error if use qt
+namespace
+{
+std::string SystemLocaleStr()
+{
 #if defined(__ANDROID__) || (defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
-		return "utf8";
+    return "utf8";
 #else
-		std::string strCodePage = boost::locale::util::get_system_locale();
-		std::locale loc = boost::locale::generator().generate(strCodePage);
-		return std::use_facet<boost::locale::info>(loc).encoding();
-#endif // __ANDROID__ or iOS
-	}
-#endif // !USE_QSTRING
+    std::string const strCodePage = boost::locale::util::get_system_locale();
+    std::locale const loc = boost::locale::generator().generate(strCodePage);
+    return std::use_facet<boost::locale::info>(loc).encoding();
+#endif  // __ANDROID__ or iOS
+}
+}  // namespace
+#endif  // !USE_QSTRING
 
-	std::string utf8_to_local(const std::string& str)
-	{
+std::string utf8_to_local(const std::string& str)
+{
 #ifndef USE_QSTRING
 #if defined(__ANDROID__) || (defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
-		return str;
+    return str;
 #else
 #if _WIN32
-		if (windows_chcp_utf8()) //If chcp is utf-8,return str
-		{
-			return str;
-		}
-#endif // _WIN32
-		return boost::locale::conv::between(str, SystemLocaleStr(), "utf-8");
-#endif // __ANDROID__ or iOS
+    if (windows_chcp_utf8())  // If chcp is utf-8,return str
+    {
+        return str;
+    }
+#endif  // _WIN32
+    return boost::locale::conv::between(str, SystemLocaleStr(), "utf-8");
+#endif  // __ANDROID__ or iOS
 #else
-		//If Use qt,code here
-		return QString::fromStdString(str).toStdString();
-#endif // !USE_QSTRING
-	}
-	std::string local_to_utf8(const std::string& str)
-	{
+    // If Use qt,code here
+    return QString::fromStdString(str).toStdString();
+#endif  // !USE_QSTRING
+}
+std::string local_to_utf8(const std::string& str)
+{
 #ifndef USE_QSTRING
 #if defined(__ANDROID__) || (defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
-		return str;
+    return str;
 #else
 #if _WIN32
-		if (windows_chcp_utf8())//If chcp is utf-8,return str
-		{
-			return str;
-		}
-#endif // _WIN32
-		return boost::locale::conv::between(str, "utf-8", SystemLocaleStr());
-#endif // __ANDROID__ or iOS
+    if (windows_chcp_utf8())  // If chcp is utf-8,return str
+    {
+        return str;
+    }
+#endif  // _WIN32
+    return boost::locale::conv::between(str, "utf-8", SystemLocaleStr());
+#endif  // __ANDROID__ or iOS
 
 
 #else
-		//If Use qt,code here
-		return QString::fromStdString(str).toStdString();
-#endif // !USE_QSTRING
-	}
+    // If Use qt,code here
+    return QString::fromStdString(str).toStdString();
+#endif  // !USE_QSTRING
+}
+
+std::filesystem::path utf8_to_path(const std::string& utf8Path)
+{
+#ifdef _WIN32
+    if (utf8Path.empty())
+    {
+        return {};
+    }
+    const int wideLen = MultiByteToWideChar(CP_UTF8, 0, utf8Path.data(), static_cast<int>(utf8Path.size()), nullptr, 0);
+    if (wideLen <= 0)
+    {
+        // Not valid UTF-8: fall back to the native (ANSI-code-page) parsing so the caller still
+        // gets a usable path instead of an empty one.
+        return std::filesystem::path(utf8Path);
+    }
+    std::wstring wide(static_cast<size_t>(wideLen), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, utf8Path.data(), static_cast<int>(utf8Path.size()), wide.data(), wideLen);
+    return std::filesystem::path(wide);
+#else
+    // On POSIX/Android/iOS the native path encoding is UTF-8, so the bytes can be used directly.
+    return std::filesystem::path(utf8Path);
+#endif  // _WIN32
+}
+
+std::string path_to_utf8(const std::filesystem::path& path)
+{
+#ifdef _WIN32
+    const std::wstring& wide = path.native();
+    if (wide.empty())
+    {
+        return {};
+    }
+    const int len =
+        WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(wide.size()), nullptr, 0, nullptr, nullptr);
+    if (len <= 0)
+    {
+        return path.string();
+    }
+    std::string out(static_cast<size_t>(len), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(wide.size()), out.data(), len, nullptr, nullptr);
+    return out;
+#else
+    return path.string();
+#endif  // _WIN32
+}
 
 #ifndef QT_VERSION
-	std::string encoding_convert(const std::string& str, const std::string& from, const std::string& to)
-	{
+std::string encoding_convert(const std::string& str, const std::string& from, const std::string& to)
+{
 #if !defined(__ANDROID__) && !(defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
-		if (from == to)
-		{
-			return str;
-		}
-		return boost::locale::conv::between(str, from, to);
-#else // Android and iOS do not support boost.locale, use iconv instead
-		constexpr size_t kMinBufferSize = 64; // Minimum buffer size for output
-		constexpr size_t kInitialExpansionFactor = 2;
-		constexpr size_t kMaxExpansionFactor = 16; // Maximum expansion factor to prevent infinite loops
-		constexpr size_t kGrowthMultiplier = 2;
-		if (from == to || str.empty()) {
-			return str;
-		}
+    if (from == to)
+    {
+        return str;
+    }
+    // boost::locale::conv::between takes the destination encoding first, then the
+    // source encoding. The contract here is "convert str from `from` to `to`", so
+    // the arguments must be (to, from); passing (from, to) silently reverses the
+    // direction (and disagrees with the iconv branch used on Android/iOS below).
+    return boost::locale::conv::between(str, to, from);
+#else   // Android and iOS do not support boost.locale, use iconv instead
+    constexpr size_t kMinBufferSize = 64;  // Minimum buffer size for output
+    constexpr size_t kInitialExpansionFactor = 2;
+    constexpr size_t kMaxExpansionFactor = 16;  // Maximum expansion factor to prevent infinite loops
+    constexpr size_t kGrowthMultiplier = 2;
+    if (from == to || str.empty())
+    {
+        return str;
+    }
 
-		struct IconvDeleter {
-			iconv_t cd;
-			IconvDeleter(iconv_t c) : cd(c) {}
-			~IconvDeleter() { if (cd != reinterpret_cast<iconv_t>(-1)) iconv_close(cd); }
-		};
+    struct IconvDeleter
+    {
+        iconv_t cd;
+        IconvDeleter(iconv_t c) : cd(c) {}
+        ~IconvDeleter()
+        {
+            if (cd != reinterpret_cast<iconv_t>(-1))
+                iconv_close(cd);
+        }
+    };
 
-		iconv_t cd = iconv_open(to.c_str(), from.c_str());
-		if (cd == reinterpret_cast<iconv_t>(-1)) {
-			throw RuntimeError("iconv_open failed for: " + from + " -> " + to);
-		}
-		IconvDeleter guard(cd);
+    iconv_t cd = iconv_open(to.c_str(), from.c_str());
+    if (cd == reinterpret_cast<iconv_t>(-1))
+    {
+        throw RuntimeError("iconv_open failed for: " + from + " -> " + to);
+    }
+    IconvDeleter guard(cd);
 
-		std::string inBuf = str;
-		size_t inBytesLeft = inBuf.size();
+    std::string inBuf = str;
+    size_t inBytesLeft = inBuf.size();
 
-		size_t outBufSize = std::max(inBytesLeft * kInitialExpansionFactor, static_cast<size_t>(kMinBufferSize));
-		std::vector<char> outBuf;
+    size_t outBufSize = std::max(inBytesLeft * kInitialExpansionFactor, static_cast<size_t>(kMinBufferSize));
+    std::vector<char> outBuf;
 
-		char* inPtr = inBuf.data();
-		char* outPtr = nullptr;
-		size_t outBytesLeft = 0;
-		size_t res = 0;
+    char* inPtr = inBuf.data();
+    char* outPtr = nullptr;
+    size_t outBytesLeft = 0;
+    size_t res = 0;
 
-		do {
-			outBuf.resize(outBufSize);
-			outBytesLeft = outBufSize;
-			outPtr = outBuf.data();
+    do
+    {
+        outBuf.resize(outBufSize);
+        outBytesLeft = outBufSize;
+        outPtr = outBuf.data();
 
-			inPtr = inBuf.data();
-			inBytesLeft = inBuf.size();
+        inPtr = inBuf.data();
+        inBytesLeft = inBuf.size();
 
-			res = iconv(cd, &inPtr, &inBytesLeft, &outPtr, &outBytesLeft);
+        res = iconv(cd, &inPtr, &inBytesLeft, &outPtr, &outBytesLeft);
 
-			if (res == static_cast<size_t>(-1) && errno != E2BIG) {
-				throw RuntimeError("iconv failed: " + std::string(strerror(errno)));
-			}
+        if (res == static_cast<size_t>(-1) && errno != E2BIG)
+        {
+            throw RuntimeError("iconv failed: " + std::string(strerror(errno)));
+        }
 
-			if (errno == E2BIG) {
-				outBufSize *= kGrowthMultiplier;
-			}
-		} while (errno == E2BIG && outBufSize < inBytesLeft * kMaxExpansionFactor);
+        if (errno == E2BIG)
+        {
+            outBufSize *= kGrowthMultiplier;
+        }
+    } while (errno == E2BIG && outBufSize < inBytesLeft * kMaxExpansionFactor);
 
-		return std::string(outBuf.data(), outBuf.size() - outBytesLeft);
-#endif // android or iOS
-	}
-#endif // !QT_VERSION
+    return std::string(outBuf.data(), outBuf.size() - outBytesLeft);
+#endif  // android or iOS
+}
+#endif  // !QT_VERSION
 
 #if _WIN32
-	constexpr UINT WINDOWS_CHCP_UTF8 = CP_UTF8;//65001
-	bool windows_chcp_utf8()
-	{
-		return GetACP() == WINDOWS_CHCP_UTF8;//65001 is utf-8
-	}
-	bool set_windows_console_utf8()
-	{
-		return SetConsoleCP(WINDOWS_CHCP_UTF8) || SetConsoleOutputCP(WINDOWS_CHCP_UTF8);
-	}
+constexpr UINT WINDOWS_CHCP_UTF8 = CP_UTF8;  // 65001
+bool windows_chcp_utf8()
+{
+    return GetACP() == WINDOWS_CHCP_UTF8;  // 65001 is utf-8
+}
+bool set_windows_console_utf8()
+{
+    return (SetConsoleCP(WINDOWS_CHCP_UTF8) != 0) || (SetConsoleOutputCP(WINDOWS_CHCP_UTF8) != 0);
+}
 
-	bool set_windows_console_ansi()
-	{
-		UINT windows_ansi = GetACP();
-		return SetConsoleCP(windows_ansi) || SetConsoleOutputCP(windows_ansi);
-	}
+bool set_windows_console_ansi()
+{
+    UINT const windows_ansi = GetACP();
+    return (SetConsoleCP(windows_ansi) != 0) || (SetConsoleOutputCP(windows_ansi) != 0);
+}
 
-	bool set_windows_console_in_ansi_out_utf8()
-	{
-		UINT windows_ansi = GetACP();
-		return SetConsoleCP(windows_ansi) || SetConsoleOutputCP(WINDOWS_CHCP_UTF8);
-	}
+bool set_windows_console_in_ansi_out_utf8()
+{
+    UINT const windows_ansi = GetACP();
+    return (SetConsoleCP(windows_ansi) != 0) || (SetConsoleOutputCP(WINDOWS_CHCP_UTF8) != 0);
+}
 
-	bool set_windows_console_out_ansi_in_utf8()
-	{
-		UINT windows_ansi = GetACP();
-		return SetConsoleCP(WINDOWS_CHCP_UTF8) || SetConsoleOutputCP(windows_ansi);
-	}
+bool set_windows_console_out_ansi_in_utf8()
+{
+    UINT const windows_ansi = GetACP();
+    return (SetConsoleCP(WINDOWS_CHCP_UTF8) != 0) || (SetConsoleOutputCP(windows_ansi) != 0);
+}
 
-	bool windows_win7_or_greater()
-	{
-		return IsWindows7OrGreater();
-	}
+bool windows_win7_or_greater()
+{
+    return IsWindows7OrGreater();
+}
 
-	bool windows_win10_or_greater()
-	{
-		return IsWindows10OrGreater();
-	}
-#endif // _WIN32
-}// namespace HsBa::Slicer
+bool windows_win10_or_greater()
+{
+    return IsWindows10OrGreater();
+}
+#endif  // _WIN32
+}  // namespace HsBa::Slicer

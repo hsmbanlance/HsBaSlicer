@@ -211,7 +211,7 @@ public:
 
 template <>
 class LuaAnyObjectNewCastImpl<long long, "longlong">
-    : public LuaAnyObjectNewCastAbstract<LuaAnyObjectNewCastImpl<long, "long">>
+    : public LuaAnyObjectNewCastAbstract<LuaAnyObjectNewCastImpl<long long, "longlong">>
 {
 public:
     const std::string type_name_impl() const { return "longlong"; }

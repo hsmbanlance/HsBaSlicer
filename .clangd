@@ -1,0 +1,117 @@
+# ============================================================================
+# clangd 配置 — HsBaSlicer
+# ============================================================================
+# compile_commands.json 由 CMake 生成到 out/build/<preset>/ 目录。
+# 首次使用请运行:
+#   cmake --preset <presetName>       (如 x64-debug / linux-debug / macos-debug)
+# 然后将编译数据库链接到项目根目录（clangd 自动搜索根目录）:
+#   Linux/macOS:  ln -sf out/build/linux-debug/compile_commands.json .
+#   Windows:      mklink compile_commands.json out\build\x64-debug\compile_commands.json
+#
+# 如果希望保留原始目录，取消下方 CompilationDatabase 注释并改为绝对/相对路径。
+# ============================================================================
+
+CompileFlags:
+  # 指向编译数据库目录（取消注释后使用，替代符号链接方案）
+  # CompilationDatabase: out/build/linux-debug
+
+  # 对 MSVC (cl.exe) 生成的 compile_commands，clangd 需要 --query-driver 读取
+  # 系统 include 路径。Linux/macOS 使用 GCC/Clang 时移除此行。
+  Add:
+    - "--query-driver=**/cl.exe"
+    - "--query-driver=**/clang-cl.exe"
+
+  # 移除 clangd 不认识的 MSVC 专属标志
+  Remove:
+    - /bigobj           # MSVC 专用，clangd 无法解析
+    - /W4
+    - /WX
+    - /permissive-
+    - /Zc:__cplusplus
+    - /utf-8
+    - /FS
+    - -mssse3
+    - -msse4.2
+    - /arch:*
+
+  # 确保 C++20 标准（项目强制要求）
+  Std: c++20
+
+Diagnostics:
+  # 忽略来自 vcpkg 安装目录和系统头文件的诊断
+  Suppress:
+    - "pp_file_not_found"
+    - "err_header_not_found"
+  # clangd 内置 clang-tidy 检查（与 .clang-tidy 文件协同）
+  ClangTidy:
+    Add:
+      - "clang-analyzer-*"
+      - "bugprone-*"
+      - "performance-*"
+      - "modernize-*"
+      - "readability-*"
+      - "cppcoreguidelines-*"
+    Remove:
+      - modernize-use-trailing-return-type
+      - modernize-use-nodiscard
+      - modernize-use-emplace
+      - readability-identifier-length
+      - readability-magic-numbers
+      - readability-function-cognitive-complexity
+      - readability-math-missing-parentheses
+      - cppcoreguidelines-avoid-magic-numbers
+      - cppcoreguidelines-pro-bounds-pointer-arithmetic
+      - cppcoreguidelines-pro-bounds-avoid-unchecked-container-access
+      - cppcoreguidelines-owning-memory
+      - misc-no-recursion
+      - cert-err52-cpp
+      - modernize-avoid-setjmp-longjmp
+      - cppcoreguidelines-pro-type-reinterpret-cast
+      - bugprone-easily-swappable-parameters
+      - modernize-avoid-c-arrays
+      - cppcoreguidelines-avoid-c-arrays
+      - cppcoreguidelines-pro-bounds-constant-array-index
+      - cppcoreguidelines-pro-bounds-array-to-pointer-decay
+      - cppcoreguidelines-pro-type-vararg
+      - bugprone-float-loop-counter
+      - cert-flp30-c
+      - clang-analyzer-security.FloatLoopCounter
+      - misc-confusable-identifiers
+      - modernize-avoid-c-style-cast
+      - cppcoreguidelines-pro-type-cstyle-cast
+      - modernize-return-braced-init-list
+      - cppcoreguidelines-pro-type-const-cast
+      - cppcoreguidelines-no-malloc
+      - cppcoreguidelines-special-member-functions
+
+  UnusedIncludes: Strict
+  MissingIncludes: Strict
+
+Index:
+  # 后台索引：仅索引项目源码，跳过系统/第三方头文件
+  StandardLibrary: No
+  Background: Build
+
+InlayHints:
+  Enabled: Yes
+  ParameterNames: Yes
+  DeducedTypes: Yes
+  DefaultArguments: No
+
+Hover:
+  ShowAKA: Yes
+
+# ----------------------------------------------------------------------------
+# 条件片段：tests/、samples/、static_tests/ 目录禁用 clang-tidy 诊断
+# 理由：Boost.Test 夹具/断言宏、教学示例重复样板、static_assert 编译期测试均
+#       与生产代码净化契约不同，纳入会产生噪声。见 .clang-tidy 顶部说明。
+# ----------------------------------------------------------------------------
+---
+If:
+  Path: "(^|.*/)(tests|samples|static_tests)/.*"
+Diagnostics:
+  ClangTidy:
+    Add: []
+    Remove:
+      - "*"
+...

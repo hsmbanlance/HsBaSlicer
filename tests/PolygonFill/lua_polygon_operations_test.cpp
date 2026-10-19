@@ -118,3 +118,74 @@ assert(#poly3 == 1)
     std::filesystem::remove(dump_path2, ec);
 }
 #endif  // HSBA_POLYGON_DUMP
+
+// Drive every boolean / hull / area / shape-factory binding registered by
+// RegisterLuaPolygonOperations. This path is available regardless of the
+// HSBA_POLYGON_DUMP macro. Note the two scaling conventions: union/intersection/
+// difference/xor/area work on raw float polygon tables, whereas offsetOperation
+// routes through the integerized path (coords * 1e6), so its delta is in integer
+// units (1.0 mm == 1e6). textToPolygons is intentionally skipped: it needs a font
+// file on disk (environment-dependent).
+BOOST_AUTO_TEST_CASE(lua_boolean_hull_area_factories)
+{
+    lua_State* L = luaL_newstate();
+    BOOST_REQUIRE(L != nullptr);
+    luaL_openlibs(L);
+    RegisterLuaPolygonOperations(L);
+
+    const char* script = R"lua(
+local function areaof(polys)
+    local s = 0
+    for _, poly in ipairs(polys) do s = s + PolygonOperations.area(poly) end
+    return math.abs(s)
+end
+local a = { { {x = 0, y = 0}, {x = 10, y = 0}, {x = 10, y = 10}, {x = 0, y = 10} } }
+local b = { { {x = 5, y = 0}, {x = 15, y = 0}, {x = 15, y = 10}, {x = 5, y = 10} } }
+
+-- area of a single polygon table
+assert(math.abs(PolygonOperations.area(a[1]) - 100) < 1e-6)
+
+-- dedicated boolean bindings
+assert(math.abs(areaof(PolygonOperations.union(a, b)) - 150) < 1e-6)
+assert(math.abs(areaof(PolygonOperations.intersection(a, b)) - 50) < 1e-6)
+assert(math.abs(areaof(PolygonOperations.difference(a, b)) - 50) < 1e-6)
+assert(math.abs(areaof(PolygonOperations.xor(a, b)) - 100) < 1e-6)
+
+-- generic dispatcher covers all four operation-name branches
+assert(math.abs(areaof(PolygonOperations.booleanOperation(a, b, "union")) - 150) < 1e-6)
+assert(math.abs(areaof(PolygonOperations.booleanOperation(a, b, "intersection")) - 50) < 1e-6)
+assert(math.abs(areaof(PolygonOperations.booleanOperation(a, b, "difference")) - 50) < 1e-6)
+assert(math.abs(areaof(PolygonOperations.booleanOperation(a, b, "xor")) - 100) < 1e-6)
+
+-- offset grows/shrinks by 1.0 unit == 1e6 in the integerized coordinate space
+assert(areaof(PolygonOperations.offsetOperation(a, 1000000)) > 120)
+assert(areaof(PolygonOperations.offsetOperation(a, -1000000)) < 80)
+
+-- hulls
+local hull = PolygonOperations.convexHullOperation(a)
+assert(#hull == 1 and #hull[1] >= 4)
+local ch = PolygonOperations.concaveHullOperation(a, 3)
+assert(#ch == 1 and #ch[1] >= 3)
+
+-- shape factories (each returns a single-element PolygonsD)
+assert(#PolygonOperations.makeRectangle(0, 0, 10, 5) == 1)
+assert(#PolygonOperations.makeCircle(0, 0, 5, 16) == 1)
+assert(#PolygonOperations.makeEllipse(0, 0, 5, 3, 16) == 1)
+assert(#PolygonOperations.makeRegularPolygon(0, 0, 5, 5) == 1)
+
+-- argument-validation branches surface as Lua errors (caught via pcall)
+assert(not pcall(function() return PolygonOperations.area(123) end))
+assert(not pcall(function() return PolygonOperations.union(a, "x") end))
+assert(not pcall(function() return PolygonOperations.offsetOperation(a, "x") end))
+assert(not pcall(function() return PolygonOperations.booleanOperation(a, b, "nonsense") end))
+)lua";
+
+    int ret = luaL_dostring(L, script);
+    if (ret != LUA_OK)
+    {
+        const char* message = lua_tostring(L, -1);
+        std::cerr << (message ? message : "Lua execution failed without error message") << std::endl;
+        BOOST_CHECK(false);
+    }
+    lua_close(L);
+}

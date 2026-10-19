@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: hsba_slicer_module
+title: HsBaSlicer C++20 模块与示例可执行入口
+scope:
+    - ModuleHsBaSlicer/
+    - HsBaSlicer/
+source_files: []
+depends_on: []
+related_to:
+    - path: samples_apps

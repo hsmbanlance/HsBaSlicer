@@ -18,6 +18,7 @@ namespace HsBa::Slicer
  * Marks the archive as closed, removes the temporary cache directory when one was created for large
  * entries, and deletes any temporary inner-tar file left over from a compressed tar archive.
  */
+// NOLINTNEXTLINE(bugprone-exception-escape) C-API cleanup path is conservatively treated as may-throw
 Bit7ZUnzipper::~Bit7ZUnzipper()
 {
     if (is_open_)
@@ -26,9 +27,10 @@ Bit7ZUnzipper::~Bit7ZUnzipper()
     }
     if (use_cache_dir_)
     {
-        if (std::filesystem::exists(cache_dir_))
+        std::error_code ec;
+        if (std::filesystem::exists(cache_dir_, ec) && !ec)
         {
-            std::filesystem::remove_all(cache_dir_);
+            std::filesystem::remove_all(cache_dir_, ec);
         }
     }
     ClearInnerTarTempFile();
@@ -45,7 +47,8 @@ void Bit7ZUnzipper::ClearInnerTarTempFile()
     if (!inner_tar_path_.empty())
     {
         archiver_.reset();  // release the file handle before deleting on Windows
-        std::filesystem::remove(inner_tar_path_);
+        std::error_code ec;
+        std::filesystem::remove(inner_tar_path_, ec);
         inner_tar_path_.clear();
     }
 }
@@ -74,10 +77,10 @@ void Bit7ZUnzipper::ReadFromFileImpl(std::string_view path, bool reopen)
         }
         is_open_ = false;
     }
-    bit7z::Bit7zLibrary lib{dll_path_};
+    bit7z::Bit7zLibrary const lib{dll_path_};
     archiver_.reset();
     ClearInnerTarTempFile();
-    std::string archive_path = std::string{path};
+    std::string const archive_path = std::string{path};
     if (IsCompressedTarPath(archive_path))
     {
         // 7z sees only the compression layer of .tar.gz/.tar.xz (a single .tar entry): unpack the
@@ -85,9 +88,9 @@ void Bit7ZUnzipper::ReadFromFileImpl(std::string_view path, bool reopen)
         try
         {
             inner_tar_path_ = MakeInnerTarTempPath(archive_path);
-            bit7z::BitArchiveReader outer{lib, archive_path, bit7z::BitFormat::Auto, password_};
+            bit7z::BitArchiveReader const outer{lib, archive_path, bit7z::BitFormat::Auto, password_};
             std::ofstream ofs(inner_tar_path_, std::ios_base::out | std::ios_base::binary);
-            outer.extractTo(ofs, 0u);
+            outer.extractTo(ofs, 0U);
             ofs.close();
             archiver_ = std::make_unique<bit7z::BitArchiveReader>(
                 lib, inner_tar_path_.string(), bit7z::ArchiveStartOffset::FileStart, bit7z::BitFormat::Tar, password_);
@@ -131,10 +134,10 @@ void Bit7ZUnzipper::CreateBuffDir()
     {
         return;
     }
-    boost::uuids::name_generator_latest gen{boost::uuids::ns::url()};
+    boost::uuids::name_generator_latest const gen{boost::uuids::ns::url()};
     auto uuid = gen(archiver_path_.c_str());
-    std::filesystem::path cur_path = std::filesystem::current_path();
-    std::filesystem::path cache_path = cur_path / boost::uuids::to_string(uuid);
+    std::filesystem::path const cur_path = std::filesystem::current_path();
+    std::filesystem::path const cache_path = cur_path / boost::uuids::to_string(uuid);
     if (std::filesystem::exists(cache_path))
     {
         std::filesystem::remove_all(cache_path);
@@ -163,7 +166,7 @@ std::shared_ptr<UnzipperStream> Bit7ZUnzipper::GetStreamImpl(std::string_view pa
         throw IOError(std::format("Zip file {} is not opened.", archiver_path_));
     }
     RaiseEvent(archiver_path_, part_file);
-    if (memory_cache_.find(std::string{part_file}) != memory_cache_.end())
+    if (memory_cache_.contains(std::string{part_file}))
     {
         const auto& cache = memory_cache_.at(std::string{part_file});
         auto stream = UnzipperStream::MakeUnzipperStream(cache);
@@ -175,7 +178,7 @@ std::shared_ptr<UnzipperStream> Bit7ZUnzipper::GetStreamImpl(std::string_view pa
     {
         throw IOError("File not found in zip: " + std::string(part_file));
     }
-    size_t uncomp_size = it->size();
+    size_t const uncomp_size = it->size();
     if (uncomp_size == 0)
     {
         auto stream = std::make_shared<UnzipperStream>("");
@@ -196,7 +199,8 @@ std::shared_ptr<UnzipperStream> Bit7ZUnzipper::GetStreamImpl(std::string_view pa
  * @param part_name Entry name used as the key in @ref memory_cache_.
  * @return Shared pointer to a stream backed by the freshly extracted buffer.
  */
-std::shared_ptr<UnzipperStream> Bit7ZUnzipper::ReadFileTobuff(It it, size_t uncompsize, const std::string& part_name)
+std::shared_ptr<UnzipperStream> Bit7ZUnzipper::ReadFileTobuff(const It& it, size_t /*uncompsize*/,
+                                                              const std::string& part_name)
 {
     UnzipperStream::Buffer buff(it->size());
     archiver_->extractTo(reinterpret_cast<bit7z::byte_t*>(buff.data.get()), it->size(), it->index());
@@ -215,15 +219,15 @@ std::shared_ptr<UnzipperStream> Bit7ZUnzipper::ReadFileTobuff(It it, size_t unco
  * Creates the cache directory on demand and names the output file from a UUID derived from
  * part_name, replacing any file that already exists at that location.
  */
-std::shared_ptr<UnzipperStream> Bit7ZUnzipper::ReadFileToFile(It it, const std::string& part_name)
+std::shared_ptr<UnzipperStream> Bit7ZUnzipper::ReadFileToFile(const It& it, const std::string& part_name)
 {
     if (!use_cache_dir_)
     {
         CreateBuffDir();
     }
-    boost::uuids::name_generator_latest gen{boost::uuids::ns::url()};
+    boost::uuids::name_generator_latest const gen{boost::uuids::ns::url()};
     auto uuid = gen(part_name.c_str());
-    std::filesystem::path cur_path = std::filesystem::path{cache_dir_} / boost::uuids::to_string(uuid);
+    std::filesystem::path const cur_path = std::filesystem::path{cache_dir_} / boost::uuids::to_string(uuid);
     if (std::filesystem::exists(cur_path))
     {
         std::filesystem::remove_all(cur_path);

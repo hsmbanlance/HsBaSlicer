@@ -1,14 +1,18 @@
 #define BOOST_TEST_MODULE polygon_fill_test
 #include <boost/test/included/unit_test.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <numbers>
 
 #undef Polygon
 #include "2D/IntPolygon.hpp"
 #include "2D/PolygonFill.hpp"
 #include "LibHsBaSlicer/Fill/polygon_fill.hpp"
 #include "LibHsBaSlicer/Path/path_optimizer.hpp"
+#include "base/error.hpp"
 
 using namespace HsBa::Slicer;
 
@@ -171,6 +175,227 @@ end
     BOOST_CHECK_EQUAL(luares[1].front().y, 9000 * integerization);
     BOOST_CHECK_EQUAL(luares[1].back().x, 9000 * integerization);
     BOOST_CHECK_EQUAL(luares[1].back().y, 1000 * integerization);
+}
+
+// OffsetFill (public C++ API) nests closed rings inward until the polygon vanishes;
+// a non-positive spacing short-circuits to an empty result.
+BOOST_AUTO_TEST_CASE(offset_fill_public_and_edge_cases)
+{
+    PolygonD polyd;
+    polyd.emplace_back(Point2{0, 0});
+    polyd.emplace_back(Point2{10000, 0});
+    polyd.emplace_back(Point2{10000, 10000});
+    polyd.emplace_back(Point2{0, 10000});
+    auto poly = Polygons{Integerization(polyd)};
+
+    auto rings = OffsetFill(poly, 1000.0);
+    BOOST_REQUIRE(!rings.empty());
+    for (const auto& r : rings)
+    {
+        BOOST_CHECK_GE(r.size(), 3u);
+        // OffsetFill closes every ring so the first and last vertex coincide
+        BOOST_CHECK(r.front() == r.back());
+    }
+
+    // spacing <= 0 returns empty (both the zero and the negative branch)
+    BOOST_CHECK(OffsetFill(poly, 0.0).empty());
+    BOOST_CHECK(OffsetFill(poly, -5.0).empty());
+}
+
+// RandomizeStartPoints: closed contour/offset loops are rotated onto a deterministic random
+// point ON AN EDGE (uniform arc-length sampling, inserted as a new split vertex) while the
+// original vertices keep their cyclic order/winding and the duplicated closing form is kept;
+// open short paths pass through unchanged.
+BOOST_AUTO_TEST_CASE(randomize_start_points_preserves_loops)
+{
+    PolygonD polyd;
+    polyd.emplace_back(Point2{0, 0});
+    polyd.emplace_back(Point2{10000, 0});
+    polyd.emplace_back(Point2{10000, 10000});
+    polyd.emplace_back(Point2{0, 10000});
+    auto poly = Polygons{Integerization(polyd)};
+    auto rings = OffsetFill(poly, 500.0);
+    BOOST_REQUIRE_GE(rings.size(), 3u);
+
+    auto const r1 = RandomizeStartPoints(rings, 12345, 0.0);
+    auto const r2 = RandomizeStartPoints(rings, 12345, 0.0);
+    BOOST_REQUIRE_EQUAL(r1.size(), rings.size());
+    // same seed -> bit-identical result (mt19937_64 is cross-platform deterministic)
+    BOOST_CHECK(r1 == r2);
+
+    bool any_mid_edge = false;
+    for (size_t i = 0; i < rings.size(); ++i)
+    {
+        const auto& src = rings[i];
+        const auto& dst = r1[i];
+        const size_t n = src.size() - 1;                  // ring vertex count (duplicated closing vertex excluded)
+        BOOST_REQUIRE_EQUAL(dst.size(), src.size() + 1);  // one split vertex inserted at head and tail
+        BOOST_CHECK(dst.front() == dst.back());           // closed form kept
+        // the interior must still be a pure cyclic rotation of the original vertex sequence
+        auto const j_it = std::find(src.begin(), src.begin() + static_cast<std::ptrdiff_t>(n), dst[1]);
+        BOOST_REQUIRE(j_it != src.begin() + static_cast<std::ptrdiff_t>(n));
+        const size_t pos = static_cast<size_t>(std::distance(src.begin(), j_it));
+        for (size_t k = 0; k < n; ++k)
+        {
+            BOOST_CHECK(dst[1 + k] == src[(pos + k) % n]);
+        }
+        // the split start point lies on the closing edge dst[n] -> dst[1] (within rounding)
+        Point2 const sp = dst.front();
+        Point2 const a = dst[n];
+        Point2 const b = dst[1];
+        double const ab = std::hypot(static_cast<double>(b.x - a.x), static_cast<double>(b.y - a.y));
+        BOOST_REQUIRE_GT(ab, 0.0);
+        double const cross = std::abs(static_cast<double>(b.x - a.x) * static_cast<double>(sp.y - a.y) -
+                                      static_cast<double>(b.y - a.y) * static_cast<double>(sp.x - a.x));
+        BOOST_CHECK_LE(cross / ab, 1.0);  // collinear up to sub-integer rounding
+        BOOST_CHECK_GE(sp.x, std::min(a.x, b.x) - 1);
+        BOOST_CHECK_LE(sp.x, std::max(a.x, b.x) + 1);
+        BOOST_CHECK_GE(sp.y, std::min(a.y, b.y) - 1);
+        BOOST_CHECK_LE(sp.y, std::max(a.y, b.y) + 1);
+        any_mid_edge = any_mid_edge || (sp != a && sp != b);
+    }
+    // the seam should land strictly inside an edge for at least one ring
+    BOOST_CHECK(any_mid_edge);
+
+    // a different seed moves at least one ring start (randomization actually happens)
+    auto const r3 = RandomizeStartPoints(rings, 987654321ULL, 0.0);
+    bool any_changed = false;
+    for (size_t i = 0; i < rings.size(); ++i)
+    {
+        any_changed = any_changed || (r3[i].front() != r1[i].front());
+    }
+    BOOST_CHECK(any_changed);
+
+    // open 2-point segments pass through unchanged
+    HsBa::Slicer::Polygon seg;
+    seg.emplace_back(Point2{0, 0});
+    seg.emplace_back(Point2{5000, 0});
+    auto const segs = RandomizeStartPoints(Polygons{seg}, 7, 0.0);
+    BOOST_CHECK(segs[0] == seg);
+}
+
+// min_separation staggers seams of nested rings: with dense candidate vertices the
+// constraint is satisfiable, so all accepted start points stay min_separation apart.
+BOOST_AUTO_TEST_CASE(randomize_start_points_min_separation)
+{
+    auto make_circle = [](int64_t r, int segments)
+    {
+        HsBa::Slicer::Polygon ring;
+        for (int i = 0; i < segments; ++i)
+        {
+            double const a = 2.0 * std::numbers::pi * static_cast<double>(i) / segments;
+            ring.emplace_back(Point2{static_cast<int64_t>(static_cast<double>(r) * std::cos(a)),
+                                     static_cast<int64_t>(static_cast<double>(r) * std::sin(a))});
+        }
+        ring.push_back(ring.front());  // closed form with duplicated vertex
+        return ring;
+    };
+    Polygons rings{make_circle(20000, 64), make_circle(15000, 64), make_circle(10000, 64)};
+    double const sep = 8000.0;
+    auto const res = RandomizeStartPoints(rings, 20260218, sep);
+    BOOST_REQUIRE_EQUAL(res.size(), rings.size());
+    for (size_t i = 0; i < res.size(); ++i)
+    {
+        for (size_t j = i + 1; j < res.size(); ++j)
+        {
+            BOOST_CHECK_GE(std::hypot(static_cast<double>(res[i].front().x - res[j].front().x),
+                                      static_cast<double>(res[i].front().y - res[j].front().y)),
+                           sep);
+        }
+    }
+}
+
+// PolygonFill.randomizeStartPoints Lua binding: rings stay closed with the same vertex
+// count; an omitted seed falls back to the random device.
+BOOST_AUTO_TEST_CASE(lua_randomize_start_points_binding)
+{
+    PolygonD polyd;
+    polyd.emplace_back(Point2{0, 0});
+    polyd.emplace_back(Point2{10000, 0});
+    polyd.emplace_back(Point2{10000, 10000});
+    polyd.emplace_back(Point2{0, 10000});
+    auto poly = Polygons{Integerization(polyd)};
+
+    const char* script = R"lua(
+function gen(poly)
+    -- large spacing keeps only a few nested rings so the binding test stays fast
+    local rings = PolygonFill.offsetFill(poly, 2000000000, { join_type = "Miter" })
+    local fixed = PolygonFill.randomizeStartPoints(rings, 42, { min_separation = 1500 })
+    local loose = PolygonFill.randomizeStartPoints(rings)
+    local out = {}
+    for i = 1, #fixed do out[#out + 1] = fixed[i] end
+    for i = 1, #loose do out[#out + 1] = loose[i] end
+    return out
+end
+)lua";
+
+    auto res = LuaCustomFillString(poly, script, "gen", 300.0);
+    // offsetFill with that spacing yields 2 nested rings; both calls return them all
+    BOOST_REQUIRE_EQUAL(res.size(), 4u);
+    for (const auto& r : res)
+    {
+        BOOST_CHECK_GE(r.size(), 3u);
+        // closed rings stay closed after rotation (first and last vertex coincide exactly)
+        BOOST_CHECK(r.front() == r.back());
+    }
+}
+
+// Exercise every registered PolygonFill.* Lua binding (offsetFill/lineFill/
+// simpleZigzagFill/zigzagFill/compositeOffsetFill/hybridFill/offsetOnly) plus all
+// four join_type strings and the FillMode dispatch, through one custom-fill script.
+BOOST_AUTO_TEST_CASE(lua_polygon_fill_bindings_via_script)
+{
+    PolygonD polyd;
+    polyd.emplace_back(Point2{0, 0});
+    polyd.emplace_back(Point2{10000, 0});
+    polyd.emplace_back(Point2{10000, 10000});
+    polyd.emplace_back(Point2{0, 10000});
+    auto poly = Polygons{Integerization(polyd)};
+
+    const char* script = R"lua(
+function gen(poly)
+    local function add(dst, src)
+        if type(src) == 'table' then
+            for i = 1, #src do dst[#dst + 1] = src[i] end
+        end
+        return dst
+    end
+    local out = {}
+    out = add(out, PolygonFill.offsetFill(poly, 2000, { join_type = "Miter" }))
+    out = add(out, PolygonFill.lineFill(poly, 1500, 0, 300))
+    out = add(out, PolygonFill.lineFill(poly, 1500, 45, 300))
+    out = add(out, PolygonFill.simpleZigzagFill(poly, 2000, 0, 300))
+    out = add(out, PolygonFill.zigzagFill(poly, 2000, 90, 300))
+    out = add(out, PolygonFill.compositeOffsetFill(poly, 2000, 500, 1, 1, "Line", 0, 300, { join_type = "Bevel" }))
+    out = add(out,
+        PolygonFill.compositeOffsetFill(poly, 2000, 500, 1, 1, "SimpleZigzag", 45, 300, { join_type = "Square" }))
+    out = add(out, PolygonFill.hybridFill(poly, 2000, 500, 1, 2, "Zigzag", 0, 300, { join_type = "Round" }))
+    out = add(out, PolygonFill.offsetOnly(poly, 500, 1, 1, { join_type = "Square" }))
+    -- sweep the remaining join_type / FillMode dispatch branches per binding
+    out = add(out, PolygonFill.offsetFill(poly, 2000, { join_type = "Square" }))
+    out = add(out, PolygonFill.offsetFill(poly, 2000, { join_type = "Bevel" }))
+    out = add(out, PolygonFill.offsetFill(poly, 2000, { join_type = "Round" }))
+    out = add(out, PolygonFill.compositeOffsetFill(poly, 2000, 500, 1, 1, "Zigzag", 0, 300, { join_type = "Round" }))
+    out = add(out, PolygonFill.compositeOffsetFill(poly, 2000, 500, 1, 1, "Line", 0, 300, { join_type = "Miter" }))
+    out = add(out, PolygonFill.hybridFill(poly, 2000, 500, 1, 1, "Line", 0, 300, { join_type = "Square" }))
+    out = add(out,
+        PolygonFill.hybridFill(poly, 2000, 500, 1, 1, "SimpleZigzag", 45, 300, { join_type = "Bevel" }))
+    out = add(out, PolygonFill.hybridFill(poly, 2000, 500, 1, 1, "Zigzag", 0, 300, { join_type = "Miter" }))
+    out = add(out, PolygonFill.offsetOnly(poly, 500, 1, 1, { join_type = "Bevel" }))
+    out = add(out, PolygonFill.offsetOnly(poly, 500, 1, 1, { join_type = "Round" }))
+    out = add(out, PolygonFill.offsetOnly(poly, 500, 1, 1, { join_type = "Miter" }))
+    return out
+end
+)lua";
+
+    auto res = LuaCustomFillString(poly, script, "gen", 300.0);
+    BOOST_REQUIRE(!res.empty());
+    for (const auto& p : res)
+        BOOST_CHECK_GE(p.size(), 2u);
+
+    // a script that returns a non-table, and an unknown function name, both raise
+    BOOST_CHECK_THROW(LuaCustomFillString(poly, "function bad() return 42 end", "bad", 300.0), RuntimeError);
+    BOOST_CHECK_THROW(LuaCustomFillString(poly, "function other() return {} end", "missing", 300.0), RuntimeError);
 }
 
 // ---------------------------------------------------------------------------
@@ -429,6 +654,116 @@ end
     BOOST_CHECK_EQUAL(RegionHelper::CountContiguousBlocks(out2, 3), 3);
 }
 
+// getFullGraph: 三区域应得到 3x3 代价矩阵，对角为 0，其余可达（>=0），
+// 扁平边表覆盖全部有序对 (i!=j)
+BOOST_AUTO_TEST_CASE(optimizer_full_graph_matrix)
+{
+    RegionPathOptimizer opt;
+    opt.addRegion(1, RegionHelper::MakeLines(0.0, 0.0, 10.0, 3, 2.0));
+    opt.addRegion(2, RegionHelper::MakeLines(12.0, 1000.0, 10.0, 3, 2.0));
+    opt.addRegion(3, RegionHelper::MakeLines(1000.0, 2000.0, 10.0, 3, 2.0));
+
+    auto g = opt.getFullGraph();
+    BOOST_REQUIRE_EQUAL(g.vertices.size(), 3u);
+    BOOST_REQUIRE_EQUAL(g.distMatrix.size(), 3u);
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        BOOST_CHECK_EQUAL(g.distMatrix[i].size(), 3u);
+        BOOST_CHECK_CLOSE(g.distMatrix[i][i], 0.0, 1e-9);
+    }
+    // 全连通：所有有序对可达（非 -1），且代价非负
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        for (std::size_t j = 0; j < 3; ++j)
+        {
+            if (i != j)
+            {
+                BOOST_CHECK(g.distMatrix[i][j] >= 0.0);
+            }
+        }
+    }
+    // 边表包含全部 3*2 = 6 条有序可达边
+    BOOST_CHECK_EQUAL(g.edges.size(), 6u);
+}
+
+// getExpandedGraph: 门级展开图顶点数 = 各区域门禁数 * 2（可进可出），
+// 每区域含内部迁移边且区域间含路由边
+BOOST_AUTO_TEST_CASE(optimizer_expanded_graph_structure)
+{
+    RegionPathOptimizer opt;
+    // 每区域 3 条填充线 -> 6 个门禁（首/尾）-> 展开为 12 个顶点
+    opt.addRegion(1, RegionHelper::MakeLines(0.0, 0.0, 10.0, 3, 2.0));
+    opt.addRegion(2, RegionHelper::MakeLines(12.0, 1000.0, 10.0, 3, 2.0));
+    opt.addRegion(3, RegionHelper::MakeLines(1000.0, 2000.0, 10.0, 3, 2.0));
+
+    auto g = opt.getExpandedGraph();
+    BOOST_CHECK_EQUAL(g.vertices.size(), 36u);  // 3 regions * 6 gates * 2 (entry+exit)
+    BOOST_CHECK(!g.edges.empty());
+    // 每条边端点索引都落在顶点数组范围内
+    for (const auto& e : g.edges)
+    {
+        BOOST_CHECK_LT(e.fromIdx, g.vertices.size());
+        BOOST_CHECK_LT(e.toIdx, g.vertices.size());
+    }
+    // 顶点属性回读一致：areaId 属于 {1,2,3}
+    for (const auto& v : g.vertices)
+    {
+        BOOST_CHECK(v.areaId == 1 || v.areaId == 2 || v.areaId == 3);
+    }
+}
+
+// setCustomTour: 用户指定的顺序应直接驱动 buildPaths 的输出分块顺序，跳过内置 TSP
+BOOST_AUTO_TEST_CASE(optimizer_custom_tour_build_paths)
+{
+    RegionPathOptimizer opt;
+    // 区域 1/2/3 分别落在 y 频带 0/1/2
+    opt.addRegion(1, RegionHelper::MakeLines(0.0, 0.0, 10.0, 2, 2.0));
+    opt.addRegion(2, RegionHelper::MakeLines(0.0, 1000.0, 10.0, 2, 2.0));
+    opt.addRegion(3, RegionHelper::MakeLines(0.0, 2000.0, 10.0, 2, 2.0));
+
+    // 强制顺序 3 -> 1 -> 2（对应频带 2 -> 0 -> 1）
+    opt.setCustomTour({3, 1, 2});
+    auto out = opt.buildPaths();
+    BOOST_REQUIRE_EQUAL(out.size(), 6u);
+
+    // 输出路径的频带应严格按 2,0,1 连续分块
+    BOOST_CHECK_EQUAL(RegionHelper::BandOf(out[0], 3), 2);
+    BOOST_CHECK_EQUAL(RegionHelper::BandOf(out[1], 3), 2);
+    BOOST_CHECK_EQUAL(RegionHelper::BandOf(out[2], 3), 0);
+    BOOST_CHECK_EQUAL(RegionHelper::BandOf(out[3], 3), 0);
+    BOOST_CHECK_EQUAL(RegionHelper::BandOf(out[4], 3), 1);
+    BOOST_CHECK_EQUAL(RegionHelper::BandOf(out[5], 3), 1);
+
+    // 空 tour 抛异常
+    BOOST_CHECK_THROW(opt.setCustomTour({}), RuntimeError);
+}
+
+// Lua 嵌入方案：自定义算法通过 getFullGraph + setCustomTour 反馈顺序（覆盖三个新绑定）
+BOOST_AUTO_TEST_CASE(lua_custom_graph_optimize)
+{
+    std::vector<PolygonsD> regions;
+    regions.push_back(RegionHelper::MakeLines(0.0, 0.0, 10.0, 3, 2.0));
+    regions.push_back(RegionHelper::MakeLines(0.0, 1000.0, 10.0, 3, 2.0));
+    regions.push_back(RegionHelper::MakeLines(0.0, 2000.0, 10.0, 3, 2.0));
+    std::vector<PolygonsD> input{regions[1], regions[2], regions[0]};
+
+    std::filesystem::path script_path = std::filesystem::path(__FILE__).parent_path() / "custom_tsp.lua";
+
+    // 最近邻贪心
+    auto out = LuaOptimizeRegionPaths(input, script_path.string(), "optimize_paths_custom");
+    BOOST_REQUIRE_EQUAL(out.size(), 9u);
+    BOOST_CHECK_EQUAL(RegionHelper::CountContiguousBlocks(out, 3), 3);
+
+    // 暴力枚举 TSP
+    auto bf = LuaOptimizeRegionPaths(input, script_path.string(), "optimize_paths_bruteforce");
+    BOOST_REQUIRE_EQUAL(bf.size(), 9u);
+    BOOST_CHECK_EQUAL(RegionHelper::CountContiguousBlocks(bf, 3), 3);
+
+    // 门级展开图只读探测
+    auto probe = LuaOptimizeRegionPaths(input, script_path.string(), "optimize_paths_probe");
+    BOOST_REQUIRE_EQUAL(probe.size(), 9u);
+}
+
 BOOST_AUTO_TEST_CASE(fill_stage_lua_exposes_path_optimize)
 {
     // Fill 阶段入口 LuaCustomFillByFile 的 Lua 环境应已注册 PathOptimize（路径优化接入对应流程）
@@ -453,6 +788,154 @@ BOOST_AUTO_TEST_CASE(fill_stage_lua_exposes_path_optimize)
     auto res = LuaCustomFillByFile(poly, script_path.string(), "generate_fill", 0.5);
     BOOST_CHECK(res.empty());
     std::filesystem::remove(script_path);
+}
+
+// A concave U-shaped polygon forces the zigzag bridging logic: horizontal scan rows
+// in the upper band yield two disjoint arms (separate connected components) while the
+// base is a single span, so adjacent rows change component and ZigzagFill must build
+// bridges that route around the open notch instead of cutting straight across it.
+BOOST_AUTO_TEST_CASE(zigzag_fill_concave_u_shape_drives_bridge)
+{
+    PolygonD u;
+    u.emplace_back(Point2D{0.0, 0.0});
+    u.emplace_back(Point2D{10000.0, 0.0});
+    u.emplace_back(Point2D{10000.0, 10000.0});
+    u.emplace_back(Point2D{7000.0, 10000.0});
+    u.emplace_back(Point2D{7000.0, 3000.0});
+    u.emplace_back(Point2D{3000.0, 3000.0});
+    u.emplace_back(Point2D{3000.0, 10000.0});
+    u.emplace_back(Point2D{0.0, 10000.0});
+    Polygons poly{Integerization(u)};
+
+    auto zig = ZigzagFill(poly, 1000.0, 0.0, 200.0);
+    BOOST_REQUIRE(!zig.empty());
+    // Every emitted vertex must remain inside or on the boundary of the U shape.
+    for (const auto& pz : zig)
+    {
+        BOOST_REQUIRE(pz.size() >= 2u);
+        for (const auto& pt : pz)
+        {
+            auto r = PointInPolygons(Clipper2Lib::Point64{pt.x, pt.y}, poly);
+            BOOST_CHECK(r != Clipper2Lib::PointInPolygonResult::IsOutside);
+        }
+    }
+}
+
+namespace
+{
+// Axis-aligned bounding box covering every vertex of a set of integer polygons.
+struct Box
+{
+    int64_t xmin, ymin, xmax, ymax;
+};
+
+Box BoundingBox(const Polygons& polys)
+{
+    Box b{INT64_MAX, INT64_MAX, INT64_MIN, INT64_MIN};
+    for (const auto& pz : polys)
+    {
+        for (const auto& pt : pz)
+        {
+            b.xmin = std::min(b.xmin, pt.x);
+            b.ymin = std::min(b.ymin, pt.y);
+            b.xmax = std::max(b.xmax, pt.x);
+            b.ymax = std::max(b.ymax, pt.y);
+        }
+    }
+    return b;
+}
+
+// True when any emitted vertex lies inside or on the given single contour.
+bool ContourReached(const Polygons& single, const Polygons& zig)
+{
+    for (const auto& pz : zig)
+    {
+        for (const auto& pt : pz)
+        {
+            auto r = PointInPolygons(Clipper2Lib::Point64{pt.x, pt.y}, single);
+            if (r != Clipper2Lib::PointInPolygonResult::IsOutside)
+                return true;
+        }
+    }
+    return false;
+}
+}  // namespace
+
+// Two squares stacked vertically leave a band of empty scan rows between them. Because
+// several disjoint contours make LineFilling emit spans that straddle the islands, the
+// serpentine reaches the clamp_segment fallback for part of the fill; before the fix
+// that fallback emitted an uninitialised (0, 0) pseudo-vertex. We lift the whole shape
+// well above the origin and assert every vertex stays within the overall bounding box,
+// so the old (0, 0) regression would be caught, and that both squares still get filled.
+BOOST_AUTO_TEST_CASE(zigzag_fill_stacked_islands_stay_in_bounds)
+{
+    PolygonD low;
+    low.emplace_back(Point2D{0.0, 10000.0});
+    low.emplace_back(Point2D{10000.0, 10000.0});
+    low.emplace_back(Point2D{10000.0, 20000.0});
+    low.emplace_back(Point2D{0.0, 20000.0});
+    PolygonD high;
+    high.emplace_back(Point2D{0.0, 40000.0});
+    high.emplace_back(Point2D{10000.0, 40000.0});
+    high.emplace_back(Point2D{10000.0, 50000.0});
+    high.emplace_back(Point2D{0.0, 50000.0});
+
+    Polygons poly{Integerization(low), Integerization(high)};
+    auto zig = ZigzagFill(poly, 1000.0, 0.0, 200.0);
+    BOOST_REQUIRE(!zig.empty());
+    auto box = BoundingBox(poly);
+    for (const auto& pz : zig)
+    {
+        BOOST_REQUIRE(pz.size() >= 2u);
+        for (const auto& pt : pz)
+        {
+            BOOST_CHECK(pt.x >= box.xmin && pt.x <= box.xmax);
+            BOOST_CHECK(pt.y >= box.ymin && pt.y <= box.ymax);
+        }
+    }
+    BOOST_CHECK(ContourReached(Polygons{Integerization(low)}, zig));
+    BOOST_CHECK(ContourReached(Polygons{Integerization(high)}, zig));
+}
+
+// Two islands with non-overlapping x-intervals form two connected components, the left
+// one born part-way up. Multi-contour LineFilling emits spans that straddle the gap, so
+// the serpentine hits the clamp_segment fallback for part of the fill; before the fix
+// that fallback emitted an uninitialised (0, 0) pseudo-vertex. Placing every vertex with
+// x >= 1000 and y >= 1000 makes the origin strictly outside the bounding box, so the
+// bounding-box assertions below would fail on the old behaviour and both islands still
+// have to be filled. (build_bridge itself is not reachable through these public inputs:
+// LineFilling collapses each row so no adjacent-row component change ever triggers it.)
+BOOST_AUTO_TEST_CASE(zigzag_fill_staggered_islands_stay_in_bounds)
+{
+    PolygonD right;
+    right.emplace_back(Point2D{6000.0, 1000.0});
+    right.emplace_back(Point2D{8000.0, 1000.0});
+    right.emplace_back(Point2D{8000.0, 10000.0});
+    right.emplace_back(Point2D{6000.0, 10000.0});
+    PolygonD left;
+    left.emplace_back(Point2D{1000.0, 3500.0});
+    left.emplace_back(Point2D{3000.0, 3500.0});
+    left.emplace_back(Point2D{3000.0, 10000.0});
+    left.emplace_back(Point2D{1000.0, 10000.0});
+
+    Polygons poly{Integerization(right), Integerization(left)};
+    auto zig = ZigzagFill(poly, 1000.0, 0.0, 200.0);
+    BOOST_REQUIRE(!zig.empty());
+    auto box = BoundingBox(poly);
+    // Origin sits strictly outside this bounding box - a leaked (0, 0) pseudo-vertex
+    // would violate the per-vertex range checks below.
+    BOOST_REQUIRE(box.xmin > 0 && box.ymin > 0);
+    for (const auto& pz : zig)
+    {
+        BOOST_REQUIRE(pz.size() >= 2u);
+        for (const auto& pt : pz)
+        {
+            BOOST_CHECK(pt.x >= box.xmin && pt.x <= box.xmax);
+            BOOST_CHECK(pt.y >= box.ymin && pt.y <= box.ymax);
+        }
+    }
+    BOOST_CHECK(ContourReached(Polygons{Integerization(right)}, zig));
+    BOOST_CHECK(ContourReached(Polygons{Integerization(left)}, zig));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -453,6 +453,7 @@ target_link_libraries(my_app PRIVATE DllHsBaSlicer)        # C ABI version
 | `HSBA_SLICER_MODULE` | `ON` | Build ModuleHsBaSlicer C++20 module wrapper |
 | `HSBA_SLICER_BUILD_SAMPLES` | `ON` | Build sample programs |
 | `HSBA_SLICER_USE_TESTS` | `ON` | Build tests |
+| `HSBA_COVERAGE` | `OFF` | GCC/Clang gcov instrumentation + `coverage` target (core 45% / other 25% line gates, anti-regression baselines; static_tests are compile-only and excluded); see the `linux-coverage` preset |
 | `HSBA_PROTOBUF_OUT` | `ON` | Output Proto multi-language generated files |
 
 ---

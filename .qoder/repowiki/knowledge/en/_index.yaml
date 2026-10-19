@@ -1,0 +1,15 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: en-US
+branch: dev
+nodes_managed: true
+exported_at: "2026-10-18T13:09:46Z"
+modules:
+    "":
+        dir_name: HsBaSlicer Slicing Engine & Cross-Language Pipeline API
+        title: HsBaSlicer Slicing Engine & Cross-Language Pipeline API
+        scope: []
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []

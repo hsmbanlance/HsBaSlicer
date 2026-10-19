@@ -9,6 +9,8 @@ namespace HsBa::Slicer
 std::shared_mutex AppConfigSingletone::mutex_{};
 AppConfigSingletone* AppConfigSingletone::instance_ = nullptr;
 
+AppConfigSingletone::AppConfigSingletone() {}
+
 AppConfigSingletone& AppConfigSingletone::GetInstance()
 {
     if (instance_)

@@ -12,7 +12,7 @@ namespace HsBa::Slicer::Config
 {
 bool PropertiesDoc::FromJson(std::string_view path)
 {
-    std::string path_loc = utf8_to_local(std::string{path});
+    std::string const path_loc = utf8_to_local(std::string{path});
     doc_.Parse(path_loc.c_str());
     return !doc_.IsNull();
 }
@@ -20,7 +20,7 @@ bool PropertiesDoc::Write(std::string_view path)
 {
     if (!doc_.IsNull())
     {
-        std::string path_loc = utf8_to_local(std::string{path});
+        std::string const path_loc = utf8_to_local(std::string{path});
         std::ofstream ofs(path_loc, std::ios_base::out);
         rapidjson::OStreamWrapper osw(ofs);
         rapidjson::Writer<rapidjson::OStreamWrapper> writer(osw);
@@ -30,9 +30,10 @@ bool PropertiesDoc::Write(std::string_view path)
 }
 std::optional<int> PropertiesDoc::GetOptionalInt(std::string_view key) const noexcept
 {
-    if (doc_.HasMember(key.data()))
+    auto const k = rapidjson::StringRef(key.data(), static_cast<rapidjson::SizeType>(key.size()));
+    if (doc_.HasMember(k))
     {
-        const auto& json_item = doc_[key.data()];
+        const auto& json_item = doc_[rapidjson::Value(k)];
         if (json_item.IsInt())
         {
             return json_item.GetInt();
@@ -43,9 +44,10 @@ std::optional<int> PropertiesDoc::GetOptionalInt(std::string_view key) const noe
 }
 std::optional<double> PropertiesDoc::GetOptionalDouble(std::string_view key) const noexcept
 {
-    if (doc_.HasMember(key.data()))
+    auto const k = rapidjson::StringRef(key.data(), static_cast<rapidjson::SizeType>(key.size()));
+    if (doc_.HasMember(k))
     {
-        const auto& json_item = doc_[key.data()];
+        const auto& json_item = doc_[rapidjson::Value(k)];
         if (json_item.IsDouble())
         {
             return json_item.GetDouble();
@@ -56,9 +58,10 @@ std::optional<double> PropertiesDoc::GetOptionalDouble(std::string_view key) con
 }
 std::optional<bool> PropertiesDoc::GetOptionBool(std::string_view key) const noexcept
 {
-    if (doc_.HasMember(key.data()))
+    auto const k = rapidjson::StringRef(key.data(), static_cast<rapidjson::SizeType>(key.size()));
+    if (doc_.HasMember(k))
     {
-        const auto& json_item = doc_[key.data()];
+        const auto& json_item = doc_[rapidjson::Value(k)];
         if (json_item.IsBool())
         {
             return json_item.GetBool();
@@ -69,9 +72,10 @@ std::optional<bool> PropertiesDoc::GetOptionBool(std::string_view key) const noe
 }
 std::optional<std::string> PropertiesDoc::GetOptionString(std::string_view key) const noexcept
 {
-    if (doc_.HasMember(key.data()))
+    auto const k = rapidjson::StringRef(key.data(), static_cast<rapidjson::SizeType>(key.size()));
+    if (doc_.HasMember(k))
     {
-        const auto& json_item = doc_[key.data()];
+        const auto& json_item = doc_[rapidjson::Value(k)];
         if (json_item.IsString())
         {
             return json_item.GetString();
@@ -80,11 +84,13 @@ std::optional<std::string> PropertiesDoc::GetOptionString(std::string_view key) 
     }
     return std::nullopt;
 }
+// NOLINTNEXTLINE(bugprone-exception-escape) deliberate: only throw path is OOM on list alloc
 std::optional<std::list<int>> PropertiesDoc::GetOptionalIntArr(std::string_view key) const noexcept
 {
-    if (doc_.HasMember(key.data()))
+    auto const k = rapidjson::StringRef(key.data(), static_cast<rapidjson::SizeType>(key.size()));
+    if (doc_.HasMember(k))
     {
-        const auto& json_item = doc_[key.data()];
+        const auto& json_item = doc_[rapidjson::Value(k)];
         if (json_item.IsArray())
         {
             std::list<int> res;
@@ -105,11 +111,13 @@ std::optional<std::list<int>> PropertiesDoc::GetOptionalIntArr(std::string_view 
     }
     return std::nullopt;
 }
+// NOLINTNEXTLINE(bugprone-exception-escape) deliberate: only throw path is OOM on list alloc
 std::optional<std::list<double>> PropertiesDoc::GetOptionalDoubleArr(std::string_view key) const noexcept
 {
-    if (doc_.HasMember(key.data()))
+    auto const k = rapidjson::StringRef(key.data(), static_cast<rapidjson::SizeType>(key.size()));
+    if (doc_.HasMember(k))
     {
-        const auto& json_item = doc_[key.data()];
+        const auto& json_item = doc_[rapidjson::Value(k)];
         if (json_item.IsArray())
         {
             std::list<double> res;
@@ -130,11 +138,13 @@ std::optional<std::list<double>> PropertiesDoc::GetOptionalDoubleArr(std::string
     }
     return std::nullopt;
 }
+// NOLINTNEXTLINE(bugprone-exception-escape) deliberate: only throw path is OOM on list alloc
 std::optional<std::list<bool>> PropertiesDoc::GetOptionalBoolArr(std::string_view key) const noexcept
 {
-    if (doc_.HasMember(key.data()))
+    auto const k = rapidjson::StringRef(key.data(), static_cast<rapidjson::SizeType>(key.size()));
+    if (doc_.HasMember(k))
     {
-        const auto& json_item = doc_[key.data()];
+        const auto& json_item = doc_[rapidjson::Value(k)];
         if (json_item.IsArray())
         {
             std::list<bool> res;
@@ -155,11 +165,13 @@ std::optional<std::list<bool>> PropertiesDoc::GetOptionalBoolArr(std::string_vie
     }
     return std::nullopt;
 }
+// NOLINTNEXTLINE(bugprone-exception-escape) deliberate: only throw path is OOM on list alloc
 std::optional<std::list<std::string>> PropertiesDoc::GetOptionalStrArr(std::string_view key) const noexcept
 {
-    if (doc_.HasMember(key.data()))
+    auto const k = rapidjson::StringRef(key.data(), static_cast<rapidjson::SizeType>(key.size()));
+    if (doc_.HasMember(k))
     {
-        const auto& json_item = doc_[key.data()];
+        const auto& json_item = doc_[rapidjson::Value(k)];
         if (json_item.IsArray())
         {
             std::list<std::string> res;

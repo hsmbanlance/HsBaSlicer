@@ -19,10 +19,14 @@ namespace
 char* DupString(const std::string& str)
 {
     if (str.empty())
+    {
         return nullptr;
+    }
     char* dup = static_cast<char*>(std::malloc(str.size() + 1));
     if (dup)
+    {
         std::memcpy(dup, str.c_str(), str.size() + 1);
+    }
     return dup;
 }
 
@@ -76,6 +80,7 @@ void MsgToFdmConfig(const HsbaProto::msg_fdm_pipeline_config& msg, HsBaFdmPipeli
     config->output_path = DupString(msg.fdm_pipe_config_output_path());
 
     config->spiral_mode = msg.fdm_pipe_config_spiral_mode() ? 1 : 0;
+    config->randomize_start_point = msg.fdm_pipe_config_randomize_start_point() ? 1 : 0;
 }
 
 void MsgToFdmResult(const HsbaProto::msg_fdm_pipe_result& msg, HsBaFdmPipelineResult_t* result)
@@ -324,6 +329,7 @@ void MsgToTdpConfig(const HsbaProto::tdp_pipe_config& msg, HsBaTdpPipelineConfig
     config->output_path = DupString(msg.tdp_pipe_config_output_path());
 
     config->spiral_mode = msg.tdp_pipe_config_spiral_mode() ? 1 : 0;
+    config->randomize_start_point = msg.tdp_pipe_config_randomize_start_point() ? 1 : 0;
 }
 
 void MsgToTdpResult(const HsbaProto::tdp_pipe_result& msg, HsBaTdpPipelineResult_t* result)
@@ -367,6 +373,7 @@ void MsgToWaamConfig(const HsbaProto::waam_pipe_config& msg, HsBaWaamPipelineCon
     config->output_path = DupString(msg.waam_pipe_config_output_path());
 
     config->spiral_mode = msg.waam_pipe_config_spiral_mode() ? 1 : 0;
+    config->randomize_start_point = msg.waam_pipe_config_randomize_start_point() ? 1 : 0;
 }
 
 void MsgToWaamResult(const HsbaProto::waam_pipe_result& msg, HsBaWaamPipelineResult_t* result)

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <!--
+    Process-level Windows settings applied to HsBaSlicer desktop executables.
+
+    activeCodePage = UTF-8 makes the process ANSI code page (GetACP()) return
+    65001, so the C runtime narrow APIs (fopen / std::ifstream / std::ofstream)
+    and third-party libraries that only accept narrow char* paths (libigl, CGAL,
+    OpenCASCADE, OpenVDB, miniz/bit7z) interpret UTF-8 paths as UTF-8 and convert
+    them to UTF-16 internally. This is what enables full non-ASCII (CJK, emoji,
+    accented, ...) model file names on Windows without per-library surgery: it
+    turns utf8_to_local() into a pass-through (see base/encoding_convert.cpp,
+    windows_chcp_utf8()).
+
+    longPathAware = true enables the Win32 long-path (>260 chars) support for
+    deeply nested output directories.
+
+    link.exe merges this fragment with its auto-generated manifest (which keeps
+    the default trust info and VC-runtime dependency), so no <trustInfo> is
+    needed here.
+  -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+    </windowsSettings>
+  </application>
+</assembly>

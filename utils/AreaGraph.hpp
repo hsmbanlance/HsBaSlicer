@@ -55,10 +55,10 @@ struct AreaConfig
 template <typename AreaId, typename GateId, typename Weight>
 struct AreaPathResult
 {
-    std::vector<AreaId> areaPath;   ///< Sequence of areas traversed.
-    std::vector<GateId> entryGates; ///< Gate used to enter each area.
-    std::vector<GateId> exitGates;  ///< Gate used to exit each area.
-    Weight totalCost;               ///< Total accumulated cost.
+    std::vector<AreaId> areaPath;    ///< Sequence of areas traversed.
+    std::vector<GateId> entryGates;  ///< Gate used to enter each area.
+    std::vector<GateId> exitGates;   ///< Gate used to exit each area.
+    Weight totalCost;                ///< Total accumulated cost.
 
     /// @brief Whether the path is empty (no reachable route).
     bool empty() const { return areaPath.empty(); }
@@ -84,17 +84,58 @@ struct AreaPathResult
 template <typename AreaId, typename GateId, typename Weight>
 struct AreaTSPResult
 {
-    std::vector<AreaId> tour;                            ///< Ordered areas visited.
-    std::vector<std::vector<GateId>> entryGates;         ///< Entry gates used at each stop.
-    std::vector<std::vector<GateId>> exitGates;          ///< Exit gates used at each stop.
-    Weight totalCost;                                    ///< Total tour cost.
-    std::size_t generations;                             ///< Generations run by the genetic solver.
+    std::vector<AreaId> tour;                     ///< Ordered areas visited.
+    std::vector<std::vector<GateId>> entryGates;  ///< Entry gates used at each stop.
+    std::vector<std::vector<GateId>> exitGates;   ///< Exit gates used at each stop.
+    Weight totalCost;                             ///< Total tour cost.
+    std::size_t generations;                      ///< Generations run by the genetic solver.
+};
+
+/// @brief Serializable dump of the gate-level expanded graph: all entry/exit vertices and every internal
+/// gate-to-gate transit and inter-area route edge, exposed so external algorithms (e.g. Lua scripts) can
+/// design custom path-optimization over the full combination structure.
+template <typename AreaId, typename GateId, typename Weight>
+struct ExpandedGraphDump
+{
+    struct Vertex
+    {
+        AreaId areaId;  ///< Area this vertex belongs to.
+        GateId gateId;  ///< Gate identifier of the vertex.
+        bool isExit;    ///< true = exit side, false = entry side.
+    };
+    struct Edge
+    {
+        std::size_t fromIdx;  ///< Index into the vertices array.
+        std::size_t toIdx;    ///< Index into the vertices array.
+        Weight weight;        ///< Edge cost.
+    };
+    std::vector<Vertex> vertices;  ///< All expanded entry/exit vertices.
+    std::vector<Edge> edges;       ///< All transit and route edges between vertices.
+};
+
+/// @brief Serializable dump of the area-level pairwise shortest-path complete graph: for a set of areas, the
+/// cheapest gate-aware cost between every ordered pair, provided both as a distance matrix and a flat edge list.
+template <typename AreaId, typename GateId, typename Weight>
+struct PairwiseGraphDump
+{
+    using PathResult = AreaPathResult<AreaId, GateId, Weight>;
+    struct Edge
+    {
+        AreaId from;      ///< Source area.
+        AreaId to;        ///< Target area.
+        Weight cost;      ///< Shortest-path cost between the areas.
+        PathResult path;  ///< The underlying gate-aware path (empty when unreachable).
+    };
+    std::vector<AreaId> areas;                                   ///< The area ids in matrix order.
+    std::vector<std::vector<std::optional<Weight>>> distMatrix;  ///< [i][j] cost, nullopt when unreachable.
+    std::vector<Edge> edges;                                     ///< Flat edge list over reachable pairs.
 };
 
 
 /**
  * @class AreaGraph
- * @brief Graph of areas connected by routes; expands each area into per-gate entry/exit vertices to compute gate-aware shortest paths and TSP tours.
+ * @brief Graph of areas connected by routes; expands each area into per-gate entry/exit vertices to compute gate-aware
+ * shortest paths and TSP tours.
  * @tparam AreaId Area identifier type.
  * @tparam GateId Gate identifier type.
  * @tparam Weight Path cost type.
@@ -355,6 +396,58 @@ public:
 
     /// @brief Number of areas in the graph.
     std::size_t areaCount() const { return areas_.size(); }
+
+    /// @brief Build the expanded graph and dump all entry/exit vertices and every transit/route edge so
+    /// external algorithms (e.g. Lua path-optimization scripts) can operate over the full combination structure.
+    ExpandedGraphDump<AreaId, GateId, Weight> dumpExpandedGraph()
+    {
+        ensureExpanded();
+        ExpandedGraphDump<AreaId, GateId, Weight> dump;
+
+        std::unordered_map<ExpandedVD, std::size_t> vdToIdx;
+        for (auto [vi, vi_end] = boost::vertices(expandedGraph_); vi != vi_end; ++vi)
+        {
+            const auto& v = expandedGraph_[*vi];
+            vdToIdx[*vi] = dump.vertices.size();
+            dump.vertices.push_back({v.areaId, v.gateId, v.isExit});
+        }
+        for (auto [ei, ei_end] = boost::edges(expandedGraph_); ei != ei_end; ++ei)
+        {
+            Weight w = boost::get(boost::edge_weight, expandedGraph_)[*ei];
+            dump.edges.push_back(
+                {vdToIdx.at(boost::source(*ei, expandedGraph_)), vdToIdx.at(boost::target(*ei, expandedGraph_)), w});
+        }
+        return dump;
+    }
+
+    /// @brief Compute the gate-aware shortest-path cost between every ordered pair of the given areas and dump the
+    /// resulting area-level complete graph as both a distance matrix and a flat edge list.
+    PairwiseGraphDump<AreaId, GateId, Weight> dumpPairwiseGraph(const std::vector<AreaId>& areas)
+    {
+        ensureExpanded();
+        PairwiseGraphDump<AreaId, GateId, Weight> dump;
+        dump.areas = areas;
+        const std::size_t n = areas.size();
+        dump.distMatrix.assign(n, std::vector<std::optional<Weight>>(n));
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            for (std::size_t j = 0; j < n; ++j)
+            {
+                if (i == j)
+                {
+                    dump.distMatrix[i][j] = Weight{};
+                    continue;
+                }
+                auto path = shortestPath(areas[i], areas[j]);
+                if (!path.empty())
+                {
+                    dump.distMatrix[i][j] = path.totalCost;
+                    dump.edges.push_back({areas[i], areas[j], path.totalCost, std::move(path)});
+                }
+            }
+        }
+        return dump;
+    }
 
 private:
     struct InternalArea

@@ -22,12 +22,11 @@ namespace HsBa::Slicer
 {
 
 using vdb_internal::PointArrayAdapter;
-using vdb_internal::ToEigen;
 using vdb_internal::ToVec3d;
 
 std::vector<Eigen::Vector3f> OpenVdbModel::RadiusSearch(const Eigen::Vector3f& center, float radius) const
 {
-    if (radius <= 0.0f)
+    if (radius <= 0.0F)
     {
         throw InvalidArgumentError("radius must be positive");
     }
@@ -66,7 +65,7 @@ std::vector<Eigen::Vector3f> OpenVdbModel::RadiusSearch(const Eigen::Vector3f& c
 
 void OpenVdbModel::Downsample(float voxelSize)
 {
-    if (voxelSize <= 0.0f)
+    if (voxelSize <= 0.0F)
     {
         throw InvalidArgumentError("voxel size must be positive");
     }
@@ -111,16 +110,16 @@ void OpenVdbModel::RemoveStatisticalOutliers(std::size_t k, float multiplier)
     }
 
     // Compute mean distance to k nearest neighbors for each point
-    std::vector<float> meanDistances(n, 0.0f);
+    std::vector<float> meanDistances(n, 0.0F);
     for (std::size_t i = 0; i < n; ++i)
     {
         auto neighbors = KNN(points[i], k + 1);  // +1 because the point itself is included
-        float distSum = 0.0f;
+        float distSum = 0.0F;
         std::size_t count = 0;
         for (const auto& neighbor : neighbors)
         {
             const float dist = (neighbor - points[i]).norm();
-            if (dist > 1e-8f)  // skip self
+            if (dist > 1e-8F)  // skip self
             {
                 distSum += dist;
                 ++count;
@@ -130,12 +129,12 @@ void OpenVdbModel::RemoveStatisticalOutliers(std::size_t k, float multiplier)
                 }
             }
         }
-        meanDistances[i] = (count > 0) ? (distSum / static_cast<float>(count)) : 0.0f;
+        meanDistances[i] = (count > 0) ? (distSum / static_cast<float>(count)) : 0.0F;
     }
 
     // Compute global mean and standard deviation
-    const float globalMean = std::accumulate(meanDistances.begin(), meanDistances.end(), 0.0f) / static_cast<float>(n);
-    float variance = 0.0f;
+    const float globalMean = std::accumulate(meanDistances.begin(), meanDistances.end(), 0.0F) / static_cast<float>(n);
+    float variance = 0.0F;
     for (const float d : meanDistances)
     {
         variance += (d - globalMean) * (d - globalMean);
@@ -198,7 +197,7 @@ Eigen::MatrixXf OpenVdbModel::ComputeNormals(std::size_t k) const
         covariance /= static_cast<float>(std::max<std::size_t>(count, 1));
 
         // Eigenvector corresponding to smallest eigenvalue is the normal
-        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> solver(covariance);
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> const solver(covariance);
         if (solver.info() == Eigen::Success)
         {
             normals.row(static_cast<Eigen::Index>(i)) = solver.eigenvectors().col(0).normalized().transpose();

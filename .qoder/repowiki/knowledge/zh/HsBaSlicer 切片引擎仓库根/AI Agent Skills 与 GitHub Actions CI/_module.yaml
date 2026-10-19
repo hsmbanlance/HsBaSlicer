@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: agent_skills
+title: AI Agent Skills 与 GitHub Actions CI
+scope:
+    - .agents/
+    - .github/
+source_files: []
+depends_on: []
+related_to: []

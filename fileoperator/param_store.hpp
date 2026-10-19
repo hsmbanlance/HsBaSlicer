@@ -55,7 +55,7 @@ public:
      * @param cfg   AnyObject wrapping a registered PipelineConfig struct (non-owning).
      * @return param_id of the persisted row.
      */
-    int64_t Save(std::string_view table, std::string_view key, Utils::AnyObject cfg);
+    int64_t Save(std::string_view table, std::string_view key, const Utils::AnyObject& cfg);
 
     /** @brief Batch save wrapped in a single transaction; any failure rolls back and throws. Returns each param_id. */
     std::vector<int64_t> SaveBatch(std::string_view table,
@@ -72,7 +72,7 @@ public:
     std::vector<std::string> List(std::string_view table, const std::string& whereJson);
 
     /** @brief Update only the fields listed in changedFields; returns false when the key does not exist. */
-    bool Update(std::string_view table, std::string_view key, Utils::AnyObject partial,
+    bool Update(std::string_view table, std::string_view key, const Utils::AnyObject& partial,
                 const std::vector<std::string>& changedFields);
 
     /** @brief Delete by key; returns whether a row was hit (judged by the row count before and after deletion). */
@@ -83,6 +83,21 @@ public:
     /// @brief Install the migration hook.
     void SetMigrationHook(MigrationFn fn) { migration_ = std::move(fn); }
 
+    /**
+     * @brief Enable or disable at-rest encryption for the persisted column map.
+     *
+     * When a non-empty key is set, Save serializes the reflected column map to a self-describing
+     * binary buffer, encrypts it with AES-256-CBC (password-derived) and stores it in the dedicated
+     * param_blob column, leaving the plaintext per-field columns empty; Load decrypts and decodes it
+     * back. param_key, schema_version, created_at and updated_at always stay in plaintext so rows can
+     * still be looked up and listed. An empty key disables encryption and preserves the prior
+     * wide-table plaintext behavior. Existing rows are only readable with the same key.
+     */
+    void SetCryptoKey(std::string_view key) { crypto_key_.assign(key); }
+
+    /// @brief Whether at-rest encryption is currently enabled.
+    bool CryptoEnabled() const noexcept { return !crypto_key_.empty(); }
+
     /** @brief Message of the most recent failure (errors are not swallowed; the exception still propagates). */
     std::string GetLastError() const { return last_error_; }
 
@@ -90,7 +105,7 @@ public:
     Backend backend() const noexcept { return backend_; }
 
     /** @brief Resolve the table name: returned as-is when non-empty, otherwise a default name is derived from the cfg type. */
-    static std::string ResolveTable(std::string_view table, Utils::AnyObject cfg);
+    static std::string ResolveTable(std::string_view table, const Utils::AnyObject& cfg);
 
 private:
     void Raise(int percent, const char* stage);
@@ -101,6 +116,7 @@ private:
     Backend backend_;
     ProgressFn progress_;
     MigrationFn migration_;
+    std::string crypto_key_;
     std::string last_error_;
 };
 }  // namespace HsBa::Slicer

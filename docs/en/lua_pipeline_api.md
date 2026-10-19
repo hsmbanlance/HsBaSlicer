@@ -157,14 +157,26 @@ The following global libraries are callable from **both the custom pipeline and 
 ### B.2 `PolygonFill` (fill algorithms)
 
 `offsetFill` / `lineFill` / `simpleZigzagFill` / `zigzagFill` / `compositeOffsetFill` / `hybridFill` / `offsetOnly` — accept integer polygon sets plus spacing/angle parameters and return fill-path polygons.
+`randomizeStartPoints(polys, seed?, opts?)` — rotates closed contour/offset loops onto a start point sampled uniformly along the perimeter (a new split vertex is inserted on the chosen edge, not confined to original vertices; vertex order, winding and closed form preserved, vertex count +1); omit `seed` for a random seed or pass a per-layer seed to stagger seams across layers; `opts.min_separation` keeps start points of different rings at least that far apart (integer coordinate units), staggering seams of nested rings.
 
 ### B.3 `PathOptimize` (path ordering optimization)
 
 | Call | Description |
 |------|-------------|
-| `PathOptimize.new()` | Create an optimizer object; methods: `addRegion(id, paths)`, `addPolygons(id, polys)`, `addRoute(...)`, `optimizeOrder()`, `buildPaths()`, `buildPolygons()` |
+| `PathOptimize.new()` | Create an optimizer object; methods: `addRegion(id, paths)`, `addPolygons(id, polys)`, `addRoute(...)`, `optimizeOrder()`, `buildPaths()`, `buildPolygons()`, `getFullGraph()`, `getExpandedGraph()`, `setCustomTour(...)` |
 | `PathOptimize.optimizeRegions(regions)` | One-shot optimization in fill-result mode; returns the complete fill path |
 | `PathOptimize.optimizePolygons(regions)` | One-shot optimization in polygon mode (before fill); returns the reordered polygon set |
+
+The optimizer object additionally exposes the **full combination graphs** so users can design arbitrary
+path-optimization algorithms in Lua:
+
+| Call | Description |
+|------|-------------|
+| `opt:getFullGraph()` | Area-level complete graph: `{vertices={id..}, distMatrix={{cost..}..} (false = unreachable), edges={{from,to,cost}..}, areaCount}` — the gate-aware shortest-path cost between every ordered pair of regions |
+| `opt:getExpandedGraph()` | Gate-level expanded graph: `{vertices={{areaId,gateId,isExit}..}, edges={{from,to,weight}..} (1-based indices), vertexCount, edgeCount}` |
+| `opt:setCustomTour(tour[, entryGates])` | Feed a user-computed order (array of region ids) and an optional `{[areaId]=gateIndex}` map; `buildPaths()`/`buildPolygons()` then reuse this order, skipping the built-in genetic TSP |
+
+> The example script `tests/PolygonFill/custom_tsp.lua` demonstrates two custom algorithms: nearest-neighbor greedy and brute-force TSP enumeration.
 
 ### B.4 `Support` (support generators)
 
@@ -208,7 +220,7 @@ Methods: `Connect`, `Execute`, `Query`, `Insert`, `Update`, `Delete`, `CreateTab
 
 ### B.8 `ParamStore` (parameter persistence)
 
-Reflection-based pipeline-config storage. `ParamStore.new(...)` creates an instance; instance methods: `EnsureSchema`, `Save`, `Load`, `List`, `Update`, `Delete` (PascalCase; on success they return `(true, table)`, on failure `(false, err)`).
+Reflection-based pipeline-config storage. `ParamStore.new(...)` creates an instance; instance methods: `EnsureSchema`, `SetCryptoKey`, `Save`, `Load`, `List`, `Update`, `Delete` (PascalCase; on success they return `(true, table)`, on failure `(false, err)`). `SetCryptoKey(password)` enables encryption at rest: with a non-empty key, `Save`/`Update` store the whole config as an AES-256-CBC encrypted `param_blob` and `Load` decrypts it; pass `nil`/`""` to disable and keep plaintext behaviour.
 
 ---
 

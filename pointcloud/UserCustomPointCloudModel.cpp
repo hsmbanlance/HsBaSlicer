@@ -15,8 +15,9 @@ namespace HsBa::Slicer
 {
 namespace
 {
-static NamedObjectPool<UserCustomPointCloudDll, 10> dllPool;
-}
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables,bugprone-throwing-static-initialization,cert-err58-cpp)
+NamedObjectPool<UserCustomPointCloudDll, 10> dllPool;
+}  // namespace
 class UserCustomPointCloudDll::Impl
 {
 public:
@@ -157,10 +158,9 @@ UserCustomPointCloudDll::VoxelizeFunc UserCustomPointCloudDll::GetVoxelizeFunc()
     return nullptr;
 }
 
-UserCustomPointCloudDll::~UserCustomPointCloudDll()
-{
-}
+UserCustomPointCloudDll::~UserCustomPointCloudDll() = default;
 
+// NOLINTNEXTLINE(bugprone-exception-escape) best-effort plugin teardown; an escape here would terminate
 UserCustomPointCloudModel::~UserCustomPointCloudModel()
 {
     if (model_ && dll_)
@@ -174,13 +174,14 @@ UserCustomPointCloudModel::~UserCustomPointCloudModel()
 
 void UserCustomPointCloudModel::LoadDll(std::string_view dllPath, std::string_view addedFunName)
 {
-    if (dllPool.Contains(dllPath.data()))
+    std::string const key{dllPath};
+    if (dllPool.Contains(key))
     {
-        dll_ = dllPool.get(dllPath.data());
+        dll_ = dllPool.get(key);
     }
     else
     {
-        dll_ = dllPool.emplace(dllPath.data(), dllPath, addedFunName);
+        dll_ = dllPool.emplace(key, dllPath, addedFunName);
     }
 }
 
@@ -324,10 +325,9 @@ float UserCustomPointCloudModel::Volume() const
     {
         return model_->Volume();
     }
-    else
-    {
-        throw RuntimeError("Model not loaded");
-    }
+
+
+    throw RuntimeError("Model not loaded");
 }
 
 std::pair<Eigen::MatrixXf, Eigen::MatrixXi> UserCustomPointCloudModel::TriangleMesh() const
@@ -336,10 +336,9 @@ std::pair<Eigen::MatrixXf, Eigen::MatrixXi> UserCustomPointCloudModel::TriangleM
     {
         return model_->TriangleMesh();
     }
-    else
-    {
-        throw RuntimeError("Model not loaded");
-    }
+
+
+    throw RuntimeError("Model not loaded");
 }
 
 void UserCustomPointCloudModel::AddPoint(const Eigen::Vector3f& point)
@@ -350,7 +349,7 @@ void UserCustomPointCloudModel::AddPoint(const Eigen::Vector3f& point)
     {
         throw RuntimeError("Add point function not found in DLL");
     }
-    addPointFunc(model_, HsBaVector3f_t{point.x(), point.y(), point.z()});
+    addPointFunc(model_, HsBaVector3f_t{.x = point.x(), .y = point.y(), .z = point.z()});
 }
 
 void UserCustomPointCloudModel::AddPoints(const std::vector<Eigen::Vector3f>& points)

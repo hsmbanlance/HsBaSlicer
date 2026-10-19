@@ -69,6 +69,7 @@ message msg_fdm_pipeline_config
     string fdm_pipe_config_output_path = 27; // output path
 
     bool fdm_pipe_config_spiral_mode = 36; // spiralize outer wall (vase mode), skips infill/support
+    bool fdm_pipe_config_randomize_start_point = 37; // randomize closed contour/loop start points per layer (stagger extrusion seams)
 }
 
 message msg_fdm_pipe_result

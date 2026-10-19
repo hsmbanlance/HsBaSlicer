@@ -184,6 +184,7 @@ void HsBaFreePipelineResult(HsBaFdmPipelineResult_t* result);
 | `retract_speed` | 40.0 | 回抽速度 (mm/s) |
 | `first_layer_speed` | 20.0 | 首层速度 (mm/s) |
 | `spiral_mode` | 0 | 外壁螺旋连续化（花瓶模式，0=false, 1=true）；启用后外轮廓输出为单条挤出连续的爬升螺旋线，并跳过逐层填充与支撑 |
+| `randomize_start_point` | 0 | 起点随机化（0=false, 1=true）；启用后每层填充中的闭合轮廓/偏置环起点被旋转到边上均匀采样的随机分裂点（按层确定），错开层间与嵌套环的挤出接缝；仅线成型工艺（FDM/TDP/WAAM）可选 |
 
 ### SLA 流水线
 
@@ -313,6 +314,7 @@ void HsBaFreeTdpPipelineResult(HsBaTdpPipelineResult_t* result);
 | `bed_temperature` | 40.0 | 粉末床温度 (°C) |
 | `binder_mode` | `HSBA_TDP_SINGLE` | 模式：FULL_COLOR（全彩）/ SINGLE（单色）/ SINTERING（烧结） |
 | `spiral_mode` | 0 | 外轮廓螺旋连续化 (0=false, 1=true) |
+| `randomize_start_point` | 0 | 逐层随机化闭合轮廓起点到边上随机分裂点，错开沉积接缝 (0=false, 1=true)；仅线成型工艺可选 |
 | `export_lua_script` | NULL | 导出 Lua 脚本路径（**不可为 NULL**） |
 | `export_lua_func` | NULL | 导出函数名，NULL 时为 `export_tdp` |
 | `output_path` | NULL | 输出路径 |
@@ -350,6 +352,7 @@ void HsBaFreeWaamPipelineResult(HsBaWaamPipelineResult_t* result);
 | `robot_type` | `HSBA_WAAM_ROBOT_ABB` | 机器人：ABB / KUKA / FANUC / UNKNOWN（需 Lua 路径脚本） |
 | `path_lua_script` / `path_lua_func` | NULL | 自定义机器人代码生成脚本与函数名（可选，NULL 时内置，默认 `export_waam`） |
 | `spiral_mode` | 0 | 外壁单道连续爬升熔敷 (0=false, 1=true) |
+| `randomize_start_point` | 0 | 逐层随机化闭合轮廓起点到边上随机分裂点，错开熔敷起始缝 (0=false, 1=true)；仅线成型工艺可选 |
 | `output_path` | NULL | 输出机器人程序路径 |
 
 > WAAM 结果结构体的输出字段为 `output_path`（机器人程序路径），而非其余流水线的 `export_path`。

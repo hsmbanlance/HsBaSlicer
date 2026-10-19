@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "base/error.hpp"
 #include "cipher/encoder.hpp"
 #include "cipher/encrypt.hpp"
 #include "cipher/hasher.hpp"
@@ -14,6 +15,7 @@
 #include <openssl/rsa.h>
 
 using namespace HsBa::Slicer::Cipher;
+using HsBa::Slicer::RuntimeError;
 
 struct DisableCrt
 {
@@ -140,12 +142,87 @@ BOOST_AUTO_TEST_CASE(rsa_gen_and_use)
     BOOST_REQUIRE_EQUAL_COLLECTIONS(plain.begin(), plain.end(), out.begin(), out.end());
 }
 
+// The password-only AES-256-CBC helpers derive key+iv internally from the
+// password, so a same-password encrypt/decrypt round-trip must recover the
+// exact plaintext (this drives the plain cbc functions, not the *_with_iv ones).
+BOOST_AUTO_TEST_CASE(aes256_cbc_plain_roundtrip)
+{
+    std::string pass = "cbc-plain-pass";
+    std::vector<unsigned char> plain = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
+    auto cipher = Encrypt::aes256_cbc_encrypt(plain, pass);
+    // CBC adds PKCS#7 padding, so a non-block-multiple input grows to the next block boundary
+    BOOST_CHECK_EQUAL(cipher.size(), 32u);
+    auto out = Encrypt::aes256_cbc_decrypt(cipher, pass);
+    BOOST_REQUIRE_EQUAL_COLLECTIONS(plain.begin(), plain.end(), out.begin(), out.end());
+
+    // Exact block-multiple input still round-trips (padding appends a full block)
+    std::vector<unsigned char> aligned(16);
+    for (int i = 0; i < 16; ++i)
+        aligned[i] = static_cast<unsigned char>(0xA0 + i);
+    auto out2 = Encrypt::aes256_cbc_decrypt(Encrypt::aes256_cbc_encrypt(aligned, pass), pass);
+    BOOST_REQUIRE_EQUAL_COLLECTIONS(aligned.begin(), aligned.end(), out2.begin(), out2.end());
+}
+
+// The *_with_iv helpers validate the IV length up front and reject a mismatched
+// IV with std::invalid_argument before touching OpenSSL (AES iv = 16, 3DES iv = 8).
+BOOST_AUTO_TEST_CASE(iv_length_validation)
+{
+    std::string pass = "iv-validate";
+    std::vector<unsigned char> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+
+    const std::vector<unsigned char> short_aes_iv(15, 0);
+    const std::vector<unsigned char> long_aes_iv(17, 0);
+    BOOST_CHECK_THROW(Encrypt::aes256_cbc_encrypt_with_iv(data, pass, short_aes_iv), std::invalid_argument);
+    BOOST_CHECK_THROW(Encrypt::aes256_cbc_decrypt_with_iv(data, pass, long_aes_iv), std::invalid_argument);
+
+    const std::vector<unsigned char> short_des3_iv(7, 0);
+    const std::vector<unsigned char> long_des3_iv(9, 0);
+    BOOST_CHECK_THROW(Encrypt::des3_cbc_encrypt_with_iv(data, pass, short_des3_iv), std::invalid_argument);
+    BOOST_CHECK_THROW(Encrypt::des3_cbc_decrypt_with_iv(data, pass, long_des3_iv), std::invalid_argument);
+}
+
+// The RSA helpers read PEM through OpenSSL BIOs; a malformed PEM string makes the
+// PEM_read_bio_* step fail and surface as RuntimeError (deterministic error branch).
+BOOST_AUTO_TEST_CASE(rsa_invalid_pem_throws)
+{
+    std::vector<unsigned char> data = {1, 2, 3, 4};
+    const std::string garbage = "this is not a PEM encoded key";
+    BOOST_CHECK_THROW(Encrypt::rsa_public_encrypt_pem(garbage, data), RuntimeError);
+    BOOST_CHECK_THROW(Encrypt::rsa_private_decrypt_pem(garbage, data), RuntimeError);
+}
+
 BOOST_AUTO_TEST_CASE(md5_hash)
 {
     std::string input = "The quick brown fox jumps over the lazy dog";
     auto hash = Hasher::md5_hex(input);
     std::string expected_hex = "9e107d9d372bb6826bd81d3542a419d6";
     BOOST_REQUIRE_EQUAL(expected_hex, hash);
+}
+
+// The string_view overloads and *_to_string helpers of Encoder are thin inline
+// wrappers around the vector/byte primitives already covered above; these cases
+// drive them directly so the header's inline bodies are exercised.
+BOOST_AUTO_TEST_CASE(encoder_string_view_wrappers)
+{
+    // base64_encode(string_view) must match base64_encode(vector of the same bytes)
+    const std::string text = "Hello, HsBaSlicer!";
+    std::vector<unsigned char> bytes(text.begin(), text.end());
+    const auto b64_from_view = Encoder::base64_encode(std::string_view(text));
+    BOOST_REQUIRE_EQUAL(b64_from_view, Encoder::base64_encode(bytes));
+
+    // base64_decode_to_string round-trips back to the original text
+    BOOST_REQUIRE_EQUAL(Encoder::base64_decode_to_string(b64_from_view), text);
+
+    // hex_encode(string_view) and hex_decode_to_string round-trip
+    const auto hex_from_view = Encoder::hex_encode(std::string_view(text));
+    BOOST_REQUIRE_EQUAL(hex_from_view, Encoder::hex_encode(bytes));
+    BOOST_REQUIRE_EQUAL(Encoder::hex_decode_to_string(hex_from_view), text);
+
+    // empty input stays empty for the decoding helpers and the hex encoder
+    // (base64_encode rejects a zero-length write by design, so it is not tested here)
+    BOOST_REQUIRE(Encoder::base64_decode_to_string("").empty());
+    BOOST_REQUIRE_EQUAL(Encoder::hex_encode(std::string_view("")), "");
+    BOOST_REQUIRE(Encoder::hex_decode_to_string("").empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

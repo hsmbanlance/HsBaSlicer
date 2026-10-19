@@ -415,3 +415,7 @@ problems-*
 
 # Downloaded sample models (not committed)
 samples/FDM/models/*.stl
+
+# clangd / clang-tidy
+compile_commands.json
+.cache/

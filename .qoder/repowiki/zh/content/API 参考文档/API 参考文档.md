@@ -1,228 +1,549 @@
 # API 参考文档
 
 <cite>
-**本文档中引用的文件**  
-- [IModel.hpp](file://base/IModel.hpp)
-- [PolygonFill.hpp](file://2D/PolygonFill.hpp)
-- [PolygonFill.cpp](file://2D/PolygonFill.cpp)
-- [IZipper.hpp](file://fileoperator/IZipper.hpp)
-- [IUnzipper.hpp](file://fileoperator/IUnzipper.hpp)
-- [zipper.hpp](file://fileoperator/zipper.hpp)
-- [unzipper.hpp](file://fileoperator/unzipper.hpp)
-- [bit7z_zipper.hpp](file://fileoperator/bit7z_zipper.hpp)
-- [bit7z_unzipper.hpp](file://fileoperator/bit7z_unzipper.hpp)
-- [logger.hpp](file://logger/logger.hpp)
-- [logger.cpp](file://logger/logger.cpp)
-- [app_config.hpp](file://utils/app_config.hpp)
-- [app_config.cpp](file://utils/app_config.cpp)
-- [polygon_fill_test.cpp](file://tests/PolygonFill/polygon_fill_test.cpp)
-- [zipper_test.cpp](file://tests/FilesOperator/zipper_test.cpp)
+**本文引用的文件**   
+- [dllexport.h](file://DllHsBaSlicer/dllexport.h)
+- [export.h](file://LibHsBaSlicer/export.h)
+- [pipeline_types.h](file://pipelinetypes/pipeline_types.h)
+- [fdm_pipeline.cpp](file://DllHsBaSlicer/fdm_pipeline.cpp)
+- [sla_pipeline.cpp](file://DllHsBaSlicer/sla_pipeline.cpp)
+- [sls_pipeline.cpp](file://DllHsBaSlicer/sls_pipeline.cpp)
+- [slm_pipeline.cpp](file://DllHsBaSlicer/slm_pipeline.cpp)
+- [lom_pipeline.cpp](file://DllHsBaSlicer/lom_pipeline.cpp)
+- [tdp_pipeline.cpp](file://DllHsBaSlicer/tdp_pipeline.cpp)
+- [waam_pipeline.cpp](file://DllHsBaSlicer/waam_pipeline.cpp)
+- [file_transfer_pipeline.cpp](file://DllHsBaSlicer/file_transfer_pipeline.cpp)
+- [custom_pipeline.cpp](file://DllHsBaSlicer/custom_pipeline.cpp)
+- [model_preprocess.cpp](file://DllHsBaSlicer/model_preprocess.cpp)
+- [lua_register.cpp](file://DllHsBaSlicer/lua_register.cpp)
+- [initialize.cpp](file://DllHsBaSlicer/initialize.cpp)
 </cite>
 
 ## 目录
-1. [IModel 接口](#imodel-接口)
-2. [PolygonFill 类](#polygonfill-类)
-3. [Zipper 和 Unzipper 类](#zipper-和-unzipper-类)
-4. [LoggerSingletone 类](#loggersingletone-类)
-5. [AppConfigSingletone 类](#appconfigsingletone-类)
+1. [引言](#引言)
+2. [项目结构](#项目结构)
+3. [核心组件](#核心组件)
+4. [架构总览](#架构总览)
+5. [详细组件分析](#详细组件分析)
+6. [依赖关系分析](#依赖关系分析)
+7. [性能与并发特性](#性能与并发特性)
+8. [错误码与异常处理](#错误码与异常处理)
+9. [跨语言绑定注意事项](#跨语言绑定注意事项)
+10. [故障排除指南](#故障排除指南)
+11. [结论](#结论)
+12. [附录：完整 C ABI 函数清单](#附录完整-c-abi-函数清单)
 
-## IModel 接口
+## 引言
+本文件是 HsBaSlicer 的完整 API 参考文档，聚焦三类对外接口：
+- C ABI 导出层（DllHsBaSlicer）：面向任意宿主语言的纯 C 接口。
+- C++ 核心库（LibHsBaSlicer）：C++ 静态库与模块封装，提供切片、支撑、填充、路径生成等能力。
+- 流水线配置类型（pipelinetypes/pipeline_types.h）：所有流水线配置与结果结构的稳定 C 兼容定义。
 
-`IModel` 是 HsBaSlicer 中所有3D模型的抽象基类，定义了模型加载、保存、变换和查询的基本接口。所有具体模型类（如 `OcctModel`、`IglModel`）都必须实现此接口。
+文档目标：
+- 为每个公共接口提供签名、参数说明、返回值描述和使用示例。
+- 详细说明数据结构、枚举和常量。
+- 解释错误码、异常处理和内存所有权。
+- 给出跨语言绑定的最佳实践与常见问题排查。
 
-### 虚函数签名与功能描述
+## 项目结构
+HsBaSlicer 在对外暴露层面分为三层：
+- DllHsBaSlicer：纯 C ABI 导出层，仅调用 LibHsBaSlicer 的导出接口，保证 ABI 边界清晰。
+- LibHsBaSlicer：C++ 核心库，包含预处理、切片、支撑、填充、路径生成、SLA 地板/打包、SLS 导出、文件传输与 Lua 扩展。
+- ModuleHsBaSlicer：C++20 模块封装，提供类式 API，内部转发到 LibHsBaSlicer 自由函数。
 
-| 函数签名 | 参数类型 | 返回值 | 功能描述 |
-| :--- | :--- | :--- | :--- |
-| `virtual bool Load(std::string_view fileName) = 0;` | `fileName`: 要加载的文件路径（UTF-8编码） | `bool`: 加载成功返回 `true`，失败返回 `false` | 从指定文件加载模型数据。支持的格式由具体实现决定。 |
-| `virtual bool Save(std::string_view fileName, const ModelFormat format) const = 0;` | `fileName`: 要保存的文件路径（UTF-8编码）<br>`format`: 指定的保存格式（如 `ModelFormat::STL`、`ModelFormat::OBJ`） | `bool`: 保存成功返回 `true`，失败返回 `false` | 将模型以指定格式保存到文件。 |
-| `virtual void Translate(const Eigen::Vector3f& translation) = 0;` | `translation`: 三维平移向量 | `void` | 对模型进行平移变换。 |
-| `virtual void Rotate(const Eigen::Quaternionf& rotation) = 0;` | `rotation`: 四元数表示的旋转变换 | `void` | 对模型进行旋转变换。 |
-| `virtual void Scale(const float scale) = 0;` | `scale`: 统一缩放因子 | `void` | 对模型进行等比缩放。 |
-| `virtual void Scale(const Eigen::Vector3f& scale) = 0;` | `scale`: 三维缩放向量（X, Y, Z轴分别缩放） | `void` | 对模型进行非等比缩放。 |
-| `virtual void Transform(const Eigen::Isometry3f& transform) = 0;` | `transform`: Eigen的等距变换矩阵 | `void` | 对模型应用一个包含旋转和平移的变换。 |
-| `virtual void Transform(const Eigen::Matrix4f& transform) = 0;` | `transform`: 4x4齐次变换矩阵 | `void` | 对模型应用一个完整的4x4齐次变换。 |
-| `virtual void Transform(const Eigen::Transform<float, 3, Eigen::Affine>& transform) = 0;` | `transform`: Eigen的仿射变换对象 | `void` | 对模型应用一个仿射变换。 |
-| `virtual void BoundingBox(Eigen::Vector3f& min, Eigen::Vector3f& max) const = 0;` | `min`: 输出参数，返回包围盒的最小角点坐标<br>`max`: 输出参数，返回包围盒的最大角点坐标 | `void` | 计算并返回模型的轴对齐包围盒（AABB）。 |
-| `virtual float Volume() const = 0;` | 无 | `float`: 模型的体积 | 计算并返回模型的体积。对于非封闭模型，行为未定义。 |
-| `virtual std::pair<Eigen::MatrixXf,Eigen::MatrixXi> TriangleMesh() const = 0;` | 无 | `std::pair<Eigen::MatrixXf,Eigen::MatrixXi>`: 第一个矩阵是顶点坐标（Nx3），第二个矩阵是面片索引（Mx3） | 将模型转换为三角网格表示，返回顶点和面片数据。 |
-
-**典型调用方式**
-```cpp
-// 假设 model 是一个 IModel 的派生类实例
-Eigen::Vector3f translation(10.0f, 0.0f, 0.0f);
-model.Translate(translation);
-
-Eigen::Vector3f min, max;
-model.BoundingBox(min, max);
-float volume = model.Volume();
+```mermaid
+graph TB
+Host["宿主应用<br/>Qt / wxWidgets / Unity / UE / C# / Java / Python / Swift"] --> Dll["DllHsBaSlicer<br/>纯 C ABI 导出层"]
+Dll --> Lib["LibHsBaSlicer<br/>C++ 核心库"]
+Lib --> Core["底层算法与数据<br/>模型/切片/支撑/填充/路径/Lua"]
 ```
 
-**Section sources**
-- [IModel.hpp](file://base/IModel.hpp#L19-L34)
-- [OcctModel.cpp](file://cadmodel/OcctModel.cpp#L141-L194)
-- [IglModel.cpp](file://meshmodel/IglModel.cpp#L54-L78)
+图示来源
+- [README.md:100-124](file://README.md#L100-L124)
+- [cpp_cmake_usage.md:1-28](file://docs/en/cpp_cmake_usage.md#L1-L28)
 
-## PolygonFill 类
+章节来源
+- [README.md:100-124](file://README.md#L100-L124)
+- [cpp_cmake_usage.md:1-28](file://docs/en/cpp_cmake_usage.md#L1-L28)
 
-`PolygonFill` 提供了一系列用于生成2D多边形填充路径的静态函数。这些函数广泛用于生成切片路径。
+## 核心组件
+本节梳理三类关键入口：
+- C ABI 宏定义：HSBA_SLICER_API（DllHsBaSlicer）与 HSBA_SLICER_LIB_API（LibHsBaSlicer）。
+- 流水线配置类型：FDM、SLA、SLS、SLM、LOM、3DP、WAAM、文件传输、自定义 Lua 流水线。
+- 公共 C ABI 函数：初始化、模型管理、各流水线同步/异步运行与结果释放。
 
-### 填充方法与参数配置
+章节来源
+- [dllexport.h:1-23](file://DllHsBaSlicer/dllexport.h#L1-L23)
+- [export.h:1-22](file://LibHsBaSlicer/export.h#L1-L22)
+- [pipeline_types.h:1-1050](file://pipelinetypes/pipeline_types.h#L1-L1050)
 
-| 函数签名 | 参数配置 | 功能描述 |
-| :--- | :--- | :--- |
-| `Polygons LineFill(const Polygons& poly, double spacing, double angle_deg, double lineThickness = 0.5);` | `poly`: 要填充的多边形<br>`spacing`: 填充线之间的间距<br>`angle_deg`: 填充线的角度（度）<br>`lineThickness`: 线条厚度（可选，默认0.5） | 生成一组平行直线填充路径。每条路径都是一个独立的两点线段。 |
-| `Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg, double lineThickness = 0.5);` | `poly`: 要填充的多边形<br>`spacing`: 填充线之间的间距<br>`angle_deg`: 填充线的角度（度）<br>`lineThickness`: 线条厚度（可选，默认0.5） | 生成一个简单的锯齿形填充路径。通过连接相邻扫描线的线段中心点来形成连续的锯齿路径。 |
-| `Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, double lineThickness = 0.5);` | `poly`: 要填充的多边形<br>`spacing`: 填充线之间的间距<br>`angle_deg`: 填充线的角度（度）<br>`lineThickness`: 线条厚度（可选，默认0.5） | 生成一个更复杂的锯齿形填充路径。与 `SimpleZigzagFill` 相比，它会尝试连接相邻行的线段以形成更长的连续路径，并在无法连接时使用桥接。 |
-| `Polygons OffsetFill(const Polygons& poly, double spacing, Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square);` | `poly`: 要填充的多边形<br>`spacing`: 偏移间距<br>`join_type`: 偏移连接类型（Square, Bevel, Round, Miter） | 通过连续向内偏移多边形边界来生成填充路径。 |
-| `Polygons CompositeOffsetFill(const Polygons& poly, double spacing, double offsetStep, int outwardCount, int inwardCount, FillMode mode, double angle_deg, double lineThickness = 0.5, Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square);` | `poly`: 要填充的多边形<br>`spacing`: 填充间距<br>`offsetStep`: 偏移步长<br>`outwardCount`: 向外偏移的次数<br>`inwardCount`: 向内偏移的次数<br>`mode`: 填充模式（Line, SimpleZigzag, Zigzag）<br>`angle_deg`: 填充角度<br>`lineThickness`: 线条厚度<br>`join_type`: 连接类型 | 先进行多次偏移，然后对最内层的偏移多边形应用指定模式的填充。 |
-| `Polygons HybridFill(const Polygons& poly, double spacing, double offsetStep, int outwardCount, int inwardCount, FillMode mode, double angle_deg, double lineThickness = 0.5, Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square);` | 参数同 `CompositeOffsetFill` | 先进行偏移，然后对最后一次偏移产生的所有多边形应用指定模式的填充。 |
-| `Polygons LuaCustomFill(const Polygons& poly, const std::string& scriptPath, const std::string& functionName = "generate_fill", double lineThickness = 0.5);` | `poly`: 要填充的多边形<br>`scriptPath`: Lua脚本文件路径<br>`functionName`: 脚本中填充函数的名称（可选，默认"generate_fill"）<br>`lineThickness`: 线条厚度（可选，默认0.5） | 使用外部Lua脚本定义的函数来生成填充路径。 |
-| `Polygons LuaCustomFillString(const Polygons& poly, const std::string& script, const std::string& functionName = "generate_fill", double lineThickness = 0.5);` | `poly`: 要填充的多边形<br>`script`: Lua脚本代码字符串<br>`functionName`: 脚本中填充函数的名称（可选，默认"generate_fill"）<br>`lineThickness`: 线条厚度（可选，默认0.5） | 使用内联Lua脚本代码来生成填充路径。 |
+## 架构总览
+下图展示从宿主应用到 C ABI 再到 C++ 核心的调用链，以及协程驱动的异步流水线执行流程。
 
-**使用示例**
-```cpp
-// 创建一个正方形多边形
-PolygonD polyd;
-polyd.emplace_back(Point2{0,0});
-polyd.emplace_back(Point2{10000,0});
-polyd.emplace_back(Point2{10000,10000});
-polyd.emplace_back(Point2{0,10000});
-Polygons poly = { Integerization(polyd) };
-
-// 生成45度角的直线填充
-Polygons lines = LineFill(poly, 1000.0, 45.0);
-
-// 生成锯齿形填充
-Polygons zigzag = ZigzagFill(poly, 1000.0, 45.0);
-
-// 使用Lua脚本进行自定义填充
-std::filesystem::path script_path = "custom_fill.lua";
-Polygons lua_fill = LuaCustomFill(poly, script_path.string(), "customFill", 100.0);
+```mermaid
+sequenceDiagram
+participant App as "宿主应用"
+participant CABI as "DllHsBaSlicer C ABI"
+participant Core as "LibHsBaSlicer 核心"
+participant Lua as "Lua 脚本(可选)"
+App->>CABI : "调用 Run*Pipeline(config, progress_cb, user_data)"
+CABI->>Core : "BuildConfig(...) + RunPipelineAsync(...)"
+Core-->>CABI : "Task.get_result() 或 then(result_callback)"
+CABI-->>App : "返回结果结构体或回调结果"
+Note over Core,Lua : "部分流水线通过 Lua 完成导出或定制逻辑"
 ```
 
-**Section sources**
-- [PolygonFill.hpp](file://2D/PolygonFill.hpp#L12-L42)
-- [PolygonFill.cpp](file://2D/PolygonFill.cpp#L15-L800)
-- [polygon_fill_test.cpp](file://tests/PolygonFill/polygon_fill_test.cpp#L11-L117)
+图示来源
+- [fdm_pipeline.cpp:455-497](file://DllHsBaSlicer/fdm_pipeline.cpp#L455-L497)
+- [sla_pipeline.cpp:244-260](file://DllHsBaSlicer/sla_pipeline.cpp#L244-L260)
+- [sls_pipeline.cpp:181-260](file://DllHsBaSlicer/sls_pipeline.cpp#L181-L260)
+- [slm_pipeline.cpp:235-260](file://DllHsBaSlicer/slm_pipeline.cpp#L235-L260)
+- [lom_pipeline.cpp:313-354](file://DllHsBaSlicer/lom_pipeline.cpp#L313-L354)
+- [tdp_pipeline.cpp:202-260](file://DllHsBaSlicer/tdp_pipeline.cpp#L202-L260)
+- [waam_pipeline.cpp:173-260](file://DllHsBaSlicer/waam_pipeline.cpp#L173-L260)
+- [file_transfer_pipeline.cpp:157-198](file://DllHsBaSlicer/file_transfer_pipeline.cpp#L157-L198)
 
-## Zipper 和 Unzipper 类
+## 详细组件分析
 
-`Zipper` 和 `Unzipper` 类提供了对ZIP等压缩格式的读写支持。`Zipper` 用于创建和写入压缩包，`Unzipper` 用于读取和解压压缩包。
+### C ABI 导出宏与平台兼容性
+- HSBA_SLICER_API：用于 DllHsBaSlicer 共享库符号导出/导入。Windows 下根据 HSBA_SLICER_EXPORTS 决定 dllexport 或 dllimport；非 Windows 为空。
+- HSBA_SLICER_LIB_API：用于 LibHsBaSlicer C++ 库符号导出/导入，语义与前者一致。
 
-### 压缩/解压接口
+使用建议：
+- 构建 DllHsBaSlicer 时定义 HSBA_SLICER_EXPORTS。
+- 消费方链接 DllHsBaSlicer 时无需定义该宏。
+- 对 LibHsBaSlicer 同理。
 
-#### Zipper 类
-`Zipper` 类继承自 `IZipper` 接口，使用 `miniz` 库实现。
+章节来源
+- [dllexport.h:1-23](file://DllHsBaSlicer/dllexport.h#L1-L23)
+- [export.h:1-22](file://LibHsBaSlicer/export.h#L1-L22)
 
-| 函数签名 | 参数类型 | 返回值 | 功能描述 |
-| :--- | :--- | :--- | :--- |
-| `Zipper(MinizCompression compression);` | `compression`: 压缩级别（No, Fast, Tight） | 构造函数 | 创建一个 `Zipper` 实例，并指定压缩级别。 |
-| `void AddByteFile(std::string_view name, const std::string& data) override;` | `name`: 压缩包内的文件名<br>`data`: 要添加的文件数据（字节流） | `void` | 将内存中的字节数据作为文件添加到压缩包。如果文件名已存在，抛出异常。 |
-| `void AddFile(std::string_view name, std::string_view path) override;` | `name`: 压缩包内的文件名<br>`path`: 要添加的本地文件路径 | `void` | 将本地磁盘上的文件添加到压缩包。如果文件名已存在，抛出异常。 |
-| `void AddByteFileIgnoreDuplicate(std::string_view name, const std::string& data) override;` | `name`: 压缩包内的文件名<br>`data`: 要添加的文件数据（字节流） | `void` | 添加字节数据，如果文件名已存在，则在原文件名后添加 `_duplicate` 后缀。 |
-| `void AddFileIgnoreDuplicate(std::string_view name, std::string_view path) override;` | `name`: 压缩包内的文件名<br>`path`: 要添加的本地文件路径 | `void` | 添加本地文件，如果文件名已存在，则在原文件名后添加 `_duplicate` 后缀。 |
-| `void Save(std::string_view filePath) override;` | `filePath`: 要保存的压缩包文件路径 | `void` | 将所有已添加的文件写入到指定的压缩包文件中。 |
+### 流水线配置类型与默认值
+所有流水线配置均为 C 兼容结构体，字段含义与默认值由 pipeline_types.h 中的静态 inline 初始化器统一维护。
 
-#### Unzipper 类
-`Unzipper` 类是一个具体的类，用于解压ZIP文件。
+- FDM：HsBaFdmPipelineConfig_t，默认层厚 0.2mm，首层 0.25mm，填充模式 HSBA_FILL_ZIGZAG，固件 HSBA_GCODE_MARLIN，喷嘴直径 0.4mm，耗材直径 1.75mm，温度 200/60，回抽长度 1.0mm，速度 50/100，螺旋外壁关闭。
+- SLA：HsBaSlaPipelineConfig_t，默认层厚 0.05mm，首层 0.1mm，底曝光 60s，正常曝光 2.5s，提升距离 5/3mm，提升速度 60mm/s，回抽速度 150mm/s，底板偏移 2mm，边框宽 1mm，填充间距 0.5mm，角度 0°，边框环数 2，凸包关闭，支撑开启，过悬角 45°，支撑间隙 0.5mm，柱径 2mm，密度 0.3，图案 HSBA_SLA_SUPPORT_SACRIFICIAL，图像格式 PNG，宽高自动。
+- SLS：HsBaSlsPipelineConfig_t，默认层厚 0.1mm，首层 0.15mm，激光功率 30W，扫描速度 2000mm/s，栅格间距 0.15mm，旋转 90°，床温 180°C，需要 export_lua_script。
+- SLM：HsBaSlmPipelineConfig_t，默认层厚 0.06mm，首层 0.08mm，功率 200W，扫描速度 1000mm/s，栅格间距 0.1mm，旋转 67°，床温 100°C，材料钛合金，光源激光，保护气氩，需要 export_lua_script。
+- LOM：HsBaLomPipelineConfig_t，默认层厚 0.2mm，首层 0.2mm，切割速度 300mm/s，轮廓偏移 0.5mm，切割功率 0.8，粘合温度 150°C，压力 1MPa，时间 5s，封边开启，切割模式轮廓，需要 export_lua_script。
+- 3DP：HsBaTdpPipelineConfig_t，默认层厚 0.1mm，首层 0.12mm，喷头数 128，滴距 0.05mm，饱和 0.6，固化 1s，床温 40°C，模式单通道，需要 export_lua_script，螺旋外壁关闭。
+- WAAM：HsBaWaamPipelineConfig_t，默认层厚 0.8mm，首层 1.0mm，焊道宽 1.2mm，行走速度 8mm/s，送丝速度 5m/min，电流 180A，电压 22V，气体流量 15L/min，材料钢，工艺电弧，保护气屏蔽气，保护气氩，层间温度 100°C，机器人 ABB，path_lua_script/path_lua_func 可选，螺旋外壁关闭。
+- 文件传输：HsBaFileTransferPipelineConfig_t，host/port 必填，pool_size 默认 4，file_paths 数组必填，file_count 指定数量。
+- 自定义 Lua：HsBaCustomPipelineConfig_t，pipeline_lua_script 或 pipeline_lua_source 二选一，entry_func 默认 run_pipeline，config_json 可传 JSON，model_name/model_path/output_path 可选。
 
-| 函数签名 | 参数类型 | 返回值 | 功能描述 |
-| :--- | :--- | :--- | :--- |
-| `static std::shared_ptr<Unzipper> Create();` | 无 | `std::shared_ptr<Unzipper>`: 新创建的 `Unzipper` 实例 | 静态工厂方法，创建并返回一个 `Unzipper` 实例。 |
-| `void ReadFromFile(std::string_view path, bool reopen = false);` | `path`: ZIP文件的路径<br>`reopen`: 是否重新打开文件（可选，默认`false`） | `void` | 从指定路径加载ZIP文件。 |
-| `std::shared_ptr<UnzipperStream> GetStream(std::string_view part_file);` | `part_file`: 压缩包内文件的名称 | `std::shared_ptr<UnzipperStream>`: 指向文件流的智能指针 | 获取压缩包内指定文件的输入流，可用于读取文件内容。 |
-| `static void SetMaxMemSize(size_t size = 1024 * 1024 * 1024);` | `size`: 最大内存使用量（字节） | `void` | 设置解压时允许使用的最大内存量（默认1GB）。超过此限制的文件将被解压到临时目录。 |
+所有结构体均提供对应默认初始化函数，例如 HsBaFdmConfigDefault、HsBaSlaConfigDefault、HsBaSlsConfigDefault、HsBaSlmConfigDefault、HsBaLomConfigDefault、HsBaTdpConfigDefault、HsBaWaamConfigDefault、HsBaFileTransferConfigDefault、HsBaCustomConfigDefault。
 
-**支持的格式和错误处理机制**
-- **支持的格式**: `Zipper` 和 `Unzipper` 主要支持ZIP格式。项目中还提供了 `Bit7zZipper` 和 `Bit7zUnzipper` 类，它们基于 `bit7z` 库，支持更广泛的格式，包括：7z, XZ, BZIP2, GZIP, TAR, RAR, ISO等。
-- **错误处理机制**:
-  - `Zipper` 在添加重复文件名时会抛出 `InvalidArgumentError` 异常。
-  - `Save` 方法在压缩失败时会抛出 `IOError` 异常。
-  - `Unzipper` 在文件不存在或路径错误时会抛出 `IOError` 异常。
-  - 所有操作都应使用 `try-catch` 块进行异常处理。
+章节来源
+- [pipeline_types.h:23-113](file://pipelinetypes/pipeline_types.h#L23-L113)
+- [pipeline_types.h:146-232](file://pipelinetypes/pipeline_types.h#L146-L232)
+- [pipeline_types.h:251-310](file://pipelinetypes/pipeline_types.h#L251-L310)
+- [pipeline_types.h:320-401](file://pipelinetypes/pipeline_types.h#L320-L401)
+- [pipeline_types.h:407-461](file://pipelinetypes/pipeline_types.h#L407-L461)
+- [pipeline_types.h:467-521](file://pipelinetypes/pipeline_types.h#L467-L521)
+- [pipeline_types.h:530-625](file://pipelinetypes/pipeline_types.h#L530-L625)
+- [pipeline_types.h:631-674](file://pipelinetypes/pipeline_types.h#L631-L674)
+- [pipeline_types.h:680-732](file://pipelinetypes/pipeline_types.h#L680-L732)
+- [pipeline_types.h:738-983](file://pipelinetypes/pipeline_types.h#L738-L983)
 
-**典型调用方式**
-```cpp
-// 创建并使用 Zipper
-HsBa::Slicer::Zipper zipper(HsBa::Slicer::MinizCompression::Tight);
-zipper.AddByteFile("test.txt", "Hello, World!");
-zipper.Save("output.zip");
+### FDM 流水线 C ABI
+- 创建默认配置：HsBaCreateDefaultConfig。
+- 同步运行：HsBaRunFdmPipeline(config, callback, user_data)。
+- 异步运行：HsBaRunFdmPipelineAsync(config, callback, user_data, result_callback, result_user_data)。
+- 释放结果：HsBaFreePipelineResult(result)。
 
-// 创建并使用 Unzipper
-auto unzipper = HsBa::Slicer::Unzipper::Create();
-unzipper->ReadFromFile("output.zip");
-auto stream = unzipper->GetStream("test.txt");
-std::string content((std::istreambuf_iterator<char>(*stream)), std::istreambuf_iterator<char>());
+行为说明：
+- 同步调用内部构造 InternalConfig，启动协程任务并等待 get_result，再转换为 C 结果结构体。
+- 异步调用将配置包装为 shared_ptr，避免协程生命周期问题，并在任务完成后通过 result_callback 返回结果。
+- 结果结构体中的 gcode_content 与 error_message 由库分配，调用方必须通过 HsBaFreePipelineResult 释放。
+
+使用示例（步骤）：
+1. 调用 HsBaCreateDefaultConfig 获取默认配置。
+2. 设置 model_name、model_path、output_path 等必要字段。
+3. 调用 HsBaRunFdmPipeline 或 HsBaRunFdmPipelineAsync。
+4. 若同步调用，检查 result.success 与 result.gcode_content；若异步调用，在 result_callback 中处理结果。
+5. 调用 HsBaFreePipelineResult 释放字符串字段。
+
+章节来源
+- [fdm_pipeline.cpp:455-497](file://DllHsBaSlicer/fdm_pipeline.cpp#L455-L497)
+
+### SLA 流水线 C ABI
+- 创建默认配置：HsBaCreateDefaultSlaConfig（由 pipeline_types.h 提供）。
+- 同步运行：HsBaRunSlaPipeline。
+- 异步运行：HsBaRunSlaPipelineAsync。
+- 释放结果：HsBaFreeSlaPipelineResult。
+
+行为说明：
+- 计算层数基于模型高度与首层/常规层厚。
+- 构建 JSON 配置，包含 slice/exposure/lift/floor/support/image/layers。
+- 输出为 zip 文件路径，image_type 支持 PNG/JPG/SVG。
+
+使用示例（步骤）：
+1. 使用 HsBaSlaConfigDefault 初始化配置。
+2. 设置 model_name、model_path、output_path、image_type。
+3. 调用 HsBaRunSlaPipeline 或 HsBaRunSlaPipelineAsync。
+4. 检查 result.success 与 result.export_path。
+5. 调用 HsBaFreeSlaPipelineResult 释放字符串字段。
+
+章节来源
+- [sla_pipeline.cpp:244-260](file://DllHsBaSlicer/sla_pipeline.cpp#L244-L260)
+- [pipeline_types.h:146-232](file://pipelinetypes/pipeline_types.h#L146-L232)
+- [pipeline_types.h:785-825](file://pipelinetypes/pipeline_types.h#L785-L825)
+
+### SLS 流水线 C ABI
+- 创建默认配置：HsBaCreateDefaultSlsConfig（由 pipeline_types.h 提供）。
+- 同步运行：HsBaRunSlsPipeline。
+- 异步运行：HsBaRunSlsPipelineAsync。
+- 释放结果：HsBaFreeSlsPipelineResult。
+
+行为说明：
+- 无标准输出格式，必须由 export_lua_script 指定导出脚本。
+- 构建 JSON 配置，包含 process/slice/laser/bed_temperature。
+- 若未提供 export_lua_script，返回错误。
+
+使用示例（步骤）：
+1. 使用 HsBaSlsConfigDefault 初始化配置。
+2. 设置 model_name、model_path、export_lua_script、export_lua_func、output_path。
+3. 调用 HsBaRunSlsPipeline 或 HsBaRunSlsPipelineAsync。
+4. 检查 result.success 与 result.export_path。
+5. 调用 HsBaFreeSlsPipelineResult 释放字符串字段。
+
+章节来源
+- [sls_pipeline.cpp:181-260](file://DllHsBaSlicer/sls_pipeline.cpp#L181-L260)
+- [pipeline_types.h:251-310](file://pipelinetypes/pipeline_types.h#L251-L310)
+- [pipeline_types.h:827-847](file://pipelinetypes/pipeline_types.h#L827-L847)
+
+### SLM 流水线 C ABI
+- 创建默认配置：HsBaCreateDefaultSlmConfig（由 pipeline_types.h 提供）。
+- 同步运行：HsBaRunSlmPipeline。
+- 异步运行：HsBaRunSlmPipelineAsync。
+- 释放结果：HsBaFreeSlmPipelineResult。
+
+行为说明：
+- 与 SLS 类似，但包含金属粉末材料、光源类型与保护气体。
+- 构建 JSON 配置，包含 process/slice/laser/bed_temperature/material/light_source/protect_gas。
+- 需要 export_lua_script。
+
+使用示例（步骤）：
+1. 使用 HsBaSlmConfigDefault 初始化配置。
+2. 设置 material、light_source、protect_gas、export_lua_script、output_path。
+3. 调用 HsBaRunSlmPipeline 或 HsBaRunSlmPipelineAsync。
+4. 检查 result.success 与 result.export_path。
+5. 调用 HsBaFreeSlmPipelineResult 释放字符串字段。
+
+章节来源
+- [slm_pipeline.cpp:235-260](file://DllHsBaSlicer/slm_pipeline.cpp#L235-L260)
+- [pipeline_types.h:320-401](file://pipelinetypes/pipeline_types.h#L320-L401)
+- [pipeline_types.h:849-872](file://pipelinetypes/pipeline_types.h#L849-L872)
+
+### LOM 流水线 C ABI
+- 创建默认配置：HsBaCreateDefaultLomConfig（由 pipeline_types.h 提供）。
+- 同步运行：HsBaRunLomPipeline。
+- 异步运行：HsBaRunLomPipelineAsync。
+- 释放结果：HsBaFreeLomPipelineResult。
+
+行为说明：
+- 层片粘合+切割工艺，需要 export_lua_script。
+- 配置包含 cut_speed/cut_margin/cut_power/bond_temperature/bond_pressure/bond_time/seal_contour/cut_mode。
+
+使用示例（步骤）：
+1. 使用 HsBaLomConfigDefault 初始化配置。
+2. 设置 model_name、model_path、cut_*、bond_*、seal_contour、cut_mode、export_lua_script、output_path。
+3. 调用 HsBaRunLomPipeline 或 HsBaRunLomPipelineAsync。
+4. 检查 result.success 与 result.export_path。
+5. 调用 HsBaFreeLomPipelineResult 释放字符串字段。
+
+章节来源
+- [lom_pipeline.cpp:313-354](file://DllHsBaSlicer/lom_pipeline.cpp#L313-L354)
+- [pipeline_types.h:407-461](file://pipelinetypes/pipeline_types.h#L407-L461)
+- [pipeline_types.h:874-897](file://pipelinetypes/pipeline_types.h#L874-L897)
+
+### 3DP 流水线 C ABI
+- 创建默认配置：HsBaCreateDefaultTdpConfig（由 pipeline_types.h 提供）。
+- 同步运行：HsBaRunTdpPipeline。
+- 异步运行：HsBaRunTdpPipelineAsync。
+- 释放结果：HsBaFreeTdpPipelineResult。
+
+行为说明：
+- 粘结剂喷射工艺，需要 export_lua_script。
+- 配置包含 head_count/drop_spacing/binder_saturation/ink_curing_time/bed_temperature/binder_mode/spiral_mode。
+
+使用示例（步骤）：
+1. 使用 HsBaTdpConfigDefault 初始化配置。
+2. 设置 model_name、model_path、binder_*、spiral_mode、export_lua_script、output_path。
+3. 调用 HsBaRunTdpPipeline 或 HsBaRunTdpPipelineAsync。
+4. 检查 result.success 与 result.export_path。
+5. 调用 HsBaFreeTdpPipelineResult 释放字符串字段。
+
+章节来源
+- [tdp_pipeline.cpp:202-260](file://DllHsBaSlicer/tdp_pipeline.cpp#L202-L260)
+- [pipeline_types.h:467-521](file://pipelinetypes/pipeline_types.h#L467-L521)
+- [pipeline_types.h:899-921](file://pipelinetypes/pipeline_types.h#L899-L921)
+
+### WAAM 流水线 C ABI
+- 创建默认配置：HsBaCreateDefaultWaamConfig（由 pipeline_types.h 提供）。
+- 同步运行：HsBaRunWaamPipeline。
+- 异步运行：HsBaRunWaamPipelineAsync。
+- 释放结果：HsBaFreeWaamPipelineResult。
+
+行为说明：
+- 输出为机器人程序而非层图 zip。
+- 配置包含焊接参数、保护方式、机器人类型、可选 path_lua_script/path_lua_func、spiral_mode。
+- 内置支持 ABB/KUKA/FANUC，未知机器人类型需 Lua 路径脚本。
+
+使用示例（步骤）：
+1. 使用 HsBaWaamConfigDefault 初始化配置。
+2. 设置 material、welding_process、protection、protect_gas、robot_type、path_lua_script/path_lua_func、spiral_mode、output_path。
+3. 调用 HsBaRunWaamPipeline 或 HsBaRunWaamPipelineAsync。
+4. 检查 result.success 与 result.output_path。
+5. 调用 HsBaFreeWaamPipelineResult 释放字符串字段。
+
+章节来源
+- [waam_pipeline.cpp:173-260](file://DllHsBaSlicer/waam_pipeline.cpp#L173-L260)
+- [pipeline_types.h:530-625](file://pipelinetypes/pipeline_types.h#L530-L625)
+- [pipeline_types.h:923-951](file://pipelinetypes/pipeline_types.h#L923-L951)
+
+### 文件传输流水线 C ABI
+- 创建默认配置：HsBaCreateDefaultFileTransferConfig。
+- 同步运行：HsBaRunFileTransferPipeline(config, callback, user_data)。
+- 异步运行：HsBaRunFileTransferPipelineAsync(config, callback, user_data, result_callback, result_user_data)。
+- 释放结果：HsBaFreeFileTransferPipelineResult。
+
+行为说明：
+- 使用 RemoteExecutorConnectionPool 进行远程服务文件传输。
+- host/port 必填，pool_size 范围 [1,16]，默认 4。
+- file_paths 数组与 file_count 必填。
+
+使用示例（步骤）：
+1. 使用 HsBaFileTransferConfigDefault 初始化配置。
+2. 设置 host、port、pool_size、file_paths、file_count。
+3. 调用 HsBaRunFileTransferPipeline 或 HsBaRunFileTransferPipelineAsync。
+4. 检查 result.success、files_transferred、total_files。
+5. 调用 HsBaFreeFileTransferPipelineResult 释放 error_message。
+
+章节来源
+- [file_transfer_pipeline.cpp:157-198](file://DllHsBaSlicer/file_transfer_pipeline.cpp#L157-L198)
+- [pipeline_types.h:631-674](file://pipelinetypes/pipeline_types.h#L631-L674)
+- [pipeline_types.h:953-966](file://pipelinetypes/pipeline_types.h#L953-L966)
+
+### 自定义 Lua 流水线 C ABI
+- 创建默认配置：HsBaCreateDefaultCustomConfig（由 pipeline_types.h 提供）。
+- 同步运行：HsBaRunCustomPipeline(config, callback, user_data)。
+- 异步运行：HsBaRunCustomPipelineAsync(config, callback, user_data, result_callback, result_user_data)。
+- 释放结果：HsBaFreeCustomPipelineResult。
+
+行为说明：
+- 整个工作流由 Lua 入口函数定义，C++ 侧仅提供流水线构建块（模型加载、切片、支撑、填充、地板、G-code 路径输出、SLA/SLS 打包）。
+- entry_func 默认 run_pipeline，config_json 作为 pipeline_config 传入 Lua。
+- output_path 可由 Lua 脚本返回。
+
+使用示例（步骤）：
+1. 使用 HsBaCustomConfigDefault 初始化配置。
+2. 设置 pipeline_lua_script 或 pipeline_lua_source、entry_func、config_json、model_name、model_path、output_path。
+3. 调用 HsBaRunCustomPipeline 或 HsBaRunCustomPipelineAsync。
+4. 检查 result.success、result.output_path、result.result_string。
+5. 调用 HsBaFreeCustomPipelineResult 释放字符串字段。
+
+章节来源
+- [custom_pipeline.cpp:171-203](file://DllHsBaSlicer/custom_pipeline.cpp#L171-L203)
+- [pipeline_types.h:680-732](file://pipelinetypes/pipeline_types.h#L680-L732)
+- [pipeline_types.h:968-983](file://pipelinetypes/pipeline_types.h#L968-L983)
+
+### 模型管理与 Lua 注册
+- 模型管理：HsBaLoadModel(name, file_path)、HsBaGetModel(name)、HsBaRemoveModel(name)、HsBaContainsModel(name)。
+- Lua 注册：HsBaAdd2DFunction(func)、HsBaAdd3DFunction(func)、HsBaAddFileFunction(func)、HsBaAddEventCallback(event_name, func)。
+- 初始化：initialize()。
+
+使用示例（步骤）：
+1. 调用 initialize() 初始化环境。
+2. 使用 HsBaLoadModel 加载模型。
+3. 通过 HsBaGetModel/HsBaContainsModel 查询模型。
+4. 使用 HsBaRemoveModel 清理模型。
+5. 根据需要注册 2D/3D/文件操作 Lua 函数与事件回调。
+
+章节来源
+- [model_preprocess.cpp:31-81](file://DllHsBaSlicer/model_preprocess.cpp#L31-L81)
+- [lua_register.cpp:11-35](file://DllHsBaSlicer/lua_register.cpp#L11-L35)
+- [initialize.cpp:7-7](file://DllHsBaSlicer/initialize.cpp#L7-L7)
+
+## 依赖关系分析
+- DllHsBaSlicer 仅依赖 LibHsBaSlicer 的导出接口，不直接访问更底层模块，确保 ABI 边界清晰。
+- 流水线实现普遍依赖：
+  - 模型预处理：LoadModel/GetModel/GetModelInfo。
+  - 切片：BuildSliceTopology/SliceLayer。
+  - 并行：ParallelForLayers。
+  - Lua：InstallCommonAnyObjectTypes 与各流水线的 Lua 导出脚本。
+  - 协程：Utils::Task 与 co_return。
+
+```mermaid
+graph LR
+Dll["DllHsBaSlicer"] --> Lib["LibHsBaSlicer"]
+Lib --> Pre["Preprocess"]
+Lib --> Slice["Slice"]
+Lib --> Support["Support"]
+Lib --> Fill["Fill"]
+Lib --> Path["Path"]
+Lib --> Lua["Lua 扩展"]
 ```
 
-**Section sources**
-- [IZipper.hpp](file://fileoperator/IZipper.hpp#L14-L18)
-- [IUnzipper.hpp](file://fileoperator/IUnzipper.hpp#L111-L122)
-- [zipper.hpp](file://fileoperator/zipper.hpp#L28-L43)
-- [unzipper.hpp](file://fileoperator/unzipper.hpp#L15-L34)
-- [bit7z_zipper.hpp](file://fileoperator/bit7z_zipper.hpp#L46-L59)
-- [bit7z_unzipper.hpp](file://fileoperator/bit7z_unzipper.hpp#L20-L49)
-- [zipper_test.cpp](file://tests/FilesOperator/zipper_test.cpp#L24-L143)
+图示来源
+- [README.md:100-124](file://README.md#L100-L124)
+- [cpp_cmake_usage.md:1-28](file://docs/en/cpp_cmake_usage.md#L1-L28)
 
-## LoggerSingletone 类
+章节来源
+- [README.md:100-124](file://README.md#L100-L124)
+- [cpp_cmake_usage.md:1-28](file://docs/en/cpp_cmake_usage.md#L1-L28)
 
-`LoggerSingletone` 是一个单例模式的日志记录器，提供不同级别的日志输出功能。
+## 性能与并发特性
+- 协程驱动：各流水线使用 Utils::Task 与 co_return，支持同步 get_result 与异步 then 回调。
+- 并行切片：ParallelForLayers 对每层独立切片进行并行化，提升吞吐。
+- 进度回调：progress_cb 在各阶段报告百分比与阶段描述，便于 UI 更新。
+- 内存管理：OwnedCString 封装 char* 分配与释放，避免泄漏。
 
-### 静态日志方法与日志级别控制
+优化建议：
+- 合理设置 pool_size 以平衡连接数与资源占用。
+- 对大模型优先使用异步接口，避免阻塞主线程。
+- 复用模型缓存（HsBaGetModel）减少重复加载。
 
-| 静态方法 | 参数类型 | 功能描述 |
-| :--- | :--- | :--- |
-| `static void Log(std::string_view message, const int log_lv, const std::source_location& location = std::source_location::current());` | `message`: 日志消息<br>`log_lv`: 日志级别（0-5）<br>`location`: 源代码位置（自动填充） | 通用日志记录函数，根据 `log_lv` 参数输出不同级别的日志。 |
-| `static void LogDebug(std::string_view message, const std::source_location& location = std::source_location::current());` | `message`: 日志消息<br>`location`: 源代码位置（自动填充） | 输出调试级别（Debug）的日志。 |
-| `static void LogInfo(std::string_view message, const std::source_location& location = std::source_location::current());` | `message`: 日志消息<br>`location`: 源代码位置（自动填充） | 输出信息级别（Info）的日志。 |
-| `static void LogWarning(std::string_view message, const std::source_location& location = std::source_location::current());` | `message`: 日志消息<br>`location`: 源代码位置（自动填充） | 输出警告级别（Warning）的日志。 |
-| `static void LogError(std::string_view message, const std::source_location& location = std::source_location::current());` | `message`: 日志消息<br>`location`: 源代码位置（自动填充） | 输出错误级别（Error）的日志。 |
+章节来源
+- [fdm_pipeline.cpp:455-497](file://DllHsBaSlicer/fdm_pipeline.cpp#L455-L497)
+- [sla_pipeline.cpp:244-260](file://DllHsBaSlicer/sla_pipeline.cpp#L244-L260)
+- [sls_pipeline.cpp:181-260](file://DllHsBaSlicer/sls_pipeline.cpp#L181-L260)
+- [slm_pipeline.cpp:235-260](file://DllHsBaSlicer/slm_pipeline.cpp#L235-L260)
+- [lom_pipeline.cpp:313-354](file://DllHsBaSlicer/lom_pipeline.cpp#L313-L354)
+- [tdp_pipeline.cpp:202-260](file://DllHsBaSlicer/tdp_pipeline.cpp#L202-L260)
+- [waam_pipeline.cpp:173-260](file://DllHsBaSlicer/waam_pipeline.cpp#L173-L260)
+- [file_transfer_pipeline.cpp:157-198](file://DllHsBaSlicer/file_transfer_pipeline.cpp#L157-L198)
 
-**日志级别控制**
-- 日志级别从低到高依次为：Trace(0), Debug(1), Info(2), Warning(3), Error(4), Fatal(5)。
-- 实际输出的日志级别由配置文件 `logcfg.ini` 决定。在 `logger.cpp` 中，程序会读取该配置文件中的 `log_level` 或 `log_level_debug` 值来设置最低输出级别。
-- 如果配置文件不存在，会使用默认级别（Debug模式下为1，Release模式下为3）。
-- 日志可以同时输出到控制台和文件（如果 `use_log_file` 配置为 `true`）。
+## 错误码与异常处理
+- 成功标志：各结果结构体的 success 字段（0=false，1=true）。
+- 错误消息：error_message 字段为 UTF-8 字符串，由库分配，调用方必须通过对应 Free*PipelineResult 释放。
+- 常见错误：
+  - 模型加载失败：返回错误信息包含模型路径。
+  - 无效模型高度：total_layers <= 0。
+  - SLS/SLM/LOM/3DP 缺少 export_lua_script：返回错误提示。
+- 异常转换：第三方几何异常被转换为 RuntimeError 家族，并通过 error_message 返回。
 
-**典型调用方式**
-```cpp
-// 使用静态方法
-HsBa::Slicer::Log::LoggerSingletone::LogInfo("Application started.");
-HsBa::Slicer::Log::LoggerSingletone::LogError("Failed to load model.");
+章节来源
+- [sls_pipeline.cpp:181-260](file://DllHsBaSlicer/sls_pipeline.cpp#L181-L260)
+- [slm_pipeline.cpp:235-260](file://DllHsBaSlicer/slm_pipeline.cpp#L235-L260)
+- [tdp_pipeline.cpp:202-260](file://DllHsBaSlicer/tdp_pipeline.cpp#L202-L260)
+- [waam_pipeline.cpp:173-260](file://DllHsBaSlicer/waam_pipeline.cpp#L173-L260)
 
-// 使用用户定义字面量 (UDL)
-"Processing data..."_log_info();
-"An error occurred!"_log_error();
-```
+## 跨语言绑定注意事项
+- 字符串编码：所有 char* 字符串为 UTF-8，宿主语言需按 UTF-8 处理。
+- 内存所有权：
+  - 结果结构体中的 gcode_content/export_path/output_path/error_message 由库分配，调用方必须调用对应的 HsBaFree*PipelineResult。
+  - 回调中的结果同样遵循此规则。
+- 回调线程安全：
+  - 进度回调与结果回调可能在线程池中触发，宿主语言需保证回调函数的线程安全。
+- 枚举与结构体布局：
+  - 所有配置与结果为 POD 类型，跨语言绑定需保持字段顺序与大小一致。
+- 初始化：
+  - 首次使用前调用 initialize()，确保 Lua 环境与全局类型注册正确。
 
-**Section sources**
-- [logger.hpp](file://logger/logger.hpp#L21-L25)
-- [logger.cpp](file://logger/logger.cpp#L154-L262)
+最佳实践：
+- 使用默认初始化函数（如 HsBaFdmConfigDefault）避免未初始化字段。
+- 在异步回调中尽快复制所需数据，避免持有原始指针过久。
+- 对文件传输，合理设置 pool_size，避免连接池过大导致资源耗尽。
 
-## AppConfigSingletone 类
+章节来源
+- [pipeline_types.h:1-1050](file://pipelinetypes/pipeline_types.h#L1-L1050)
+- [fdm_pipeline.cpp:455-497](file://DllHsBaSlicer/fdm_pipeline.cpp#L455-L497)
+- [file_transfer_pipeline.cpp:157-198](file://DllHsBaSlicer/file_transfer_pipeline.cpp#L157-L198)
+- [initialize.cpp:7-7](file://DllHsBaSlicer/initialize.cpp#L7-L7)
 
-`AppConfigSingletone` 是一个单例模式的配置管理器，用于提供运行时配置信息。
+## 故障排除指南
+- 模型加载失败：
+  - 检查 model_path 是否存在且格式受支持。
+  - 确认已调用 HsBaLoadModel 或提供有效 model_name。
+- 层数为零：
+  - 检查 layer_height 与 first_layer_height 是否合理。
+  - 确认模型高度大于零。
+- 缺少 Lua 导出脚本：
+  - SLS/SLM/LOM/3DP 必须提供 export_lua_script。
+  - 自定义流水线需提供 pipeline_lua_script 或 pipeline_lua_source。
+- 内存泄漏：
+  - 确保调用 HsBaFree*PipelineResult 释放结果字符串。
+  - 避免在回调中延迟释放原始指针。
 
-### 运行时配置方法
+章节来源
+- [sls_pipeline.cpp:181-260](file://DllHsBaSlicer/sls_pipeline.cpp#L181-L260)
+- [slm_pipeline.cpp:235-260](file://DllHsBaSlicer/slm_pipeline.cpp#L235-L260)
+- [tdp_pipeline.cpp:202-260](file://DllHsBaSlicer/tdp_pipeline.cpp#L202-L260)
+- [waam_pipeline.cpp:173-260](file://DllHsBaSlicer/waam_pipeline.cpp#L173-L260)
+- [custom_pipeline.cpp:171-203](file://DllHsBaSlicer/custom_pipeline.cpp#L171-L203)
 
-| 方法 | 参数类型 | 返回值 | 功能描述 |
-| :--- | :--- | :--- | :--- |
-| `std::string GetSevenZPath() const;` | 无 | `std::string`: 7-Zip可执行文件的路径 | 获取7-Zip命令行工具（7z.exe）的路径。该路径在程序启动时初始化，用于调用外部7-Zip工具进行压缩/解压操作。 |
+## 结论
+HsBaSlicer 通过清晰的三层架构与稳定的 C ABI，为多语言宿主提供了统一的切片流水线接口。所有流水线均支持同步与异步调用，提供进度回调与结构化结果，便于集成到各类应用中。正确使用默认配置、注意内存所有权与线程安全，可获得稳定高效的切片体验。
 
-**说明**
-- 该类通过单例模式确保全局只有一个配置实例。
-- `GetSevenZPath()` 方法是线程安全的，使用 `std::shared_mutex` 保护对 `sevenZ_path_` 成员的访问。
-- 具体的路径值是在程序其他地方初始化的，`AppConfigSingletone` 负责提供一个统一的访问接口。
+## 附录：完整 C ABI 函数清单
+- 初始化与模型管理：
+  - initialize()
+  - HsBaLoadModel(name, file_path)
+  - HsBaGetModel(name)
+  - HsBaRemoveModel(name)
+  - HsBaContainsModel(name)
+- FDM：
+  - HsBaCreateDefaultConfig()
+  - HsBaRunFdmPipeline(config, callback, user_data)
+  - HsBaRunFdmPipelineAsync(config, callback, user_data, result_callback, result_user_data)
+  - HsBaFreePipelineResult(result)
+- SLA：
+  - HsBaCreateDefaultSlaConfig()
+  - HsBaRunSlaPipeline(config, callback, user_data)
+  - HsBaRunSlaPipelineAsync(config, callback, user_data, result_callback, result_user_data)
+  - HsBaFreeSlaPipelineResult(result)
+- SLS：
+  - HsBaCreateDefaultSlsConfig()
+  - HsBaRunSlsPipeline(config, callback, user_data)
+  - HsBaRunSlsPipelineAsync(config, callback, user_data, result_callback, result_user_data)
+  - HsBaFreeSlsPipelineResult(result)
+- SLM：
+  - HsBaCreateDefaultSlmConfig()
+  - HsBaRunSlmPipeline(config, callback, user_data)
+  - HsBaRunSlmPipelineAsync(config, callback, user_data, result_callback, result_user_data)
+  - HsBaFreeSlmPipelineResult(result)
+- LOM：
+  - HsBaCreateDefaultLomConfig()
+  - HsBaRunLomPipeline(config, callback, user_data)
+  - HsBaRunLomPipelineAsync(config, callback, user_data, result_callback, result_user_data)
+  - HsBaFreeLomPipelineResult(result)
+- 3DP：
+  - HsBaCreateDefaultTdpConfig()
+  - HsBaRunTdpPipeline(config, callback, user_data)
+  - HsBaRunTdpPipelineAsync(config, callback, user_data, result_callback, result_user_data)
+  - HsBaFreeTdpPipelineResult(result)
+- WAAM：
+  - HsBaCreateDefaultWaamConfig()
+  - HsBaRunWaamPipeline(config, callback, user_data)
+  - HsBaRunWaamPipelineAsync(config, callback, user_data, result_callback, result_user_data)
+  - HsBaFreeWaamPipelineResult(result)
+- 文件传输：
+  - HsBaCreateDefaultFileTransferConfig()
+  - HsBaRunFileTransferPipeline(config, callback, user_data)
+  - HsBaRunFileTransferPipelineAsync(config, callback, user_data, result_callback, result_user_data)
+  - HsBaFreeFileTransferPipelineResult(result)
+- 自定义 Lua：
+  - HsBaCreateDefaultCustomConfig()
+  - HsBaRunCustomPipeline(config, callback, user_data)
+  - HsBaRunCustomPipelineAsync(config, callback, user_data, result_callback, result_user_data)
+  - HsBaFreeCustomPipelineResult(result)
+- Lua 注册：
+  - HsBaAdd2DFunction(func)
+  - HsBaAdd3DFunction(func)
+  - HsBaAddFileFunction(func)
+  - HsBaAddEventCallback(event_name, func)
 
-**典型调用方式**
-```cpp
-// 获取7-Zip工具的路径
-std::string sevenZPath = HsBa::Slicer::AppConfigSingletone::GetInstance().GetSevenZPath();
-// 使用该路径调用7-Zip命令
-// system((sevenZPath + " a archive.zip file.txt").c_str());
-```
-
-**Section sources**
-- [app_config.hpp](file://utils/app_config.hpp#L14)
-- [app_config.cpp](file://utils/app_config.cpp#L32-L37)
+章节来源
+- [initialize.cpp:7-7](file://DllHsBaSlicer/initialize.cpp#L7-L7)
+- [model_preprocess.cpp:31-81](file://DllHsBaSlicer/model_preprocess.cpp#L31-L81)
+- [fdm_pipeline.cpp:455-497](file://DllHsBaSlicer/fdm_pipeline.cpp#L455-L497)
+- [sla_pipeline.cpp:244-260](file://DllHsBaSlicer/sla_pipeline.cpp#L244-L260)
+- [sls_pipeline.cpp:181-260](file://DllHsBaSlicer/sls_pipeline.cpp#L181-L260)
+- [slm_pipeline.cpp:235-260](file://DllHsBaSlicer/slm_pipeline.cpp#L235-L260)
+- [lom_pipeline.cpp:313-354](file://DllHsBaSlicer/lom_pipeline.cpp#L313-L354)
+- [tdp_pipeline.cpp:202-260](file://DllHsBaSlicer/tdp_pipeline.cpp#L202-L260)
+- [waam_pipeline.cpp:173-260](file://DllHsBaSlicer/waam_pipeline.cpp#L173-L260)
+- [file_transfer_pipeline.cpp:157-198](file://DllHsBaSlicer/file_transfer_pipeline.cpp#L157-L198)
+- [custom_pipeline.cpp:171-203](file://DllHsBaSlicer/custom_pipeline.cpp#L171-L203)
+- [lua_register.cpp:11-35](file://DllHsBaSlicer/lua_register.cpp#L11-L35)

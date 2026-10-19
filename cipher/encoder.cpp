@@ -26,17 +26,30 @@ namespace
 unsigned char hex_val(char c)
 {
     if (c >= '0' && c <= '9')
+    {
         return c - '0';
+    }
     if (c >= 'a' && c <= 'f')
+    {
         return c - 'a' + HEX_BASE;
+    }
     if (c >= 'A' && c <= 'F')
+    {
         return c - 'A' + HEX_BASE;
+    }
     throw InvalidArgumentError("Invalid hex char");
 }
 }  // namespace
 
 std::string Encoder::base64_encode(const std::vector<unsigned char>& data)
 {
+    // An empty input is valid and encodes to ""; BIO_write returns 0 for a 0-length
+    // write, which the <=0 failure check below would otherwise misread as an error.
+    if (data.empty())
+    {
+        return std::string();
+    }
+
     BIO* bio = BIO_new(BIO_s_mem());
     BIO* b64 = BIO_new(BIO_f_base64());
     if (!bio || !b64)
@@ -64,7 +77,9 @@ std::string Encoder::base64_encode(const std::vector<unsigned char>& data)
     BIO_get_mem_ptr(bio, &mem);
     std::string out;
     if (mem && mem->length > 0)
+    {
         out.assign(mem->data, mem->length);
+    }
 
     BIO_free_all(bio);
     return out;
@@ -85,7 +100,7 @@ std::vector<unsigned char> Encoder::base64_decode(std::string_view b64)
 
     std::vector<unsigned char> out;
     out.resize(b64.size());
-    int len = BIO_read(bio, out.data(), static_cast<int>(out.size()));
+    int const len = BIO_read(bio, out.data(), static_cast<int>(out.size()));
     if (len < 0)
     {
         BIO_free_all(bio);
@@ -101,7 +116,7 @@ std::string Encoder::hex_encode(const std::vector<unsigned char>& data)
     static const char* hex_chars = "0123456789abcdef";
     std::string out;
     out.reserve(data.size() * 2);
-    for (unsigned char c : data)
+    for (unsigned char const c : data)
     {
         out.push_back(hex_chars[(c >> 4) & 0xF]);
         out.push_back(hex_chars[c & 0xF]);
@@ -112,13 +127,15 @@ std::string Encoder::hex_encode(const std::vector<unsigned char>& data)
 std::vector<unsigned char> Encoder::hex_decode(std::string_view hex)
 {
     if (hex.size() % 2 != 0)
+    {
         throw std::invalid_argument("hex string length must be even");
+    }
     std::vector<unsigned char> out;
     out.reserve(hex.size() / 2);
     for (size_t i = 0; i < hex.size(); i += 2)
     {
-        unsigned char hi = hex_val(hex[i]);
-        unsigned char lo = hex_val(hex[i + 1]);
+        unsigned char const hi = hex_val(hex[i]);
+        unsigned char const lo = hex_val(hex[i + 1]);
         out.push_back((unsigned char)((hi << 4) | lo));
     }
     return out;

@@ -157,14 +157,25 @@ HsBaSlicer 中的 Lua 脚本按用途分为两类：
 ### B.2 `PolygonFill`（填充算法）
 
 `offsetFill` / `lineFill` / `simpleZigzagFill` / `zigzagFill` / `compositeOffsetFill` / `hybridFill` / `offsetOnly` —— 输入整型多边形集合与间距/角度参数，返回填充路径多边形。
+`randomizeStartPoints(polys, seed?, opts?)` —— 将闭合轮廓与偏置路径的起点旋转到周长上均匀采样的随机点（在所选边上插入新的分裂顶点，不限于原顶点；保持顶点顺序、环绕方向与闭合形式，顶点数 +1）；`seed` 省略时用随机种子，可按层传入 seed 实现层间起点错开；`opts.min_separation` 约束不同环起点之间的最小距离（整型坐标单位），用于错开嵌套环的接缝。
 
 ### B.3 `PathOptimize`（路径顺序优化）
 
 | 调用 | 说明 |
 |------|------|
-| `PathOptimize.new()` | 创建优化器对象，方法：`addRegion(id, paths)`、`addPolygons(id, polys)`、`addRoute(...)`、`optimizeOrder()`、`buildPaths()`、`buildPolygons()` |
+| `PathOptimize.new()` | 创建优化器对象，方法：`addRegion(id, paths)`、`addPolygons(id, polys)`、`addRoute(...)`、`optimizeOrder()`、`buildPaths()`、`buildPolygons()`、`getFullGraph()`、`getExpandedGraph()`、`setCustomTour(...)` |
 | `PathOptimize.optimizeRegions(regions)` | 填充结果模式一键优化，返回完整填充路径 |
 | `PathOptimize.optimizePolygons(regions)` | 多边形模式一键优化（填充前执行），返回优化顺序的多边形集合 |
+
+优化器对象额外暴露**全组合图**，供用户用 Lua 设计任意路径优化算法：
+
+| 调用 | 说明 |
+|------|------|
+| `opt:getFullGraph()` | 区域级全组合图：`{vertices={id..}, distMatrix={{代价..}..}（不可达为 false），edges={{from,to,cost}..}, areaCount}`，即所有区域两两的门禁感知最短路径代价 |
+| `opt:getExpandedGraph()` | 门级展开图：`{vertices={{areaId,gateId,isExit}..}, edges={{from,to,weight}..}（1 基下标）, vertexCount, edgeCount}` |
+| `opt:setCustomTour(tour[, entryGates])` | 反馈用户计算的顺序（区域 id 数组）与可选 `{[areaId]=门禁下标}` 映射，随后 `buildPaths()`/`buildPolygons()` 复用该顺序、跳过内置遗传 TSP |
+
+> 示例脚本 `tests/PolygonFill/custom_tsp.lua` 演示了最近邻贪心与暴力枚举 TSP 两种自定义算法。
 
 ### B.4 `Support`（支撑生成工具）
 
@@ -208,7 +219,7 @@ db:Delete("table", "where...")
 
 ### B.8 `ParamStore`（参数持久化）
 
-基于反射的流水线配置存取。`ParamStore.new(...)` 创建实例，实例方法：`EnsureSchema`、`Save`、`Load`、`List`、`Update`、`Delete`。
+基于反射的流水线配置存取。`ParamStore.new(...)` 创建实例，实例方法：`EnsureSchema`、`SetCryptoKey`、`Save`、`Load`、`List`、`Update`、`Delete`。`SetCryptoKey(password)` 启用静态加密：口令非空时，`Save`/`Update` 将整份配置以 AES-256-CBC 加密存入 `param_blob`，`Load` 自动解密；传 `nil`/`""` 则禁用并保持明文行为。
 
 ---
 

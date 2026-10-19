@@ -24,6 +24,8 @@
 
 namespace HsBa::Slicer::Pipeline
 {
+namespace
+{
 
 struct InternalSlmResult
 {
@@ -38,13 +40,13 @@ struct InternalSlmConfig
 {
     std::string model_name;
     std::string model_path;
-    float layer_height = 0.06f;
-    float first_layer_height = 0.08f;
-    float laser_power = 200.0f;
-    float scan_speed = 1000.0f;
-    float hatch_spacing = 0.1f;
-    float hatch_rotation = 67.0f;
-    float bed_temperature = 100.0f;
+    float layer_height = 0.06F;
+    float first_layer_height = 0.08F;
+    float laser_power = 200.0F;
+    float scan_speed = 1000.0F;
+    float hatch_spacing = 0.1F;
+    float hatch_rotation = 67.0F;
+    float bed_temperature = 100.0F;
     HsBaSlmMaterial_t material = HSBA_SLM_MATERIAL_TITANIUM;
     HsBaSlmLight_t light_source = HSBA_SLM_LIGHT_LASER;
     HsBaMetalProtectGas_t protect_gas = HSBA_METAL_GAS_ARGON;
@@ -54,9 +56,6 @@ struct InternalSlmConfig
     HsBaSlmProgressCallback progress_cb = nullptr;
     void* progress_user_data = nullptr;
 };
-
-namespace
-{
 
 struct OwnedCString
 {
@@ -69,7 +68,9 @@ struct OwnedCString
         {
             data = static_cast<char*>(std::malloc(str.size() + 1));
             if (data)
+            {
                 std::memcpy(data, str.c_str(), str.size() + 1);
+            }
         }
     }
 
@@ -94,20 +95,26 @@ struct OwnedCString
 
 int CalculateLayerCount(const ModelInfo& info, float layer_height, float first_layer_height)
 {
-    float model_height = info.bbox_max.z() - info.bbox_min.z();
-    if (model_height <= 0.0f)
+    float const model_height = info.bbox_max.z() - info.bbox_min.z();
+    if (model_height <= 0.0F)
+    {
         return 0;
-    float remaining = model_height - first_layer_height;
-    if (remaining <= 0.0f)
+    }
+    float const remaining = model_height - first_layer_height;
+    if (remaining <= 0.0F)
+    {
         return 1;
+    }
     return 1 + static_cast<int>(std::ceil(remaining / layer_height));
 }
 
 float GetLayerZ(int layer_index, float first_layer_height, float layer_height)
 {
     if (layer_index == 0)
+    {
         return first_layer_height;
-    return first_layer_height + layer_index * layer_height;
+    }
+    return first_layer_height + static_cast<float>(layer_index) * layer_height;
 }
 
 void ReportProgress(const InternalSlmConfig& cfg, int percent, const std::string& stage)
@@ -181,14 +188,12 @@ std::string BuildSlmConfigJson(const InternalSlmConfig& cfg, int total_layers)
     json << "    \"hatch_rotation\": " << cfg.hatch_rotation << "\n";
     json << "  },\n";
     json << "  \"bed_temperature\": " << cfg.bed_temperature << ",\n";
-    json << "  \"material\": \"" << SlmMaterialName(cfg.material) << "\",\n";
-    json << "  \"light_source\": \"" << SlmLightName(cfg.light_source) << "\",\n";
-    json << "  \"protect_gas\": \"" << MetalGasName(cfg.protect_gas) << "\"\n";
+    json << R"(  "material": ")" << SlmMaterialName(cfg.material) << "\",\n";
+    json << R"(  "light_source": ")" << SlmLightName(cfg.light_source) << "\",\n";
+    json << R"(  "protect_gas": ")" << MetalGasName(cfg.protect_gas) << "\"\n";
     json << "}\n";
     return json.str();
 }
-
-}  // anonymous namespace
 
 InternalSlmConfig BuildSlmConfig(const HsBaSlmPipelineConfig_t* cfg, HsBaSlmProgressCallback cb, void* ud)
 {
@@ -227,6 +232,7 @@ HsBaSlmPipelineResult_t ToCResult(const InternalSlmResult& ir)
     return cr;
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-reference-coroutine-parameters) caller keeps cfg alive
 Utils::Task<InternalSlmResult> RunSlmPipelineAsync(const InternalSlmConfig& cfg)
 {
     HsBa::Slicer::InstallCommonAnyObjectTypes();
@@ -272,17 +278,17 @@ Utils::Task<InternalSlmResult> RunSlmPipelineAsync(const InternalSlmConfig& cfg)
         // Build the slicing topology once and slice layers in parallel: each layer
         // is independent and SliceLayer only const-reads the shared topology.
         auto topo = BuildSliceTopology(*model);
-        ParallelForLayers(
+        co_await ParallelForLayersAsync(
             total_layers,
             [&](int i)
             {
-                float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
+                float const z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
                 layer_z_heights[i] = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height);
                 layer_outlines[i] = SliceLayer(*topo, z);
             },
             [&](int done)
             {
-                int progress = 15 + (done * 35) / total_layers;
+                int const progress = 15 + (done * 35) / total_layers;
                 ReportProgress(cfg, progress, "Slicing layer");
             });
         ReportProgress(cfg, 50, "Slicing complete");
@@ -305,16 +311,16 @@ Utils::Task<InternalSlmResult> RunSlmPipelineAsync(const InternalSlmConfig& cfg)
             output_path = cfg.model_name + "_slm_output.zip";
         }
 
-        std::string config_json = BuildSlmConfigJson(cfg, total_layers);
+        std::string const config_json = BuildSlmConfigJson(cfg, total_layers);
 
         SlsPackage pkg;
         pkg.layer_outlines = layer_outlines;
         pkg.layer_z_heights = layer_z_heights;
         pkg.config_json = config_json;
 
-        std::string func = cfg.export_lua_func.empty() ? "export_slm" : cfg.export_lua_func;
+        std::string const func = cfg.export_lua_func.empty() ? "export_slm" : cfg.export_lua_func;
         std::string lua_error;
-        bool export_ok = SaveSlsPackageLua(pkg, output_path, cfg.export_lua_script, func, &lua_error);
+        bool const export_ok = SaveSlsPackageLua(pkg, output_path, cfg.export_lua_script, func, &lua_error);
 
         if (export_ok)
         {
@@ -340,6 +346,8 @@ Utils::Task<InternalSlmResult> RunSlmPipelineAsync(const InternalSlmConfig& cfg)
 
     co_return result;
 }
+
+}  // anonymous namespace
 
 }  // namespace HsBa::Slicer::Pipeline
 
@@ -367,20 +375,22 @@ HSBA_SLICER_API void HsBaRunSlmPipelineAsync(const HsBaSlmPipelineConfig_t* conf
         HsBa::Slicer::Pipeline::BuildSlmConfig(config, callback, user_data));
     auto task = HsBa::Slicer::Pipeline::RunSlmPipelineAsync(*shared_cfg);
     task.then(
-        [shared_cfg, result_callback, result_user_data](HsBa::Slicer::Pipeline::InternalSlmResult ir)
+        [shared_cfg, result_callback, result_user_data](const HsBa::Slicer::Pipeline::InternalSlmResult& ir)
         {
             auto cr = HsBa::Slicer::Pipeline::ToCResult(ir);
             if (result_callback)
             {
                 result_callback(cr, result_user_data);
             }
-        });
+        });  // NOLINT(clang-analyzer-unix.Malloc) C-ABI ownership transfer: result_callback frees cr strings
 }
 
 HSBA_SLICER_API void HsBaFreeSlmPipelineResult(HsBaSlmPipelineResult_t* result)
 {
     if (!result)
+    {
         return;
+    }
     std::free(std::exchange(result->export_path, nullptr));
     std::free(std::exchange(result->error_message, nullptr));
 }

@@ -8,9 +8,11 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <utility>
 
 
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
+#include "base/encoding_convert.hpp"
 #include "base/error.hpp"
 #include "fileoperator/LuaAdapter.hpp"
 #include "paths/imagespath.hpp"
@@ -30,7 +32,9 @@ std::string PolygonToJson(const PolygonD& poly)
     for (size_t i = 0; i < poly.size(); ++i)
     {
         if (i > 0)
+        {
             oss << ",";
+        }
         oss << "{\"x\":" << poly[i].x << ",\"y\":" << poly[i].y << "}";
     }
     oss << "]";
@@ -45,7 +49,9 @@ std::string PolygonsToJson(const PolygonsD& polys)
     for (size_t i = 0; i < polys.size(); ++i)
     {
         if (i > 0)
+        {
             oss << ",";
+        }
         oss << PolygonToJson(polys[i]);
     }
     oss << "]}";
@@ -56,11 +62,13 @@ std::string PolygonsToJson(const PolygonsD& polys)
 std::string SpiralPathToJson(const std::vector<SpiralPoint>& path)
 {
     std::ostringstream oss;
-    oss << "{\"type\":\"spiral\",\"points\":[";
+    oss << R"({"type":"spiral","points":[)";
     for (size_t i = 0; i < path.size(); ++i)
     {
         if (i > 0)
+        {
             oss << ",";
+        }
         oss << "{\"x\":" << path[i].x << ",\"y\":" << path[i].y << ",\"z\":" << path[i].z << "}";
     }
     oss << "]}";
@@ -81,10 +89,10 @@ HSBA_SLICER_LIB_API bool SaveSlsPackageLua(const SlsPackage& pkg, const std::str
         const int total_layers = static_cast<int>(pkg.layer_outlines.size());
         for (int i = 0; i < total_layers; ++i)
         {
-            std::string layer_json = PolygonsToJson(pkg.layer_outlines[i]);
+            std::string const layer_json = PolygonsToJson(pkg.layer_outlines[i]);
             if (!layer_json.empty())
             {
-                float z = (i < static_cast<int>(pkg.layer_z_heights.size())) ? pkg.layer_z_heights[i] : 0.0f;
+                float const z = (std::cmp_less(i, pkg.layer_z_heights.size())) ? pkg.layer_z_heights[i] : 0.0F;
                 // Embed z_height in a wrapper JSON
                 std::ostringstream wrapper;
                 wrapper << "{\"layer\":" << i << ",\"z_height\":" << z << ",\"outlines\":" << layer_json << "}";
@@ -96,14 +104,16 @@ HSBA_SLICER_LIB_API bool SaveSlsPackageLua(const SlsPackage& pkg, const std::str
         // extra data stream for the export script to consume if it supports it.
         if (pkg.spiral_mode)
         {
-            std::vector<double> zs(pkg.layer_z_heights.begin(), pkg.layer_z_heights.end());
+            std::vector<double> const zs(pkg.layer_z_heights.begin(), pkg.layer_z_heights.end());
             const std::vector<SpiralPoint> helix = SpiralizeOuterWall(pkg.layer_outlines, zs);
             if (helix.size() >= 2)
+            {
                 images_path.AddImage("spiral/path.json", SpiralPathToJson(helix));
+            }
         }
 
         // Register SQL adapters so Lua script can perform database registration
-        std::function<void(lua_State*)> sql_reg = [](lua_State* L)
+        std::function<void(lua_State*)> const sql_reg = [](lua_State* L)
         {
             RegisterLuaSQLiteAdapter(L);
 #ifdef HSBA_USE_MYSQL
@@ -114,17 +124,20 @@ HSBA_SLICER_LIB_API bool SaveSlsPackageLua(const SlsPackage& pkg, const std::str
 #endif
             // Register external File functions for SLS output stage
             for (auto& reg : GetFileFunctions())
+            {
                 reg(L);
+            }
         };
 
-        images_path.Save(std::filesystem::path(output_zip), std::filesystem::path(lua_script),
-                         std::string_view(lua_func), sql_reg);
+        images_path.Save(utf8_to_path(output_zip), utf8_to_path(lua_script), std::string_view(lua_func), sql_reg);
         return true;
     }
     catch (const RuntimeError& e)
     {
         if (error_out)
+        {
             *error_out = e.what();
+        }
         return false;
     }
 }

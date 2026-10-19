@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "LibHsBaSlicer/Extends/LuaCommonTypes.hpp"
+#include "LibHsBaSlicer/Fill/polygon_fill.hpp"
 #include "LibHsBaSlicer/Path/sls_export.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
@@ -23,6 +24,8 @@
 #include "pipeline_parallel.hpp"
 
 namespace HsBa::Slicer::Pipeline
+{
+namespace
 {
 
 struct InternalTdpResult
@@ -38,24 +41,22 @@ struct InternalTdpConfig
 {
     std::string model_name;
     std::string model_path;
-    float layer_height = 0.1f;
-    float first_layer_height = 0.12f;
+    float layer_height = 0.1F;
+    float first_layer_height = 0.12F;
     int head_count = 128;
-    float drop_spacing = 0.05f;
-    float binder_saturation = 0.6f;
-    float ink_curing_time = 1.0f;
-    float bed_temperature = 40.0f;
+    float drop_spacing = 0.05F;
+    float binder_saturation = 0.6F;
+    float ink_curing_time = 1.0F;
+    float bed_temperature = 40.0F;
     HsBaTdpBinderMode_t binder_mode = HSBA_TDP_SINGLE;
     std::string export_lua_script;
     std::string export_lua_func;
     std::string output_path;
     bool spiral_mode = false;
+    bool randomize_start_point = false;
     HsBaTdpProgressCallback progress_cb = nullptr;
     void* progress_user_data = nullptr;
 };
-
-namespace
-{
 
 struct OwnedCString
 {
@@ -68,7 +69,9 @@ struct OwnedCString
         {
             data = static_cast<char*>(std::malloc(str.size() + 1));
             if (data)
+            {
                 std::memcpy(data, str.c_str(), str.size() + 1);
+            }
         }
     }
 
@@ -93,20 +96,26 @@ struct OwnedCString
 
 int CalculateLayerCount(const ModelInfo& info, float layer_height, float first_layer_height)
 {
-    float model_height = info.bbox_max.z() - info.bbox_min.z();
-    if (model_height <= 0.0f)
+    float const model_height = info.bbox_max.z() - info.bbox_min.z();
+    if (model_height <= 0.0F)
+    {
         return 0;
-    float remaining = model_height - first_layer_height;
-    if (remaining <= 0.0f)
+    }
+    float const remaining = model_height - first_layer_height;
+    if (remaining <= 0.0F)
+    {
         return 1;
+    }
     return 1 + static_cast<int>(std::ceil(remaining / layer_height));
 }
 
 float GetLayerZ(int layer_index, float first_layer_height, float layer_height)
 {
     if (layer_index == 0)
+    {
         return first_layer_height;
-    return first_layer_height + layer_index * layer_height;
+    }
+    return first_layer_height + static_cast<float>(layer_index) * layer_height;
 }
 
 void ReportProgress(const InternalTdpConfig& cfg, int percent, const std::string& stage)
@@ -148,15 +157,14 @@ std::string BuildTdpConfigJson(const InternalTdpConfig& cfg, int total_layers)
     json << "    \"drop_spacing\": " << cfg.drop_spacing << ",\n";
     json << "    \"saturation\": " << cfg.binder_saturation << ",\n";
     json << "    \"curing_time\": " << cfg.ink_curing_time << ",\n";
-    json << "    \"mode\": \"" << BinderModeName(cfg.binder_mode) << "\"\n";
+    json << R"(    "mode": ")" << BinderModeName(cfg.binder_mode) << "\"\n";
     json << "  },\n";
     json << "  \"bed_temperature\": " << cfg.bed_temperature << ",\n";
-    json << "  \"spiral_mode\": " << (cfg.spiral_mode ? "true" : "false") << "\n";
+    json << "  \"spiral_mode\": " << (cfg.spiral_mode ? "true" : "false") << ",\n";
+    json << "  \"randomize_start_point\": " << (cfg.randomize_start_point ? "true" : "false") << "\n";
     json << "}\n";
     return json.str();
 }
-
-}  // anonymous namespace
 
 InternalTdpConfig BuildTdpConfig(const HsBaTdpPipelineConfig_t* cfg, HsBaTdpProgressCallback cb, void* ud)
 {
@@ -175,6 +183,7 @@ InternalTdpConfig BuildTdpConfig(const HsBaTdpPipelineConfig_t* cfg, HsBaTdpProg
     ic.export_lua_func = cfg->export_lua_func ? cfg->export_lua_func : "";
     ic.output_path = cfg->output_path ? cfg->output_path : "";
     ic.spiral_mode = cfg->spiral_mode != 0;
+    ic.randomize_start_point = cfg->randomize_start_point != 0;
     ic.progress_cb = cb;
     ic.progress_user_data = ud;
     return ic;
@@ -194,6 +203,7 @@ HsBaTdpPipelineResult_t ToCResult(const InternalTdpResult& ir)
     return cr;
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-reference-coroutine-parameters) caller keeps cfg alive
 Utils::Task<InternalTdpResult> RunTdpPipelineAsync(const InternalTdpConfig& cfg)
 {
     HsBa::Slicer::InstallCommonAnyObjectTypes();
@@ -239,17 +249,25 @@ Utils::Task<InternalTdpResult> RunTdpPipelineAsync(const InternalTdpConfig& cfg)
         // Build the slicing topology once and slice layers in parallel: each layer
         // is independent and SliceLayer only const-reads the shared topology.
         auto topo = BuildSliceTopology(*model);
-        ParallelForLayers(
+        co_await ParallelForLayersAsync(
             total_layers,
             [&](int i)
             {
-                float z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
+                float const z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
                 layer_z_heights[i] = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height);
                 layer_outlines[i] = SliceLayer(*topo, z);
+                if (cfg.randomize_start_point)
+                {
+                    // Stagger deposition seams: rotate each closed contour to a
+                    // per-layer deterministic random start point on an edge interior.
+                    Polygons const int_polys = Integerization(layer_outlines[i]);
+                    layer_outlines[i] =
+                        UnIntegerization(RandomizePathStartPoints(int_polys, static_cast<std::uint64_t>(i) + 1ULL));
+                }
             },
             [&](int done)
             {
-                int progress = 15 + (done * 35) / total_layers;
+                int const progress = 15 + (done * 35) / total_layers;
                 ReportProgress(cfg, progress, "Slicing layer");
             });
         ReportProgress(cfg, 50, "Slicing complete");
@@ -272,7 +290,7 @@ Utils::Task<InternalTdpResult> RunTdpPipelineAsync(const InternalTdpConfig& cfg)
             output_path = cfg.model_name + "_3dp_output.zip";
         }
 
-        std::string config_json = BuildTdpConfigJson(cfg, total_layers);
+        std::string const config_json = BuildTdpConfigJson(cfg, total_layers);
 
         SlsPackage pkg;
         pkg.layer_outlines = layer_outlines;
@@ -280,9 +298,9 @@ Utils::Task<InternalTdpResult> RunTdpPipelineAsync(const InternalTdpConfig& cfg)
         pkg.config_json = config_json;
         pkg.spiral_mode = cfg.spiral_mode;
 
-        std::string func = cfg.export_lua_func.empty() ? "export_tdp" : cfg.export_lua_func;
+        std::string const func = cfg.export_lua_func.empty() ? "export_tdp" : cfg.export_lua_func;
         std::string lua_error;
-        bool export_ok = SaveSlsPackageLua(pkg, output_path, cfg.export_lua_script, func, &lua_error);
+        bool const export_ok = SaveSlsPackageLua(pkg, output_path, cfg.export_lua_script, func, &lua_error);
 
         if (export_ok)
         {
@@ -308,6 +326,8 @@ Utils::Task<InternalTdpResult> RunTdpPipelineAsync(const InternalTdpConfig& cfg)
 
     co_return result;
 }
+
+}  // anonymous namespace
 
 }  // namespace HsBa::Slicer::Pipeline
 
@@ -335,20 +355,22 @@ HSBA_SLICER_API void HsBaRunTdpPipelineAsync(const HsBaTdpPipelineConfig_t* conf
         HsBa::Slicer::Pipeline::BuildTdpConfig(config, callback, user_data));
     auto task = HsBa::Slicer::Pipeline::RunTdpPipelineAsync(*shared_cfg);
     task.then(
-        [shared_cfg, result_callback, result_user_data](HsBa::Slicer::Pipeline::InternalTdpResult ir)
+        [shared_cfg, result_callback, result_user_data](const HsBa::Slicer::Pipeline::InternalTdpResult& ir)
         {
             auto cr = HsBa::Slicer::Pipeline::ToCResult(ir);
             if (result_callback)
             {
                 result_callback(cr, result_user_data);
             }
-        });
+        });  // NOLINT(clang-analyzer-unix.Malloc) C-ABI ownership transfer: result_callback frees cr strings
 }
 
 HSBA_SLICER_API void HsBaFreeTdpPipelineResult(HsBaTdpPipelineResult_t* result)
 {
     if (!result)
+    {
         return;
+    }
     std::free(std::exchange(result->export_path, nullptr));
     std::free(std::exchange(result->error_message, nullptr));
 }

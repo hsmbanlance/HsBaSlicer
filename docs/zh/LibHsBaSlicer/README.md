@@ -146,6 +146,7 @@ using namespace HsBa::Slicer;
 ParamStoreConn conn;
 conn.backend    = ParamBackend::Sqlite;
 conn.sqlitePath = "params.db";
+// conn.cryptoKey = "secret";  // 可选：非空时整份配置加密存入 param_blob 列
 
 HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
 cfg.model_name   = "tough_template";
@@ -168,6 +169,7 @@ if (loaded.success) {
 - MySQL/PostgreSQL 分支受 `HSBA_USE_MYSQL` / `HSBA_USE_PGSQL` 编译宏守卫，未启用时返回 `success=false` 而非崩溃（移动端仅 SQLite）。
 - 读取回填的 `const char*` 字段由 `std::malloc` 持有，须用 `FreeLoadedConfigStrings` 释放。
 - 底层存储/反射/CRUD（含 `List`/`Update`/`Delete`/Lua）能力位于 fileoperator 的 `ParamStore`，本层仅面向 C 配置结构体暴露写入/读取。
+- 可选静态加密：`conn.cryptoKey` 非空时，配置会被序列化并经 AES-256-CBC（口令由 `HsBaCipher` 派生）加密存入 `param_blob` 列；留空则维持原明文行为。读取加密行时口令缺失或错误会使 `success=false`。详见 [fileoperator/param_store.md](../fileoperator/param_store.md)。
 
 ## SLA 地板/渲染/打包
 
@@ -262,6 +264,16 @@ opt2.addRegion(2, region2_paths);
 opt2.addRoute(1, 2, 42.0);                 // 可选：手动覆盖区域间空走代价（对称）
 opt2.optimizeOrder();
 PolygonsD full_paths = opt2.buildPaths();  // 区域内路径方向/次序贪心编排，减少跳变
+
+// 全组合图：由用户算法决定区域访问顺序
+RegionPathOptimizer opt3;
+opt3.addRegion(1, region1_paths);
+opt3.addRegion(2, region2_paths);
+opt3.addRegion(3, region3_paths);
+auto fg = opt3.getFullGraph();             // N x N 两两最短路径代价矩阵 + 扁平边表
+auto eg = opt3.getExpandedGraph();         // 门级展开图（所有入口/出口顶点与边）
+opt3.setCustomTour({3, 1, 2});             // 反馈用户计算的顺序（跳过内置遗传 TSP）
+PolygonsD custom_paths = opt3.buildPaths();
 ```
 
 ### Lua 脚本嵌入方案（唯一交付入口）
@@ -270,14 +282,23 @@ PolygonsD full_paths = opt2.buildPaths();  // 区域内路径方向/次序贪心
 
 | Lua 接口 | 说明 |
 | --- | --- |
-| `PathOptimize.new()` | 创建优化器对象（`addPolygons`/`addRegion`/`addRoute`/`optimizeOrder`/`buildPolygons`/`buildPaths`） |
+| `PathOptimize.new()` | 创建优化器对象（`addPolygons`/`addRegion`/`addRoute`/`optimizeOrder`/`buildPolygons`/`buildPaths`/`getFullGraph`/`getExpandedGraph`/`setCustomTour`） |
 | `PathOptimize.optimizePolygons(regions)` | 多边形模式一键优化，返回优化顺序的多边形表 |
 | `PathOptimize.optimizeRegions(regions)` | 填充结果模式一键优化，返回完整填充路径表（支持多点折线） |
+
+优化器对象额外暴露**全组合图**，供用户用 Lua 设计任意路径优化算法：
+
+| Lua 接口 | 说明 |
+| --- | --- |
+| `opt:getFullGraph()` | 区域级全组合图：`{vertices, distMatrix（不可达为 false）, edges, areaCount}`，即所有区域两两的门禁感知最短路径代价 |
+| `opt:getExpandedGraph()` | 门级展开图：`{vertices（areaId/gateId/isExit）, edges（from/to/weight，1 基下标）, vertexCount, edgeCount}` |
+| `opt:setCustomTour(tour[, entryGates])` | 反馈用户计算的顺序（区域 id 数组）与可选 `{[areaId]=门禁下标}` 映射，随后 `buildPaths()`/`buildPolygons()` 复用该顺序、跳过内置遗传 TSP |
 
 其中 `regions` = 区域数组，每个区域 = 折线/多边形数组，每条折线/多边形 = `{x=.., y=..}` 点数组。
 
 脚本契约：函数接收 `regions`，返回同格式的优化结果表；脚本内还可使用多边形操作与填充函数。
-示例脚本见 `tests/PolygonFill/optimize_paths.lua`：
+示例脚本见 `tests/PolygonFill/optimize_paths.lua`（内置策略）与 `tests/PolygonFill/custom_tsp.lua`
+（在全组合图上运行用户自定义算法）：
 
 ```lua
 -- 填充结果模式：输出完整填充路径（支持多点折线）
@@ -288,6 +309,19 @@ end
 -- 多边形模式（填充前执行）：输出优化顺序的多边形集合，供后续填充使用
 function optimize_polygons(regions)
     return PathOptimize.optimizePolygons(regions)
+end
+
+-- 在全组合图上运行用户自定义算法（最近邻示例）
+function optimize_paths_custom(regions)
+    local opt = PathOptimize.new()
+    for i, paths in ipairs(regions) do
+        opt:addRegion(i, paths)
+    end
+    local graph = opt:getFullGraph()          -- N x N 两两代价矩阵
+    local tour = { graph.vertices[1] }         -- 从首个区域出发
+    -- ...每步选择代价最小的未访问区域，再把顺序反馈给优化器...
+    opt:setCustomTour(tour)
+    return opt:buildPaths()
 end
 ```
 

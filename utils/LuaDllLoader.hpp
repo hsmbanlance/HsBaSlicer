@@ -6,6 +6,11 @@
 
 #include <boost/dll.hpp>
 
+#include <functional>
+#include <string>
+#include <type_traits>
+#include <utility>
+
 #include "LuaAnyObject.hpp"
 #include "LuaNewObject.hpp"
 
@@ -107,10 +112,53 @@ public:
 
 namespace detail
 {
+/**
+ * @brief Convert the Lua stack value at @p index to the native parameter type @p T.
+ *
+ * Used to unpack the real argument values of `call_<name>` from the Lua stack
+ * (positions 3..). The previous implementation default-constructed the argument
+ * tuple and never read the stack, so every call passed zeros to the target.
+ */
+template <typename T>
+T lua_arg_to(lua_State* L, int index)
+{
+    using D = std::decay_t<T>;
+    if constexpr (std::is_same_v<D, bool>)
+    {
+        return static_cast<bool>(lua_toboolean(L, index));
+    }
+    else if constexpr (std::is_integral_v<D>)
+    {
+        return static_cast<D>(lua_tointeger(L, index));
+    }
+    else if constexpr (std::is_floating_point_v<D>)
+    {
+        return static_cast<D>(lua_tonumber(L, index));
+    }
+    else if constexpr (std::is_same_v<D, std::string>)
+    {
+        return std::string(luaL_checkstring(L, index));
+    }
+    else if constexpr (std::is_same_v<D, const char*>)
+    {
+        return lua_tostring(L, index);
+    }
+    else
+    {
+        return luaL_error(L, "DllLoader: unsupported native argument type at stack index %d", index), D{};
+    }
+}
+
+// Unpack Lua stack arguments (positions 3..) and invoke the resolved native function.
+template <typename Ret, typename... Args, std::size_t... I>
+Ret call_dll(Ret(*func)(Args...), lua_State* L, std::index_sequence<I...>)
+{
+    return func(lua_arg_to<Args>(L, static_cast<int>(3 + I))...);
+}
+
 template <typename Ret, typename... Args>
 int lua_dll_get_function(lua_State* L)
 {
-    using FuncType = Ret (*)(Args...);
     auto* dll = (DllLoader*)lua_topointer(L, 1);
     std::string function_name = luaL_checkstring(L, 2);
     if (!dll)
@@ -121,9 +169,13 @@ int lua_dll_get_function(lua_State* L)
     }
     try
     {
-        auto func = dll->GetFunction<FuncType>(function_name);
-        // Push the function pointer as lightuserdata
-        lua_pushlightuserdata(L, (void*)func.template target<void*>());
+        // Resolve the exported function via its function-type signature.
+        // `get<Ret(Args...)>` returns a reference to the function, which `auto`
+        // decays to a real function pointer; `get<Ret(*)(Args...)>` (the previous
+        // code) would instead read the symbol as a data object holding a pointer
+        // (see the note in pointcloud/UserCustomPointCloudModel.cpp).
+        auto func = dll->GetFunction<Ret(Args...)>(function_name);
+        lua_pushlightuserdata(L, reinterpret_cast<void*>(func));
         return 1;
     }
     catch (const std::exception& e)
@@ -138,7 +190,7 @@ int lua_dll_call_function(lua_State* L)
 {
     auto* dll = (DllLoader*)lua_topointer(L, 1);
     std::string function_name = luaL_checkstring(L, 2);
-    // table of arguments starts from index 3
+    // arguments start from index 3
 
     if (!dll)
     {
@@ -147,10 +199,8 @@ int lua_dll_call_function(lua_State* L)
         return 0;
     }
 
-    // Collect arguments
-    std::tuple<std::decay_t<Args>...> args;
     int top = lua_gettop(L);
-    if (sizeof...(Args) != top - 2)
+    if (sizeof...(Args) != static_cast<std::size_t>(top - 2))
     {
         lua_pushstring(L, std::format("Expected {} arguments but got {}", sizeof...(Args), top - 2).c_str());
         lua_error(L);
@@ -158,20 +208,25 @@ int lua_dll_call_function(lua_State* L)
     }
     try
     {
-        auto func = dll->GetFunction<std::function<Ret(Args...)>>(function_name);
-        // Call the function with collected arguments
-        auto result = std::apply(func, args);
-        // Push result back to Lua
-        if constexpr (!std::is_same_v<Ret, void>)
+        // Resolve the exported function by its function-type signature; `auto`
+        // decays the returned function reference into a real `Ret(*)(Args...)`
+        // pointer (see the note in pointcloud/UserCustomPointCloudModel.cpp).
+        auto func = dll->GetFunction<Ret(Args...)>(function_name);
+        if constexpr (std::is_void_v<Ret>)
         {
-            // For simplicity, assume result is a string or number
+            call_dll<Ret, Args...>(func, L, std::index_sequence_for<Args...>{});
+            return 0;
+        }
+        else
+        {
+            auto result = call_dll<Ret, Args...>(func, L, std::index_sequence_for<Args...>{});
             if constexpr (std::is_arithmetic_v<Ret>)
             {
-                lua_pushnumber(L, result);
+                lua_pushnumber(L, static_cast<lua_Number>(result));
             }
-            else if constexpr (std::is_convertible_v<Ret, std::string>)
+            else if constexpr (std::is_constructible_v<std::string, Ret>)
             {
-                lua_pushstring(L, result.c_str());
+                lua_pushstring(L, std::string(result).c_str());
             }
             else
             {
@@ -179,10 +234,6 @@ int lua_dll_call_function(lua_State* L)
                 NewLuaObject<Utils::AnyObject, AnyObjectTypeName>(L, result);
             }
             return 1;
-        }
-        else
-        {
-            return 0;
         }
     }
     catch (const std::exception& e)
@@ -199,7 +250,7 @@ class LuaDllGetFunction : public DllGetFunctionAbstract
 public:
     virtual LuaResisterFunction GetLuaDllGetFuction() const override { return lua_dll_get_function<Ret, Args...>; }
     virtual LuaResisterFunction GetLuaDllCallFuction() const override { return lua_dll_call_function<Ret, Args...>; }
-    virtual std::string_view Name() const override { return TName; }
+    virtual std::string_view Name() const override { return TName.ToStringView(); }
 };
 }  // namespace detail
 

@@ -18,21 +18,21 @@ boost::property_tree::ptree from_ini(const std::string& path)
     boost::property_tree::ptree res;
     ;
     boost::property_tree::read_ini(path_loc, res);
-    return std::move(res);
+    return res;
 }
 boost::property_tree::ptree from_xml(const std::string& path)
 {
     auto path_loc = utf8_to_local(path);
     boost::property_tree::ptree res;
     boost::property_tree::read_xml(path_loc, res);
-    return std::move(res);
+    return res;
 }
 boost::property_tree::ptree from_json(const std::string& path)
 {
     auto path_loc = utf8_to_local(path);
     boost::property_tree::ptree res;
     boost::property_tree::read_json(path_loc, res);
-    return std::move(res);
+    return res;
 }
 
 void to_ini(const std::string& path, const boost::property_tree::ptree& ptree)

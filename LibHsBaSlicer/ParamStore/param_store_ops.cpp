@@ -45,9 +45,10 @@ std::string ResolveTable(PipelineConfigTag tag, std::string_view table)
     return table.empty() ? std::string(DefaultTableName(tag)) : std::string(table);
 }
 
-// Run Save on an adapter already connected to a concrete backend; exceptions are converged into the outcome here and not rethrown.
+// Run Save on an adapter already connected to a concrete backend; exceptions are converged into the outcome here and
+// not rethrown.
 ParamStoreOutcome DoSave(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::string_view table, std::string_view key,
-                         const void* cfg)
+                         const void* cfg, std::string_view cryptoKey)
 {
     ParamStoreOutcome o;
     if (!cfg)
@@ -64,8 +65,12 @@ ParamStoreOutcome DoSave(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::strin
     try
     {
         ParamStore store(db);
+        if (!cryptoKey.empty())
+        {
+            store.SetCryptoKey(cryptoKey);
+        }
         store.EnsureTable(tag);
-        Utils::AnyObject obj(ti, const_cast<void*>(cfg));
+        Utils::AnyObject const obj(ti, const_cast<void*>(cfg));
         o.paramId = static_cast<long long>(store.Save(ResolveTable(tag, table), key, obj));
         o.success = true;
     }
@@ -77,9 +82,10 @@ ParamStoreOutcome DoSave(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::strin
     return o;
 }
 
-// Run Load on an adapter already connected to a concrete backend; on a hit convert the arena strings to malloc ownership.
+// Run Load on an adapter already connected to a concrete backend; on a hit convert the arena strings to malloc
+// ownership.
 ParamStoreOutcome DoLoad(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::string_view table, std::string_view key,
-                         void* out_cfg)
+                         void* out_cfg, std::string_view cryptoKey)
 {
     ParamStoreOutcome o;
     if (!out_cfg)
@@ -96,16 +102,21 @@ ParamStoreOutcome DoLoad(SQL::ISQLAdapter& db, PipelineConfigTag tag, std::strin
     try
     {
         ParamStore store(db);
+        if (!cryptoKey.empty())
+        {
+            store.SetCryptoKey(cryptoKey);
+        }
         store.EnsureTable(tag);
         StringArena arena;
-        Utils::AnyObject obj(ti, out_cfg);
+        Utils::AnyObject const obj(ti, out_cfg);
         if (!store.Load(ResolveTable(tag, table), key, obj, arena))
         {
             o.success = false;
             o.error = "not found: " + std::string(key);
             return o;
         }
-        // The arena (new[]) is destroyed with its scope; first swap the const char* to malloc ownership so each can be freed across the C ABI.
+        // The arena (new[]) is destroyed with its scope; first swap the const char* to malloc ownership so each can be
+        // freed across the C ABI.
         ConfigStringsToOwning(ti, out_cfg);
         o.success = true;
     }
@@ -154,7 +165,7 @@ ParamStoreOutcome SavePipelineParams(const ParamStoreConn& conn, ParamPipelineKi
             o.error = std::string("ParamStore: sqlite connect failed: ") + e.what();
             return o;
         }
-        return DoSave(db, tag, table, key, cfg);
+        return DoSave(db, tag, table, key, cfg, conn.cryptoKey);
     }
     case ParamBackend::MySql:
 #ifdef HSBA_USE_MYSQL
@@ -163,9 +174,13 @@ ParamStoreOutcome SavePipelineParams(const ParamStoreConn& conn, ParamPipelineKi
         try
         {
             if (conn.port)
+            {
                 db.Connect(conn.host, conn.user, conn.password, conn.database, conn.port);
+            }
             else
+            {
                 db.Connect(conn.host, conn.user, conn.password, conn.database);
+            }
         }
         catch (const SQL::SQLAdapterError& e)
         {
@@ -173,7 +188,7 @@ ParamStoreOutcome SavePipelineParams(const ParamStoreConn& conn, ParamPipelineKi
             o.error = std::string("ParamStore: mysql connect failed: ") + e.what();
             return o;
         }
-        return DoSave(db, tag, table, key, cfg);
+        return DoSave(db, tag, table, key, cfg, conn.cryptoKey);
     }
 #else
         return BackendUnavailable(conn.backend);
@@ -185,9 +200,13 @@ ParamStoreOutcome SavePipelineParams(const ParamStoreConn& conn, ParamPipelineKi
         try
         {
             if (conn.port)
+            {
                 db.Connect(conn.host, conn.user, conn.password, conn.database, conn.port);
+            }
             else
+            {
                 db.Connect(conn.host, conn.user, conn.password, conn.database);
+            }
         }
         catch (const SQL::SQLAdapterError& e)
         {
@@ -195,7 +214,7 @@ ParamStoreOutcome SavePipelineParams(const ParamStoreConn& conn, ParamPipelineKi
             o.error = std::string("ParamStore: postgresql connect failed: ") + e.what();
             return o;
         }
-        return DoSave(db, tag, table, key, cfg);
+        return DoSave(db, tag, table, key, cfg, conn.cryptoKey);
     }
 #else
         return BackendUnavailable(conn.backend);
@@ -234,7 +253,7 @@ ParamStoreOutcome LoadPipelineParams(const ParamStoreConn& conn, ParamPipelineKi
             o.error = std::string("ParamStore: sqlite connect failed: ") + e.what();
             return o;
         }
-        return DoLoad(db, tag, table, key, outCfg);
+        return DoLoad(db, tag, table, key, outCfg, conn.cryptoKey);
     }
     case ParamBackend::MySql:
 #ifdef HSBA_USE_MYSQL
@@ -243,9 +262,13 @@ ParamStoreOutcome LoadPipelineParams(const ParamStoreConn& conn, ParamPipelineKi
         try
         {
             if (conn.port)
+            {
                 db.Connect(conn.host, conn.user, conn.password, conn.database, conn.port);
+            }
             else
+            {
                 db.Connect(conn.host, conn.user, conn.password, conn.database);
+            }
         }
         catch (const SQL::SQLAdapterError& e)
         {
@@ -253,7 +276,7 @@ ParamStoreOutcome LoadPipelineParams(const ParamStoreConn& conn, ParamPipelineKi
             o.error = std::string("ParamStore: mysql connect failed: ") + e.what();
             return o;
         }
-        return DoLoad(db, tag, table, key, outCfg);
+        return DoLoad(db, tag, table, key, outCfg, conn.cryptoKey);
     }
 #else
         return BackendUnavailable(conn.backend);
@@ -265,9 +288,13 @@ ParamStoreOutcome LoadPipelineParams(const ParamStoreConn& conn, ParamPipelineKi
         try
         {
             if (conn.port)
+            {
                 db.Connect(conn.host, conn.user, conn.password, conn.database, conn.port);
+            }
             else
+            {
                 db.Connect(conn.host, conn.user, conn.password, conn.database);
+            }
         }
         catch (const SQL::SQLAdapterError& e)
         {
@@ -275,7 +302,7 @@ ParamStoreOutcome LoadPipelineParams(const ParamStoreConn& conn, ParamPipelineKi
             o.error = std::string("ParamStore: postgresql connect failed: ") + e.what();
             return o;
         }
-        return DoLoad(db, tag, table, key, outCfg);
+        return DoLoad(db, tag, table, key, outCfg, conn.cryptoKey);
     }
 #else
         return BackendUnavailable(conn.backend);
@@ -292,7 +319,9 @@ void FreeLoadedConfigStrings(ParamPipelineKind kind, void* cfg)
     RegisterPipelineConfigTypes();
     Utils::TypeInfo* ti = TypeInfoOf(ToTag(kind));
     if (ti)
+    {
         FreeConfigStrings(ti, cfg);
+    }
 }
 
 }  // namespace HsBa::Slicer

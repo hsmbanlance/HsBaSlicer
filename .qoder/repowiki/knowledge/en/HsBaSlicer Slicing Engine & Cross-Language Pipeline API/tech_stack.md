@@ -1,0 +1,1 @@
+C++20 (concepts, ranges, source_location, NTTP class/FP, coroutines guarded by feature checks), CMake 3.28+, vcpkg-managed Boost/Clipper2/miniz/bit7z/protobuf/RapidJSON/Eigen3/OpenSSL/OpenCV/libigl/OpenVDB/sqlpp11/Lua/tinyxml2/yaml-cpp/magic_enum; CGAL/OpenCASCADE linked conditionally via `HSBA_COPL`; optional C++20 module wrapper via `HSBA_SLICER_MODULE`.

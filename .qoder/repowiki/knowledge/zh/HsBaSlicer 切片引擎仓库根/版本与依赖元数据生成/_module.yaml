@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: version_gen
+title: 版本与依赖元数据生成
+scope:
+    - version/
+source_files: []
+depends_on: []
+related_to: []

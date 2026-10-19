@@ -6,6 +6,7 @@
 
 #include <exception>
 #include <string>
+#include <utility>
 
 #include "base/error.hpp"
 #include "preprocess/ModelLoader.hpp"
@@ -38,7 +39,7 @@ auto GuardModel(Fn&& fn) -> decltype(fn())
 {
     try
     {
-        return fn();
+        return std::forward<Fn>(fn)();
     }
     catch (const RuntimeError&)
     {

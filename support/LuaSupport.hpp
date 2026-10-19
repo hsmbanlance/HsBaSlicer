@@ -58,10 +58,15 @@ public:
      * @param script_file Path to the Lua script file.
      * @param funcName Name of the Lua function to call.
      */
-    explicit LuaSupport(const std::filesystem::path& script_file, std::string_view funcName);
+    explicit LuaSupport(std::filesystem::path script_file, std::string_view funcName);
 
     PolygonsD Generate(const PolygonsD& current_layer, const PolygonsD& prev_layer, float layer_height,
                        const SupportConfig& config) override;
+
+    /// Lua scripts may share interpreters, external registrations, or filesystem
+    /// side effects, so GenerateAll stays on the serial path even though a
+    /// per-call lua_State is created inside Generate.
+    bool IsLayerIndependent() const override { return false; }
 
     /// Set external Lua registration functions (2D+3D) to be applied at Lua state init.
     void SetExternalRegs(std::vector<std::function<void(lua_State*)>> regs);
