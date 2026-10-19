@@ -8,6 +8,7 @@
 
 #include "FloatPolygons.hpp"
 #include "IntPolygon.hpp"
+#include "base/contracts.hpp"
 #include <cstdint>
 #include <functional>
 
@@ -26,7 +27,8 @@ namespace HsBa::Slicer
  * @return Fill pattern as polygons.
  */
 Polygons OffsetFill(const Polygons& poly, double spacing,
-                    Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square);
+                    Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square)
+    HSBA_PRE(Contracts::is_positive(spacing));
 
 /**
  * @brief Generate line fill pattern for polygons.
@@ -36,7 +38,8 @@ Polygons OffsetFill(const Polygons& poly, double spacing,
  * @param lineThickness Thickness of fill lines (default: 0.5).
  * @return Fill pattern as polygons.
  */
-Polygons LineFill(const Polygons& poly, double spacing, double angle_deg, double lineThickness = 0.5);
+Polygons LineFill(const Polygons& poly, double spacing, double angle_deg, double lineThickness = 0.5)
+    HSBA_PRE(Contracts::is_positive(spacing));
 
 /**
  * @brief Generate simple zigzag fill pattern for polygons.
@@ -46,7 +49,8 @@ Polygons LineFill(const Polygons& poly, double spacing, double angle_deg, double
  * @param lineThickness Thickness of fill lines (default: 0.5).
  * @return Fill pattern as polygons.
  */
-Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg, double lineThickness = 0.5);
+Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg, double lineThickness = 0.5)
+    HSBA_PRE(Contracts::is_positive(spacing));
 
 /**
  * @brief Generate zigzag fill pattern for polygons with improved corner handling.
@@ -56,7 +60,8 @@ Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg
  * @param lineThickness Thickness of fill lines (default: 0.5).
  * @return Fill pattern as polygons.
  */
-Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, double lineThickness = 0.5);
+Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, double lineThickness = 0.5)
+    HSBA_PRE(Contracts::is_positive(spacing));
 
 /**
  * @brief Enumeration of fill modes.
@@ -83,7 +88,8 @@ enum class FillMode
  */
 Polygons CompositeOffsetFill(const Polygons& poly, double spacing, double offsetStep, int outwardCount, int inwardCount,
                              FillMode mode, double angle_deg, double lineThickness = 0.5,
-                             Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square);
+                             Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square)
+    HSBA_PRE(Contracts::is_positive(spacing));
 
 /**
  * @brief Generate hybrid fill: first apply offsets, then fill the last offset polygons.
@@ -100,7 +106,8 @@ Polygons CompositeOffsetFill(const Polygons& poly, double spacing, double offset
  */
 Polygons HybridFill(const Polygons& poly, double spacing, double offsetStep, int outwardCount, int inwardCount,
                     FillMode mode, double angle_deg, double lineThickness = 0.5,
-                    Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square);
+                    Clipper2Lib::JoinType join_type = Clipper2Lib::JoinType::Square)
+    HSBA_PRE(Contracts::is_positive(spacing));
 
 /**
  * @brief Randomize the start points of closed contour and offset paths.

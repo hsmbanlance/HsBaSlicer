@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "base/contracts.hpp"
 #include "layerspath.hpp"
 
 // forward-declare lua state
@@ -101,7 +102,8 @@ private:
 
     std::string GenerateHeader(GCodeFirmware fw) const;
     std::string GenerateFooter(GCodeFirmware fw) const;
-    std::string GenerateLayerGCode(int layer_idx, GCodeFirmware fw) const;
+    std::string GenerateLayerGCode(int layer_idx, GCodeFirmware fw) const
+        HSBA_PRE(Contracts::is_non_negative(layer_idx));
     std::string GenerateContinuousWall() const;
     double CalcExtrusion(double segment_length) const;
 };

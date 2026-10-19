@@ -9,6 +9,7 @@
     filename_check.hpp
     filename_check.cpp
     concepts.hpp
+    contracts.hpp
     template_helper.hpp
     coroutine.hpp
     any_visit.hpp

@@ -24,6 +24,8 @@
 #include <type_traits>
 #include <utility>
 
+#include "contracts.hpp"
+
 #if __has_include(<inplace_vector>)
 #include <inplace_vector>
 #endif
@@ -39,7 +41,7 @@ namespace HsBa::Slicer::Utils
  */
 template <typename T, std::size_t N>
 using InplaceVector = std::inplace_vector<T, N>;
-}
+}  // namespace HsBa::Slicer::Utils
 #else
 namespace HsBa::Slicer::Utils
 {
@@ -132,14 +134,20 @@ public:
     constexpr bool empty() const noexcept { return size_ == 0; }
 
     /** @brief Accesses the element at the specified index without bounds checking. */
-    constexpr reference operator[](size_type idx) noexcept { return *ptr_at(idx); }
+    constexpr reference operator[](size_type idx) noexcept HSBA_PRE(Contracts::valid_index(idx, size_))
+    {
+        return *ptr_at(idx);
+    }
     /** @brief Accesses the element at the specified index without bounds checking (const). */
-    constexpr const_reference operator[](size_type idx) const noexcept { return *ptr_at(idx); }
+    constexpr const_reference operator[](size_type idx) const noexcept HSBA_PRE(Contracts::valid_index(idx, size_))
+    {
+        return *ptr_at(idx);
+    }
 
     /** @brief Accesses the element at the specified index with bounds checking.
      * @throws std::out_of_range if idx is not less than size().
      */
-    constexpr reference at(size_type idx)
+    constexpr reference at(size_type idx) HSBA_PRE(Contracts::valid_index(idx, size_))
     {
         if (idx >= size_)
             throw std::out_of_range("InplaceVector::at");
@@ -209,8 +217,11 @@ private:
     storage_t storage_[N];
     size_type size_;
 
-    constexpr pointer ptr_at(size_type idx) noexcept { return reinterpret_cast<pointer>(&storage_[idx]); }
-    constexpr const_pointer ptr_at(size_type idx) const noexcept
+    constexpr pointer ptr_at(size_type idx) noexcept HSBA_PRE(Contracts::valid_index(idx, N))
+    {
+        return reinterpret_cast<pointer>(&storage_[idx]);
+    }
+    constexpr const_pointer ptr_at(size_type idx) const noexcept HSBA_PRE(Contracts::valid_index(idx, N))
     {
         return reinterpret_cast<const_pointer>(&storage_[idx]);
     }

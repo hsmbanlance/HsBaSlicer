@@ -37,6 +37,7 @@
 #include <magic_enum/magic_enum.hpp>
 
 #include "concepts.hpp"
+#include "contracts.hpp"
 #include "error.hpp"
 
 namespace HsBa::Slicer::Utils
@@ -279,7 +280,7 @@ struct TemplateString
      * @return A reference to the character at the specified index.
      * @throws std::out_of_range if the index is out of range.
      */
-    T& at(size_t index)
+    T& at(size_t index) HSBA_PRE(Contracts::valid_index(index, N))
     {
         if (index >= N)
         {
@@ -293,7 +294,7 @@ struct TemplateString
      * @return A constant reference to the character at the specified index.
      * @throws std::out_of_range if the index is out of range.
      */
-    const T& at(size_t index) const
+    const T& at(size_t index) const HSBA_PRE(Contracts::valid_index(index, N))
     {
         if (index >= N)
         {

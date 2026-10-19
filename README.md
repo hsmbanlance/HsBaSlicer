@@ -1,6 +1,5 @@
-﻿"""
-Unified README inserted by script.
-"""
+﻿
+[![CMake on multiple platforms](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/cmake-multi-platform.yml/badge.svg?branch=master)](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/cmake-multi-platform.yml) 
 
 # HsBaSlicer / README
 
@@ -12,9 +11,20 @@ HsBaSlicer 是一个面向 3D 打印切片领域的高性能 C++ 软件框架，
 
 主要模块（概览）：
 
-"""
-Updated README content below replaces the previous duplicated and inconsistent sections with a unified bilingual overview and build instructions.
-"""
+CI 结果（GitHub Actions，默认分支 `master`）：`cmake-multi-platform` 于 push/PR 自动触发；`build-windows` / `build-linux` / `build-macos` / `build-ios` / `build-android` 为 `workflow_dispatch` 手动触发；`test-coverage` 门禁 Core ≥ 45%、Other ≥ 25%；`publish-wiki` 同步 repowiki 到 GitHub Wiki。点击下方徽章可跳转至对应 workflow 页面查看历史运行。
+
+CI results (GitHub Actions, default branch `master`): `cmake-multi-platform` runs on push/PR; `build-windows` / `build-linux` / `build-macos` / `build-ios` / `build-android` are `workflow_dispatch`-only; `test-coverage` gates at Core ≥ 45% / Other ≥ 25%; `publish-wiki` syncs repowiki to the GitHub Wiki. Click any badge above to open the workflow run history.
+
+| Workflow | Platform | Trigger | Last run |
+|----------|----------|---------|----------|
+| cmake-multi-platform | Windows / Linux / macOS | push, pull_request | [![badge](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/cmake-multi-platform.yml/badge.svg?branch=master)](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/cmake-multi-platform.yml) |
+| build-windows | windows-latest | workflow_dispatch | [![badge](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/build-windows.yml/badge.svg?branch=master)](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/build-windows.yml) |
+| build-linux | ubuntu-latest | workflow_dispatch | [![badge](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/build-linux.yml/badge.svg?branch=master)](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/build-linux.yml) |
+| build-macos | macos-latest | workflow_dispatch | [![badge](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/build-macos.yml/badge.svg?branch=master)](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/build-macos.yml) |
+| build-ios | macos-latest (arm64 cross) | workflow_dispatch | [![badge](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/build-ios.yml/badge.svg?branch=master)](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/build-ios.yml) |
+| build-android | ubuntu-latest (NDK arm64-v8a) | workflow_dispatch | [![badge](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/build-android.yml/badge.svg?branch=master)](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/build-android.yml) |
+| test-coverage | ubuntu-latest (gcov) | pull_request, workflow_dispatch | [![badge](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/test-coverage.yml/badge.svg?branch=master)](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/test-coverage.yml) |
+| publish-wiki | ubuntu-latest | push (main/master), workflow_dispatch | [![badge](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/publish-wiki.yml/badge.svg?branch=master)](https://github.com/hsmbanlance/HsBaSlicer/actions/workflows/publish-wiki.yml) |
 
 # HsBaSlicer / README
 
