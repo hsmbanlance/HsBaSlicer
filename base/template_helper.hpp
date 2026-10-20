@@ -27,9 +27,7 @@
 #include <utility>
 #include <vector>
 
-#if __cpp_impl_coroutine
 #include <coroutine>
-#endif
 #ifdef __cpp_lib_generator
 #include <generator>
 #endif  // __cpp_lib_generator

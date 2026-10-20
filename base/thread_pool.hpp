@@ -161,7 +161,6 @@ private:
     std::atomic<size_t> active_tasks_{0};
 };
 
-#if __cpp_lib_coroutine && __cpp_impl_coroutine
 #ifdef HSBA_ENABLE_THREAD_POOL_COROUTINE
 namespace Utils
 {
@@ -207,7 +206,6 @@ private:
 };
 }  // namespace Utils
 #endif  // HSBA_ENABLE_THREAD_POOL_COROUTINE
-#endif  // __cpp_lib_coroutine && __cpp_impl_coroutine
 
 }  // namespace HsBa::Slicer
 

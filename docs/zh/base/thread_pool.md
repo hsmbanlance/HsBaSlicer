@@ -207,8 +207,6 @@ int main()
 #include "base/coroutine.hpp"
 #include <iostream>
 
-#if __cpp_lib_coroutine && __cpp_impl_coroutine
-
 using namespace HsBa::Slicer;
 using namespace HsBa::Slicer::Utils;
 
@@ -241,8 +239,6 @@ int main()
     
     return 0;
 }
-
-#endif
 ```
 
 ### 6. 并行计算示例
@@ -297,7 +293,7 @@ int main()
 - **生命周期**：ThreadPool 析构时会自动等待所有任务完成并 join 所有线程
 - **异常传播**：任务中的异常会通过 `std::future::get()` 传播到调用方
 - **线程安全**：submit、PendingTasks、ActiveTasks、WaitAll 都是线程安全的
-- **协程支持**：ThreadPoolExecutor 需要 C++20 协程支持（`__cpp_lib_coroutine` 和 `__cpp_impl_coroutine`）
+- **协程支持**：C++20 协程在本项目中为全平台必选特性；`ThreadPoolExecutor` 仅由 `HSBA_ENABLE_THREAD_POOL_COROUTINE` 构建选项控制是否启用
 - **默认池**：ThreadPoolExecutor 如果没有指定池，会自动创建默认池实例
 - **性能优化**：
   - 避免提交过多的短任务，任务队列本身有开销

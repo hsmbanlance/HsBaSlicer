@@ -218,7 +218,6 @@ inline std::vector<R> ParallelMapLayers(int total_layers, const std::function<R(
     return out;
 }
 
-#ifdef HSBA_COROUTINES_AVAILABLE
 /**
  * @brief Coroutine-mode wrapper: returns a Utils::Task<void> that dispatches the
  *        layer-parallel loop on the shared PipelinePool.
@@ -255,7 +254,6 @@ inline Utils::Task<std::vector<R>> ParallelMapLayersAsync(int total_layers, std:
     }
     co_return out;
 }
-#endif  // HSBA_COROUTINES_AVAILABLE
 
 }  // namespace HsBa::Slicer::Pipeline
 

@@ -169,7 +169,6 @@ void TupleEachTests()
 
 // static coroutine tests
 
-#if __cpp_lib_coroutine && __cpp_impl_coroutine
 #include <base/coroutine.hpp>
 
 HsBa::Slicer::Utils::Task<int> CoroutineTests()
@@ -208,8 +207,6 @@ HsBa::Slicer::Utils::Generator<int> GeneratorTests()
         co_yield i;
     }
 }
-
-#endif  // __cpp_lib_coroutine && __cpp_impl_coroutine
 
 // test any object
 

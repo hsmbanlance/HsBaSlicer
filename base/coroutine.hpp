@@ -10,20 +10,12 @@
 #ifndef HSBA_SLICER_COROUTINE_HPP
 #define HSBA_SLICER_COROUTINE_HPP
 
-#if __cpp_impl_coroutine
 #include <coroutine>
-#endif
-// On GCC, __cpp_lib_coroutine is defined by <coroutine> (not predefined).
-// After inclusion, both macros are available for subsequent guards.
-#if __cpp_lib_coroutine && __cpp_impl_coroutine
-#define HSBA_COROUTINES_AVAILABLE 1
-#endif
 #ifdef __cpp_lib_generator
 #include <generator>
 #endif  // __cpp_lib_generator
 
 #include "template_helper.hpp"
-#ifdef HSBA_COROUTINES_AVAILABLE
 #include <condition_variable>
 #include <exception>
 #include <functional>
@@ -36,11 +28,9 @@
 #include <thread>
 #include <type_traits>
 #include <utility>
-#endif
 
 namespace HsBa::Slicer::Utils
 {
-#ifdef HSBA_COROUTINES_AVAILABLE
 /**
  * @brief coroutine executor interface
  */
@@ -770,10 +760,6 @@ public:
 private:
     Handle handle_;
 };
-#endif  // HSBA_COROUTINES_AVAILABLE
-
-#ifdef HSBA_COROUTINES_AVAILABLE
-
 // personal coroutine Generator
 // see it in https://zh.cppreference.com/w/cpp/coroutine/coroutine_handle
 
@@ -1059,32 +1045,6 @@ template <typename Arg, template <typename> typename Container, typename Callbac
         co_yield std::forward<Callback>(callback)(i);
     }
 }
-
-#else
-// not coroutine, use std::list as returns for avioding std::vector<bool>
-
-/** @brief Eagerly maps callback over a container into a new container (non-coroutine fallback).
- * @tparam Arg The element type of the container.
- * @tparam Container The source/result container template.
- * @tparam Callback The invocable applied to each element.
- * @param callback The function to apply to every element.
- * @param arg The container to iterate.
- * @return A container holding callback(i) for each element i.
- */
-template <typename Arg, template <typename> typename Container, typename Callback>
-    requires std::invocable<Callback, Arg> &&
-    (std::ranges::range<Container<Arg>> && !std::same_as<Container<Arg>, std::vector<bool>>)inline auto
-    GeneratorInvoke(Callback&& callback, const Container<Arg>& arg) -> Container<std::invoke_result_t<Callback, Arg>>
-{
-    using R = std::invoke_result_t<Callback, Arg>;
-    Container<R> ret;
-    for (const auto& i : arg)
-    {
-        ret.emplace_back(std::forward<Callback>(callback)(i));
-    }
-    return ret;
-}
-#endif  // HSBA_COROUTINES_AVAILABLE
 
 }  // namespace HsBa::Slicer::Utils
 
