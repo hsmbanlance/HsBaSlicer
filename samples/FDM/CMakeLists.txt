@@ -69,3 +69,6 @@ if(NOT ANDROID AND NOT IOS)
         COMMAND_EXPAND_LISTS
     )
 endif()
+
+# UTF-8 active-code-page manifest (no-op on non-MSVC / non-Windows).
+hsba_apply_utf8_codepage(fdm_sample)

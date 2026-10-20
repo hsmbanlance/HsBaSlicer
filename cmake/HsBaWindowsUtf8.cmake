@@ -46,12 +46,30 @@ function(hsba_apply_utf8_codepage target)
         return()
     endif()
 
-    # Feed the fragment to the MSVC linker as an extra manifest input and force
-    # an embedded, merged manifest. link.exe combines /MANIFESTINPUT with its
-    # auto-generated default manifest (trust info + VC-runtime dependency), so
-    # this works deterministically for both the Visual Studio and Ninja
-    # generators (no reliance on .manifest source-file auto-detection).
-    target_link_options(${target} PRIVATE
-        "/MANIFEST:EMBED"
-        "/MANIFESTINPUT:${_manifest}")
+    # Merge the UTF-8 fragment into the executable AFTER it links, using the
+    # manifest tool (mt.exe) that CMake already locates via CMAKE_MT. mt.exe
+    # reads the default manifest CMake embedded during the link, merges our
+    # fragment with it, and rewrites resource #1 (RT_MANIFEST) in place -- this
+    # is exactly the step the Visual Studio toolchain performs internally, so it
+    # is deterministic and generator-agnostic (Ninja, MSBuild, Makefiles).
+    #
+    # Do NOT try to inject the fragment at link time instead:
+    #   * "/MANIFEST:EMBED /MANIFESTINPUT:..." makes link.exe embed a second
+    #     MANIFEST while CMake also links its own manifest.res (default ID 1,
+    #     lang 0x409) -> "fatal error CVT1100: duplicate resource: MANIFEST"
+    #     -> "fatal error LNK1123" on every executable link.
+    #   * "/MANIFESTINPUT:..." on its own fails with "LNK1220: MANIFESTINPUT
+    #     requires /MANIFEST:EMBED".
+    if(NOT CMAKE_MT)
+        message(WARNING "HsBaWindowsUtf8: CMAKE_MT not found; UTF-8 code-page "
+                        "manifest not applied to target '${target}'.")
+        return()
+    endif()
+
+    add_custom_command(TARGET ${target} POST_BUILD
+        COMMAND "${CMAKE_MT}"
+            -manifest "${_manifest}"
+            "-outputresource:$<TARGET_FILE:${target}>;#1"
+        COMMENT "Merging UTF-8 active-code-page manifest into ${target}"
+        VERBATIM)
 endfunction()

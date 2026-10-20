@@ -84,10 +84,12 @@ embedding an application manifest:
 
 - File: **`cmake/hsba_utf8.manifest`**; applied by the reusable function
   `hsba_apply_utf8_codepage(<target>)` in **`cmake/HsBaWindowsUtf8.cmake`**
-  (passes `/MANIFEST:EMBED` + `/MANIFESTINPUT:...` to the MSVC linker; a no-op on
-  non-MSVC / non-Windows toolchains).
-- It is applied in the root `CMakeLists.txt` to every desktop executable we own
-  (the `HsBaSlicer` app and all samples).
+  (merges the fragment into the already-linked executable with the manifest
+  tool `mt.exe` in a post-build step, so it works with the Ninja / MSBuild /
+  Makefile generators; a no-op on non-MSVC / non-Windows toolchains).
+  It is applied per-target from each executable's own `CMakeLists.txt`.
+- It is applied to every desktop executable we own (the `HsBaSlicer` app and
+  all samples).
 
 Effect: `GetACP()` returns 65001, so `utf8_to_local` becomes a pass-through
 (`windows_chcp_utf8()` is true) and the CRT converts the UTF-8 narrow path to

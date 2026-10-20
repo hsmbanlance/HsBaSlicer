@@ -73,10 +73,11 @@ std::string           path_to_utf8(const std::filesystem::path& path); // native
 ```
 
 - 文件：**`cmake/hsba_utf8.manifest`**；由 **`cmake/HsBaWindowsUtf8.cmake`** 中的可复用
-  函数 `hsba_apply_utf8_codepage(<target>)` 应用（向 MSVC 链接器传入
-  `/MANIFEST:EMBED` + `/MANIFESTINPUT:...`；在非 MSVC / 非 Windows 工具链上为 no-op）。
-- 在根 `CMakeLists.txt` 中，它被应用于我们拥有的每个桌面可执行文件
-  （`HsBaSlicer` 应用与全部 samples）。
+  函数 `hsba_apply_utf8_codepage(<target>)` 应用（在构建后步骤中用清单工具
+  `mt.exe` 将片段合并进已链接的可执行文件，因此兼容 Ninja / MSBuild / Makefile
+  生成器；在非 MSVC / 非 Windows 工具链上为 no-op）。它由各可执行文件自己的
+  `CMakeLists.txt` 逐目标调用。
+- 它被应用于我们拥有的每个桌面可执行文件（`HsBaSlicer` 应用与全部 samples）。
 
 效果：`GetACP()` 返回 65001，于是 `utf8_to_local` 变为直通
 （`windows_chcp_utf8()` 为真），CRT 会把 UTF-8 窄路径正确转换为 UTF-16——**全部**
