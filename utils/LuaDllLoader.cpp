@@ -29,9 +29,7 @@ int lua_dll_unload(lua_State* L)
     auto* dll = (DllLoader*)lua_topointer(L, 1);
     if (!dll)
     {
-        lua_pushstring(L, std::format("Invalid DllLoader object").c_str());
-        lua_error(L);
-        return 0;
+        return raise_lua_error(L, "Invalid DllLoader object");
     }
     dll->Unload();
     return 0;
@@ -43,9 +41,7 @@ int lua_dll_reload(lua_State* L)
     const char* dll_path = luaL_checkstring(L, 2);
     if (!dll)
     {
-        lua_pushstring(L, std::format("Invalid DllLoader object").c_str());
-        lua_error(L);
-        return 0;
+        return raise_lua_error(L, "Invalid DllLoader object");
     }
     dll->Reload(dll_path);
     return 0;

@@ -720,8 +720,8 @@ BOOST_AUTO_TEST_CASE(lua_anyobject_scalar_new_validation_errors)
     static LuaSize_t size_t_type;
     static LuaLong long_type;
     static LuaLongLong longlong_type;
-    std::vector<LuaAnyObjectNewCastBase*> types{&int_type,   &double_type, &float_type, &bool_type,  &string_type,
-                                               &cstring_type, &size_t_type, &long_type, &longlong_type};
+    std::vector<LuaAnyObjectNewCastBase*> types{&int_type,     &double_type, &float_type, &bool_type,    &string_type,
+                                                &cstring_type, &size_t_type, &long_type,  &longlong_type};
     RegisterAnyObject(L, types);
 
     // A table is never an integer / number / boolean / string, so every new_*
@@ -799,11 +799,7 @@ struct NewObjProbe
 {
     static std::atomic<int> live;
     int value;
-    explicit NewObjProbe(int v)
-        : value(v)
-    {
-        ++live;
-    }
+    explicit NewObjProbe(int v) : value(v) { ++live; }
     ~NewObjProbe() { --live; }
 };
 std::atomic<int> NewObjProbe::live{0};
@@ -848,6 +844,66 @@ BOOST_AUTO_TEST_CASE(lua_newobject_runtime_metatable_name_gc)
 
     // State closed by the deleter; no further finalisers should be pending.
     BOOST_CHECK_EQUAL(NewObjProbe::live.load(), 0);
+}
+
+// Raise paths of the LuaAnyObject new/cast adapters. The formatted message has to be copied into
+// Lua's own memory before lua_error longjmps, and an exception handler has to be left before the
+// raise. Arguments are longer than the small string optimization so that a C++ object surviving
+// the longjmp becomes visible under ASAN.
+BOOST_AUTO_TEST_CASE(lua_anyobject_raise_paths)
+{
+    lua_State* L = luaL_newstate();
+    BOOST_REQUIRE(L != nullptr);
+    luaL_openlibs(L);
+    RegisterStandardType(L);
+
+    std::vector<HsBa::Slicer::LuaAnyObjectNewCastBase*> types;
+    static HsBa::Slicer::LuaAnyObjectNewCastImpl<Standard, "Standard"> standard_type;
+    static HsBa::Slicer::LuaInt int_type;
+    static HsBa::Slicer::LuaString string_type;
+    types = {&standard_type, &int_type, &string_type};
+    HsBa::Slicer::RegisterAnyObject(L, types);
+
+    const char* script = R"(
+        local function probe(f)
+            local ok, err = pcall(f)
+            return tostring(ok) .. "|" .. tostring(err)
+        end
+        _G.r1 = probe(function() return AnyObject.new_Standard(42) end)
+        _G.r2 = probe(function() return AnyObject.new_int({}) end)
+        _G.r3 = probe(function() return AnyObject.new_string({}) end)
+        _G.r4 = probe(function() return AnyObject.cast_int(42) end)
+        local any = AnyObject.new_int(7)
+        _G.r5 = probe(function() return any:cast_string() end)
+    )";
+    BOOST_REQUIRE_MESSAGE(luaL_dostring(L, script) == LUA_OK, lua_tostring(L, -1));
+
+    auto read_global = [L](const char* key) -> std::string
+    {
+        lua_getglobal(L, key);
+        const char* value = lua_tostring(L, -1);
+        std::string result = value ? value : "";
+        lua_pop(L, 1);
+        return result;
+    };
+
+    struct expectation
+    {
+        const char* key;
+        const char* fragment;
+    };
+    for (const expectation& item :
+         {expectation{"r1", "Invalid Standard object"}, expectation{"r2", "Invalid int object"},
+          expectation{"r3", "Invalid string object"}, expectation{"r4", "Invalid AnyObject object"},
+          expectation{"r5", "Bad AnyObject cast"}})
+    {
+        const std::string result = read_global(item.key);
+        BOOST_CHECK_MESSAGE(result.rfind("false|", 0) == 0, item.key << " -> " << result);
+        BOOST_CHECK_MESSAGE(result.find(item.fragment) != std::string::npos,
+                            item.key << " expects \"" << item.fragment << "\", got " << result);
+    }
+
+    lua_close(L);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

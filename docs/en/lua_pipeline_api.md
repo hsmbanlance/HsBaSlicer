@@ -12,6 +12,7 @@ This document collects the **Lua APIs available inside the various slicing pipel
 - [B. Shared libraries (available in every environment)](#b-shared-libraries-available-in-every-environment)
 - [C. Built-in pipeline stage hooks](#c-built-in-pipeline-stage-hooks)
 - [Pipeline availability matrix](#pipeline-availability-matrix)
+- [Error handling and known limitations](#error-handling-and-known-limitations)
 - [Full example](#full-example)
 
 ---
@@ -289,6 +290,24 @@ Export scripts run at the packaging stage, injecting:
 | `ParamStore` | ✅ | ✅ (export stage) |
 
 > `MySQLAdapter`, `PostgreSQLAdapter`, and `Bit7zZipper` are registered only when `HSBA_USE_MYSQL`, `HSBA_USE_PGSQL`, and `HSBA_USE_BIT7Z` are enabled respectively.
+
+---
+
+## Error handling and known limitations
+
+The binding layer (`2D/`, `support/`, `cipher/`, `fileoperator/`, `utils/`, `LibHsBaSlicer/Extends/`) reports failures as **Lua errors**, never as a `false`/`nil` return value. The message layout is identical to `luaL_error` (prefixed with `file:line: `).
+
+- Wrap calls that can fail in `pcall` / `xpcall`, or rely on the stage's own error capture; testing `if not x then` cannot observe an error.
+- Errors do not roll back: inside the C call that raised the Lua error, side effects already produced (parameters already written, archive entries already appended, database connections already opened) are kept as-is, so a script has to decide what state the failure left behind and re-initialise.
+- To raise an error from a script, use the standard `error()` only; the binding layer exposes no additional reporting interface.
+
+### Known calling limitations
+
+| Situation | Consequence | Recommendation |
+|-----------|-------------|----------------|
+| The self check of object methods relies on `lua_topointer`, which **returns NULL only for `nil`/numbers/booleans** and returns a real address for a table | Passing a table in place of an object handle (e.g. `AnyObject.cast_int({})`) passes the null check and is then reinterpreted as a C++ object pointer — undefined behaviour, not an error | The self argument must be the value returned by `XXX.new()`; argument type validation is currently only performed on the `new_*` side |
+| The `ParamStore` global table exposes only `new`; `Save/Load/Update/List/Delete` live on the instance metatable | nil-self paths such as `ParamStore.Save(nil, ...)` cannot be reached from a script; an unrecognised table name raises `unknown config table '...'` | Call through an instance; use a short label (`fdm`) or the default table name (`hsba_param_fdm`) |
+| `HsBa.toGcode` can only report a failure as a Lua error; there is no branch that returns `nil`/`false` | `if not gcode then` is never true, so relying on it silently treats a failure as success | Use `pcall` when you need to detect failure |
 
 ---
 

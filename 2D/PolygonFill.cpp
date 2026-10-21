@@ -272,9 +272,10 @@ Polygons OffsetOnly(const Polygons& poly, double delta, size_t inner, size_t out
 // registered function: generate_fill(poly_table)
 int l_report(lua_State* L, const char* fname, const char* msg)
 {
-    std::ostringstream oss;
-    oss << "Error in Lua function '" << fname << "': " << msg;
-    return luaL_error(L, "%s", oss.str().c_str());
+    // raise_lua_error_with_where formats into a trivially destructible buffer, which is the only
+    // shape that is safe for lua_error's longjmp on both MSVC (unwinding) and POSIX (raw jump).
+    return raise_lua_error_with_where(L, "Error in Lua function '{}': {}", std::string_view{fname},
+                                      std::string_view{msg});
 }
 
 int l_offsetFill(lua_State* L)

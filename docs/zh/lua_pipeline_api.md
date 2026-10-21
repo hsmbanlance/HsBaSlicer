@@ -12,6 +12,7 @@
 - [B. 通用共享库（所有环境均可用）](#b-通用共享库所有环境均可用)
 - [C. 内置流水线的阶段替换脚本](#c-内置流水线的阶段替换脚本)
 - [流水线可用性矩阵](#流水线可用性矩阵)
+- [错误处理与已知限制](#错误处理与已知限制)
 - [完整示例](#完整示例)
 
 ---
@@ -288,6 +289,24 @@ db:Delete("table", "where...")
 | `ParamStore` | ✅ | ✅（导出阶段） |
 
 > `MySQLAdapter`、`PostgreSQLAdapter`、`Bit7zZipper` 分别在启用 `HSBA_USE_MYSQL`、`HSBA_USE_PGSQL`、`HSBA_USE_BIT7Z` 时注册。
+
+---
+
+## 错误处理与已知限制
+
+绑定层（`2D/`、`support/`、`cipher/`、`fileoperator/`、`utils/`、`LibHsBaSlicer/Extends/`）在出错时一律以 **Lua 错误**上报，而不是返回 `false`/`nil`。错误消息的文本布局与 `luaL_error` 完全一致（带 `文件:行号: ` 前缀）。
+
+- 脚本侧必须用 `pcall` / `xpcall` 包裹可能失败的调用，或依赖流水线阶段自身的错误捕获；用 `if not x then` 判空是捕不到错误的。
+- 报错不会回滚：抛出 Lua 错误的那一次 C 调用里，已经产生的副作用（已写入的参数、已追加的压缩包条目、已建立的数据库连接）均不会撤销，脚本需自行判定失败后的状态并重新初始化。
+- 脚本内主动报错只用标准 `error()`，绑定层没有另外的报错接口。
+
+### 已知的调用限制
+
+| 现象 | 影响 | 建议 |
+|------|------|------|
+| 对象方法的 self 校验依赖 `lua_topointer`，它**只对 `nil`/数字/布尔返回 NULL**，对 table 会返回真指针 | 用 table 冒充对象句柄（如 `AnyObject.cast_int({})`）会通过空指针检查，随后被当作 C++ 对象指针解释，属于未定义行为而不是报错 | self 必须是 `XXX.new()` 的返回值；入参类型校验目前只在 `new_*` 一侧完成 |
+| `ParamStore` 全局表只暴露 `new`，`Save/Load/Update/List/Delete` 只挂在实例 metatable 上 | `ParamStore.Save(nil, ...)` 这类 nil-self 路径无法从脚本触达；表名无法识别时抛 `unknown config table '...'` | 通过实例调用；表名使用短标签（`fdm`）或默认表名（`hsba_param_fdm`） |
+| `HsBa.toGcode` 失败只表现为 Lua 错误，不存在“返回 `nil`/`false`”的分支 | `if not gcode then` 永不为真，误用它会把失败当成成功 | 需要判断失败请用 `pcall` |
 
 ---
 

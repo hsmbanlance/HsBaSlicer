@@ -79,9 +79,7 @@ public:
         auto* obj = (T*)lua_topointer(L, 1);
         if (!obj)
         {
-            lua_pushstring(L, std::format("Invalid {} object", TypeName).c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid {} object", TypeName);
         }
         NewLuaObject<Utils::AnyObject, AnyObjectTypeName>(L, *obj);
         return 1;
@@ -91,9 +89,7 @@ public:
         auto* obj = (Utils::AnyObject*)lua_topointer(L, 1);
         if (!obj)
         {
-            lua_pushstring(L, std::format("Invalid AnyObject object").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid AnyObject object");
         }
         try
         {
@@ -105,9 +101,8 @@ public:
         catch (const std::exception& e)
         {
             lua_pushstring(L, e.what());
-            lua_error(L);
-            return 0;
         }
+        return lua_error(L);
     }
 };
 
@@ -134,9 +129,7 @@ public:
     {
         if (!lua_isinteger(L, 1))
         {
-            lua_pushstring(L, std::format("Invalid {} object", "int").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid {} object", "int");
         }
         auto v = static_cast<int>(lua_tointeger(L, 1));
         NewLuaObject<Utils::AnyObject, AnyObjectTypeName>(L, v);
@@ -147,9 +140,7 @@ public:
         auto* obj = (Utils::AnyObject*)lua_topointer(L, 1);
         if (!obj)
         {
-            lua_pushstring(L, std::format("Invalid AnyObject object").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid AnyObject object");
         }
         try
         {
@@ -161,9 +152,8 @@ public:
         catch (const std::exception& e)
         {
             lua_pushstring(L, e.what());
-            lua_error(L);
-            return 0;
         }
+        return lua_error(L);
     }
 };
 
@@ -176,9 +166,7 @@ public:
     {
         if (!lua_isinteger(L, 1))
         {
-            lua_pushstring(L, std::format("Invalid {} object", "long").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid {} object", "long");
         }
         auto v = static_cast<long>(lua_tointeger(L, 1));
         NewLuaObject<Utils::AnyObject, AnyObjectTypeName>(L, v);
@@ -189,9 +177,7 @@ public:
         auto* obj = (Utils::AnyObject*)lua_topointer(L, 1);
         if (!obj)
         {
-            lua_pushstring(L, std::format("Invalid AnyObject object").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid AnyObject object");
         }
         try
         {
@@ -203,9 +189,8 @@ public:
         catch (const std::exception& e)
         {
             lua_pushstring(L, e.what());
-            lua_error(L);
-            return 0;
         }
+        return lua_error(L);
     }
 };
 
@@ -219,9 +204,7 @@ public:
     {
         if (!lua_isinteger(L, 1))
         {
-            lua_pushstring(L, std::format("Invalid {} object", "longlong").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid {} object", "longlong");
         }
         auto v = static_cast<long long>(lua_tointeger(L, 1));
         NewLuaObject<Utils::AnyObject, AnyObjectTypeName>(L, v);
@@ -232,9 +215,7 @@ public:
         auto* obj = (Utils::AnyObject*)lua_topointer(L, 1);
         if (!obj)
         {
-            lua_pushstring(L, std::format("Invalid AnyObject object").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid AnyObject object");
         }
         try
         {
@@ -246,9 +227,8 @@ public:
         catch (const std::exception& e)
         {
             lua_pushstring(L, e.what());
-            lua_error(L);
-            return 0;
         }
+        return lua_error(L);
     }
 };
 
@@ -262,9 +242,7 @@ public:
     {
         if (!lua_isinteger(L, 1))
         {
-            lua_pushstring(L, std::format("Invalid {} object", "size_t").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid {} object", "size_t");
         }
         auto v = static_cast<size_t>(lua_tointeger(L, 1));
         NewLuaObject<Utils::AnyObject, AnyObjectTypeName>(L, v);
@@ -275,9 +253,7 @@ public:
         auto* obj = (Utils::AnyObject*)lua_topointer(L, 1);
         if (!obj)
         {
-            lua_pushstring(L, std::format("Invalid AnyObject object").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid AnyObject object");
         }
         try
         {
@@ -289,9 +265,8 @@ public:
         catch (const std::exception& e)
         {
             lua_pushstring(L, e.what());
-            lua_error(L);
-            return 0;
         }
+        return lua_error(L);
     }
 };
 
@@ -305,9 +280,7 @@ public:
     {
         if (!lua_isnumber(L, 1))
         {
-            lua_pushstring(L, std::format("Invalid {} object", "float").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid {} object", "float");
         }
         auto v = static_cast<float>(lua_tonumber(L, 1));
         NewLuaObject<Utils::AnyObject, AnyObjectTypeName>(L, v);
@@ -318,9 +291,7 @@ public:
         auto* obj = (Utils::AnyObject*)lua_topointer(L, 1);
         if (!obj)
         {
-            lua_pushstring(L, std::format("Invalid AnyObject object").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid AnyObject object");
         }
         try
         {
@@ -332,9 +303,8 @@ public:
         catch (const std::exception& e)
         {
             lua_pushstring(L, e.what());
-            lua_error(L);
-            return 0;
         }
+        return lua_error(L);
     }
 };
 
@@ -348,9 +318,7 @@ public:
     {
         if (!lua_isnumber(L, 1))
         {
-            lua_pushstring(L, std::format("Invalid {} object", "double").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid {} object", "double");
         }
         auto v = static_cast<double>(lua_tonumber(L, 1));
         NewLuaObject<Utils::AnyObject, AnyObjectTypeName>(L, v);
@@ -361,9 +329,7 @@ public:
         auto* obj = (Utils::AnyObject*)lua_topointer(L, 1);
         if (!obj)
         {
-            lua_pushstring(L, std::format("Invalid AnyObject object").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid AnyObject object");
         }
         try
         {
@@ -375,9 +341,8 @@ public:
         catch (const std::exception& e)
         {
             lua_pushstring(L, e.what());
-            lua_error(L);
-            return 0;
         }
+        return lua_error(L);
     }
 };
 
@@ -390,9 +355,7 @@ public:
     {
         if (!lua_isboolean(L, 1))
         {
-            lua_pushstring(L, std::format("Invalid {} object", "bool").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid {} object", "bool");
         }
         auto v = static_cast<bool>(lua_toboolean(L, 1));
         NewLuaObject<Utils::AnyObject, AnyObjectTypeName>(L, v);
@@ -403,9 +366,7 @@ public:
         auto* obj = (Utils::AnyObject*)lua_topointer(L, 1);
         if (!obj)
         {
-            lua_pushstring(L, std::format("Invalid AnyObject object").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid AnyObject object");
         }
         try
         {
@@ -417,9 +378,8 @@ public:
         catch (const std::exception& e)
         {
             lua_pushstring(L, e.what());
-            lua_error(L);
-            return 0;
         }
+        return lua_error(L);
     }
 };
 
@@ -433,9 +393,7 @@ public:
     {
         if (!lua_isstring(L, 1))
         {
-            lua_pushstring(L, std::format("Invalid {} object", "string").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid {} object", "string");
         }
         std::string v = lua_tostring(L, 1);
         NewLuaObject<Utils::AnyObject, AnyObjectTypeName>(L, v);
@@ -446,9 +404,7 @@ public:
         auto* obj = (Utils::AnyObject*)lua_topointer(L, 1);
         if (!obj)
         {
-            lua_pushstring(L, std::format("Invalid AnyObject object").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid AnyObject object");
         }
         try
         {
@@ -460,9 +416,8 @@ public:
         catch (const std::exception& e)
         {
             lua_pushstring(L, e.what());
-            lua_error(L);
-            return 0;
         }
+        return lua_error(L);
     }
 };
 
@@ -476,9 +431,7 @@ public:
     {
         if (!lua_isstring(L, 1))
         {
-            lua_pushstring(L, std::format("Invalid {} object", "cstring").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid {} object", "cstring");
         }
         const char* v = lua_tostring(L, 1);
         NewLuaObject<Utils::AnyObject, AnyObjectTypeName>(L, v);
@@ -489,9 +442,7 @@ public:
         auto* obj = (Utils::AnyObject*)lua_topointer(L, 1);
         if (!obj)
         {
-            lua_pushstring(L, std::format("Invalid AnyObject object").c_str());
-            lua_error(L);
-            return 0;
+            return raise_lua_error(L, "Invalid AnyObject object");
         }
         try
         {
@@ -503,9 +454,8 @@ public:
         catch (const std::exception& e)
         {
             lua_pushstring(L, e.what());
-            lua_error(L);
-            return 0;
         }
+        return lua_error(L);
     }
 };
 

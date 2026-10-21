@@ -88,6 +88,16 @@ struct Fixture
         lua_pop(L, 1);
         return v;
     }
+    // Error text captured by pcall/tostring in the script; used to assert that the
+    // raise actually produced the intended message instead of merely failing.
+    std::string globalText(const char* name)
+    {
+        lua_getglobal(L, name);
+        const char* s = lua_tostring(L, -1);
+        std::string v = s ? s : "";
+        lua_pop(L, 1);
+        return v;
+    }
 };
 }  // namespace
 
@@ -143,24 +153,32 @@ BOOST_AUTO_TEST_CASE(call_arg_count_mismatch_errors)
     Fixture f;
     const char* script = R"(
         local o = DllLoader.new(MOCK_PATH)
-        _G.err = not pcall(function() return o:call_i2("mock_add", 3) end)
+        local ok, err = pcall(function() return o:call_i2("mock_answer_mock_answer_mock_answer_mock_answer_mock_answer_64", 3) end)
+        _G.err = not ok
+        _G.msg = tostring(err)
     )";
     if (!f.run(script))
         BOOST_FAIL("Lua script error: " << f.error_);
     BOOST_CHECK(f.globalTrue("err"));
+    BOOST_CHECK(f.globalText("msg").find("Expected 2 arguments but got 1") != std::string::npos);
 }
 
-// Resolving an unknown symbol must raise through the get catch branch.
+// Resolving an unknown symbol must raise through the get catch branch. The symbol name is
+// deliberately long so that a leaked formatting temporary would stay visible to ASAN.
 BOOST_AUTO_TEST_CASE(get_unknown_symbol_errors)
 {
     Fixture f;
     const char* script = R"(
         local o = DllLoader.new(MOCK_PATH)
-        _G.err = not pcall(function() return o:get_intret("no_such_symbol") end)
+        local ok, err = pcall(function() return o:get_intret("mock_answer_mock_answer_mock_answer_mock_answer_mock_answer_64") end)
+        _G.err = not ok
+        _G.msg = tostring(err)
     )";
     if (!f.run(script))
         BOOST_FAIL("Lua script error: " << f.error_);
     BOOST_CHECK(f.globalTrue("err"));
+    // The raise happens after the handler, so e.what() must have survived as the message.
+    BOOST_CHECK(!f.globalText("msg").empty());
 }
 
 // The `if (!dll)` null-object guard in unload/reload/get/call: calling the class-table
@@ -172,8 +190,12 @@ BOOST_AUTO_TEST_CASE(null_object_error_branches)
     const char* script = R"(
         _G.e1 = not pcall(function() return DllLoader.unload(5) end)
         _G.e2 = not pcall(function() return DllLoader.reload(5, MOCK_PATH) end)
-        _G.e3 = not pcall(function() return DllLoader.get_intret(5, "mock_answer") end)
-        _G.e4 = not pcall(function() return DllLoader.call_intret(5, "mock_answer") end)
+        local ok3, err3 = pcall(function() return DllLoader.get_intret(5, "mock_answer_mock_answer_mock_answer_mock_answer_mock_answer_64") end)
+        local ok4, err4 = pcall(function() return DllLoader.call_intret(5, "mock_answer_mock_answer_mock_answer_mock_answer_mock_answer_64") end)
+        _G.e3 = not ok3
+        _G.e4 = not ok4
+        _G.msg3 = tostring(err3)
+        _G.msg4 = tostring(err4)
     )";
     if (!f.run(script))
         BOOST_FAIL("Lua script error: " << f.error_);
@@ -182,6 +204,8 @@ BOOST_AUTO_TEST_CASE(null_object_error_branches)
     BOOST_CHECK(f.globalTrue("e2"));
     BOOST_CHECK(f.globalTrue("e3"));
     BOOST_CHECK(f.globalTrue("e4"));
+    BOOST_CHECK(f.globalText("msg3").find("Invalid DllLoader object") != std::string::npos);
+    BOOST_CHECK(f.globalText("msg4").find("Invalid DllLoader object") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

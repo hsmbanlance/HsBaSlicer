@@ -280,6 +280,54 @@ BOOST_AUTO_TEST_CASE(lua_smoke)
     RemoveQuiet(path);
 }
 
+// 4b. 报错路径：未知表名进入 handler 并被 raise，覆盖 raise 前帧上不残留 owning 对象的约定
+BOOST_AUTO_TEST_CASE(lua_error_paths)
+{
+    RegisterPipelineConfigTypes();
+    auto path = TempDbPath("lua_error");
+    RemoveQuiet(path);
+
+    lua_State* L = luaL_newstate();
+    BOOST_REQUIRE(L != nullptr);
+    luaL_openlibs(L);
+    HsBa::Slicer::RegisterLuaSQLiteAdapter(L);
+    HsBa::Slicer::RegisterLuaParamStore(L);
+
+    // 表名刻意加长，令错误消息中的格式化临时量在 ASAN 下可辨识。
+    const std::string chunk = R"lua(
+        local ldb = SQLiteAdapter.new()
+        ldb:Connect(")lua" + path.generic_string() +
+                              R"lua(")
+        local store = ParamStore.new(ldb)
+        store:EnsureSchema()
+        local bogus = "unknown_" .. string.rep("b", 48)
+        local hits = 0
+        local function expect_raise(name, fn)
+            local ok, err = pcall(fn)
+            assert(ok == false, name .. " 应当报错但未报错")
+            err = tostring(err)
+            assert(err:find("unknown config table", 1, true), name .. " 消息不符: " .. err)
+            hits = hits + 1
+        end
+        expect_raise("Save", function() return store:Save(bogus, "k", { model_name = "x" }) end)
+        expect_raise("Load", function() return store:Load(bogus, "k") end)
+        expect_raise("Update", function() return store:Update(bogus, "k", { model_name = "x" }, { "model_name" }) end)
+        assert(hits == 3, "应命中三处报错路径")
+        return 1
+    )lua";
+
+    int rc = luaL_dostring(L, chunk.c_str());
+    if (rc != LUA_OK)
+    {
+        const char* err = lua_tostring(L, -1);
+        BOOST_TEST_MESSAGE("Lua error: " << (err ? err : "unknown"));
+    }
+    BOOST_CHECK_EQUAL(rc, LUA_OK);
+
+    lua_close(L);
+    RemoveQuiet(path);
+}
+
 // 5. 批量事务：中途失败 -> ROLLBACK，全批不落库
 BOOST_AUTO_TEST_CASE(batch_transaction_rollback)
 {

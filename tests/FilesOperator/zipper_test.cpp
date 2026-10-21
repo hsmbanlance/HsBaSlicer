@@ -226,4 +226,56 @@ BOOST_AUTO_TEST_CASE(test_zipper_lua_both_call_conventions)
     BOOST_TEST_MESSAGE("Zipper Lua Both Call Conventions test completed successfully");
 }
 
+// Error paths of the Zipper Lua binding. The frame calling lua_error must own nothing to destroy:
+// MSVC x64 runs the destructors of every frame its longjmp unwinds (a pre-destroyed local is freed
+// twice), POSIX runs none (a live local leaks). Arguments exceed the small string optimization so
+// that either failure shows up - as a leak under ASAN or as heap corruption in a Release stress run.
+BOOST_AUTO_TEST_CASE(test_zipper_lua_error_paths)
+{
+    BOOST_TEST_MESSAGE("Running Zipper Lua Error Path test");
+    auto L = HsBa::Slicer::MakeUniqueLuaState();
+    luaL_openlibs(L.get());
+    HsBa::Slicer::RegisterLuaZipper(L.get());
+
+    const char* lua_code = R"(
+        local name = string.rep("n", 64)
+        local path = string.rep("p", 64)
+        local function probe(f)
+            local ok, err = pcall(f)
+            return tostring(ok) .. "|" .. tostring(err)
+        end
+        _G.r1 = probe(function() return Zipper.AddFile(nil, name, path) end)
+        _G.r2 = probe(function() return Zipper.AddByteFile(nil, name, path) end)
+        _G.r3 = probe(function() return Zipper.Save(nil, path) end)
+        _G.r4 = probe(function() return Zipper.AddFile(42, name, path) end)
+        local zipper = Zipper.new()
+        zipper:AddFile(name, path)
+        _G.r5 = probe(function() return zipper:AddFile(name, path) end)
+    )";
+
+    int ret = luaL_dostring(L.get(), lua_code);
+    BOOST_REQUIRE_MESSAGE(ret == LUA_OK, lua_tostring(L.get(), -1));
+
+    auto read_global = [L = L.get()](const char* key) -> std::string
+    {
+        lua_getglobal(L, key);
+        const char* value = lua_tostring(L, -1);
+        std::string result = value ? value : "";
+        lua_pop(L, 1);
+        return result;
+    };
+
+    for (const char* key : {"r1", "r2", "r3", "r4"})
+    {
+        const std::string result = read_global(key);
+        BOOST_CHECK_MESSAGE(result.rfind("false|", 0) == 0, key << " -> " << result);
+        BOOST_CHECK_MESSAGE(result.find("Invalid Zipper object") != std::string::npos, key << " -> " << result);
+    }
+    // staging the same entry name twice is a RuntimeError raised from inside the wrapper body
+    const std::string duplicate = read_global("r5");
+    BOOST_CHECK_MESSAGE(duplicate.rfind("false|", 0) == 0, duplicate);
+    BOOST_CHECK_MESSAGE(duplicate.find("Duplicate name files") != std::string::npos, duplicate);
+    BOOST_TEST_MESSAGE("Zipper Lua Error Path test completed successfully");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
