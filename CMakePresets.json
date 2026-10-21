@@ -57,7 +57,19 @@
       },
       "vendor": {
         "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
-          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}"
+          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}",
+          "copySourcesOptions": {
+            "exclusionList": [
+              ".vs",
+              ".git",
+              "out",
+              ".cache",
+              "vcpkg_installed",
+              "Testing",
+              ".qoder",
+              "compile_commands.json"
+            ]
+          }
         }
       }
     },
@@ -78,7 +90,19 @@
       },
       "vendor": {
         "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
-          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}"
+          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}",
+          "copySourcesOptions": {
+            "exclusionList": [
+              ".vs",
+              ".git",
+              "out",
+              ".cache",
+              "vcpkg_installed",
+              "Testing",
+              ".qoder",
+              "compile_commands.json"
+            ]
+          }
         }
       }
     },
@@ -107,7 +131,19 @@
       },
       "vendor": {
         "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
-          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}"
+          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}",
+          "copySourcesOptions": {
+            "exclusionList": [
+              ".vs",
+              ".git",
+              "out",
+              ".cache",
+              "vcpkg_installed",
+              "Testing",
+              ".qoder",
+              "compile_commands.json"
+            ]
+          }
         }
       }
     },
@@ -134,7 +170,19 @@
       },
       "vendor": {
         "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
-          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}"
+          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}",
+          "copySourcesOptions": {
+            "exclusionList": [
+              ".vs",
+              ".git",
+              "out",
+              ".cache",
+              "vcpkg_installed",
+              "Testing",
+              ".qoder",
+              "compile_commands.json"
+            ]
+          }
         }
       }
     },
@@ -156,7 +204,19 @@
       },
       "vendor": {
         "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
-          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}"
+          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}",
+          "copySourcesOptions": {
+            "exclusionList": [
+              ".vs",
+              ".git",
+              "out",
+              ".cache",
+              "vcpkg_installed",
+              "Testing",
+              ".qoder",
+              "compile_commands.json"
+            ]
+          }
         }
       }
     },
@@ -177,7 +237,19 @@
       },
       "vendor": {
         "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
-          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}"
+          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}",
+          "copySourcesOptions": {
+            "exclusionList": [
+              ".vs",
+              ".git",
+              "out",
+              ".cache",
+              "vcpkg_installed",
+              "Testing",
+              ".qoder",
+              "compile_commands.json"
+            ]
+          }
         }
       }
     },
@@ -202,7 +274,19 @@
       },
       "vendor": {
         "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
-          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}"
+          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}",
+          "copySourcesOptions": {
+            "exclusionList": [
+              ".vs",
+              ".git",
+              "out",
+              ".cache",
+              "vcpkg_installed",
+              "Testing",
+              ".qoder",
+              "compile_commands.json"
+            ]
+          }
         }
       }
     }
