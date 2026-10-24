@@ -40,7 +40,8 @@ bool IsStrictlyConvex(const Polygon& r)
         const Point2& o = r[i];
         const Point2& a = r[(i + 1) % n];
         const Point2& b = r[(i + 2) % n];
-        const double cross = static_cast<double>(a.x - o.x) * (b.y - a.y) - static_cast<double>(a.y - o.y) * (b.x - a.x);
+        const double cross =
+            static_cast<double>(a.x - o.x) * (b.y - a.y) - static_cast<double>(a.y - o.y) * (b.x - a.x);
         if (cross == 0.0)
             return false;
         const int cur = cross > 0.0 ? 1 : -1;
@@ -167,8 +168,7 @@ BOOST_AUTO_TEST_CASE(convex_hull_int_pivot_is_not_first_vertex)
     const bool interior_kept = std::find(hull.begin(), hull.end(), Point2{5, 5}) != hull.end();
     BOOST_TEST(!interior_kept);
 
-    PolygonD polyd{Point2D{10.0, 10.0}, Point2D{0.0, 0.0}, Point2D{10.0, 0.0}, Point2D{0.0, 10.0},
-                   Point2D{5.5, 5.5}};
+    PolygonD polyd{Point2D{10.0, 10.0}, Point2D{0.0, 0.0}, Point2D{10.0, 0.0}, Point2D{0.0, 10.0}, Point2D{5.5, 5.5}};
     BOOST_TEST(ConvexHull(polyd).size() == 4);
 }
 
@@ -177,8 +177,8 @@ BOOST_AUTO_TEST_CASE(convex_hull_int_pivot_is_not_first_vertex)
 // this actively checks the polar-angle sort + scan ordering, not just the vertex count.
 BOOST_AUTO_TEST_CASE(convex_hull_int_scattered_is_convex_with_known_area)
 {
-    Polygon poly{Point2{5, 0}, Point2{2, 1}, Point2{0, 3}, Point2{5, 3}, Point2{1, 2}, Point2{4, 1},
-                 Point2{3, 2}, Point2{2, 2}, Point2{0, 0}};
+    Polygon poly{Point2{5, 0}, Point2{2, 1}, Point2{0, 3}, Point2{5, 3}, Point2{1, 2},
+                 Point2{4, 1}, Point2{3, 2}, Point2{2, 2}, Point2{0, 0}};
     auto hull = ConvexHull(poly);
 
     BOOST_TEST(hull.size() == 4);

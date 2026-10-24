@@ -1,10 +1,10 @@
 ﻿#define BOOST_TEST_MODULE layers_path_test
 #include <boost/test/included/unit_test.hpp>
 
+#include "base/error.hpp"
 #include "fileoperator/LuaAdapter.hpp"
 #include "fileoperator/sql_adapter.hpp"
 #include "paths/layerspath.hpp"
-#include "base/error.hpp"
 #include <filesystem>
 #include <fstream>
 #include <lua.hpp>
@@ -187,7 +187,8 @@ BOOST_AUTO_TEST_CASE(test_save_funcname_and_script_file)
 
     auto dir = std::filesystem::temp_directory_path();
     std::error_code ec;
-    auto slurp = [](const std::filesystem::path& f) {
+    auto slurp = [](const std::filesystem::path& f)
+    {
         std::ifstream ifs(f);
         return std::string((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
     };
@@ -202,7 +203,10 @@ BOOST_AUTO_TEST_CASE(test_save_funcname_and_script_file)
 
     // Save(path, script_file, funcName): script read from file
     auto scriptFile = dir / "lp_save.lua";
-    { std::ofstream ofs(scriptFile); ofs << "return 'FROM_FILE:' .. funcName"; }
+    {
+        std::ofstream ofs(scriptFile);
+        ofs << "return 'FROM_FILE:' .. funcName";
+    }
     auto out2 = dir / "lp_file.txt";
     std::filesystem::remove(out2, ec);
     lp.Save(out2, scriptFile, std::string_view("fnF"));
@@ -216,7 +220,10 @@ BOOST_AUTO_TEST_CASE(test_save_funcname_and_script_file)
 
     // ToString(script_file, funcName): file-based serialize
     auto tsFile = dir / "lp_ts.lua";
-    { std::ofstream ofs(tsFile); ofs << "return 'TSFILE:' .. funcName"; }
+    {
+        std::ofstream ofs(tsFile);
+        ofs << "return 'TSFILE:' .. funcName";
+    }
     BOOST_CHECK_EQUAL(lp.ToString(tsFile, std::string_view("tfn")), "TSFILE:tfn");
     std::filesystem::remove(tsFile, ec);
 

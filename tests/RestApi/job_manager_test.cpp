@@ -23,7 +23,8 @@ namespace
 // A runner that always succeeds, emits one progress tick and a small inline payload.
 JobManager::Runner SuccessRunner()
 {
-    return [](HsBaPipelineKind, const void*, HsBaProgressCallback cb, void* ud) {
+    return [](HsBaPipelineKind, const void*, HsBaProgressCallback cb, void* ud)
+    {
         if (cb)
         {
             cb(50, "half", ud);

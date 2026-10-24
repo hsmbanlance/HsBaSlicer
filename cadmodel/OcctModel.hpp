@@ -36,11 +36,11 @@ public:
     OcctModel(const TopoDS_Shape& shape);
     /// Construct a model from an OCCT shape (move).
     OcctModel(TopoDS_Shape&& shape);
-    OcctModel(const OcctModel& o) = default;   ///< Copy constructor.
+    OcctModel(const OcctModel& o) = default;             ///< Copy constructor.
     OcctModel& operator=(const OcctModel& o) = default;  ///< Copy assignment.
-    OcctModel(OcctModel&& o) = default;        ///< Move constructor.
+    OcctModel(OcctModel&& o) = default;                  ///< Move constructor.
     OcctModel& operator=(OcctModel&& o) = default;       ///< Move assignment.
-    ~OcctModel() = default;                   ///< Destructor.
+    ~OcctModel() = default;                              ///< Destructor.
 
     /// Add another model's shape into this model's compound.
     void AddShape(const OcctModel& o);
@@ -72,8 +72,7 @@ public:
     void Transform(const Eigen::Transform<float, 3, Eigen::Affine>& transform) override;
 
     /// Get the axis-aligned bounding box of the model.
-    void BoundingBox(Eigen::Vector3f& min,
-                     Eigen::Vector3f& max) const override;
+    void BoundingBox(Eigen::Vector3f& min, Eigen::Vector3f& max) const override;
 
     /// Tessellate the shape and return a (vertices, faces) pair in libigl style.
     std::pair<Eigen::MatrixXf, Eigen::MatrixXi> TriangleMesh() const override;

@@ -1,5 +1,6 @@
 ﻿/** @file FloatPolygons.hpp
- * @brief Double-precision polygon type aliases, boolean/offset/area operations, shape/text generators and int<->double conversion.
+ * @brief Double-precision polygon type aliases, boolean/offset/area operations, shape/text generators and int<->double
+ * conversion.
  * @author HsBa
  */
 #pragma once

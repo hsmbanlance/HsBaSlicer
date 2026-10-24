@@ -34,18 +34,19 @@ namespace HsBa::Slicer
 class CgalModel final : public IModel
 {
 public:
-    using EpicKernel = CGAL::Exact_predicates_inexact_constructions_kernel;  ///< CGAL exact-predicates inexact-constructions kernel.
-    using Point_3 = typename EpicKernel::Point_3;                            ///< CGAL 3D point type.
-    using Vector_3 = typename EpicKernel::Vector_3;                          ///< CGAL 3D vector type.
-    using Affine_3 = CGAL::Aff_transformation_3<EpicKernel>;                 ///< CGAL 3D affine transformation.
-    using Polyhedron_3 = CGAL::Polyhedron_3<EpicKernel>;                     ///< CGAL polyhedron surface mesh.
-    using Nef_Polyheron_3 = CGAL::Nef_polyhedron_3<EpicKernel>;              ///< CGAL Nef polyhedron for boolean ops.
-    CgalModel() = default;                    ///< Construct an empty model.
-    ~CgalModel() = default;                   ///< Destructor.
-    CgalModel(const CgalModel&) = default;    ///< Copy constructor.
-    CgalModel(CgalModel&&) = default;         ///< Move constructor.
-    CgalModel& operator=(const CgalModel&) = default;  ///< Copy assignment.
-    CgalModel& operator=(CgalModel&&) = default;       ///< Move assignment.
+    using EpicKernel =
+        CGAL::Exact_predicates_inexact_constructions_kernel;  ///< CGAL exact-predicates inexact-constructions kernel.
+    using Point_3 = typename EpicKernel::Point_3;             ///< CGAL 3D point type.
+    using Vector_3 = typename EpicKernel::Vector_3;           ///< CGAL 3D vector type.
+    using Affine_3 = CGAL::Aff_transformation_3<EpicKernel>;  ///< CGAL 3D affine transformation.
+    using Polyhedron_3 = CGAL::Polyhedron_3<EpicKernel>;      ///< CGAL polyhedron surface mesh.
+    using Nef_Polyheron_3 = CGAL::Nef_polyhedron_3<EpicKernel>;  ///< CGAL Nef polyhedron for boolean ops.
+    CgalModel() = default;                                       ///< Construct an empty model.
+    ~CgalModel() = default;                                      ///< Destructor.
+    CgalModel(const CgalModel&) = default;                       ///< Copy constructor.
+    CgalModel(CgalModel&&) = default;                            ///< Move constructor.
+    CgalModel& operator=(const CgalModel&) = default;            ///< Copy assignment.
+    CgalModel& operator=(CgalModel&&) = default;                 ///< Move assignment.
     /// Construct a model from an existing CGAL polyhedron.
     CgalModel(const Polyhedron_3& o);
     /// Construct a model from a vertex/face mesh.
@@ -72,8 +73,7 @@ public:
     void Transform(const Eigen::Transform<float, 3, Eigen::Affine>& transform) override;
 
     /// Get the axis-aligned bounding box of the model.
-    void BoundingBox(Eigen::Vector3f& min,
-                     Eigen::Vector3f& max) const override;
+    void BoundingBox(Eigen::Vector3f& min, Eigen::Vector3f& max) const override;
 
     /// Get the signed volume of the model.
     float Volume() const override;

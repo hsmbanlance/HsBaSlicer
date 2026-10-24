@@ -17,7 +17,8 @@
 
 namespace HsBa::Slicer
 {
-// Planar slicing along Z; when inter-layer path planning does not interfere, one layer's paths can be handled within a single coroutine
+// Planar slicing along Z; when inter-layer path planning does not interfere, one layer's paths can be handled within a
+// single coroutine
 
 /**
  * @brief Safely slice a model at a given height, ignoring open contours.

@@ -188,8 +188,7 @@ BOOST_AUTO_TEST_CASE(test_save_funcname_and_script_file_variants)
     BOOST_CHECK(std::filesystem::exists(tmp1));
     {
         std::ifstream ifs(tmp1, std::ios::binary);
-        BOOST_CHECK_EQUAL(std::string((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>()),
-                          "FNx");
+        BOOST_CHECK_EQUAL(std::string((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>()), "FNx");
     }
     std::filesystem::remove(tmp1, ec);
 
@@ -205,8 +204,7 @@ BOOST_AUTO_TEST_CASE(test_save_funcname_and_script_file_variants)
     BOOST_CHECK(std::filesystem::exists(tmp2));
     {
         std::ifstream ifs(tmp2, std::ios::binary);
-        BOOST_CHECK_EQUAL(std::string((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>()),
-                          "FNy");
+        BOOST_CHECK_EQUAL(std::string((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>()), "FNy");
     }
     std::filesystem::remove(tmp2, ec);
     std::filesystem::remove(lua_file, ec);

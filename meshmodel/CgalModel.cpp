@@ -670,7 +670,8 @@ CgalModel CgalModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& di
         bottom_tris.push_back(idx);
     }
 
-    // Clipper2 Triangulate produces no triangles for already-triangular input; fall back to using the original triangle as the base face
+    // Clipper2 Triangulate produces no triangles for already-triangular input; fall back to using the original triangle
+    // as the base face
     if (bottom_tris.empty() && n == 3)
     {
         bottom_tris.push_back({0, 1, 2});
@@ -838,7 +839,8 @@ CgalModel CgalModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
         {
             idx[i] = findOrAdd(tri[i]);
         }
-        // Force base triangles to CCW (positive signed area in Cartesian coordinates), not relying on Triangulate's output winding
+        // Force base triangles to CCW (positive signed area in Cartesian coordinates), not relying on Triangulate's
+        // output winding
         if (Clipper2Lib::Area(tri) < 0.0)
         {
             std::swap(idx[1], idx[2]);
@@ -846,8 +848,9 @@ CgalModel CgalModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& 
         bottom_tris.push_back(idx);
     }
 
-    // Clipper2 Triangulate produces no triangles for triangular paths; append the original triangle paths to complete the base face, avoiding lost caps;
-    // outer-contour triangles are normalized to CCW, hole triangles to CW (cap contributions cancel)
+    // Clipper2 Triangulate produces no triangles for triangular paths; append the original triangle paths to complete
+    // the base face, avoiding lost caps; outer-contour triangles are normalized to CCW, hole triangles to CW (cap
+    // contributions cancel)
     const size_t trianglePathCount =
         std::count_if(norm_paths.begin(), norm_paths.end(), [](const PolygonD& p) { return p.size() == 3; });
     if (bottom_tris.size() < trianglePathCount)

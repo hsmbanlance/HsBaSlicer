@@ -18,8 +18,8 @@ namespace
 // emitted segment is non-degenerate and carries positive extrusion.
 Slicer::PolygonsD SquareContour(double size = 10.0)
 {
-    Slicer::PolygonD ring{
-        Slicer::Point2D{0.0, 0.0}, Slicer::Point2D{size, 0.0}, Slicer::Point2D{size, size}, Slicer::Point2D{0.0, size}};
+    Slicer::PolygonD ring{Slicer::Point2D{0.0, 0.0}, Slicer::Point2D{size, 0.0}, Slicer::Point2D{size, size},
+                          Slicer::Point2D{0.0, size}};
     return {ring};
 }
 }  // namespace

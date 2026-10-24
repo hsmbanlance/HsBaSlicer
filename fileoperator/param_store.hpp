@@ -36,7 +36,8 @@ public:
     /** @brief Progress callback: percent (0-100), stage description. */
     using ProgressFn = std::function<void(int, const char*)>;
 
-    /** @brief Migration hook: runs for the given backend/table/schema version; currently only a lightweight pointer is retained. */
+    /** @brief Migration hook: runs for the given backend/table/schema version; currently only a lightweight pointer is
+     * retained. */
     using MigrationFn = std::function<void(SQL::ISQLAdapter&, Backend, const std::string&, int64_t)>;
 
     /** @brief When backend is std::nullopt it is auto-detected via ParamSchema::DetectBackend. */
@@ -68,7 +69,8 @@ public:
      */
     bool Load(std::string_view table, std::string_view key, Utils::AnyObject outCfg, StringArena& arena);
 
-    /** @brief List the param_key of rows matching whereJson (an object whose keys are column names and values are scalars). */
+    /** @brief List the param_key of rows matching whereJson (an object whose keys are column names and values are
+     * scalars). */
     std::vector<std::string> List(std::string_view table, const std::string& whereJson);
 
     /** @brief Update only the fields listed in changedFields; returns false when the key does not exist. */
@@ -104,7 +106,8 @@ public:
     /// @brief The backend this store targets.
     Backend backend() const noexcept { return backend_; }
 
-    /** @brief Resolve the table name: returned as-is when non-empty, otherwise a default name is derived from the cfg type. */
+    /** @brief Resolve the table name: returned as-is when non-empty, otherwise a default name is derived from the cfg
+     * type. */
     static std::string ResolveTable(std::string_view table, const Utils::AnyObject& cfg);
 
 private:

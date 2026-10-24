@@ -12,6 +12,6 @@ namespace HsBa::Slicer::Cipher
 {
 /// Register the Cipher module functions (Encoder, Hasher, Encrypt) into the given Lua state.
 void RegisterLuaCipher(lua_State* L);
-}
+}  // namespace HsBa::Slicer::Cipher
 
 #endif  // CIPHER_LUAADAPTER_HPP

@@ -32,8 +32,8 @@
 #define HSBA_PRE(...) pre(__VA_ARGS__)
 #define HSBA_POST(...) post(__VA_ARGS__)
 #else
-    // Fallback: contracts are not enforced on this toolchain, but the annotated
-    // declaration must remain valid C++, so the specifiers expand to nothing.
+// Fallback: contracts are not enforced on this toolchain, but the annotated
+// declaration must remain valid C++, so the specifiers expand to nothing.
 #define HSBA_PRE(...)
 #define HSBA_POST(...)
 #endif

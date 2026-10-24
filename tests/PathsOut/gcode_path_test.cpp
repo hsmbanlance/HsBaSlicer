@@ -53,7 +53,7 @@ BOOST_AUTO_TEST_CASE(header_footer_per_firmware)
     BOOST_CHECK(Contains(marlin, "M82 ; absolute extrusion"));
     BOOST_CHECK(Contains(marlin, "G1 Z5.0 F6000"));  // travel_speed 100 * 60
     BOOST_CHECK(Contains(marlin, "M84 ; disable motors"));
-    BOOST_CHECK(!Contains(marlin, "M106"));             // fan command is RepRap only
+    BOOST_CHECK(!Contains(marlin, "M106"));                  // fan command is RepRap only
     BOOST_CHECK(!Contains(marlin, "SET_PRESSURE_ADVANCE"));  // Klipper only
 
     auto reprap = path.ToGCode(GCodeFirmware::RepRap);
@@ -118,11 +118,11 @@ BOOST_AUTO_TEST_CASE(layer_generation_with_z_and_extrusion)
 BOOST_AUTO_TEST_CASE(layer_config_z_parsing_edge_cases)
 {
     GCodePath path{MakeConfig()};
-    PolygonsD empty_poly;  // no polygons at all
-    path.push_back("plain_config", empty_poly);       // no Z: prefix -> z = 0
-    path.push_back("Z:notanumber", empty_poly);       // invalid_argument -> z = 0
-    path.push_back("Z:1e999999", empty_poly);         // out_of_range -> z = 0
-    path.push_back("Z:", empty_poly);                 // tiny suffix -> z = 0
+    PolygonsD empty_poly;                        // no polygons at all
+    path.push_back("plain_config", empty_poly);  // no Z: prefix -> z = 0
+    path.push_back("Z:notanumber", empty_poly);  // invalid_argument -> z = 0
+    path.push_back("Z:1e999999", empty_poly);    // out_of_range -> z = 0
+    path.push_back("Z:", empty_poly);            // tiny suffix -> z = 0
 
     auto gcode = path.ToGCode(GCodeFirmware::Marlin);
     BOOST_CHECK(Contains(gcode, "G0 Z0.000"));
@@ -205,8 +205,8 @@ BOOST_AUTO_TEST_CASE(lua_post_processing_variants)
 
     // firmware + printer_config globals are exported correctly
     auto fw = path.ToGCode(GCodeFirmware::Klipper, "return firmware .. '|' .. "
-                                                  "tostring(printer_config.total_layers) .. '|' .. "
-                                                  "string.format('%.0f', printer_config.nozzle_temp)");
+                                                   "tostring(printer_config.total_layers) .. '|' .. "
+                                                   "string.format('%.0f', printer_config.nozzle_temp)");
     BOOST_CHECK_EQUAL(fw, "klipper|1|200");
 
     auto reprap_fw = path.ToGCode(GCodeFirmware::RepRap, "return firmware");
@@ -223,13 +223,12 @@ BOOST_AUTO_TEST_CASE(lua_post_processing_variants)
     BOOST_CHECK_EQUAL(via_global, "FROM_GLOBAL");
 
     // lua_reg callback runs before the script and can expose extra globals
-    auto with_reg = path.ToGCode(
-        GCodeFirmware::Marlin, "return injected",
-        [](lua_State* L)
-        {
-            lua_pushstring(L, "FROM_LUA_REG");
-            lua_setglobal(L, "injected");
-        });
+    auto with_reg = path.ToGCode(GCodeFirmware::Marlin, "return injected",
+                                 [](lua_State* L)
+                                 {
+                                     lua_pushstring(L, "FROM_LUA_REG");
+                                     lua_setglobal(L, "injected");
+                                 });
     BOOST_CHECK_EQUAL(with_reg, "FROM_LUA_REG");
 
     // load errors and runtime errors surface as RuntimeError

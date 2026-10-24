@@ -194,7 +194,7 @@ BOOST_AUTO_TEST_CASE(toimage_input_guards)
 BOOST_AUTO_TEST_CASE(toimage_skips_empty_polygons)
 {
     PolygonsD poly;
-    poly.push_back(PolygonD{}); // empty -> skipped
+    poly.push_back(PolygonD{});  // empty -> skipped
     poly.push_back(OneSquare()[0]);
 
     auto outSvg = std::filesystem::temp_directory_path() / "hsbaslicer_skip.svg";
@@ -252,15 +252,17 @@ BOOST_AUTO_TEST_CASE(lua_to_image_error_and_callback_paths)
     std::filesystem::remove(outImg, ec);
 
     // LuaToImageString failure modes.
-    BOOST_CHECK_THROW(LuaToImageString(poly, "not valid lua @@#", "o.png", "f"), RuntimeError);        // load fail
-    BOOST_CHECK_THROW(LuaToImageString(poly, "error('boom')", "o.png", "f"), RuntimeError);            // chunk exec fail
-    BOOST_CHECK_THROW(LuaToImageString(poly, "function g() end", "o.png", "f"), RuntimeError);         // function absent
-    BOOST_CHECK_THROW(LuaToImageString(poly, "function f(p) error('x') end", "o.png", "f"), RuntimeError); // call error
-    BOOST_CHECK_THROW(LuaToImageString(poly, "function f(p) return 42 end", "o.png", "f"), RuntimeError);   // non-table
+    BOOST_CHECK_THROW(LuaToImageString(poly, "not valid lua @@#", "o.png", "f"), RuntimeError);  // load fail
+    BOOST_CHECK_THROW(LuaToImageString(poly, "error('boom')", "o.png", "f"), RuntimeError);      // chunk exec fail
+    BOOST_CHECK_THROW(LuaToImageString(poly, "function g() end", "o.png", "f"), RuntimeError);   // function absent
+    BOOST_CHECK_THROW(LuaToImageString(poly, "function f(p) error('x') end", "o.png", "f"),
+                      RuntimeError);                                                                       // call error
+    BOOST_CHECK_THROW(LuaToImageString(poly, "function f(p) return 42 end", "o.png", "f"), RuntimeError);  // non-table
     BOOST_CHECK_THROW(LuaToImageString(poly, "function f(p) return {1, 'x'} end", "o.png", "f"),
-                      RuntimeError); // non-integer element
-    BOOST_CHECK(!LuaToImageString(poly, "function f(p) return {0, 255} end", "", "f", [&regCalled](lua_State*) { regCalled = true; })); // empty out path
-    BOOST_CHECK(regCalled); // LuaToImageString registration callback runs before the empty-path short-circuit
+                      RuntimeError);  // non-integer element
+    BOOST_CHECK(!LuaToImageString(poly, "function f(p) return {0, 255} end", "", "f",
+                                  [&regCalled](lua_State*) { regCalled = true; }));  // empty out path
+    BOOST_CHECK(regCalled);  // LuaToImageString registration callback runs before the empty-path short-circuit
 }
 
 // The file-based LuaToImage mirrors LuaToImageString's error handling over a script

@@ -18,9 +18,9 @@ namespace HsBa::Slicer::Cipher
 class Hasher
 {
 public:
-    static std::string md5_hex(const std::vector<unsigned char>& data);      ///< MD5 hex digest of the buffer.
-    static std::string sha1_hex(const std::vector<unsigned char>& data);     ///< SHA1 hex digest of the buffer.
-    static std::string sha256_hex(const std::vector<unsigned char>& data);   ///< SHA256 hex digest of the buffer.
+    static std::string md5_hex(const std::vector<unsigned char>& data);     ///< MD5 hex digest of the buffer.
+    static std::string sha1_hex(const std::vector<unsigned char>& data);    ///< SHA1 hex digest of the buffer.
+    static std::string sha256_hex(const std::vector<unsigned char>& data);  ///< SHA256 hex digest of the buffer.
     /// Compute the MD5 hex digest of a string view.
     inline static std::string md5_hex(std::string_view data)
     {

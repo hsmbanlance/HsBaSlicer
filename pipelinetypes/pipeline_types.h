@@ -346,11 +346,11 @@ extern "C"
      */
     typedef enum HsBaMetalProtectGas
     {
-        HSBA_METAL_GAS_ARGON = 0,    ///< Argon shielding gas
-        HSBA_METAL_GAS_HELIUM = 1,   ///< Helium shielding gas
-        HSBA_METAL_GAS_N2 = 2,       ///< Nitrogen shielding gas
-        HSBA_METAL_GAS_CO2 = 3,      ///< Carbon dioxide shielding gas
-        HSBA_METAL_GAS_UNKNOWN = 4   ///< Unspecified gas
+        HSBA_METAL_GAS_ARGON = 0,   ///< Argon shielding gas
+        HSBA_METAL_GAS_HELIUM = 1,  ///< Helium shielding gas
+        HSBA_METAL_GAS_N2 = 2,      ///< Nitrogen shielding gas
+        HSBA_METAL_GAS_CO2 = 3,     ///< Carbon dioxide shielding gas
+        HSBA_METAL_GAS_UNKNOWN = 4  ///< Unspecified gas
     } HsBaMetalProtectGas_t;
 
     /**
@@ -361,21 +361,21 @@ extern "C"
      */
     typedef struct HsBaSlmPipelineConfig
     {
-        const char* model_name;        ///< Model name
-        const char* model_path;        ///< Model file path
-        float layer_height;            ///< Layer height (mm)
-        float first_layer_height;      ///< First layer height (mm)
-        float laser_power;             ///< Energy source power (W)
-        float scan_speed;              ///< Scan speed (mm/s)
-        float hatch_spacing;           ///< Hatch spacing (mm)
-        float hatch_rotation;          ///< Hatch rotation angle (degrees)
-        float bed_temperature;         ///< Build platform temperature (C)
-        HsBaSlmMaterial_t material;    ///< Metal powder material
-        HsBaSlmLight_t light_source;   ///< Energy source type
+        const char* model_name;             ///< Model name
+        const char* model_path;             ///< Model file path
+        float layer_height;                 ///< Layer height (mm)
+        float first_layer_height;           ///< First layer height (mm)
+        float laser_power;                  ///< Energy source power (W)
+        float scan_speed;                   ///< Scan speed (mm/s)
+        float hatch_spacing;                ///< Hatch spacing (mm)
+        float hatch_rotation;               ///< Hatch rotation angle (degrees)
+        float bed_temperature;              ///< Build platform temperature (C)
+        HsBaSlmMaterial_t material;         ///< Metal powder material
+        HsBaSlmLight_t light_source;        ///< Energy source type
         HsBaMetalProtectGas_t protect_gas;  ///< Shielding gas
-        const char* export_lua_script; ///< Export Lua script path (required)
-        const char* export_lua_func;   ///< Export Lua function name
-        const char* output_path;       ///< Output file path (can be NULL)
+        const char* export_lua_script;      ///< Export Lua script path (required)
+        const char* export_lua_func;        ///< Export Lua function name
+        const char* output_path;            ///< Output file path (can be NULL)
     } HsBaSlmPipelineConfig_t;
 
     /**
@@ -421,21 +421,21 @@ extern "C"
      */
     typedef struct HsBaLomPipelineConfig
     {
-        const char* model_name;        ///< Model name
-        const char* model_path;        ///< Model file path
-        float layer_height;            ///< Sheet thickness (mm)
-        float first_layer_height;      ///< First sheet thickness (mm)
-        float cut_speed;               ///< Laser cut speed (mm/s)
-        float cut_margin;              ///< Contour offset (mm)
-        float cut_power;               ///< Laser cut power [0,1]
-        float bond_temperature;        ///< Bonding temperature (C)
-        float bond_pressure;           ///< Bonding pressure (MPa)
-        float bond_time;               ///< Bonding time per layer (s)
-        int seal_contour;              ///< Seal part edge (0=false, 1=true)
-        HsBaLomCutMode_t cut_mode;     ///< Sheet cutting mode
-        const char* export_lua_script; ///< Export Lua script path (required)
-        const char* export_lua_func;   ///< Export Lua function name
-        const char* output_path;       ///< Output file path (can be NULL)
+        const char* model_name;         ///< Model name
+        const char* model_path;         ///< Model file path
+        float layer_height;             ///< Sheet thickness (mm)
+        float first_layer_height;       ///< First sheet thickness (mm)
+        float cut_speed;                ///< Laser cut speed (mm/s)
+        float cut_margin;               ///< Contour offset (mm)
+        float cut_power;                ///< Laser cut power [0,1]
+        float bond_temperature;         ///< Bonding temperature (C)
+        float bond_pressure;            ///< Bonding pressure (MPa)
+        float bond_time;                ///< Bonding time per layer (s)
+        int seal_contour;               ///< Seal part edge (0=false, 1=true)
+        HsBaLomCutMode_t cut_mode;      ///< Sheet cutting mode
+        const char* export_lua_script;  ///< Export Lua script path (required)
+        const char* export_lua_func;    ///< Export Lua function name
+        const char* output_path;        ///< Output file path (can be NULL)
     } HsBaLomPipelineConfig_t;
 
     /**
@@ -482,21 +482,22 @@ extern "C"
      */
     typedef struct HsBaTdpPipelineConfig
     {
-        const char* model_name;        ///< Model name
-        const char* model_path;        ///< Model file path
-        float layer_height;            ///< Layer height (mm)
-        float first_layer_height;      ///< First layer height (mm)
-        int head_count;                ///< Print head nozzle count
-        float drop_spacing;            ///< Binder drop spacing (mm)
-        float binder_saturation;       ///< Binder saturation [0,1]
-        float ink_curing_time;         ///< Per-layer curing time (s)
-        float bed_temperature;         ///< Powder bed temperature (C)
+        const char* model_name;           ///< Model name
+        const char* model_path;           ///< Model file path
+        float layer_height;               ///< Layer height (mm)
+        float first_layer_height;         ///< First layer height (mm)
+        int head_count;                   ///< Print head nozzle count
+        float drop_spacing;               ///< Binder drop spacing (mm)
+        float binder_saturation;          ///< Binder saturation [0,1]
+        float ink_curing_time;            ///< Per-layer curing time (s)
+        float bed_temperature;            ///< Powder bed temperature (C)
         HsBaTdpBinderMode_t binder_mode;  ///< Binder jetting mode
-        const char* export_lua_script; ///< Export Lua script path (required)
-        const char* export_lua_func;   ///< Export Lua function name
-        const char* output_path;       ///< Output file path (can be NULL)
-        int spiral_mode;               ///< Spiralize outer contour into a continuous rising path (0=false, 1=true), default 0
-        int randomize_start_point;     ///< Randomize closed contour start points on edge interiors per layer (0=false, 1=true), default 0
+        const char* export_lua_script;    ///< Export Lua script path (required)
+        const char* export_lua_func;      ///< Export Lua function name
+        const char* output_path;          ///< Output file path (can be NULL)
+        int spiral_mode;  ///< Spiralize outer contour into a continuous rising path (0=false, 1=true), default 0
+        int randomize_start_point;  ///< Randomize closed contour start points on edge interiors per layer (0=false,
+                                    ///< 1=true), default 0
     } HsBaTdpPipelineConfig_t;
 
     /**
@@ -536,11 +537,11 @@ extern "C"
      */
     typedef enum HsBaWaamMaterial
     {
-        HSBA_WAAM_MATERIAL_STEEL = 0,    ///< Steel wire
-        HSBA_WAAM_MATERIAL_ALUMINUM = 1, ///< Aluminum wire
-        HSBA_WAAM_MATERIAL_TITANIUM = 2, ///< Titanium wire
-        HSBA_WAAM_MATERIAL_COPPER = 3,   ///< Copper wire
-        HSBA_WAAM_MATERIAL_UNKNOWN = 4   ///< Unspecified material
+        HSBA_WAAM_MATERIAL_STEEL = 0,     ///< Steel wire
+        HSBA_WAAM_MATERIAL_ALUMINUM = 1,  ///< Aluminum wire
+        HSBA_WAAM_MATERIAL_TITANIUM = 2,  ///< Titanium wire
+        HSBA_WAAM_MATERIAL_COPPER = 3,    ///< Copper wire
+        HSBA_WAAM_MATERIAL_UNKNOWN = 4    ///< Unspecified material
     } HsBaWaamMaterial_t;
 
     /**
@@ -548,9 +549,9 @@ extern "C"
      */
     typedef enum HsBaWaamWeldProcess
     {
-        HSBA_WAAM_WELD_ARC = 0,    ///< Arc welding
-        HSBA_WAAM_WELD_LASER = 1,  ///< Laser welding
-        HSBA_WAAM_WELD_UNKNOWN = 2 ///< Unspecified process
+        HSBA_WAAM_WELD_ARC = 0,     ///< Arc welding
+        HSBA_WAAM_WELD_LASER = 1,   ///< Laser welding
+        HSBA_WAAM_WELD_UNKNOWN = 2  ///< Unspecified process
     } HsBaWaamWeldProcess_t;
 
     /**
@@ -558,9 +559,9 @@ extern "C"
      */
     typedef enum HsBaWaamProtection
     {
-        HSBA_WAAM_PROTECTION_SHIELD_GAS = 0, ///< Shielding-gas protection
-        HSBA_WAAM_PROTECTION_VACUUM = 1,     ///< Vacuum protection
-        HSBA_WAAM_PROTECTION_UNKNOWN = 2     ///< Unspecified protection
+        HSBA_WAAM_PROTECTION_SHIELD_GAS = 0,  ///< Shielding-gas protection
+        HSBA_WAAM_PROTECTION_VACUUM = 1,      ///< Vacuum protection
+        HSBA_WAAM_PROTECTION_UNKNOWN = 2      ///< Unspecified protection
     } HsBaWaamProtection_t;
 
     /**
@@ -581,27 +582,28 @@ extern "C"
      */
     typedef struct HsBaWaamPipelineConfig
     {
-        const char* model_name;        ///< Model name
-        const char* model_path;        ///< Model file path
-        float layer_height;            ///< Bead/layer height (mm)
-        float first_layer_height;      ///< First layer height (mm)
-        float bead_width;              ///< Deposited bead width (mm)
-        float travel_speed;            ///< Torch travel speed (mm/s)
-        float wire_feed_speed;         ///< Wire feed speed (m/min)
-        float arc_current;             ///< Welding current (A)
-        float arc_voltage;             ///< Arc voltage (V)
-        float gas_flow_rate;           ///< Shielding gas flow (L/min)
-        HsBaWaamMaterial_t material;   ///< Feedstock wire material
+        const char* model_name;                 ///< Model name
+        const char* model_path;                 ///< Model file path
+        float layer_height;                     ///< Bead/layer height (mm)
+        float first_layer_height;               ///< First layer height (mm)
+        float bead_width;                       ///< Deposited bead width (mm)
+        float travel_speed;                     ///< Torch travel speed (mm/s)
+        float wire_feed_speed;                  ///< Wire feed speed (m/min)
+        float arc_current;                      ///< Welding current (A)
+        float arc_voltage;                      ///< Arc voltage (V)
+        float gas_flow_rate;                    ///< Shielding gas flow (L/min)
+        HsBaWaamMaterial_t material;            ///< Feedstock wire material
         HsBaWaamWeldProcess_t welding_process;  ///< Welding process type
         HsBaWaamProtection_t protection;        ///< Protection method
         HsBaMetalProtectGas_t protect_gas;      ///< Shielding gas
-        float interpass_temperature;   ///< Interpass temperature (C)
+        float interpass_temperature;            ///< Interpass temperature (C)
         HsBaWaamRobotType_t robot_type;         ///< Target robot controller
-        const char* path_lua_script;   ///< Optional custom robot-code generator
-        const char* path_lua_func;     ///< Optional Lua function name
-        const char* output_path;       ///< Output file path (can be NULL)
-        int spiral_mode;               ///< Deposit the outer wall as one continuous, Z-rising bead (0=false, 1=true), default 0
-        int randomize_start_point;     ///< Randomize closed contour start points on edge interiors per layer (0=false, 1=true), default 0
+        const char* path_lua_script;            ///< Optional custom robot-code generator
+        const char* path_lua_func;              ///< Optional Lua function name
+        const char* output_path;                ///< Output file path (can be NULL)
+        int spiral_mode;  ///< Deposit the outer wall as one continuous, Z-rising bead (0=false, 1=true), default 0
+        int randomize_start_point;  ///< Randomize closed contour start points on edge interiors per layer (0=false,
+                                    ///< 1=true), default 0
     } HsBaWaamPipelineConfig_t;
 
     /**
