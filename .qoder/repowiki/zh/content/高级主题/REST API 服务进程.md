@@ -16,7 +16,17 @@
 - [restapi/content_negotiate.hpp](file://restapi/content_negotiate.hpp)
 - [restapi/content_negotiate.cpp](file://restapi/content_negotiate.cpp)
 - [restapi/restapi.ini](file://restapi/restapi.ini)
+- [tests/RestApi/job_manager_test.cpp](file://tests/RestApi/job_manager_test.cpp)
+- [tests/RestApi/config_roundtrip_test.cpp](file://tests/RestApi/config_roundtrip_test.cpp)
 </cite>
+
+## 更新摘要
+**变更内容**   
+- 增强了REST API路由系统的文档说明，包括更详细的端点描述和请求处理流程
+- 完善了作业队列管理机制的文档，涵盖状态转换、TTL清理和并发控制
+- 扩展了配置桥接机制的文档，详细说明反射驱动的JSON/XML序列化过程
+- 添加了新的API参考章节，包含完整的端点清单和响应模型定义
+- 更新了架构图表以反映最新的模块交互关系
 
 ## 目录
 1. [项目概述与快速开始](#项目概述与快速开始)

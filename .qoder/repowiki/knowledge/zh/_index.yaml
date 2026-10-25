@@ -3,15 +3,14 @@ schema_version: 1
 locale: zh-CN
 branch: dev
 nodes_managed: true
-exported_at: "2026-10-25T00:53:54Z"
+exported_at: "2026-10-25T04:04:13Z"
 modules:
     "":
-        dir_name: HsBaSlicer 切片引擎与可选 REST API 服务聚合项目
-        title: HsBaSlicer 切片引擎与可选 REST API 服务聚合项目
+        dir_name: HsBaSlicer 3D 打印切片框架（根工程）
+        title: HsBaSlicer 3D 打印切片框架（根工程）
         scope: []
         source_files: []
-        children:
-            - restapi
+        children: []
         depends_on: []
         related_to: []
     restapi:
