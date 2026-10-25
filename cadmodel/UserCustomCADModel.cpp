@@ -145,6 +145,17 @@ void UserCustomCADModel::LoadDll(std::string_view dllPath, std::string_view adde
 
 void UserCustomCADModel::UnloadDll()
 {
+    // model_ was allocated by the DLL and can only be released through the DLL destroy
+    // function, so it must be freed before dll_ goes away; otherwise the destructor finds
+    // no dll_ and the instance leaks.
+    if (model_ && dll_)
+    {
+        if (auto destroyModelFunc = dll_->GetDestroyModelFunc())
+        {
+            destroyModelFunc(model_);
+        }
+        model_ = nullptr;
+    }
     dll_.reset();
 }
 

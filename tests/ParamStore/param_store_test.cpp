@@ -1,7 +1,7 @@
 /** @file param_store_test.cpp
  * @brief ParamStore 工艺参数流水线测试：反射完整性 / 类型收敛往返 / SQLite CRUD /
- *        Lua 冒烟 / 批量事务回滚 / Lib 层写入读取往返 / C 导出冒烟 / 后端可用性守卫。
- *        MySQL / PGSQL 实连用例仅在对应宏开启且设置环境变量时启用。
+ *        Lua 冒烟 / 批量事务回滚 / Lib 层写入读取往返 / C 导出冒烟 / 后端可用性守卫 /
+ *        SQL 标识符注入守卫。MySQL / PGSQL 实连用例仅在对应宏开启且设置环境变量时启用。
  */
 #define BOOST_TEST_MODULE param_store_test
 #include <boost/test/included/unit_test.hpp>
@@ -265,6 +265,54 @@ BOOST_AUTO_TEST_CASE(lua_smoke)
         -- 未命中：Load 返回 (false, err)
         local ok2, err = store:Load("fdm", "ghost")
         assert(ok2 == false and type(err) == "string", "expected miss")
+        return 1
+    )lua";
+
+    int rc = luaL_dostring(L, chunk.c_str());
+    if (rc != LUA_OK)
+    {
+        const char* err = lua_tostring(L, -1);
+        BOOST_TEST_MESSAGE("Lua error: " << (err ? err : "unknown"));
+    }
+    BOOST_CHECK_EQUAL(rc, LUA_OK);
+
+    lua_close(L);
+    RemoveQuiet(path);
+}
+
+// 4b. 报错路径：未知表名进入 handler 并被 raise，覆盖 raise 前帧上不残留 owning 对象的约定
+BOOST_AUTO_TEST_CASE(lua_error_paths)
+{
+    RegisterPipelineConfigTypes();
+    auto path = TempDbPath("lua_error");
+    RemoveQuiet(path);
+
+    lua_State* L = luaL_newstate();
+    BOOST_REQUIRE(L != nullptr);
+    luaL_openlibs(L);
+    HsBa::Slicer::RegisterLuaSQLiteAdapter(L);
+    HsBa::Slicer::RegisterLuaParamStore(L);
+
+    // 表名刻意加长，令错误消息中的格式化临时量在 ASAN 下可辨识。
+    const std::string chunk = R"lua(
+        local ldb = SQLiteAdapter.new()
+        ldb:Connect(")lua" + path.generic_string() +
+                              R"lua(")
+        local store = ParamStore.new(ldb)
+        store:EnsureSchema()
+        local bogus = "unknown_" .. string.rep("b", 48)
+        local hits = 0
+        local function expect_raise(name, fn)
+            local ok, err = pcall(fn)
+            assert(ok == false, name .. " 应当报错但未报错")
+            err = tostring(err)
+            assert(err:find("unknown config table", 1, true), name .. " 消息不符: " .. err)
+            hits = hits + 1
+        end
+        expect_raise("Save", function() return store:Save(bogus, "k", { model_name = "x" }) end)
+        expect_raise("Load", function() return store:Load(bogus, "k") end)
+        expect_raise("Update", function() return store:Update(bogus, "k", { model_name = "x" }, { "model_name" }) end)
+        assert(hits == 3, "应命中三处报错路径")
         return 1
     )lua";
 
@@ -604,6 +652,56 @@ BOOST_AUTO_TEST_CASE(param_store_backend_guard)
         BOOST_CHECK(!o.error.empty());
     }
 #endif
+}
+
+// SQL 注入守卫：表名与 whereJson 列名会被适配器裸拼接进语句，ParamStore 层必须以
+// [A-Za-z_][A-Za-z0-9_]* 白名单拒绝含引号/分号/空格/空名的标识符；key 与字段值走参数绑定，任意字符安全。
+BOOST_AUTO_TEST_CASE(sql_identifier_injection_guard)
+{
+    RegisterPipelineConfigTypes();
+    auto path = TempDbPath("inject_guard");
+    RemoveQuiet(path);
+
+    SQL::SQLiteAdapter db;
+    db.Connect(path.string());
+    ParamStore store(db);
+    store.EnsureSchema();
+
+    HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+    cfg.model_name = "guard_box";
+    AnyObject const obj(GetTypeInfo<HsBaFdmPipelineConfig_t>(), &cfg);
+    const std::string evil = R"(x'; DROP TABLE hsba_param_fdm; --)";
+
+    // 表名注入：Save / Load / Update / Delete / List 全部拒绝且未建表、未破坏原表
+    BOOST_CHECK_THROW(store.Save(evil, "k1", obj), SQL::SQLAdapterInvalidArgumentError);
+    HsBaFdmPipelineConfig_t out = HsBaFdmConfigDefault();
+    StringArena arena;
+    BOOST_CHECK_THROW(store.Load(evil, "k1", AnyObject(GetTypeInfo<HsBaFdmPipelineConfig_t>(), &out), arena),
+                      SQL::SQLAdapterInvalidArgumentError);
+    BOOST_CHECK_THROW(store.Update(evil, "k1", obj, {"wall_count"}), SQL::SQLAdapterInvalidArgumentError);
+    BOOST_CHECK_THROW(store.Delete(evil, "k1"), SQL::SQLAdapterInvalidArgumentError);
+    BOOST_CHECK_THROW(store.List(evil, ""), SQL::SQLAdapterInvalidArgumentError);
+
+    // 合法表名的正常往返不受影响
+    BOOST_CHECK(store.Save("hsba_param_fdm", "ok1", obj) > 0);
+
+    // whereJson 列名注入：JSON 键名进入 WHERE 拼接，需拒绝；值本身绑定，无害
+    BOOST_CHECK_THROW(store.List("hsba_param_fdm", R"({"a'; DROP TABLE hsba_param_fdm; --":1})"),
+                      SQL::SQLAdapterInvalidArgumentError);
+    BOOST_CHECK_NO_THROW(store.List("hsba_param_fdm", R"({"wall_count":3})"));
+
+    // key 含注入载荷仍走参数绑定：只作为普通键值往返
+    BOOST_CHECK(store.Save("", evil, obj) > 0);
+    HsBaFdmPipelineConfig_t loaded = HsBaFdmConfigDefault();
+    StringArena arena2;
+    BOOST_CHECK(store.Load("", evil, AnyObject(GetTypeInfo<HsBaFdmPipelineConfig_t>(), &loaded), arena2));
+    BOOST_CHECK_EQUAL(std::string(loaded.model_name), "guard_box");
+
+    // 校验失败后原表仍可读写，未被 DROP
+    auto keys = store.List("hsba_param_fdm", "");
+    BOOST_CHECK_EQUAL(keys.size(), 2u);
+
+    RemoveQuiet(path);
 }
 
 #ifdef HSBA_USE_MYSQL

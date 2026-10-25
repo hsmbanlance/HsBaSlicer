@@ -275,16 +275,19 @@ int Lp_readFile(lua_State* L)
 // HsBa.writeFile(path, content) -> true
 int Lp_writeFile(lua_State* L)
 {
-    std::string const path = luaL_checkstring(L, 1);
-    std::string content = luaL_checkstring(L, 2);
-    std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
-    if (!ofs)
+    std::string_view const path = luaL_checkstring(L, 1);
+    std::string_view const content = luaL_checkstring(L, 2);
     {
-        return luaL_error(L, "Failed to open file for writing: %s", path.c_str());
+        // the stream owns a file buffer that lua_error cannot destroy: it stays inside this scope
+        std::ofstream ofs(std::string(path), std::ios::binary | std::ios::trunc);
+        if (ofs)
+        {
+            ofs.write(content.data(), static_cast<std::streamsize>(content.size()));
+            lua_pushboolean(L, 1);
+            return 1;
+        }
     }
-    ofs.write(content.data(), static_cast<std::streamsize>(content.size()));
-    lua_pushboolean(L, 1);
-    return 1;
+    return raise_lua_error_with_where(L, "Failed to open file for writing: {}", path);
 }
 
 // --- Model management -------------------------------------------------------
@@ -292,16 +295,16 @@ int Lp_writeFile(lua_State* L)
 // HsBa.loadModel(name, path) -> true
 int Lp_loadModel(lua_State* L)
 {
-    std::string const name = luaL_checkstring(L, 1);
+    std::string_view const name = luaL_checkstring(L, 1);
     std::string_view const path = luaL_checkstring(L, 2);
-    auto model = GetModel(name);
+    auto model = GetModel(std::string(name));
     if (!model)
     {
-        model = LoadModel(name, path);
+        model = LoadModel(std::string(name), std::string(path));
     }
     if (!model)
     {
-        return luaL_error(L, "Failed to load model '%s' from '%s'", name.c_str(), std::string(path).c_str());
+        return raise_lua_error_with_where(L, "Failed to load model '{}' from '{}'", name, path);
     }
     lua_pushboolean(L, 1);
     return 1;
@@ -310,12 +313,12 @@ int Lp_loadModel(lua_State* L)
 // HsBa.modelInfo(name) -> {bbox_min={x,y,z}, bbox_max={x,y,z}, volume, layerHeight, firstLayerHeight}
 int Lp_modelInfo(lua_State* L)
 {
-    std::string const name = luaL_checkstring(L, 1);
-    if (!ContainsModel(name))
+    std::string_view const name = luaL_checkstring(L, 1);
+    if (!ContainsModel(std::string(name)))
     {
-        return luaL_error(L, "Model '%s' not found in pool", name.c_str());
+        return raise_lua_error_with_where(L, "Model '{}' not found in pool", name);
     }
-    const ModelInfo info = GetModelInfo(name);
+    const ModelInfo info = GetModelInfo(std::string(name));
 
     lua_newtable(L);  // result
     lua_newtable(L);  // bbox_min
@@ -401,14 +404,14 @@ int Lp_modelNames(lua_State* L)
 // HsBa.layerCount(name, layerHeight, firstLayerHeight) -> int
 int Lp_layerCount(lua_State* L)
 {
-    std::string const name = luaL_checkstring(L, 1);
+    std::string_view const name = luaL_checkstring(L, 1);
     const double layer_height = luaL_checknumber(L, 2);
     const double first_layer_height = luaL_checknumber(L, 3);
-    if (!ContainsModel(name) || layer_height <= 0.0)
+    if (!ContainsModel(std::string(name)) || layer_height <= 0.0)
     {
-        return luaL_error(L, "layerCount: invalid model or layer height");
+        return raise_lua_error_with_where(L, "layerCount: invalid model or layer height");
     }
-    const ModelInfo info = GetModelInfo(name);
+    const ModelInfo info = GetModelInfo(std::string(name));
     const double model_height = info.bbox_max.z() - info.bbox_min.z();
     if (model_height <= 0.0)
     {
@@ -435,12 +438,12 @@ int Lp_layerZ(lua_State* L)
 // HsBa.slice(name, z) -> polygons (safe, closed contours only)
 int Lp_slice(lua_State* L)
 {
-    std::string const name = luaL_checkstring(L, 1);
+    std::string_view const name = luaL_checkstring(L, 1);
     const double z = luaL_checknumber(L, 2);
-    auto model = GetModel(name);
+    auto model = GetModel(std::string(name));
     if (!model)
     {
-        return luaL_error(L, "Model '%s' not loaded", name.c_str());
+        return raise_lua_error_with_where(L, "Model '{}' not loaded", name);
     }
     PushPolygonsD(L, UnIntegerization(Slice(*model, static_cast<float>(z))));
     return 1;
@@ -449,12 +452,12 @@ int Lp_slice(lua_State* L)
 // HsBa.sliceUnsafe(name, z) -> polygons (normalized, may drop open contours)
 int Lp_sliceUnsafe(lua_State* L)
 {
-    std::string const name = luaL_checkstring(L, 1);
+    std::string_view const name = luaL_checkstring(L, 1);
     const double z = luaL_checknumber(L, 2);
-    auto model = GetModel(name);
+    auto model = GetModel(std::string(name));
     if (!model)
     {
-        return luaL_error(L, "Model '%s' not loaded", name.c_str());
+        return raise_lua_error_with_where(L, "Model '{}' not loaded", name);
     }
     PushPolygonsD(L, NormalizeUnSafePolygons(UnSafeSlice(*model, static_cast<float>(z))));
     return 1;
@@ -697,6 +700,12 @@ int Lp_toGcode(lua_State* L)
 int Lp_saveSlsPackage(lua_State* L)
 {
     luaL_checktype(L, 1, LUA_TTABLE);
+    // Required fields are validated before any owning object is built: the longjmp of
+    // lua_error cannot run destructors, so pkg and the field strings must not exist yet.
+    if (GetStringField(L, 1, "output").empty() || GetStringField(L, 1, "script").empty())
+    {
+        return raise_lua_error_with_where(L, "saveSlsPackage: 'output' and 'script' fields are required");
+    }
     SlsPackage pkg;
     lua_getfield(L, 1, "outlines");
     pkg.layer_outlines = ReadLayerList(L, -1);
@@ -718,10 +727,6 @@ int Lp_saveSlsPackage(lua_State* L)
     const std::string output = GetStringField(L, 1, "output");
     const std::string script = GetStringField(L, 1, "script");
     const std::string func = GetStringField(L, 1, "func", "export_sls");
-    if (output.empty() || script.empty())
-    {
-        return luaL_error(L, "saveSlsPackage: 'output' and 'script' fields are required");
-    }
     const bool ok = SaveSlsPackageLua(pkg, output, script, func);
     lua_pushboolean(L, ok ? 1 : 0);
     return 1;
@@ -735,6 +740,11 @@ int Lp_saveSlsPackage(lua_State* L)
 int Lp_saveWaamPackage(lua_State* L)
 {
     luaL_checktype(L, 1, LUA_TTABLE);
+    // see Lp_saveSlsPackage: validate before owning objects exist, lua_error cannot destroy them
+    if (GetStringField(L, 1, "output").empty())
+    {
+        return raise_lua_error_with_where(L, "saveWaamPackage: 'output' field is required");
+    }
     WaamRobotPackage pkg;
     lua_getfield(L, 1, "outlines");
     pkg.layer_outlines = ReadLayerList(L, -1);
@@ -771,10 +781,6 @@ int Lp_saveWaamPackage(lua_State* L)
     const std::string output = GetStringField(L, 1, "output");
     const std::string script = GetStringField(L, 1, "script");
     const std::string func = GetStringField(L, 1, "func", "export_waam");
-    if (output.empty())
-    {
-        return luaL_error(L, "saveWaamPackage: 'output' field is required");
-    }
 
     std::string error;
     const bool ok = SaveWaamRobotPath(pkg, output, script, func, &error);
@@ -791,6 +797,11 @@ int Lp_saveWaamPackage(lua_State* L)
 int Lp_saveSlaPackage(lua_State* L)
 {
     luaL_checktype(L, 1, LUA_TTABLE);
+    // see Lp_saveSlsPackage: validate before owning objects exist, lua_error cannot destroy them
+    if (GetStringField(L, 1, "output").empty())
+    {
+        return raise_lua_error_with_where(L, "saveSlaPackage: 'output' field is required");
+    }
     SlaPackage pkg;
     lua_getfield(L, 1, "outlines");
     pkg.layer_outlines = ReadLayerList(L, -1);
@@ -806,10 +817,6 @@ int Lp_saveSlaPackage(lua_State* L)
     pkg.image_height = GetIntField(L, 1, "imageHeight", 0);
     pkg.image_extension = GetStringField(L, 1, "imageExtension", ".png");
     const std::string output = GetStringField(L, 1, "output");
-    if (output.empty())
-    {
-        return luaL_error(L, "saveSlaPackage: 'output' field is required");
-    }
     const bool ok = SaveSlaPackage(pkg, output);
     lua_pushboolean(L, ok ? 1 : 0);
     return 1;

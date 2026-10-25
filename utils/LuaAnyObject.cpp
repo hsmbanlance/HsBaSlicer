@@ -16,74 +16,87 @@ int lua_any_object_new(lua_State* L)
 
 int lua_any_object_invoke(lua_State* L)
 {
+    // check if the first argument is a light userdata representing an AnyObject pointer
     auto* obj = (Utils::AnyObject*)lua_topointer(L, 1);
-    std::string method_name = luaL_checkstring(L, 2);
-    // table of arguments starts from index 3
 
-    if (!obj)
+    // lua_error longjmps instead of unwinding, so no C++ destructor runs on the way out. All
+    // owning objects of this call (method name, argument vector, result) are therefore confined
+    // to the scope below: it always returns before the error is raised, leaving only Lua-owned
+    // values on the stack.
+    const bool failed = [L, obj]
     {
-        lua_pushstring(L, std::format("Invalid AnyObject object").c_str());
-        lua_error(L);
-        return 0;
-    }
+        std::string method_name = luaL_checkstring(L, 2);
 
-    // Collect arguments
-    std::vector<Utils::AnyObject> args;
-    int top = lua_gettop(L);
-    for (int i = 3; i <= top; ++i)
-    {
-        if (lua_isinteger(L, i))
+        if (!obj)
         {
-            auto integer_value = lua_tointeger(L, i);
-            args.emplace_back(integer_value);
+            lua_pushstring(L, "Invalid AnyObject object");
+            return true;
         }
-        else if (lua_isboolean(L, i))
-        {
-            // Lua 5.4 treats booleans as numeric (lua_isnumber(true) == 1), so
-            // the boolean test must run before the number test or this branch
-            // would be unreachable.
-            args.emplace_back((bool)lua_toboolean(L, i));
-        }
-        else if (lua_isnumber(L, i))
-        {
-            auto number_value = lua_tonumber(L, i);
-            args.emplace_back(number_value);
-        }
-        else if (lua_isstring(L, i))
-        {
-            args.emplace_back(std::string(lua_tostring(L, i)));
-        }
-        else
-        {
-            // For other types, push as AnyObject
-            auto* subobj = (Utils::AnyObject*)lua_topointer(L, i);
-            args.emplace_back(subobj ? *subobj : Utils::AnyObject());
-        }
-    }
 
-    try
-    {
-        Utils::AnyObject result = obj->Invoke(method_name, args);
-        // Push result back to Lua
-        // For simplicity, assume result is a string or number
-        auto* type_info = result.get_type_info();
-        if (type_info)
+        // Collect arguments
+        std::vector<Utils::AnyObject> args;
+        int top = lua_gettop(L);
+        for (int i = 3; i <= top; ++i)
         {
-            // push pointer
-            NewLuaObject<Utils::AnyObject, AnyObjectTypeName>(L, std::move(result));
+            if (lua_isinteger(L, i))
+            {
+                auto integer_value = lua_tointeger(L, i);
+                args.emplace_back(integer_value);
+            }
+            else if (lua_isboolean(L, i))
+            {
+                // Lua 5.4 treats booleans as numeric (lua_isnumber(true) == 1), so
+                // the boolean test must run before the number test or this branch
+                // would be unreachable.
+                args.emplace_back((bool)lua_toboolean(L, i));
+            }
+            else if (lua_isnumber(L, i))
+            {
+                auto number_value = lua_tonumber(L, i);
+                args.emplace_back(number_value);
+            }
+            else if (lua_isstring(L, i))
+            {
+                args.emplace_back(std::string(lua_tostring(L, i)));
+            }
+            else
+            {
+                // For other types, push as AnyObject
+                auto* subobj = (Utils::AnyObject*)lua_topointer(L, i);
+                args.emplace_back(subobj ? *subobj : Utils::AnyObject());
+            }
         }
-        else
+
+        try
         {
-            lua_pushnil(L);
+            Utils::AnyObject result = obj->Invoke(method_name, args);
+            // Push result back to Lua
+            // For simplicity, assume result is a string or number
+            auto* type_info = result.get_type_info();
+            if (type_info)
+            {
+                // push pointer
+                NewLuaObject<Utils::AnyObject, AnyObjectTypeName>(L, std::move(result));
+            }
+            else
+            {
+                lua_pushnil(L);
+            }
+            return false;
         }
-        return 1;
-    }
-    catch (const std::exception& e)
+        catch (const std::exception& e)
+        {
+            // the message is copied into Lua's own memory before this frame is left
+            lua_pushstring(L, e.what());
+            return true;
+        }
+    }();
+
+    if (failed)
     {
-        lua_pushstring(L, e.what());
-        lua_error(L);
-        return 0;
+        return lua_error(L);
     }
+    return 1;
 }
 
 int lua_any_object_gc(lua_State* L)

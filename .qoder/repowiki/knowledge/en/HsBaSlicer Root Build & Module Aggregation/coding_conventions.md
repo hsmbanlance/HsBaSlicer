@@ -1,0 +1,3 @@
+- Optional capabilities are exposed as CMake cache options (e.g. `HSBA_COPL`, `HSBA_BUILD_REST_API`, `HSBA_SLICER_MODULE`, `HSBA_USE_DLL_LOADER`) guarded by `if(...)` blocks that also add corresponding compile definitions like `HSBA_COPL`, `HSBA_HAS_CXX_MODULES`, `HSBA_NO_DLL_LOADER`.
+- Platform-specific behavior is selected through `HSBA_DESKTOP` / `HSBA_MOBILE` / `HSBA_GAME_CONSOLE` macros derived from `VCPKG_TARGET_TRIPLET` or `CMAKE_SYSTEM_NAME`, rather than ad-hoc `#ifdef WIN32` checks scattered across sources.
+- Each submodule is a self-contained CMake subdirectory with its own `CMakeLists.txt`, exposing a single target named after the library (e.g. `HsBaSlicerBase`, `HsBaSlicerUtils`, `HsBaSlicerMesh`) and listed in `_HSBA_INSTALL_TARGETS` for install/export.

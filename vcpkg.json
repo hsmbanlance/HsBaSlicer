@@ -107,6 +107,15 @@
           "platform": "windows | linux | osx "
         }
       ]
+    },
+    "rest-api": {
+      "description": "Build the optional RESTful API server executable (HsBaSlicerRestServer) backed by cpp-httplib. Enable together with the CMake option HSBA_BUILD_REST_API=ON; desktop platforms only. Not part of default-features.",
+      "dependencies": [
+        {
+          "name": "cpp-httplib",
+          "platform": "windows | linux | osx"
+        }
+      ]
     }
   }
 }

@@ -63,26 +63,26 @@ public:
     /** @brief Get (and cache) the Schema for the given Config type; cfgType must be a registered PipelineConfig. */
     static ParamSchema& forConfig(Utils::TypeInfo* cfgType);
 
-    /** @brief Build the "column name -> full column definition" map for the target backend (metadata columns included), ready for CreateTable. */
+    /** @brief Build the "column name -> full column definition" map for the target backend (metadata columns included),
+     * ready for CreateTable. */
     std::unordered_map<std::string, std::string> BuildDdl(Backend backend) const;
 
-    /** @brief Emit the full CREATE TABLE statement; SQLite/MySQL carry IF NOT EXISTS, PG relies on a prior ExistenceCheck. */
+    /** @brief Emit the full CREATE TABLE statement; SQLite/MySQL carry IF NOT EXISTS, PG relies on a prior
+     * ExistenceCheck. */
     std::string CreateStatement(const std::string& table, Backend backend) const;
 
     /** @brief Emit a probe query that returns at least one row when the table already exists. */
     static std::string ExistenceCheck(const std::string& table, Backend backend);
 
-    /** @brief Detect the concrete ISQLAdapter backend via dynamic_cast; throws SQLAdapterInvalidArgumentError for unknown types. */
+    /** @brief Detect the concrete ISQLAdapter backend via dynamic_cast; throws SQLAdapterInvalidArgumentError for
+     * unknown types. */
     static Backend DetectBackend(const SQL::ISQLAdapter& db);
 
     /** @brief Return the converged column kind for a field type. */
     static ColumnKind KindOf(Utils::TypeInfo* field_ti);
 
     /** @brief Name of the dedicated binary-encrypted column map (param_blob); shared by ParamStore and the DDL. */
-    static constexpr const char* BlobColumn() noexcept
-    {
-        return "param_blob";
-    }
+    static constexpr const char* BlobColumn() noexcept { return "param_blob"; }
 
     /** @brief Reflected field names of this Config (excluding metadata columns), in TypeInfo::fields order. */
     const std::vector<std::string>& field_columns() const noexcept { return field_columns_; }

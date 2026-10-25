@@ -21,10 +21,10 @@ constexpr float DEFAULT_VELOCITY = 100.0f;  ///< Default velocity for a GPoint.
 /// Supported G-code motion/setting codes.
 enum class GcodeType
 {
-    G0,  ///< Rapid move.
-    G1,  ///< Linear move.
-    G2,  ///< Clockwise arc.
-    G3,  ///< Counter-clockwise arc.
+    G0,                     ///< Rapid move.
+    G1,                     ///< Linear move.
+    G2,                     ///< Clockwise arc.
+    G3,                     ///< Counter-clockwise arc.
     G17 = GCODE_G17_VALUE,  ///< Select XY plane.
     G18,                    ///< Select XZ plane.
     G19,                    ///< Select YZ plane.
@@ -44,9 +44,9 @@ enum class GCodeUnits
 /// A single G-code motion command with its target/arc point, velocity and extrusion.
 struct GPoint
 {
-    GcodeType type = GcodeType::G1;  ///< Motion/setting code.
-    OutPoints3 p1;                   ///< Target point of the move.
-    OutPoints3 center;               ///< Transition/mid point of an arc motion.
+    GcodeType type = GcodeType::G1;     ///< Motion/setting code.
+    OutPoints3 p1;                      ///< Target point of the move.
+    OutPoints3 center;                  ///< Transition/mid point of an arc motion.
     float velocity = DEFAULT_VELOCITY;  ///< Feed velocity for the move.
     double extrusion = 0.0;             ///< Extrusion amount (filament length) for the move.
 };

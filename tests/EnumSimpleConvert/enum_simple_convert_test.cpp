@@ -211,9 +211,7 @@ BOOST_AUTO_TEST_CASE(template_string_and_utils_runtime)
 
     // recursive YCombinator (present only without explicit-this-parameter)
 #ifndef __cpp_explicit_this_parameter
-    auto fact = U::YCombinator{
-        [](auto&& self, int n) -> int
-        { return n <= 1 ? 1 : n * self(n - 1); }};
+    auto fact = U::YCombinator{[](auto&& self, int n) -> int { return n <= 1 ? 1 : n * self(n - 1); }};
     BOOST_CHECK_EQUAL(fact(5), 120);
 #endif
 
@@ -221,9 +219,7 @@ BOOST_AUTO_TEST_CASE(template_string_and_utils_runtime)
     struct MoveOnly
     {
         int v;
-        MoveOnly(int x) : v(x)
-        {
-        }
+        MoveOnly(int x) : v(x) {}
         MoveOnly(MoveOnly&&) = default;
         MoveOnly(const MoveOnly&) = delete;
     };

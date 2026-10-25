@@ -46,11 +46,11 @@ public:
     IglModel(Eigen::MatrixXf&& vertices, Eigen::MatrixXi&& faces, bool calcNormals = true);
     /// Move-construct a model from vertex/face meshes with explicit normals.
     IglModel(Eigen::MatrixXf&& vertices, Eigen::MatrixXi&& faces, Eigen::MatrixXf&& normals);
-    IglModel(const IglModel& o) = default;   ///< Copy constructor.
+    IglModel(const IglModel& o) = default;             ///< Copy constructor.
     IglModel& operator=(const IglModel& o) = default;  ///< Copy assignment.
-    IglModel(IglModel&& o) = default;        ///< Move constructor.
+    IglModel(IglModel&& o) = default;                  ///< Move constructor.
     IglModel& operator=(IglModel&& o) = default;       ///< Move assignment.
-    ~IglModel() = default;                   ///< Destructor.
+    ~IglModel() = default;                             ///< Destructor.
 
     /// Load the model from a file (STL/OBJ/PLY/OFF and other supported mesh formats).
     bool Load(std::string_view fileName) override;
@@ -73,8 +73,7 @@ public:
     void Transform(const Eigen::Transform<float, 3, Eigen::Affine>& transform) override;
 
     /// Get the axis-aligned bounding box of the model.
-    void BoundingBox(Eigen::Vector3f& min,
-                     Eigen::Vector3f& max) const override;
+    void BoundingBox(Eigen::Vector3f& min, Eigen::Vector3f& max) const override;
 
     /// Get the mesh as a (vertices, faces) pair in libigl style.
     std::pair<Eigen::MatrixXf, Eigen::MatrixXi> TriangleMesh() const override;

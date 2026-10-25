@@ -1,0 +1,5 @@
+- Cross-platform feature toggles are declared as CMake `option()` variables at the top level and propagated to children via `add_compile_definitions` or conditional `add_subdirectory` calls.
+- Platform capability detection uses `HSBA_DESKTOP` / `HSBA_MOBILE` / `HSBA_GAME_CONSOLE` booleans set from `VCPKG_TARGET_TRIPLET`, and children gate features off Android/iOS/game-console accordingly.
+- Public C ABI surface lives in `DllHsBaSlicer/` and is installed as headers under `${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer`; consumers (samples, restapi) go through this boundary rather than internal C++ headers.
+- Generated protobuf sources live under `proto/` and are consumed via the `HsBaSlicerProto` target; conversion helpers between proto and pipeline config live in `convert/`.
+- All executables share the same output layout `${CMAKE_BINARY_DIR}/bin/$<CONFIG>` and receive the UTF-8 active code page manifest via `hsba_apply_utf8_codepage(target)`.

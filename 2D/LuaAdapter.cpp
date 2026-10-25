@@ -4,7 +4,10 @@
  */
 #include "LuaAdapter.hpp"
 
+#include <algorithm>
+#include <array>
 #include <format>
+#include <string_view>
 
 #include "2Dhull.hpp"
 #include "base/error.hpp"
@@ -13,9 +16,29 @@ namespace HsBa::Slicer
 {
 namespace
 {
-void l_booleanError(lua_State* L, const char* fname, const char* msg)
+/** @brief Raises a Lua error carrying "file:line: Error in Lua function 'fname': msg".
+ *
+ *  lua_error longjmps, and the two platforms then disagree: MSVC x64 runs the C++
+ *  destructors of every skipped frame during the unwind, POSIX longjmp does not. So a
+ *  message object destroyed in a nested scope would be freed twice on Windows, while one
+ *  still alive at the raise would leak on Linux. The text is therefore formatted into a
+ *  trivially destructible buffer, copied into Lua's own memory, and nothing needs cleanup.
+ *  @param quoted_detail if not empty, appended to the message as `'quoted_detail'`.
+ */
+void l_booleanError(lua_State* L, std::string_view fname, std::string_view msg, std::string_view quoted_detail = {})
 {
-    luaL_error(L, std::format("Error in Lua function '{}': {}", fname, msg).c_str());
+    std::array<char, 512> buffer{};
+    // replicate luaL_error: position prefix, then the message, then raise
+    const auto formatted =
+        quoted_detail.empty()
+            ? std::format_to_n(buffer.data(), buffer.size() - 1, "Error in Lua function '{}': {}", fname, msg)
+            : std::format_to_n(buffer.data(), buffer.size() - 1, "Error in Lua function '{}': {} '{}'", fname, msg,
+                               quoted_detail);
+    const size_t length = std::min(static_cast<size_t>(formatted.size), buffer.size() - 1);
+    luaL_where(L, 1);
+    lua_pushlstring(L, buffer.data(), length);
+    lua_concat(L, 2);
+    lua_error(L);
 }
 
 
@@ -25,15 +48,17 @@ int l_booleanOperation(lua_State* L)
     {
         l_booleanError(L, "booleanOperation", "Expected two polygon tables and a string operation name");
     }
+    // Resolve the operation before converting any polygon: an unknown name raised afterwards
+    // would longjmp past the live PolygonsD objects below and leak their buffers.
+    std::string_view const operation = lua_tostring(L, 3);
+    if (operation != "union" && operation != "intersection" && operation != "difference" && operation != "xor")
+    {
+        l_booleanError(L, "booleanOperation", "Unknown operation", operation);
+    }
     PolygonsD const left = LuaTableToPolygonsD(L, 1);
     PolygonsD const right = LuaTableToPolygonsD(L, 2);
-    std::string operation = lua_tostring(L, 3);
     PolygonsD result;
-    if (operation == "union")
-    {
-        result = Union(left, right);
-    }
-    else if (operation == "intersection")
+    if (operation == "intersection")
     {
         result = Intersection(left, right);
     }
@@ -45,9 +70,9 @@ int l_booleanOperation(lua_State* L)
     {
         result = Xor(left, right);
     }
-    else
+    else  // "union", validated above
     {
-        l_booleanError(L, "booleanOperation", std::format("Unknown operation '{}'", operation).c_str());
+        result = Union(left, right);
     }
     PushPolygonsDToLua(L, result);
     return 1;  // return the result table

@@ -107,7 +107,8 @@ std::vector<unsigned char> EncodeColumns(const std::unordered_map<std::string, s
 
 std::unordered_map<std::string, std::any> DecodeColumns(const std::vector<unsigned char>& bytes)
 {
-    auto fail = [](const char* msg) { throw SQL::SQLAdapterInvalidArgumentError(std::string("DecodeColumns: ") + msg); };
+    auto fail = [](const char* msg)
+    { throw SQL::SQLAdapterInvalidArgumentError(std::string("DecodeColumns: ") + msg); };
 
     std::unordered_map<std::string, std::any> columns;
     // Minimum: 4 magic + 4 count.

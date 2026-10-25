@@ -15,9 +15,9 @@
     longPathAware = true enables the Win32 long-path (>260 chars) support for
     deeply nested output directories.
 
-    link.exe merges this fragment with its auto-generated manifest (which keeps
-    the default trust info and VC-runtime dependency), so no <trustInfo> is
-    needed here.
+    This fragment is merged into the executable's default manifest by mt.exe in
+    a post-build step (see cmake/HsBaWindowsUtf8.cmake), which keeps the default
+    trust info and VC-runtime dependency alongside these settings.
   -->
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>

@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: path_output_types
-title: 切片器路径输出抽象与多格式实现
-scope:
-    - paths/
-source_files: []
-depends_on: []
-related_to:
-    - path: core_library

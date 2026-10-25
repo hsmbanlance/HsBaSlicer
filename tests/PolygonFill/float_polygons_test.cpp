@@ -144,8 +144,8 @@ BOOST_AUTO_TEST_CASE(boolean_polygon_sets)
 BOOST_AUTO_TEST_CASE(make_simple_removes_collinear)
 {
     // a rectangle carrying an extra collinear vertex on the bottom edge
-    Slicer::PolygonD poly{Slicer::Point2D{0, 0}, Slicer::Point2D{5, 0}, Slicer::Point2D{10, 0},
-                          Slicer::Point2D{10, 10}, Slicer::Point2D{0, 10}};
+    Slicer::PolygonD poly{Slicer::Point2D{0, 0}, Slicer::Point2D{5, 0}, Slicer::Point2D{10, 0}, Slicer::Point2D{10, 10},
+                          Slicer::Point2D{0, 10}};
     auto simplified = Slicer::MakeSimple(poly);
     BOOST_REQUIRE(!simplified.empty());
     // simplification preserves the enclosed area

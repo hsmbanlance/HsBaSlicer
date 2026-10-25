@@ -52,7 +52,7 @@ struct ParamStoreConn
     std::string user;
     std::string password;
     std::string database;
-    unsigned port = 0;  ///< 0 means use the adapter's default port
+    unsigned port = 0;      ///< 0 means use the adapter's default port
     std::string cryptoKey;  ///< Optional at-rest encryption password; empty means plaintext storage
 };
 
@@ -80,13 +80,15 @@ HSBA_SLICER_LIB_API ParamStoreOutcome SavePipelineParams(const ParamStoreConn& c
  * @brief Load one PipelineConfig by key and back-fill it into the caller-provided outCfg struct.
  *        The const char* fields in outCfg are allocated by std::malloc and must be released via
  *        FreeLoadedConfigStrings.
- * @param outCfg Writable pointer to the corresponding C config struct (should be initialized by *ConfigDefault() first).
+ * @param outCfg Writable pointer to the corresponding C config struct (should be initialized by *ConfigDefault()
+ * first).
  * @return success=true on a hit; on a miss or unavailable backend success=false and error is filled.
  */
 HSBA_SLICER_LIB_API ParamStoreOutcome LoadPipelineParams(const ParamStoreConn& conn, ParamPipelineKind kind,
                                                          std::string_view table, std::string_view key, void* outCfg);
 
-/** @brief Free the library-malloc'd const char* fields back-filled into cfg by LoadPipelineParams (nulling the pointers). */
+/** @brief Free the library-malloc'd const char* fields back-filled into cfg by LoadPipelineParams (nulling the
+ * pointers). */
 HSBA_SLICER_LIB_API void FreeLoadedConfigStrings(ParamPipelineKind kind, void* cfg);
 
 }  // namespace HsBa::Slicer

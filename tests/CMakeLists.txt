@@ -1506,3 +1506,57 @@ if(HSBA_USE_DLL_LOADER)
     )
   endif()
 endif()
+
+# ---------------------------------------------------------------------------
+# REST API server unit tests (desktop-only; mirror the HSBA_BUILD_REST_API gate
+# source-wise). These compile the non-HTTP restapi translation units directly
+# into the test executables, so cpp-httplib is NOT required to build them.
+# ---------------------------------------------------------------------------
+if(HSBA_DESKTOP)
+  find_package(Threads REQUIRED)
+  # content_negotiate_test
+  add_executable(restapi_content_negotiate_test
+  	RestApi/content_negotiate_test.cpp
+  	../restapi/content_negotiate.cpp)
+  target_link_libraries(restapi_content_negotiate_test
+  	Boost::unit_test_framework)
+  target_compile_definitions(restapi_content_negotiate_test PRIVATE BOOST_TEST_DYN_LINK)
+  enable_testing()
+  add_test(NAME restapi_content_negotiate_test COMMAND $<TARGET_FILE:restapi_content_negotiate_test>)
+
+  # config_roundtrip_test
+  add_executable(restapi_config_roundtrip_test
+  	RestApi/config_roundtrip_test.cpp
+  	../restapi/config_bridge.cpp
+  	../restapi/pipeline_executor.cpp)
+  target_include_directories(restapi_config_roundtrip_test PRIVATE ${CMAKE_SOURCE_DIR})
+  target_link_libraries(restapi_config_roundtrip_test
+  	HsBaSlicerBase
+  	HsBaSlicerUtils
+  	HsBaSlicerFileOperator
+  	HsBaPipelineTypes
+  	DllHsBaSlicer
+  	Boost::unit_test_framework)
+  target_compile_definitions(restapi_config_roundtrip_test PRIVATE BOOST_TEST_DYN_LINK)
+  enable_testing()
+  add_test(NAME restapi_config_roundtrip_test COMMAND $<TARGET_FILE:restapi_config_roundtrip_test>)
+
+  # job_manager_test
+  add_executable(restapi_job_manager_test
+  	RestApi/job_manager_test.cpp
+  	../restapi/job_manager.cpp
+  	../restapi/pipeline_executor.cpp
+  	../restapi/config_bridge.cpp)
+  target_include_directories(restapi_job_manager_test PRIVATE ${CMAKE_SOURCE_DIR})
+  target_link_libraries(restapi_job_manager_test
+  	HsBaSlicerBase
+  	HsBaSlicerUtils
+  	HsBaSlicerFileOperator
+  	HsBaPipelineTypes
+  	DllHsBaSlicer
+  	Threads::Threads
+  	Boost::unit_test_framework)
+  target_compile_definitions(restapi_job_manager_test PRIVATE BOOST_TEST_DYN_LINK)
+  enable_testing()
+  add_test(NAME restapi_job_manager_test COMMAND $<TARGET_FILE:restapi_job_manager_test>)
+endif()

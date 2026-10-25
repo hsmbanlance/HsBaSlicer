@@ -50,8 +50,7 @@ BOOST_AUTO_TEST_CASE(generate_fdm_tree_and_honeycomb_patterns)
     honey.support_pattern = 2;
     honey.support_gap = 0.0f;
     honey.honeycomb_cell_size = 5.0f;
-    auto honeyResult =
-        Slicer::GenerateFdmSupport(SquareRing(0.0, 0.0, 30.0), SquareRing(5.0, 5.0, 20.0), 0.2f, honey);
+    auto honeyResult = Slicer::GenerateFdmSupport(SquareRing(0.0, 0.0, 30.0), SquareRing(5.0, 5.0, 20.0), 0.2f, honey);
     BOOST_CHECK(!honeyResult.empty());
 }
 

@@ -73,5 +73,8 @@ if(WIN32)
     )
 endif()
 
+# UTF-8 active-code-page manifest (no-op on non-MSVC / non-Windows).
+hsba_apply_utf8_codepage(HsBaSlicer)
+
 
 # TODO: 如有需要，请添加测试并安装目标。

@@ -4,6 +4,8 @@
 **Referenced Files in This Document**   
 - [lua_pipeline.hpp](file://LibHsBaSlicer/Extends/lua_pipeline.hpp)
 - [lua_pipeline.cpp](file://LibHsBaSlicer/Extends/lua_pipeline.cpp)
+- [LuaNewObject.hpp](file://utils/LuaNewObject.hpp)
+- [LuaAdapter.cpp](file://2D/LuaAdapter.cpp)
 - [LuaSupport.hpp](file://support/LuaSupport.hpp)
 - [LuaSupport.cpp](file://support/LuaSupport.cpp)
 - [ISupport.hpp](file://support/ISupport.hpp)
@@ -20,11 +22,10 @@
 
 ## Update Summary
 **Changes Made**   
-- Removed extensive implementation details and detailed guides as per the update reason
-- Focused on configuration parameters and protocol definitions
-- Simplified architectural descriptions while preserving essential API information
-- Updated parallel processing documentation to reflect current implementation
-- Streamlined examples to focus on configuration rather than implementation details
+- Updated error handling documentation to reflect critical memory safety improvements
+- Added information about centralized error raising functions and parameter validation
+- Enhanced troubleshooting section with new debugging techniques for memory safety issues
+- Updated examples to demonstrate proper error handling patterns
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -33,8 +34,9 @@
 4. [Pipeline Configuration](#pipeline-configuration)
 5. [Stage Hooks](#stage-hooks)
 6. [Parallel Processing](#parallel-processing)
-7. [Examples](#examples)
-8. [Troubleshooting](#troubleshooting)
+7. [Error Handling and Memory Safety](#error-handling-and-memory-safety)
+8. [Examples](#examples)
+9. [Troubleshooting](#troubleshooting)
 
 ## Introduction
 HsBaSlicer provides a Lua scripting system for customizing slicing workflows. The system supports two main approaches:
@@ -193,6 +195,53 @@ Current parallelization covers:
 - Batch operations where possible to reduce overhead
 - Monitor memory usage with large models
 
+## Error Handling and Memory Safety
+
+**Updated** The Lua integration system now includes critical memory safety improvements to prevent crashes and resource leaks during error conditions.
+
+### Centralized Error Raising Functions
+The system provides standardized error handling utilities that safely raise Lua errors without causing memory corruption:
+
+- **`raise_lua_error(L, fmt, ...)`**: Raises a Lua error with formatted message using a stack-safe buffer
+- **`raise_lua_error_with_where(L, fmt, ...)`**: Same as above but includes caller location information ("file:line: message")
+- **`guarded(Worker)`**: Wrapper that ensures errors are raised from a frame that owns no resources
+
+These functions format error messages into trivially destructible buffers before calling `lua_error`, preventing double-free issues that can occur when C++ exceptions cross the Lua boundary on different platforms (MSVC vs POSIX).
+
+### Parameter Validation Before Object Construction
+All pipeline functions now validate parameters before constructing owning objects to prevent resource leaks:
+
+```cpp
+// Example pattern used throughout the codebase:
+if (GetStringField(L, 1, "output").empty()) {
+    return raise_lua_error_with_where(L, "saveSlsPackage: 'output' field is required");
+}
+// Only construct owning objects after validation passes
+SlsPackage pkg;
+```
+
+This pattern ensures that if an error occurs during parameter validation, no expensive resources have been allocated yet.
+
+### Platform-Safe Error Handling
+The error handling system addresses platform differences in exception unwinding:
+- **MSVC x64**: Uses RtlUnwind which runs destructors for every skipped frame
+- **POSIX**: Uses direct longjmp which runs no destructors
+
+The centralized error functions ensure consistent behavior across platforms by avoiding ownership transfer during error paths.
+
+### Best Practices for Custom Scripts
+When writing custom Lua scripts or extensions:
+
+1. **Use provided error functions**: Always use `raise_lua_error_with_where` instead of direct `lua_error` calls
+2. **Validate early**: Check all parameters before allocating any resources
+3. **Avoid complex objects in error paths**: Keep error handling simple and stack-safe
+4. **Test error conditions**: Verify your scripts handle invalid inputs gracefully
+
+**Section sources**   
+- [LuaNewObject.hpp:43-117](file://utils/LuaNewObject.hpp#L43-L117)
+- [lua_pipeline.cpp:703-708](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L703-L708)
+- [lua_pipeline.cpp:800-804](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L800-L804)
+
 ## Examples
 
 ### Minimal Custom Pipeline
@@ -262,14 +311,36 @@ end
 - **Invalid layer height**: Validate inputs to `layerCount` and `layerZ`
 - **Export script returns wrong type**: Always return `{success=..., export_path=...}`
 
+### Memory Safety Debugging
+With the new error handling system, you should see more informative error messages:
+
+1. **Check error messages**: New errors include file and line information automatically
+2. **Monitor resource allocation**: Use logging to track when objects are created
+3. **Test with sanitizers**: Enable AddressSanitizer to catch memory issues during development
+4. **Validate parameters early**: Ensure all inputs are checked before expensive operations
+
 ### Debugging Tips
 - Use `HsBa.progress(percent, stage)` to track execution flow
 - Enable logging through C++ logger integration
 - Test with `HSBA_PIPELINE_THREADS=1` for deterministic behavior
 - Validate polygon data using `PolygonOperations.area()`
+- Use the new centralized error functions in custom extensions
 
 ### Performance Optimization
 - Minimize polygon operations in tight loops
 - Use integer coordinates where possible (`HsBa.toInt`)
 - Reuse computed values across iterations
 - Consider disabling unnecessary features (supports, complex fills)
+- Profile memory usage with large models using system tools
+
+### Error Handling Best Practices
+- Always validate function parameters before allocating resources
+- Use `raise_lua_error_with_where` for consistent error reporting
+- Keep error paths simple and avoid complex object lifetimes
+- Test error conditions thoroughly during development
+- Log important state changes for debugging purposes
+
+**Section sources**   
+- [lua_pipeline.cpp:290-291](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L290-L291)
+- [lua_pipeline.cpp:307-308](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L307-L308)
+- [lua_pipeline.cpp:412-413](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L412-L413)

@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: restapi
+title: HsBaSlicerRestServer REST API 服务进程
+scope:
+    - restapi/
+source_files: []
+depends_on: []
+related_to: []

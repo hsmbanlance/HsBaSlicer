@@ -115,8 +115,8 @@ BOOST_AUTO_TEST_CASE(point_in_polygons_respects_holes)
         std::reverse(hole.begin(), hole.end());
 
     const Polygons ring{outer, hole};
-    const Clipper2Lib::Point64 inHole{500, 500};   // inside the hole ring
-    const Clipper2Lib::Point64 inBand{100, 100};   // between outer and hole
+    const Clipper2Lib::Point64 inHole{500, 500};  // inside the hole ring
+    const Clipper2Lib::Point64 inBand{100, 100};  // between outer and hole
 
     BOOST_CHECK(PointInPolygons(inHole, ring, true) == Clipper2Lib::PointInPolygonResult::IsOutside);
     BOOST_CHECK(PointInPolygons(inBand, ring, true) != Clipper2Lib::PointInPolygonResult::IsOutside);
@@ -126,8 +126,8 @@ BOOST_AUTO_TEST_CASE(point_in_polygons_respects_holes)
 BOOST_AUTO_TEST_CASE(polygon_hash_specializations)
 {
     const Polygon s1 = MakeIntSquare(0, 0, 1000);
-    const Polygon s2 = MakeIntSquare(0, 0, 1000); // equal geometry
-    const Polygon s3 = MakeIntSquare(0, 0, 2000); // different geometry
+    const Polygon s2 = MakeIntSquare(0, 0, 1000);  // equal geometry
+    const Polygon s3 = MakeIntSquare(0, 0, 2000);  // different geometry
 
     std::hash<Polygon> hp;
     BOOST_CHECK_EQUAL(hp(s1), hp(s2));
@@ -173,11 +173,7 @@ BOOST_AUTO_TEST_CASE(normalize_to_simple_polygons_set_and_degenerate)
 BOOST_AUTO_TEST_CASE(normalize_star_exercises_hole_nesting)
 {
     // Five points of a star polygon {5/2} traced in self-intersecting order.
-    Polygon star{Point2{0, 1000},
-                 Point2{-588, -809},
-                 Point2{951, 309},
-                 Point2{-951, 309},
-                 Point2{588, -809}};
+    Polygon star{Point2{0, 1000}, Point2{-588, -809}, Point2{951, 309}, Point2{-951, 309}, Point2{588, -809}};
 
     auto out = NormalizeToSimplePolygons(star);
     BOOST_REQUIRE(!out.empty());

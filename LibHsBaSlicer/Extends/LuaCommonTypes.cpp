@@ -357,8 +357,7 @@ private:
     {
         if (!lua_istable(L, 1))
         {
-            lua_pushstring(L, std::format("new_{} expects a table argument", Name.ToStringView()).c_str());
-            return lua_error(L);
+            return raise_lua_error(L, "new_{} expects a table argument", Name.ToStringView());
         }
         T value = Read(L, 1);
         NewLuaObject<Utils::AnyObject, AnyObjectTypeName>(L, value);
@@ -383,8 +382,8 @@ private:
         catch (const RuntimeError& e)
         {
             lua_pushstring(L, e.what());
-            return lua_error(L);
         }
+        return lua_error(L);
     }
 };
 

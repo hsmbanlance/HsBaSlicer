@@ -211,7 +211,7 @@ std::string GCodePath::GenerateFooter(GCodeFirmware fw) const
 
 std::string GCodePath::GenerateLayerGCode(int layer_idx, GCodeFirmware /*fw*/) const
 {
-    if (layer_idx < 0 || std::cmp_greater_equal(layer_idx, layers_.size()))
+    if (layer_idx < 0 || std::cmp_greater_equal(layer_idx, layers_.size())) [[unlikely]]
     {
         return "";
     }
@@ -233,7 +233,7 @@ std::string GCodePath::GenerateLayerGCode(int layer_idx, GCodeFirmware /*fw*/) c
 
     for (const auto& polygon : layer_data.layer)
     {
-        if (polygon.empty())
+        if (polygon.empty()) [[unlikely]]
         {
             continue;
         }

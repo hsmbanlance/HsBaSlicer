@@ -5,6 +5,7 @@
 
 #include <cctype>
 #include <ctime>
+#include <regex>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -33,6 +34,20 @@ bool IsMetaColumn(const std::string& name)
 int64_t NowSeconds()
 {
     return static_cast<int64_t>(std::time(nullptr));
+}
+
+// SQL identifiers are concatenated verbatim into statements by the adapters (tables, column
+// names, ORDER BY), so unquoted names must stay inside [A-Za-z0-9_] and well below any backend
+// length limit. Values are safe: SQLite/MySQL bind parameters and PG only carries the literal
+// payload. Reject anything else (quotes, semicolons, spaces) before it reaches the adapter.
+void ValidateSqlIdentifier(std::string_view what, const std::string& name)
+{
+    static const std::regex identifierPattern("[A-Za-z_][A-Za-z0-9_]{0,63}");
+    if (!std::regex_match(name, identifierPattern))
+    {
+        throw SQL::SQLAdapterInvalidArgumentError(std::string("ParamStore::") + std::string(what) +
+                                                  ": illegal SQL identifier: '" + name + "'");
+    }
 }
 
 // Reflect a registered Config AnyObject into {column name -> converged std::any}.
@@ -138,7 +153,10 @@ std::string ParamStore::ResolveTable(std::string_view table, const Utils::AnyObj
 {
     if (!table.empty())
     {
-        return std::string(table);
+        // Caller-supplied table names are untrusted input pasted into SQL; whitelist-check them.
+        std::string const name(table);
+        ValidateSqlIdentifier("ResolveTable", name);
+        return name;
     }
     std::string_view const derived = DefaultTableName(cfg.get_type_info());
     if (!derived.empty())
@@ -404,6 +422,7 @@ std::vector<std::string> ParamStore::List(std::string_view table, const std::str
                 throw SQL::SQLAdapterInvalidArgumentError("ParamStore::List: table name required");
             }
             const std::string tbl(table);
+            ValidateSqlIdentifier("List", tbl);
             std::unordered_map<std::string, std::any> where;
             if (!whereJson.empty())
             {
@@ -415,7 +434,10 @@ std::vector<std::string> ParamStore::List(std::string_view table, const std::str
                 }
                 for (auto it = doc.MemberBegin(); it != doc.MemberEnd(); ++it)
                 {
-                    where[it->name.GetString()] = JsonValueToAny(it->value);
+                    // JSON member names become WHERE column names in the concatenated clause.
+                    std::string colName(it->name.GetString(), it->name.GetStringLength());
+                    ValidateSqlIdentifier("List", colName);
+                    where[std::move(colName)] = JsonValueToAny(it->value);
                 }
             }
             auto rows = db_->Select(tbl, {"param_key"}, where, std::nullopt, -1, 0);
@@ -529,6 +551,7 @@ bool ParamStore::Delete(std::string_view table, std::string_view key)
                 throw SQL::SQLAdapterInvalidArgumentError("ParamStore::Delete: table name required");
             }
             const std::string tbl(table);
+            ValidateSqlIdentifier("Delete", tbl);
             auto existing = db_->Select(tbl, {"param_id"}, {{"param_key", std::string(key)}}, std::nullopt, 1, 0);
             if (existing.empty())
             {

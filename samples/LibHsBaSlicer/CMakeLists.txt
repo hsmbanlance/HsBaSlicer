@@ -68,3 +68,8 @@ if(NOT ANDROID AND NOT IOS)
         )
     endif()
 endif()
+
+# UTF-8 active-code-page manifest (no-op on non-MSVC / non-Windows;
+# lib_sample_module is skipped automatically when the module is disabled).
+hsba_apply_utf8_codepage(lib_sample_header)
+hsba_apply_utf8_codepage(lib_sample_module)

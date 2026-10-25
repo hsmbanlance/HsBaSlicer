@@ -1,9 +1,9 @@
 ﻿#define BOOST_TEST_MODULE points_path_test
 #include <boost/test/included/unit_test.hpp>
 
+#include "base/error.hpp"
 #include "paths/pointspath.hpp"
 #include "paths/robotpath.hpp"
-#include "base/error.hpp"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -269,7 +269,8 @@ BOOST_AUTO_TEST_CASE(test_save_overloads)
 
     auto dir = std::filesystem::temp_directory_path();
     std::error_code ec;
-    auto slurp = [](const std::filesystem::path& f) {
+    auto slurp = [](const std::filesystem::path& f)
+    {
         std::ifstream ifs(f);
         return std::string((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
     };
@@ -319,15 +320,20 @@ BOOST_AUTO_TEST_CASE(test_funcname_and_script_file)
 
     // ToString(script_file, funcName) reads the file then calls the registered function
     auto scriptFile = dir / "points_gen.lua";
-    { std::ofstream ofs(scriptFile); ofs << "-- file body is not executed by this overload"; }
+    {
+        std::ofstream ofs(scriptFile);
+        ofs << "-- file body is not executed by this overload";
+    }
     BOOST_CHECK_EQUAL(path.ToString(scriptFile, std::string_view("gen"), reg), "GEN:1");
     // Save(path, script_file, funcName)
     auto saved = dir / "points_filesave.gcode";
     std::filesystem::remove(saved, ec);
     path.Save(saved, scriptFile, std::string_view("gen"), reg);
-    { std::ifstream ifs(saved);
-      std::string c((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-      BOOST_CHECK_EQUAL(c, "GEN:1"); }
+    {
+        std::ifstream ifs(saved);
+        std::string c((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+        BOOST_CHECK_EQUAL(c, "GEN:1");
+    }
     std::filesystem::remove(saved, ec);
     std::filesystem::remove(scriptFile, ec);
 

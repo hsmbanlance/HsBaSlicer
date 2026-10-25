@@ -3,12 +3,23 @@ schema_version: 1
 locale: en-US
 branch: dev
 nodes_managed: true
-exported_at: "2026-10-18T13:09:46Z"
+exported_at: "2026-10-25T03:46:24Z"
 modules:
     "":
-        dir_name: HsBaSlicer Slicing Engine & Cross-Language Pipeline API
-        title: HsBaSlicer Slicing Engine & Cross-Language Pipeline API
+        dir_name: HsBaSlicer Slicing Platform (Root)
+        title: HsBaSlicer Slicing Platform (Root)
         scope: []
+        source_files: []
+        children:
+            - restapi
+        depends_on: []
+        related_to: []
+    restapi:
+        dir_name: HsBaSlicerRestServer — Optional REST API Service
+        title: HsBaSlicerRestServer — Optional REST API Service
+        scope:
+            - restapi/
+            - tests/RestApi/
         source_files: []
         children: []
         depends_on: []

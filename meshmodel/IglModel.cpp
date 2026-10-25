@@ -652,7 +652,8 @@ IglModel IglModel::CreatePrime(const PolygonD& poly, const Eigen::Vector3f& dire
                 throw RuntimeError("Triangulation produced unexpected vertex");
             }
         }
-        // Force base triangles to CCW (positive signed area in Cartesian coordinates), not relying on Triangulate's output winding
+        // Force base triangles to CCW (positive signed area in Cartesian coordinates), not relying on Triangulate's
+        // output winding
         if (Clipper2Lib::Area(tri) < 0.0)
         {
             std::swap(idx[1], idx[2]);
@@ -826,8 +827,9 @@ IglModel IglModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& di
         {
             idx[i] = findOrAdd(tri[i]);
         }
-        // Force base triangles to CCW (positive signed area in Cartesian coordinates), not relying on Triangulate's output winding;
-        // hole regions are not triangulated (already passed in per convention), so all triangles belong to solid regions
+        // Force base triangles to CCW (positive signed area in Cartesian coordinates), not relying on Triangulate's
+        // output winding; hole regions are not triangulated (already passed in per convention), so all triangles belong
+        // to solid regions
         if (Clipper2Lib::Area(tri) < 0.0)
         {
             std::swap(idx[1], idx[2]);
@@ -835,8 +837,9 @@ IglModel IglModel::CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& di
         bottom_tris.push_back(idx);
     }
 
-    // Clipper2 Triangulate produces no triangles for triangular paths; append the original triangle paths to complete the base face, avoiding lost caps;
-    // outer-contour triangles are normalized to CCW, hole triangles to CW (cap contributions cancel)
+    // Clipper2 Triangulate produces no triangles for triangular paths; append the original triangle paths to complete
+    // the base face, avoiding lost caps; outer-contour triangles are normalized to CCW, hole triangles to CW (cap
+    // contributions cancel)
     const size_t trianglePathCount =
         std::count_if(paths.begin(), paths.end(), [](const PolygonD& p) { return p.size() == 3; });
     if (bottom_tris.size() < trianglePathCount)

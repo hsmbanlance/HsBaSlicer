@@ -1,0 +1,8 @@
+The module builds a single executable `HsBaSlicerRestServer` gated by `HSBA_BUILD_REST_API` (desktop-only, OFF by default). Internal layering:
+- Entry point: `main.cpp` parses CLI (`--config`, `--host`, `--port`) and delegates to `RunServer`.
+- Configuration: `server_config.{hpp,cpp}` loads `restapi.ini` into `ServerConfig`; `config_bridge.{hpp,cpp}` maps ini fields onto DllHsBaSlicer's `HsBaParamStoreConn_t` via reflection.
+- Serialization bridge: `serialize_value.hpp` + `content_negotiate.{hpp,cpp}` provide `SerializeValue` / `DataFormat` / `ContentType` for JSON and XML output, driven by `?format=` or `Accept` header.
+- Pipeline boundary: `pipeline_executor.{hpp,cpp}` wraps the DllHsBaSlicer C ABI (`CreateDefaultConfig`, `RunPipeline`, `DestroyConfig`, `KindName`/`ParseKind`), normalizing per-kind result structs into the uniform `SliceOutcome` view.
+- Async queue: `job_manager.{hpp,cpp}` owns a fixed-size worker pool (`std::thread`s + `condition_variable`), tracking jobs in an `unordered_map` with TTL reaping; it is the seam where tests inject a mock runner.
+- HTTP layer: `routes.cpp` registers all `/api/*` handlers on `httplib::Server`, using a shared `Ctx { cfg, jobs, start }` and helper `ReplyValue`/`ReplyError`.
+Dependency direction is strictly one-way: restapi → DllHsBaSlicer (C ABI run/save/load/version) + fileoperator (ParamStore) + utils (struct_json/xml, TypeInfo) + httplib; samples/Lua never depends on this module.

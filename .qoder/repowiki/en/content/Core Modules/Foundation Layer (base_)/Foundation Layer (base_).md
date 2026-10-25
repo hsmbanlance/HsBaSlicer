@@ -9,21 +9,24 @@
 - [thread_pool.hpp](file://base/thread_pool.hpp)
 - [singleton.hpp](file://base/singleton.hpp)
 - [concepts.hpp](file://base/concepts.hpp)
+- [contracts.hpp](file://base/contracts.hpp)
 - [coroutine.hpp](file://base/coroutine.hpp)
 - [delegate.hpp](file://base/delegate.hpp)
 - [encoding_convert.hpp](file://base/encoding_convert.hpp)
 - [encoding_convert.cpp](file://base/encoding_convert.cpp)
+- [InplaceVector.hpp](file://base/InplaceVector.hpp)
+- [PolygonFill.hpp](file://2D/PolygonFill.hpp)
 - [hsba_utf8.manifest](file://cmake/hsba_utf8.manifest)
 - [HsBaWindowsUtf8.cmake](file://cmake/HsBaWindowsUtf8.cmake)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive UTF-8 path support system documentation
-- Documented new encoding conversion functions (utf8_to_path, path_to_utf8, utf8_to_local, local_to_utf8)
-- Added Windows UTF-8 manifest integration details
-- Updated file I/O layer Unicode compatibility information
-- Enhanced cross-platform encoding handling documentation
+- Added comprehensive C++26 contract support foundation documentation
+- Documented HSBA_PRE and HSBA_POST macros for compile-time contract enforcement
+- Added reusable predicate functions (not_null, in_range, not_empty, valid_index, is_positive, etc.)
+- Updated InplaceVector and PolygonFill examples showing contract usage
+- Enhanced compile-time safety section with contract enforcement patterns
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -31,17 +34,18 @@
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [UTF-8 Path Support System](#utf-8-path-support-system)
-7. [Dependency Analysis](#dependency-analysis)
-8. [Performance Considerations](#performance-considerations)
-9. [Troubleshooting Guide](#troubleshooting-guide)
-10. [Conclusion](#conclusion)
-11. [Appendices](#appendices)
+6. [C++26 Contract Support Foundation](#c26-contract-support-foundation)
+7. [UTF-8 Path Support System](#utf-8-path-support-system)
+8. [Dependency Analysis](#dependency-analysis)
+9. [Performance Considerations](#performance-considerations)
+10. [Troubleshooting Guide](#troubleshooting-guide)
+11. [Conclusion](#conclusion)
+12. [Appendices](#appendices)
 
 ## Introduction
-The `base/` directory is the foundation layer for HsBaSlicer. It provides type-erased object handling, reflection-style dispatch, memory and object pools, a thread pool with coroutine integration, a singleton helper, C++20 concepts for compile-time constraints, coroutine primitives, a delegate/event system, and comprehensive UTF-8 path support for cross-platform Unicode compatibility. These components are reused by higher-level slicing modules such as model processing, path generation, support generation, and pipeline orchestration.
+The `base/` directory is the foundation layer for HsBaSlicer. It provides type-erased object handling, reflection-style dispatch, memory and object pools, a thread pool with coroutine integration, a singleton helper, C++20 concepts for compile-time constraints, **C++26 contract enforcement**, coroutine primitives, a delegate/event system, and comprehensive UTF-8 path support for cross-platform Unicode compatibility. These components are reused by higher-level slicing modules such as model processing, path generation, support generation, and pipeline orchestration.
 
-This document explains how these building blocks work together, how to use them safely, and what performance and safety trade-offs they introduce. The UTF-8 path support system ensures proper Unicode handling across all platforms, particularly addressing Windows ANSI code page limitations through manifest-based configuration.
+This document explains how these building blocks work together, how to use them safely, and what performance and safety trade-offs they introduce. The C++26 contract support provides compile-time contract enforcement through pre/post specifiers, while the UTF-8 path support system ensures proper Unicode handling across all platforms, particularly addressing Windows ANSI code page limitations through manifest-based configuration.
 
 ## Project Structure
 The foundation layer is organized around focused headers:
@@ -51,6 +55,7 @@ The foundation layer is organized around focused headers:
 - Concurrency: `thread_pool.hpp`, `coroutine.hpp`
 - Global state: `singleton.hpp`
 - Compile-time type contracts: `concepts.hpp`
+- **New**: C++26 contract enforcement: `contracts.hpp`
 - Callback and event patterns: `delegate.hpp`
 - **New**: UTF-8 path encoding and conversion: `encoding_convert.hpp`, `encoding_convert.cpp`
 - **New**: Windows UTF-8 manifest integration: `hsba_utf8.manifest`, `HsBaWindowsUtf8.cmake`
@@ -65,6 +70,7 @@ tp["ThreadPool<br/>Task Queue + Workers"]
 coro["Coroutines<br/>Task / Generator / Executors"]
 sing["Singleton<br/>Thread-Safe Global Access"]
 concepts["Concepts<br/>Compile-Time Constraints"]
+contracts["Contracts<br/>C++26 Pre/Post Specifiers"]
 del["Delegate / Event / EventSource<br/>Callback Aggregation"]
 enc["Encoding Convert<br/>UTF-8 Path Support"]
 win["Windows UTF-8 Manifest<br/>Process Code Page Configuration"]
@@ -75,6 +81,7 @@ base --> tp
 base --> coro
 base --> sing
 base --> concepts
+base --> contracts
 base --> del
 base --> enc
 base --> win
@@ -83,6 +90,7 @@ tp --> coro
 tp --> concepts
 del --> concepts
 enc --> concepts
+contracts --> concepts
 ```
 
 **Diagram sources**
@@ -93,6 +101,7 @@ enc --> concepts
 - [coroutine.hpp:41-773](file://base/coroutine.hpp#L41-L773)
 - [singleton.hpp:14-61](file://base/singleton.hpp#L14-L61)
 - [concepts.hpp:15-267](file://base/concepts.hpp#L15-L267)
+- [contracts.hpp:1-122](file://base/contracts.hpp#L1-L122)
 - [delegate.hpp:20-243](file://base/delegate.hpp#L20-L243)
 - [encoding_convert.hpp:32-53](file://base/encoding_convert.hpp#L32-L53)
 - [hsba_utf8.manifest:22-26](file://cmake/hsba_utf8.manifest#L22-L26)
@@ -105,6 +114,7 @@ enc --> concepts
 - [coroutine.hpp:1-773](file://base/coroutine.hpp#L1-L773)
 - [singleton.hpp:1-61](file://base/singleton.hpp#L1-L61)
 - [concepts.hpp:1-267](file://base/concepts.hpp#L1-L267)
+- [contracts.hpp:1-122](file://base/contracts.hpp#L1-L122)
 - [delegate.hpp:1-243](file://base/delegate.hpp#L1-L243)
 - [encoding_convert.hpp:1-304](file://base/encoding_convert.hpp#L1-L304)
 - [encoding_convert.cpp:1-264](file://base/encoding_convert.cpp#L1-L264)
@@ -125,6 +135,8 @@ This section summarizes the foundational primitives and their roles.
 | `IExecutor` / `AsyncExecutor` / `NoopExecutor` | Execution policy for coroutines | `execute(func)` | Control where coroutine continuations run |
 | `Singleton` | Thread-safe global instance access | `GetInstance(args...)` | Configuration, logging, or shared resources |
 | `Concepts` | Compile-time type requirements | `String`, `StdHash`, `TAllocator`, `Addable`, etc. | Enforce API contracts without runtime checks |
+| **`HSBA_PRE` / `HSBA_POST`** | **C++26 contract enforcement macros** | **pre/post function contract specifiers** | **Compile-time contract validation** |
+| **`Contracts::` predicates** | **Reusable contract conditions** | `not_null`, `in_range`, `valid_index`, `is_positive`, etc. | **Contract condition expressions** |
 | `Delegate` / `Event` / `EventSource` | Multicast callbacks and events | `Add`, `Invoke`, `RaiseEvent` | Pipeline events, progress notifications, plugin hooks |
 | **`utf8_to_path` / `path_to_utf8`** | **Cross-platform UTF-8 path conversion** | **UTF-8 ↔ std::filesystem::path** | **Unicode file paths across all platforms** |
 | **`utf8_to_local` / `local_to_utf8`** | **Local encoding conversion for narrow APIs** | **UTF-8 ↔ Local narrow encoding** | **Third-party library compatibility (libigl, CGAL, OpenCASCADE)** |
@@ -137,6 +149,8 @@ This section summarizes the foundational primitives and their roles.
 - [coroutine.hpp:47-773](file://base/coroutine.hpp#L47-L773)
 - [singleton.hpp:21-61](file://base/singleton.hpp#L21-L61)
 - [concepts.hpp:17-267](file://base/concepts.hpp#L17-L267)
+- [contracts.hpp:28-39](file://base/contracts.hpp#L28-L39)
+- [contracts.hpp:44-117](file://base/contracts.hpp#L44-L117)
 - [delegate.hpp:27-243](file://base/delegate.hpp#L27-L243)
 - [encoding_convert.hpp:32-53](file://base/encoding_convert.hpp#L32-L53)
 
@@ -144,6 +158,7 @@ This section summarizes the foundational primitives and their roles.
 The foundation layer forms a layered base:
 
 - Concepts define compile-time contracts used across the layer.
+- **Contracts provide C++26 language-level contract enforcement** using pre/post specifiers.
 - `AnyObject` depends on concepts and error types to provide dynamic typing.
 - `ThreadPool` integrates with coroutines through an executor interface.
 - `NamedObjectPool` manages long-lived shared objects that may be wrapped in `AnyObject`.
@@ -207,6 +222,16 @@ class EventSource_Derived_R_Args {
 +Add(cb) void
 +RaiseEvent(args) R
 }
+class Contracts {
++not_null(T*) bool
++not_null(P&) bool
++in_range(T,T,T) bool
++not_empty(C) bool
++valid_index(size_t,size_t) bool
++is_positive(T) bool
++is_non_negative(T) bool
++is_finite(double) bool
+}
 class EncodingConvert {
 +utf8_to_path(utf8Str) filesystem : : path
 +path_to_utf8(path) string
@@ -220,6 +245,7 @@ AsyncExecutor ..|> IExecutor
 NoopExecutor ..|> IExecutor
 Event_R_Args --> Delegate_R_Args : "wraps"
 EventSource_Derived_R_Args --> Event_R_Args : "exposes"
+Contracts --> concepts : "uses"
 EncodingConvert --> concepts : "uses"
 ```
 
@@ -228,6 +254,7 @@ EncodingConvert --> concepts : "uses"
 - [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
 - [coroutine.hpp:47-773](file://base/coroutine.hpp#L47-L773)
 - [delegate.hpp:27-243](file://base/delegate.hpp#L27-L243)
+- [contracts.hpp:41-119](file://base/contracts.hpp#L41-L119)
 - [encoding_convert.hpp:32-53](file://base/encoding_convert.hpp#L32-L53)
 
 **Section sources**
@@ -235,6 +262,7 @@ EncodingConvert --> concepts : "uses"
 - [thread_pool.hpp:25-162](file://base/thread_pool.hpp#L25-L162)
 - [coroutine.hpp:41-773](file://base/coroutine.hpp#L41-L773)
 - [delegate.hpp:20-243](file://base/delegate.hpp#L20-L243)
+- [contracts.hpp:41-119](file://base/contracts.hpp#L41-L119)
 - [encoding_convert.hpp:32-53](file://base/encoding_convert.hpp#L32-L53)
 
 ## Detailed Component Analysis
@@ -467,7 +495,7 @@ Usage guidance:
 - Allocators: `TAllocator`, `NoStateAllocator`
 - Arithmetic operations: `Addable`, `Subtractable`, `Multipliable`, `Dividable`
 
-These concepts constrain templates and improve error messages at compile time. They are used by other foundation components, including delegates and coroutine utilities.
+These concepts constrain templates and improve error messages at compile time. They are used by other foundation components, including delegates, coroutine utilities, and contract predicates.
 
 **Section sources**
 - [concepts.hpp:17-267](file://base/concepts.hpp#L17-L267)
@@ -502,6 +530,127 @@ Best practices:
 **Section sources**
 - [delegate.hpp:27-167](file://base/delegate.hpp#L27-L167)
 - [delegate.hpp:173-243](file://base/delegate.hpp#L173-L243)
+
+## C++26 Contract Support Foundation
+
+**Updated** Added comprehensive C++26 contract support foundation providing compile-time contract enforcement through pre/post specifiers and reusable predicate functions.
+
+The C++26 contract support foundation provides a feature-macro-gated interface to the C++26 contract specifiers `pre` and `post` (P2900 / function contract specifiers). These are language keywords that attach to the END of a function declarator - after the parameter list, cv/ref qualifiers, trailing-noexcept and requires-clause, and before the body or semicolon.
+
+### Contract Enforcement Macros
+
+The primary interface provides two key macros for contract specification:
+
+- **`HSBA_PRE(...)`**: Specifies preconditions that must hold before function entry
+- **`HSBA_POST(...)`**: Specifies postconditions that must hold after function exit
+
+These macros expand to native `pre`/`post` specifiers when the compiler supports C++26 contracts (detected via `__cpp_contracts`), and expand to nothing on toolchains without support, ensuring backward compatibility.
+
+```mermaid
+flowchart TD
+CompilerCheck{"Compiler supports<br/>C++26 contracts?"}
+CompilerCheck --> |Yes| NativePath["HSBA_PRE → pre<br/>HSBA_POST → post"]
+CompilerCheck --> |No| FallbackPath["HSBA_PRE → empty<br/>HSBA_POST → empty"]
+NativePath --> ContractEnforcement["Contract Enforcement"]
+FallbackPath --> NoOp["No Runtime Overhead"]
+```
+
+**Diagram sources**
+- [contracts.hpp:28-39](file://base/contracts.hpp#L28-L39)
+
+### Reusable Predicate Functions
+
+The `HsBa::Slicer::Contracts` namespace provides a comprehensive set of reusable predicate functions for common contract conditions:
+
+#### Pointer and Resource Management
+- **`not_null(T* p)`**: Checks raw pointers for non-null
+- **`not_null(P& p)`**: Checks smart-pointer-like objects with `.get()` member
+
+#### Range and Bounds Checking
+- **`in_range(value, lo, hi)`**: Validates value within inclusive range [lo, hi]
+- **`valid_index(index, size)`**: Validates array/vector indices
+- **`not_empty(container)`**: Checks container-like objects for non-empty state
+
+#### Numeric Validation
+- **`is_positive(value)`**: Strictly greater than zero
+- **`is_non_negative(value)`**: Greater than or equal to zero
+- **`is_finite(x)`**: Floating-point finite check (no NaN/infinity)
+
+```mermaid
+classDiagram
+namespace HsBa : : Slicer : : Contracts {
+class Contracts {
++not_null(T*) bool
++not_null(P&) bool
++in_range(T,T,T) bool
++not_empty(C) bool
++valid_index(size_t,size_t) bool
++is_positive(T) bool
++is_non_negative(T) bool
++is_finite(double) bool
+}
+}
+Contracts --> concepts : "uses"
+```
+
+**Diagram sources**
+- [contracts.hpp:41-119](file://base/contracts.hpp#L41-L119)
+
+### Usage Examples in HsBaSlicer
+
+The contract system is actively used throughout the codebase to enforce API contracts:
+
+#### InplaceVector Contract Usage
+```cpp
+// Index access with contract enforcement
+constexpr reference operator[](size_type idx) noexcept 
+    HSBA_PRE(Contracts::valid_index(idx, size_))
+{
+    return *ptr_at(idx);
+}
+
+// Internal pointer access with contract validation
+constexpr pointer ptr_at(size_type idx) noexcept 
+    HSBA_PRE(Contracts::valid_index(idx, N))
+{
+    return reinterpret_cast<pointer>(&storage_[idx]);
+}
+```
+
+#### Polygon Fill Contract Usage
+```cpp
+// All fill functions enforce positive spacing constraint
+Polygons OffsetFill(const Polygons& poly, double spacing, ...)
+    HSBA_PRE(Contracts::is_positive(spacing));
+
+Polygons LineFill(const Polygons& poly, double spacing, ...)
+    HSBA_PRE(Contracts::is_positive(spacing));
+```
+
+### Platform Compatibility
+
+The contract system provides seamless compatibility across different compiler capabilities:
+
+| Compiler Support | Behavior | Use Case |
+|-----------------|----------|----------|
+| C++26 contracts enabled | Full contract enforcement | Development, testing, production with modern compilers |
+| C++26 contracts disabled | No runtime overhead, no enforcement | Legacy compilers, performance-critical builds |
+
+### Design Principles
+
+The contract system follows several key design principles:
+
+1. **Zero-cost abstraction**: Contracts expand to nothing on unsupported compilers
+2. **Composability**: Predicates can be combined in complex contract expressions
+3. **Type safety**: All predicates are constexpr and template-based
+4. **Documentation**: Contracts serve as executable specifications
+5. **Debugging**: Contract violations provide clear failure points
+
+**Section sources**
+- [contracts.hpp:1-122](file://base/contracts.hpp#L1-L122)
+- [InplaceVector.hpp:137-145](file://base/InplaceVector.hpp#L137-L145)
+- [InplaceVector.hpp:220-227](file://base/InplaceVector.hpp#L220-L227)
+- [PolygonFill.hpp:31-64](file://2D/PolygonFill.hpp#L31-L64)
 
 ## UTF-8 Path Support System
 
@@ -609,6 +758,7 @@ The foundation layer has clear internal dependencies:
 - `Delegate` and `EventSource` depend on `concepts.hpp`.
 - `coroutine.hpp` depends on `template_helper.hpp` and standard library coroutine facilities.
 - Pools and singletons have minimal cross-dependencies, keeping them reusable.
+- **Contracts depend on `concepts.hpp` and standard library headers**.
 - **Encoding conversion depends on `concepts.hpp` and platform-specific headers**.
 
 ```mermaid
@@ -616,6 +766,7 @@ graph LR
 concepts["concepts.hpp"] --> any_object["any_object.hpp"]
 concepts --> delegate["delegate.hpp"]
 concepts --> thread_pool["thread_pool.hpp"]
+concepts --> contracts["contracts.hpp"]
 concepts --> encoding_convert["encoding_convert.hpp"]
 error["error.hpp"] --> any_object
 error --> thread_pool
@@ -628,6 +779,7 @@ coroutine --> thread_pool
 - [thread_pool.hpp:22-24](file://base/thread_pool.hpp#L22-L24)
 - [delegate.hpp:18](file://base/delegate.hpp#L18)
 - [coroutine.hpp:25-39](file://base/coroutine.hpp#L25-L39)
+- [contracts.hpp:20-22](file://base/contracts.hpp#L20-L22)
 - [encoding_convert.hpp:10-15](file://base/encoding_convert.hpp#L10-L15)
 
 **Section sources**
@@ -635,6 +787,7 @@ coroutine --> thread_pool
 - [thread_pool.hpp:22-24](file://base/thread_pool.hpp#L22-L24)
 - [delegate.hpp:18](file://base/delegate.hpp#L18)
 - [coroutine.hpp:25-39](file://base/coroutine.hpp#L25-L39)
+- [contracts.hpp:20-22](file://base/contracts.hpp#L20-L22)
 - [encoding_convert.hpp:10-15](file://base/encoding_convert.hpp#L10-L15)
 
 ## Performance Considerations
@@ -644,6 +797,7 @@ coroutine --> thread_pool
 - `ThreadPool` parallelizes work, but too many workers can increase contention; tune `num_threads` based on workload characteristics.
 - Coroutines add abstraction overhead compared to direct function calls; use them where asynchronous control flow improves clarity.
 - `Delegate::Invoke` copies the callback list under lock; keep callback counts reasonable and avoid heavy work inside hot-path callbacks.
+- **C++26 contracts provide compile-time contract enforcement with zero runtime overhead on unsupported compilers**.
 - **UTF-8 conversions add minimal overhead but provide critical Unicode support; prefer `utf8_to_path` for `std::filesystem` operations to avoid double-conversion issues**.
 
 [No sources needed since this section provides general guidance]
@@ -661,6 +815,7 @@ Common issues and resolutions:
 | `InvalidArgumentError("Number of threads must be greater than 0")` | Constructing `ThreadPool` with zero threads | Pass a positive thread count |
 | `RuntimeError("Cannot submit task to stopped ThreadPool")` | Submitting after destructor began shutdown | Do not submit new tasks after stopping or destroying the pool |
 | Coroutine continuation never resumes | Executor not configured or default pool unavailable | Configure `ThreadPoolExecutor` or set a default pool |
+| **Contract violation errors** | **Precondition/postcondition not satisfied** | **Fix input parameters or function logic to satisfy contract conditions** |
 | **Non-ASCII file paths fail on Windows** | Missing UTF-8 manifest or incorrect conversion usage | Apply `hsba_apply_utf8_codepage()` and use `utf8_to_path`/`utf8_to_local` appropriately |
 | **Chinese/emoji characters corrupted in filenames** | Using `path.string()` instead of proper conversion functions | Replace with `path_to_utf8()` for UTF-8 APIs or `utf8_to_local()` for narrow APIs |
 
@@ -672,10 +827,11 @@ Common issues and resolutions:
 - [object_pool.hpp:71-155](file://base/object_pool.hpp#L71-L155)
 - [thread_pool.hpp:37-46](file://base/thread_pool.hpp#L37-L46)
 - [thread_pool.hpp:77-89](file://base/thread_pool.hpp#L77-L89)
+- [contracts.hpp:28-39](file://base/contracts.hpp#L28-L39)
 - [encoding_convert.cpp:101-144](file://base/encoding_convert.cpp#L101-L144)
 
 ## Conclusion
-The `base/` foundation layer provides the essential primitives for HsBaSlicer: dynamic typing through `AnyObject`, efficient memory management through pools, concurrency through `ThreadPool` and coroutines, global state through `Singleton`, compile-time safety through `Concepts`, decoupled communication through `Delegate` and `EventSource`, and comprehensive UTF-8 path support for cross-platform Unicode compatibility. The UTF-8 path support system ensures proper Unicode handling across all platforms, particularly addressing Windows ANSI code page limitations through manifest-based configuration. Higher-level slicing functionality builds on these components to manage models, compute paths, generate supports, and export outputs. Correct usage requires respecting ownership semantics, sizing pools appropriately, tuning concurrency, preferring compile-time constraints where possible, and using the appropriate encoding conversion functions for file path handling.
+The `base/` foundation layer provides the essential primitives for HsBaSlicer: dynamic typing through `AnyObject`, efficient memory management through pools, concurrency through `ThreadPool` and coroutines, global state through `Singleton`, compile-time safety through `Concepts` and **C++26 contract enforcement**, decoupled communication through `Delegate` and `EventSource`, and comprehensive UTF-8 path support for cross-platform Unicode compatibility. The C++26 contract support provides compile-time contract enforcement through pre/post specifiers, while the UTF-8 path support system ensures proper Unicode handling across all platforms, particularly addressing Windows ANSI code page limitations through manifest-based configuration. Higher-level slicing functionality builds on these components to manage models, compute paths, generate supports, and export outputs. Correct usage requires respecting ownership semantics, sizing pools appropriately, tuning concurrency, preferring compile-time constraints where possible, using contract enforcement for API validation, and employing the appropriate encoding conversion functions for file path handling.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -716,6 +872,18 @@ Reference locations:
 
 Reference locations:
 - [concepts.hpp:17-267](file://base/concepts.hpp#L17-L267)
+
+#### Using C++26 Contracts for Compile-Time Contract Enforcement
+- Use `HSBA_PRE` to specify preconditions for function parameters.
+- Use `HSBA_POST` to specify postconditions for function results.
+- Leverage reusable predicates like `Contracts::valid_index`, `Contracts::is_positive`, `Contracts::not_null`.
+- Contracts automatically adapt to compiler capabilities with zero overhead on unsupported compilers.
+
+Reference locations:
+- [contracts.hpp:28-39](file://base/contracts.hpp#L28-L39)
+- [contracts.hpp:44-117](file://base/contracts.hpp#L44-L117)
+- [InplaceVector.hpp:137-145](file://base/InplaceVector.hpp#L137-L145)
+- [PolygonFill.hpp:31-64](file://2D/PolygonFill.hpp#L31-L64)
 
 #### Using UTF-8 Path Conversion Functions
 - Use `utf8_to_path()` for `std::filesystem` operations with Unicode paths.

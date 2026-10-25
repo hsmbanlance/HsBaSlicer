@@ -181,22 +181,26 @@ int l_generate(lua_State* L)
         return lua_error(L);
     }
 
-    PolygonsD const current_layer = LuaTableToPolygonsD(L, 2);
-    PolygonsD const prev_layer = LuaTableToPolygonsD(L, 3);
-    float const layer_height = static_cast<float>(luaL_checknumber(L, 4));
-    SupportConfig const config = ReadConfigFromTable(L, 5);
+    // The polygon containers must be released before the longjmp of lua_error, so they are
+    // confined to this scope and the raise happens after it.
+    {
+        PolygonsD const current_layer = LuaTableToPolygonsD(L, 2);
+        PolygonsD const prev_layer = LuaTableToPolygonsD(L, 3);
+        float const layer_height = static_cast<float>(luaL_checknumber(L, 4));
+        SupportConfig const config = ReadConfigFromTable(L, 5);
 
-    try
-    {
-        PolygonsD const result = wrapper->impl->Generate(current_layer, prev_layer, layer_height, config);
-        PushPolygonsDToLua(L, result);
-        return 1;
+        try
+        {
+            PolygonsD const result = wrapper->impl->Generate(current_layer, prev_layer, layer_height, config);
+            PushPolygonsDToLua(L, result);
+            return 1;
+        }
+        catch (const std::exception& e)
+        {
+            lua_pushstring(L, e.what());
+        }
     }
-    catch (const std::exception& e)
-    {
-        lua_pushstring(L, e.what());
-        return lua_error(L);
-    }
+    return lua_error(L);
 }
 
 // Lua: Support.detect_overhang(current_layer, prev_layer, layer_height, angle_deg)

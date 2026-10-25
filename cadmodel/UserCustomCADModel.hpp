@@ -27,24 +27,24 @@ class UserCustomCADModel;
 class IUserCustomCAD
 {
 public:
-    typedef IModel* (*CreateModelFunc)();                                              ///< Create an empty custom model.
-    typedef void (*DestroyModelFunc)(IModel*);                                         ///< Destroy a custom model.
-    typedef bool (*BooleanOperationFunc)(IModel*, const IModel*, const char*);         ///< Perform a named boolean operation.
-    typedef IModel* (*CreateBox)(float x, float y, float z);                           ///< Create a box primitive.
-    typedef IModel* (*CreateSphere)(float radius, int subdivisions);                   ///< Create a sphere primitive.
-    typedef IModel* (*CreateCylinder)(float radius, float height, int segments);       ///< Create a cylinder primitive.
-    typedef void (*SetThicknessFunc)(IModel*, float thickness);                        ///< Set a shell thickness on a model.
-    typedef IModel* (*CreatePrismFunc)(HsBaPoly2D_t, HsBaVector3f_t);                   ///< Extrude a polygon into a prism.
-    typedef IModel* (*CreatePrismExFunc)(HsBaPolys2D_t, HsBaVector3f_t);                ///< Extrude polygons into a prism.
-    virtual CreateModelFunc GetCreateModelFunc() const = 0;                            ///< Retrieve the create-model function.
-    virtual DestroyModelFunc GetDestroyModelFunc() const = 0;                          ///< Retrieve the destroy-model function.
-    virtual BooleanOperationFunc GetBooleanOperationFunc() const = 0;                  ///< Retrieve the boolean-operation function.
-    virtual CreateBox GetCreateBoxFunc() const = 0;                                    ///< Retrieve the box factory.
-    virtual CreateSphere GetCreateSphereFunc() const = 0;                              ///< Retrieve the sphere factory.
-    virtual CreateCylinder GetCreateCylinderFunc() const = 0;                          ///< Retrieve the cylinder factory.
-    virtual SetThicknessFunc GetSetThicknessFunc() const = 0;                          ///< Retrieve the thickness setter.
-    virtual CreatePrismFunc GetCreatePrismFunc() const = 0;                            ///< Retrieve the single-polygon extrude factory.
-    virtual CreatePrismExFunc GetCreatePrismExFunc() const = 0;                        ///< Retrieve the multi-polygon extrude factory.
+    typedef IModel* (*CreateModelFunc)();                                       ///< Create an empty custom model.
+    typedef void (*DestroyModelFunc)(IModel*);                                  ///< Destroy a custom model.
+    typedef bool (*BooleanOperationFunc)(IModel*, const IModel*, const char*);  ///< Perform a named boolean operation.
+    typedef IModel* (*CreateBox)(float x, float y, float z);                    ///< Create a box primitive.
+    typedef IModel* (*CreateSphere)(float radius, int subdivisions);            ///< Create a sphere primitive.
+    typedef IModel* (*CreateCylinder)(float radius, float height, int segments);  ///< Create a cylinder primitive.
+    typedef void (*SetThicknessFunc)(IModel*, float thickness);                   ///< Set a shell thickness on a model.
+    typedef IModel* (*CreatePrismFunc)(HsBaPoly2D_t, HsBaVector3f_t);             ///< Extrude a polygon into a prism.
+    typedef IModel* (*CreatePrismExFunc)(HsBaPolys2D_t, HsBaVector3f_t);          ///< Extrude polygons into a prism.
+    virtual CreateModelFunc GetCreateModelFunc() const = 0;            ///< Retrieve the create-model function.
+    virtual DestroyModelFunc GetDestroyModelFunc() const = 0;          ///< Retrieve the destroy-model function.
+    virtual BooleanOperationFunc GetBooleanOperationFunc() const = 0;  ///< Retrieve the boolean-operation function.
+    virtual CreateBox GetCreateBoxFunc() const = 0;                    ///< Retrieve the box factory.
+    virtual CreateSphere GetCreateSphereFunc() const = 0;              ///< Retrieve the sphere factory.
+    virtual CreateCylinder GetCreateCylinderFunc() const = 0;          ///< Retrieve the cylinder factory.
+    virtual SetThicknessFunc GetSetThicknessFunc() const = 0;          ///< Retrieve the thickness setter.
+    virtual CreatePrismFunc GetCreatePrismFunc() const = 0;            ///< Retrieve the single-polygon extrude factory.
+    virtual CreatePrismExFunc GetCreatePrismExFunc() const = 0;        ///< Retrieve the multi-polygon extrude factory.
 };
 /**
  * @class UserCustomCADDll
@@ -56,16 +56,16 @@ public:
     friend class UserCustomCADModel;
     /// Load the library at dllPath and resolve the entry function named addedFunName.
     UserCustomCADDll(std::string_view dllPath, std::string_view addedFunName);
-    CreateModelFunc GetCreateModelFunc() const override;         ///< Retrieve the create-model function.
-    DestroyModelFunc GetDestroyModelFunc() const override;       ///< Retrieve the destroy-model function.
+    CreateModelFunc GetCreateModelFunc() const override;            ///< Retrieve the create-model function.
+    DestroyModelFunc GetDestroyModelFunc() const override;          ///< Retrieve the destroy-model function.
     BooleanOperationFunc GetBooleanOperationFunc() const override;  ///< Retrieve the boolean-operation function.
-    CreateBox GetCreateBoxFunc() const override;                 ///< Retrieve the box factory.
-    CreateSphere GetCreateSphereFunc() const override;           ///< Retrieve the sphere factory.
-    CreateCylinder GetCreateCylinderFunc() const override;       ///< Retrieve the cylinder factory.
-    SetThicknessFunc GetSetThicknessFunc() const override;       ///< Retrieve the thickness setter.
-    CreatePrismFunc GetCreatePrismFunc() const override;         ///< Retrieve the single-polygon extrude factory.
-    CreatePrismExFunc GetCreatePrismExFunc() const override;     ///< Retrieve the multi-polygon extrude factory.
-    ~UserCustomCADDll();                                         ///< Unload the library.
+    CreateBox GetCreateBoxFunc() const override;                    ///< Retrieve the box factory.
+    CreateSphere GetCreateSphereFunc() const override;              ///< Retrieve the sphere factory.
+    CreateCylinder GetCreateCylinderFunc() const override;          ///< Retrieve the cylinder factory.
+    SetThicknessFunc GetSetThicknessFunc() const override;          ///< Retrieve the thickness setter.
+    CreatePrismFunc GetCreatePrismFunc() const override;            ///< Retrieve the single-polygon extrude factory.
+    CreatePrismExFunc GetCreatePrismExFunc() const override;        ///< Retrieve the multi-polygon extrude factory.
+    ~UserCustomCADDll();                                            ///< Unload the library.
 
 private:
     class Impl;
@@ -105,11 +105,9 @@ public:
     /// Apply an affine transform to the model.
     void Transform(const Eigen::Transform<float, 3, Eigen::Affine>& transform) override;
     /// Boolean operation with another model; operation is one of "union", "intersection", "difference".
-    void BooleanOperation(const UserCustomCADModel& other,
-                          const std::string& operation);
+    void BooleanOperation(const UserCustomCADModel& other, const std::string& operation);
     /// Get the axis-aligned bounding box of the model.
-    void BoundingBox(Eigen::Vector3f& min,
-                     Eigen::Vector3f& max) const override;
+    void BoundingBox(Eigen::Vector3f& min, Eigen::Vector3f& max) const override;
     /// Get the signed volume of the model.
     float Volume() const override;
     /// Get the mesh as a (vertices, faces) pair in libigl style.

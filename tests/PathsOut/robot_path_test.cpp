@@ -27,9 +27,9 @@ std::string ReadAll(const std::filesystem::path& p)
 // dump exercise every branch of the RLPointType switch.
 std::vector<RLPoint> AllKindPoints()
 {
-    const RLPointType kinds[] = {RLPointType::MoveJ,     RLPointType::MoveL,     RLPointType::MoveC,
+    const RLPointType kinds[] = {RLPointType::MoveJ,         RLPointType::MoveL,        RLPointType::MoveC,
                                  RLPointType::ProgramLStart, RLPointType::ProgramStart, RLPointType::ProgramCStart,
-                                 RLPointType::ProgramL,  RLPointType::ProgramC,  RLPointType::ProgramLEnd,
+                                 RLPointType::ProgramL,      RLPointType::ProgramC,     RLPointType::ProgramLEnd,
                                  RLPointType::ProgramCEnd};
     std::vector<RLPoint> pts;
     float x = 1.0f;
@@ -150,8 +150,7 @@ BOOST_AUTO_TEST_CASE(lua_script_sees_points_and_start)
     BOOST_CHECK_EQUAL(path.ToString("return string.format('%.1f', startPoint.x)"), "7.0");
 
     // every point kind round-trips through RLPointTypeToString
-    auto types = path.ToString(
-        "local t = {} for i=1,#points do t[i]=points[i].type end return table.concat(t, ',')");
+    auto types = path.ToString("local t = {} for i=1,#points do t[i]=points[i].type end return table.concat(t, ',')");
     BOOST_CHECK_NE(types.find("MoveC"), std::string::npos);
 }
 

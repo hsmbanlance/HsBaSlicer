@@ -207,8 +207,6 @@ int main()
 #include "base/coroutine.hpp"
 #include <iostream>
 
-#if __cpp_lib_coroutine && __cpp_impl_coroutine
-
 using namespace HsBa::Slicer;
 using namespace HsBa::Slicer::Utils;
 
@@ -241,8 +239,6 @@ int main()
     
     return 0;
 }
-
-#endif
 ```
 
 ### 6. Parallel Computation Example
@@ -297,7 +293,7 @@ int main()
 - **Lifecycle**: ThreadPool automatically waits for all tasks to complete and joins all threads during destruction
 - **Exception Propagation**: Exceptions in tasks are propagated to the caller through `std::future::get()`
 - **Thread Safety**: submit, PendingTasks, ActiveTasks, and WaitAll are all thread-safe
-- **Coroutine Support**: ThreadPoolExecutor requires C++20 coroutine support (`__cpp_lib_coroutine` and `__cpp_impl_coroutine`)
+- **Coroutine Support**: C++20 coroutines are a mandatory feature across all platforms in this project; `ThreadPoolExecutor` itself is only gated by the `HSBA_ENABLE_THREAD_POOL_COROUTINE` build option
 - **Default Pool**: If no pool is specified, ThreadPoolExecutor automatically creates a default pool instance
 - **Performance Optimization**:
   - Avoid submitting too many short tasks; the task queue itself has overhead

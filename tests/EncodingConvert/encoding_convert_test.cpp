@@ -40,7 +40,7 @@ BOOST_AUTO_TEST_CASE(latin1_to_utf8)
 // present in both encodings; this also fails if the direction is inverted.
 BOOST_AUTO_TEST_CASE(round_trip_is_lossless)
 {
-    const std::string original = std::string("caf\xC3\xA9", 5); // "café" in UTF-8
+    const std::string original = std::string("caf\xC3\xA9", 5);  // "café" in UTF-8
     const std::string latin1 = HsBa::Slicer::encoding_convert(original, "UTF-8", "ISO-8859-1");
     const std::string back = HsBa::Slicer::encoding_convert(latin1, "ISO-8859-1", "UTF-8");
     BOOST_CHECK_EQUAL(back, original);

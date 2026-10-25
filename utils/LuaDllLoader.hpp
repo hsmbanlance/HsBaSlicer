@@ -30,9 +30,10 @@ public:
     /**
      * @brief Construct the loader for a DLL file path.
      *
-     * @param dllPath Path to the DLL to load.
+     * @param dllPath Path to the DLL to load. It is copied first: a string_view is not necessarily
+     * NUL-terminated, and boost::dll would keep reading past its end.
      */
-    DllLoader(std::string_view dllPath) : m_dll(dllPath.data()) {}
+    DllLoader(std::string_view dllPath) : m_dll(std::string(dllPath)) {}
 
     /**
      * @brief Retrieve a function symbol from the loaded DLL.
@@ -67,7 +68,7 @@ public:
      *
      * @param dllPath New DLL file path.
      */
-    void Reload(std::string_view dllPath) { m_dll.load(dllPath.data()); }
+    void Reload(std::string_view dllPath) { m_dll.load(std::string(dllPath)); }
 
     /**
      * @brief Unload the currently loaded DLL.
@@ -151,7 +152,7 @@ T lua_arg_to(lua_State* L, int index)
 
 // Unpack Lua stack arguments (positions 3..) and invoke the resolved native function.
 template <typename Ret, typename... Args, std::size_t... I>
-Ret call_dll(Ret(*func)(Args...), lua_State* L, std::index_sequence<I...>)
+Ret call_dll(Ret (*func)(Args...), lua_State* L, std::index_sequence<I...>)
 {
     return func(lua_arg_to<Args>(L, static_cast<int>(3 + I))...);
 }
@@ -160,12 +161,10 @@ template <typename Ret, typename... Args>
 int lua_dll_get_function(lua_State* L)
 {
     auto* dll = (DllLoader*)lua_topointer(L, 1);
-    std::string function_name = luaL_checkstring(L, 2);
+    std::string_view const function_name = luaL_checkstring(L, 2);
     if (!dll)
     {
-        lua_pushstring(L, std::format("Invalid DllLoader object").c_str());
-        lua_error(L);
-        return 0;
+        return raise_lua_error(L, "Invalid DllLoader object");
     }
     try
     {
@@ -174,44 +173,41 @@ int lua_dll_get_function(lua_State* L)
         // decays to a real function pointer; `get<Ret(*)(Args...)>` (the previous
         // code) would instead read the symbol as a data object holding a pointer
         // (see the note in pointcloud/UserCustomPointCloudModel.cpp).
-        auto func = dll->GetFunction<Ret(Args...)>(function_name);
+        auto func = dll->GetFunction<Ret(Args...)>(std::string(function_name));
         lua_pushlightuserdata(L, reinterpret_cast<void*>(func));
         return 1;
     }
     catch (const std::exception& e)
     {
         lua_pushstring(L, e.what());
-        lua_error(L);
-        return 0;
     }
+    // raise only after the handler: lua_error longjmps and would skip the destruction of
+    // the exception object owned by the handler
+    return lua_error(L);
 }
 template <typename Ret, typename... Args>
 int lua_dll_call_function(lua_State* L)
 {
     auto* dll = (DllLoader*)lua_topointer(L, 1);
-    std::string function_name = luaL_checkstring(L, 2);
+    std::string_view const function_name = luaL_checkstring(L, 2);
     // arguments start from index 3
 
     if (!dll)
     {
-        lua_pushstring(L, std::format("Invalid DllLoader object").c_str());
-        lua_error(L);
-        return 0;
+        return raise_lua_error(L, "Invalid DllLoader object");
     }
 
     int top = lua_gettop(L);
     if (sizeof...(Args) != static_cast<std::size_t>(top - 2))
     {
-        lua_pushstring(L, std::format("Expected {} arguments but got {}", sizeof...(Args), top - 2).c_str());
-        lua_error(L);
-        return 0;
+        return raise_lua_error(L, "Expected {} arguments but got {}", sizeof...(Args), top - 2);
     }
     try
     {
         // Resolve the exported function by its function-type signature; `auto`
         // decays the returned function reference into a real `Ret(*)(Args...)`
         // pointer (see the note in pointcloud/UserCustomPointCloudModel.cpp).
-        auto func = dll->GetFunction<Ret(Args...)>(function_name);
+        auto func = dll->GetFunction<Ret(Args...)>(std::string(function_name));
         if constexpr (std::is_void_v<Ret>)
         {
             call_dll<Ret, Args...>(func, L, std::index_sequence_for<Args...>{});
@@ -239,9 +235,9 @@ int lua_dll_call_function(lua_State* L)
     catch (const std::exception& e)
     {
         lua_pushstring(L, e.what());
-        lua_error(L);
-        return 0;
     }
+    // raise only after the handler, see lua_dll_get_function
+    return lua_error(L);
 }
 
 template <Utils::TemplateString TName, typename Ret, typename... Args>

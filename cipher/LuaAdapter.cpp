@@ -24,8 +24,8 @@ int l_base64_encode(lua_State* L)
     catch (const std::exception& e)
     {
         lua_pushstring(L, e.what());
-        return lua_error(L);
     }
+    return lua_error(L);
 }
 
 int l_base64_decode(lua_State* L)
@@ -42,8 +42,8 @@ int l_base64_decode(lua_State* L)
     catch (const std::exception& e)
     {
         lua_pushstring(L, e.what());
-        return lua_error(L);
     }
+    return lua_error(L);
 }
 
 int l_hex_encode(lua_State* L)
@@ -60,8 +60,8 @@ int l_hex_encode(lua_State* L)
     catch (const std::exception& e)
     {
         lua_pushstring(L, e.what());
-        return lua_error(L);
     }
+    return lua_error(L);
 }
 
 int l_hex_decode(lua_State* L)
@@ -78,8 +78,8 @@ int l_hex_decode(lua_State* L)
     catch (const std::exception& e)
     {
         lua_pushstring(L, e.what());
-        return lua_error(L);
     }
+    return lua_error(L);
 }
 
 const luaL_Reg cipherLib[] = {{.name = "base64_encode", .func = l_base64_encode},

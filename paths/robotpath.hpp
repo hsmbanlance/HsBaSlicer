@@ -34,21 +34,21 @@ enum class RLPointType
 /// Supported robot language brands.
 enum class RLType
 {
-    Unknown = -1,                   ///< Unspecified/unknown brand.
-    Abb,                            ///< ABB RobotStudio code.
-    Kuka,                           ///< KUKA KRL code.
-    Fanuc,                          ///< FANUC TP code.
-    Undefine = ROBOT_UNDEFINED_TYPE, ///< Explicit undefined marker.
+    Unknown = -1,                     ///< Unspecified/unknown brand.
+    Abb,                              ///< ABB RobotStudio code.
+    Kuka,                             ///< KUKA KRL code.
+    Fanuc,                            ///< FANUC TP code.
+    Undefine = ROBOT_UNDEFINED_TYPE,  ///< Explicit undefined marker.
 };
 
 /// A single robot path point with its end/middle position, velocity and command kind.
 struct RLPoint
 {
-    OutPoints3 end;                              ///< End position of the move.
-    OutPoints3 middle;                           ///< Middle/via position (for circular moves).
-    float velocity = DEFAULT_ROBOT_VELOCITY;     ///< Move velocity.
-    RLPointType type = RLPointType::MoveL;       ///< Motion/program command kind.
-    size_t programIndex = 0;                     ///< Index used for program-block pairing.
+    OutPoints3 end;                           ///< End position of the move.
+    OutPoints3 middle;                        ///< Middle/via position (for circular moves).
+    float velocity = DEFAULT_ROBOT_VELOCITY;  ///< Move velocity.
+    RLPointType type = RLPointType::MoveL;    ///< Motion/program command kind.
+    size_t programIndex = 0;                  ///< Index used for program-block pairing.
 };
 
 /**

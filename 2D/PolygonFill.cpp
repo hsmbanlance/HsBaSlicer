@@ -162,7 +162,7 @@ std::vector<std::vector<std::pair<Point2D, Point2D>>> LineFilling(const Polygons
         for (const auto& c : clipped)
         {
             PolygonD const pc = UnIntegerization(c);
-            if (pc.empty())
+            if (pc.empty()) [[unlikely]]
             {
                 continue;
             }
@@ -272,9 +272,10 @@ Polygons OffsetOnly(const Polygons& poly, double delta, size_t inner, size_t out
 // registered function: generate_fill(poly_table)
 int l_report(lua_State* L, const char* fname, const char* msg)
 {
-    std::ostringstream oss;
-    oss << "Error in Lua function '" << fname << "': " << msg;
-    return luaL_error(L, "%s", oss.str().c_str());
+    // raise_lua_error_with_where formats into a trivially destructible buffer, which is the only
+    // shape that is safe for lua_error's longjmp on both MSVC (unwinding) and POSIX (raw jump).
+    return raise_lua_error_with_where(L, "Error in Lua function '{}': {}", std::string_view{fname},
+                                      std::string_view{msg});
 }
 
 int l_offsetFill(lua_State* L)
@@ -822,7 +823,7 @@ Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg
     for (size_t r = 0; r < rows.size(); ++r)
     {
         auto& segs = rows[r];
-        if (segs.empty())
+        if (segs.empty()) [[unlikely]]
         {
             continue;
         }
@@ -833,7 +834,7 @@ Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg
                 double const dx = b.x - a.x;
                 double const dy = b.y - a.y;
                 double const len = std::hypot(dx, dy);
-                if (len <= 1e-12)
+                if (len <= 1e-12) [[unlikely]]
                 {
                     continue;
                 }
@@ -852,7 +853,7 @@ Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg
                 Point2D const aa{a2.x + (b2.x - a2.x) * t0, a2.y + (b2.y - a2.y) * t0};
                 Point2D const bb{a2.x + (b2.x - a2.x) * t1, a2.y + (b2.y - a2.y) * t1};
 
-                if (polylines.empty())
+                if (polylines.empty()) [[unlikely]]
                 {
                     polylines.emplace_back();
                     polylines.back().push_back(aa);
@@ -894,7 +895,7 @@ Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg
                 double const dx = b.x - a.x;
                 double const dy = b.y - a.y;
                 double const len = std::hypot(dx, dy);
-                if (len <= 1e-12)
+                if (len <= 1e-12) [[unlikely]]
                 {
                     continue;
                 }
@@ -913,7 +914,7 @@ Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg
                 Point2D const aa{a2.x + (b2.x - a2.x) * t0, a2.y + (b2.y - a2.y) * t0};
                 Point2D const bb{a2.x + (b2.x - a2.x) * t1, a2.y + (b2.y - a2.y) * t1};
 
-                if (polylines.empty())
+                if (polylines.empty()) [[unlikely]]
                 {
                     polylines.emplace_back();
                     polylines.back().push_back(aa);
@@ -947,7 +948,7 @@ Polygons SimpleZigzagFill(const Polygons& poly, double spacing, double angle_deg
     // convert polylines to integer Polygons
     for (auto& pl : polylines)
     {
-        if (pl.empty())
+        if (pl.empty()) [[unlikely]]
         {
             continue;
         }
@@ -1304,7 +1305,7 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
 
     auto push_seg_to_current = [&](std::vector<Point2D>& pl, const Point2D& aa, const Point2D& bb)
     {
-        if (pl.empty())
+        if (pl.empty()) [[unlikely]]
         {
             pl.push_back(aa);
             pl.push_back(bb);
@@ -1322,7 +1323,7 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
         double const dx = b.x - a.x;
         double const dy = b.y - a.y;
         double const len = std::hypot(dx, dy);
-        if (len <= 1e-12)
+        if (len <= 1e-12) [[unlikely]]
         {
             return false;
         }
@@ -1344,7 +1345,7 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
     for (size_t r = 0; r < rows.size(); ++r)
     {
         auto& segs = rows[r];
-        if (segs.empty())
+        if (segs.empty()) [[unlikely]]
         {
             continue;
         }
@@ -1365,7 +1366,7 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
                     continue;
                 }
 
-                if (polylines.empty())
+                if (polylines.empty()) [[unlikely]]
                 {
                     polylines.emplace_back();
                     push_seg_to_current(polylines.back(), aa, bb);
@@ -1447,7 +1448,7 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
                     continue;
                 }
 
-                if (polylines.empty())
+                if (polylines.empty()) [[unlikely]]
                 {
                     polylines.emplace_back();
                     push_seg_to_current(polylines.back(), aa, bb);
@@ -1510,7 +1511,7 @@ Polygons ZigzagFill(const Polygons& poly, double spacing, double angle_deg, doub
     // convert polylines to integer polygons
     for (auto& pl : polylines)
     {
-        if (pl.empty())
+        if (pl.empty()) [[unlikely]]
         {
             continue;
         }
