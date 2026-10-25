@@ -1,0 +1,5 @@
+- Every handler follows the same shape: compute `DataFormat fmt = TargetFormat(req, ctx.cfg)`, build a plain aggregate view struct, and emit it through `ReplyValue(res, status, view, fmt, "Root")`.
+- Errors are returned uniformly via `ReplyError(res, http_code, message, detail, fmt)`, which wraps them in an `ErrorView` with the same root-name convention.
+- Pipeline kind names flow wire-side as lowercase strings parsed by `ParseKind`/`IsValidKind`/`KindName` rather than raw `HsBaPipelineKind` enums across the HTTP boundary.
+- Config objects cross the DLL boundary only as opaque `void*` heap pointers allocated by `CreateDefaultConfig` and freed by `DestroyConfig`, with string buffers owned by a `StringArena` passed alongside.
+- All public headers use the `#ifndef HSBA_SLICER_RESTAPI_<NAME>__HPP` include guard pattern under the `HsBa::Slicer::RestApi` namespace.

@@ -1,0 +1,1 @@
+Optional standalone HTTP server (cpp-httplib) that exposes the full HsBaSlicer slicing pipeline as a JSON/XML REST API with async job queuing, status polling and result download.

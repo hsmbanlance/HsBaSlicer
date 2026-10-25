@@ -8,7 +8,16 @@
 - [DllHsBaSlicer/custom_pipeline.cpp](file://DllHsBaSlicer/custom_pipeline.cpp)
 - [DllHsBaSlicer/fdm_pipeline.cpp](file://DllHsBaSlicer/fdm_pipeline.cpp)
 - [DllHsBaSlicer/sla_pipeline.cpp](file://DllHsBaSlicer/sla_pipeline.cpp)
+- [CMakeLists.txt](file://CMakeLists.txt)
+- [static_check/feature_check.cmake](file://static_check/feature_check.cmake)
 </cite>
+
+## 更新摘要
+**变更内容**   
+- 将 C++20 协程从可选特性升级为强制特性
+- 移除了条件编译守卫，简化构建配置
+- 确保跨平台一致的协程行为
+- 更新了构建系统以要求编译器支持 C++20 协程
 
 ## 目录
 1. [引言](#引言)
@@ -25,13 +34,16 @@
 12. [结论](#结论)
 
 ## 引言
-本技术文档聚焦 HsBaSlicer 中 C++20 协程的支持与使用。仓库在 `base/coroutine.hpp` 中实现了任务型协程 `Task`、生成器 `Generator`、执行器抽象 `IExecutor`，以及自定义分配器的协程变体；在 `DllHsBaSlicer` 下的多个流水线函数中使用 `co_return` 暴露异步能力，并通过 `Task::get_result()` 或链式回调对外提供同步与异步两种调用方式。测试用例位于 `tests/Coroutines/coroutines_test.cpp`，中文使用说明位于 `docs/zh/base/coroutine.md`。
+本技术文档聚焦 HsBaSlicer 中 C++20 协程的支持与使用。**重要更新**：C++20 协程现已成为项目的强制特性，不再需要条件编译检查。仓库在 `base/coroutine.hpp` 中实现了任务型协程 `Task`、生成器 `Generator`、执行器抽象 `IExecutor`，以及自定义分配器的协程变体；在 `DllHsBaSlicer` 下的多个流水线函数中使用 `co_return` 暴露异步能力，并通过 `Task::get_result()` 或链式回调对外提供同步与异步两种调用方式。测试用例位于 `tests/Coroutines/coroutines_test.cpp`，中文使用说明位于 `docs/zh/base/coroutine.md`。
+
+**更新**：C++20 协程现在是强制特性，所有编译器必须支持协程功能才能构建项目。
 
 ## 项目结构中的协程位置
 - 协程基础设施：`base/coroutine.hpp`
 - 协程单元测试：`tests/Coroutines/coroutines_test.cpp`
 - 协程中文文档：`docs/zh/base/coroutine.md`
 - 协程在流水线中的实际使用：`DllHsBaSlicer/custom_pipeline.cpp`、`fdm_pipeline.cpp`、`sla_pipeline.cpp`
+- 构建系统配置：`CMakeLists.txt`、`static_check/feature_check.cmake`
 
 ```mermaid
 graph TB
@@ -40,6 +52,8 @@ A --> C["DllHsBaSlicer/fdm_pipeline.cpp"]
 A --> D["DllHsBaSlicer/sla_pipeline.cpp"]
 E["tests/Coroutines/coroutines_test.cpp"] --> A
 F["docs/zh/base/coroutine.md"] --> A
+G["CMakeLists.txt<br/>强制协程支持"] --> A
+H["static_check/feature_check.cmake<br/>协程检测"] --> G
 ```
 
 **图表来源**
@@ -49,6 +63,8 @@ F["docs/zh/base/coroutine.md"] --> A
 - [DllHsBaSlicer/custom_pipeline.cpp:120-213](file://DllHsBaSlicer/custom_pipeline.cpp#L120-L213)
 - [DllHsBaSlicer/fdm_pipeline.cpp:230-429](file://DllHsBaSlicer/fdm_pipeline.cpp#L230-L429)
 - [DllHsBaSlicer/sla_pipeline.cpp:310-509](file://DllHsBaSlicer/sla_pipeline.cpp#L310-L509)
+- [CMakeLists.txt:88-96](file://CMakeLists.txt#L88-L96)
+- [static_check/feature_check.cmake:69-85](file://static_check/feature_check.cmake#L69-L85)
 
 **章节来源**
 - [base/coroutine.hpp:41-773](file://base/coroutine.hpp#L41-L773)
@@ -57,6 +73,8 @@ F["docs/zh/base/coroutine.md"] --> A
 - [DllHsBaSlicer/custom_pipeline.cpp:120-213](file://DllHsBaSlicer/custom_pipeline.cpp#L120-L213)
 - [DllHsBaSlicer/fdm_pipeline.cpp:230-429](file://DllHsBaSlicer/fdm_pipeline.cpp#L230-L429)
 - [DllHsBaSlicer/sla_pipeline.cpp:310-509](file://DllHsBaSlicer/sla_pipeline.cpp#L310-L509)
+- [CMakeLists.txt:88-96](file://CMakeLists.txt#L88-L96)
+- [static_check/feature_check.cmake:69-85](file://static_check/feature_check.cmake#L69-L85)
 
 ## 核心概念与类型
 - 执行器接口与实现
@@ -410,4 +428,6 @@ IO_Task-->>App : 返回数据
 [本节为概念性对比，不直接引用具体源码行]
 
 ## 结论
-HsBaSlicer 的协程支持以 `Task` 与 `Generator` 为核心，结合执行器抽象与自定义分配器，提供了灵活、可扩展的异步编程基础。流水线函数通过 `co_return` 暴露结果，并在 C API 层提供同步与异步两种调用方式。在实际工程中，建议根据任务特征选择合适的执行器，结合线程池与内存池优化性能，并通过链式回调与异常处理机制提升可维护性与可观测性。
+HsBaSlicer 的协程支持以 `Task` 与 `Generator` 为核心，结合执行器抽象与自定义分配器，提供了灵活、可扩展的异步编程基础。**重要更新**：C++20 协程现已成为项目的强制特性，所有编译器必须支持协程功能才能构建项目。这简化了构建配置并确保跨平台一致的协程行为。流水线函数通过 `co_return` 暴露结果，并在 C API 层提供同步与异步两种调用方式。在实际工程中，建议根据任务特征选择合适的执行器，结合线程池与内存池优化性能，并通过链式回调与异常处理机制提升可维护性与可观测性。
+
+**更新**：由于 C++20 协程现在是强制特性，开发者无需担心编译器兼容性问题，可以专注于协程的最佳实践和性能优化。

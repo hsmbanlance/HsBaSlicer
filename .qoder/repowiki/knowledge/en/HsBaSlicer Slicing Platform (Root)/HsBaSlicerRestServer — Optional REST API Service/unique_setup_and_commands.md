@@ -1,0 +1,1 @@
+Build only when top-level `HSBA_BUILD_REST_API=ON` (default OFF, desktop-only); the CMake script copies `restapi.ini` next to the built executable via a POST_BUILD custom command so a fresh checkout can run `HsBaSlicerRestServer` without `--config`.

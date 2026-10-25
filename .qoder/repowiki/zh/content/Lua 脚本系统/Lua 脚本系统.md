@@ -15,8 +15,17 @@
 - [lua_pipeline.cpp](file://LibHsBaSlicer/Extends/lua_pipeline.cpp)
 - [custom_fill.lua](file://tests/PolygonFill/custom_fill.lua)
 - [my_infill.lua](file://samples/FDM/scripts/my_infill.lua)
-- [my_support.lua](file://samples/FDM/scripts/my_support.lua)
+- [LuaNewObject.hpp](file://utils/LuaNewObject.hpp)
+- [LuaAnyObject.cpp](file://utils/LuaAnyObject.cpp)
+- [fileoperator/LuaAdapter.cpp](file://fileoperator/LuaAdapter.cpp)
 </cite>
+
+## 更新摘要
+**所做更改**
+- 新增内存安全与异常处理机制章节，详细说明 longjmp 相关的安全改进
+- 更新错误处理部分，反映 std::array 缓冲区替代 std::string 的新实现
+- 增强性能优化建议，包含新的内存管理最佳实践
+- 添加 guarded() 包装器和 raise_lua_error 函数的详细说明
 
 ## 目录
 1. [引言](#引言)
@@ -24,11 +33,12 @@
 3. [核心组件](#核心组件)
 4. [架构总览](#架构总览)
 5. [详细组件分析](#详细组件分析)
-6. [依赖关系分析](#依赖关系分析)
-7. [性能与数据交换](#性能与数据交换)
-8. [调试与故障排除](#调试与故障排除)
-9. [结论](#结论)
-10. [附录：Lua API 参考](#附录lua-api-参考)
+6. [内存安全与异常处理](#内存安全与异常处理)
+7. [依赖关系分析](#依赖关系分析)
+8. [性能与数据交换](#性能与数据交换)
+9. [调试与故障排除](#调试与故障排除)
+10. [结论](#结论)
+11. [附录：Lua API 参考](#附录lua-api-参考)
 
 ## 引言
 本文件面向 HsBaSlicer 的 Lua 脚本系统，系统性说明以下主题：
@@ -37,6 +47,7 @@
 - 几何操作、模型处理、路径生成等可用函数与模块
 - 自定义填充算法、支撑生成器与导出脚本的编写方式
 - 脚本执行环境、错误处理机制与调试技巧
+- **新增**：内存安全改进、longjmp 处理和异常安全保证
 - 脚本与 C++ 核心的数据交换格式与性能考虑
 
 ## 项目结构
@@ -47,6 +58,7 @@ Lua 脚本能力由多个层次协作实现：
 - Support 层提供基于 Lua 的自定义支撑生成器
 - PolygonFill 提供基于 Lua 的自定义填充入口
 - 通用类型系统通过 AnyObject 反射将常见数学与几何类型暴露给 Lua
+- **新增**：utils 层提供内存安全的错误处理工具和对象生命周期管理
 
 ```mermaid
 graph TB
@@ -60,6 +72,7 @@ subgraph "库核心"
 Pool["Lua 注册函数池<br/>Add2DFunctions / Add3DFunctions / AddFileFunctions"]
 Pipeline["流水线执行<br/>RunLuaPipeline"]
 Types["通用类型注册<br/>RegisterCommonAnyObjectTypes"]
+Utils["内存安全工具<br/>guarded() / raise_lua_error()"]
 end
 subgraph "2D 几何"
 PolyOps["多边形操作<br/>booleanOperation / union / intersection / offsetOperation / area / make*"]
@@ -72,6 +85,7 @@ end
 App --> CABI
 CABI --> Pool
 Pipeline --> Types
+Pipeline --> Utils
 Pipeline --> PolyOps
 Pipeline --> LuaSupport
 Pipeline --> LuaFill
@@ -89,6 +103,7 @@ PolyOps --> Adapter
 - [LuaAdapter.cpp:311-329](file://2D/LuaAdapter.cpp#L311-L329)
 - [LuaSupport.cpp:113-178](file://support/LuaSupport.cpp#L113-L178)
 - [PolygonFill.hpp:122-136](file://2D/PolygonFill.hpp#L122-L136)
+- [LuaNewObject.hpp:43-93](file://utils/LuaNewObject.hpp#L43-L93)
 
 **章节来源**
 - [lua_register.h:1-38](file://DllHsBaSlicer/lua_register.h#L1-L38)
@@ -98,9 +113,10 @@ PolyOps --> Adapter
 - [LuaAdapter.hpp:16-81](file://2D/LuaAdapter.hpp#L16-L81)
 - [LuaSupport.hpp:21-67](file://support/LuaSupport.hpp#L21-L67)
 - [PolygonFill.hpp:122-136](file://2D/PolygonFill.hpp#L122-L136)
+- [LuaNewObject.hpp:1-222](file://utils/LuaNewObject.hpp#L1-L222)
 
 ## 核心组件
-本节聚焦 Lua 脚本系统的五个关键组件及其职责。
+本节聚焦 Lua 脚本系统的六个关键组件及其职责。
 
 - C ABI 扩展注册入口
   - 提供 HsBaAdd2DFunction、HsBaAdd3DFunction、HsBaAddFileFunction、HsBaAddEventCallback
@@ -122,6 +138,11 @@ PolyOps --> Adapter
   - LuaSupport：以 Lua 脚本替换内置支撑算法，支持 inline 或文件脚本，支持外部注册函数注入
   - LuaCustomFillString：以 Lua 脚本替换内置填充算法，返回填充多边形
 
+- **新增**：内存安全工具
+  - guarded()：注册安全的包装器，避免 longjmp 导致的内存泄漏和双重释放
+  - raise_lua_error()：使用 std::array 缓冲区的异常安全错误抛出
+  - NewLuaObject/LuaGC：安全的对象生命周期管理
+
 **章节来源**
 - [lua_register.h:21-31](file://DllHsBaSlicer/lua_register.h#L21-L31)
 - [LuaAddFunction.hpp:24-74](file://LibHsBaSlicer/Extends/LuaAddFunction.hpp#L24-L74)
@@ -131,6 +152,7 @@ PolyOps --> Adapter
 - [LuaAdapter.cpp:311-329](file://2D/LuaAdapter.cpp#L311-L329)
 - [LuaSupport.hpp:21-67](file://support/LuaSupport.hpp#L21-L67)
 - [PolygonFill.hpp:122-136](file://2D/PolygonFill.hpp#L122-L136)
+- [LuaNewObject.hpp:43-137](file://utils/LuaNewObject.hpp#L43-L137)
 
 ## 架构总览
 下图展示从外部集成到 Lua 脚本执行的完整流程。
@@ -294,7 +316,7 @@ end
 
 **章节来源**
 - [LuaAdapter.hpp:16-81](file://2D/LuaAdapter.hpp#L16-L81)
-- [LuaAdapter.cpp:1-493](file://2D/LuaAdapter.cpp#L1-L493)
+- [LuaAdapter.cpp:1-518](file://2D/LuaAdapter.cpp#L1-L518)
 
 ### 自定义填充算法
 - 入口函数：
@@ -362,7 +384,7 @@ Result --> End(["返回支撑多边形"])
 
 **章节来源**
 - [LuaSupport.hpp:21-81](file://support/LuaSupport.hpp#L21-L81)
-- [LuaSupport.cpp:1-180](file://support/LuaSupport.cpp#L1-L180)
+- [LuaSupport.cpp:1-282](file://support/LuaSupport.cpp#L1-L282)
 - [my_support.lua:1-83](file://samples/FDM/scripts/my_support.lua#L1-L83)
 
 ### 流水线执行环境与生命周期
@@ -398,11 +420,130 @@ Pipe->>Script : 加载并执行 ctx.script_file
 - [lua_pipeline.cpp:950-994](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L950-L994)
 - [LuaCommonTypes.cpp:469-531](file://LibHsBaSlicer/Extends/LuaCommonTypes.cpp#L469-L531)
 
+## 内存安全与异常处理
+
+### longjmp 相关的内存安全问题
+Lua 的错误处理机制使用 `lua_error` 进行长跳转（longjmp），这在跨平台环境下存在严重的内存安全问题：
+
+- **MSVC x64 行为**：通过 RtlUnwind 路由 longjmp，会执行每个被跳过帧中注册的析构函数
+- **POSIX 行为**：直接跳转到目标位置，不执行任何析构函数
+- **问题表现**：
+  - Windows 上：已销毁的对象被双重释放（double-free）
+  - Linux 上：仍存活的对象发生内存泄漏
+
+### 解决方案：std::array 缓冲区与隔离框架
+
+#### guarded() 包装器
+`guarded()` 模板函数提供了一个安全的错误抛出框架：
+
+```cpp
+template <LuaErrorWorker Worker>
+HSBA_NOINLINE int guarded(lua_State* L)
+{
+    const int results = Worker(L);
+    if (results < 0)
+    {
+        return lua_error(L);  // the worker already pushed the message and left the stack
+    }
+    return results;
+}
+```
+
+关键特性：
+- 使用 `HSBA_NOINLINE` 确保函数不被内联
+- 将实际的错误抛出放在独立的栈帧中
+- Worker 函数通过函数指针调用，无法被内联
+- 当 Worker 返回负值时，raise 发生在干净的栈帧中
+
+#### raise_lua_error() 函数
+使用 `std::array<char, 512>` 替代 `std::string` 缓冲区：
+
+```cpp
+template <typename... Args>
+inline int raise_lua_error(lua_State* L, std::format_string<Args...> fmt, Args&&... args)
+{
+    std::array<char, 512> buffer{};
+    const auto formatted = std::format_to_n(buffer.data(), buffer.size() - 1, fmt, std::forward<Args>(args)...);
+    const size_t length = std::min(static_cast<size_t>(formatted.size), buffer.size() - 1);
+    lua_pushlstring(L, buffer.data(), length);
+    return lua_error(L);
+}
+```
+
+优势：
+- `std::array` 是 trivially destructible 类型，不会触发析构函数
+- 消息格式化后立即复制到 Lua 管理的内存
+- 避免在 longjmp 过程中持有任何需要清理的资源
+
+#### 实际应用场景
+
+**2D 几何操作中的错误处理**：
+```cpp
+void l_booleanError(lua_State* L, std::string_view fname, std::string_view msg, std::string_view quoted_detail = {})
+{
+    std::array<char, 512> buffer{};
+    const auto formatted = std::format_to_n(buffer.data(), buffer.size() - 1, 
+        "Error in Lua function '{}': {}", fname, msg);
+    const size_t length = std::min(static_cast<size_t>(formatted.size), buffer.size() - 1);
+    luaL_where(L, 1);
+    lua_pushlstring(L, buffer.data(), length);
+    lua_concat(L, 2);
+    lua_error(L);
+}
+```
+
+**ParamStore 操作的 RAII 保护**：
+```cpp
+struct ConfigGuard {
+    Utils::TypeInfo* ti = nullptr;
+    void* ptr = nullptr;
+    ~ConfigGuard() {
+        if (ptr && ti) {
+            ti->destroy(ptr);
+        }
+    }
+};
+```
+
+**支撑生成器的资源管理**：
+```cpp
+// 多边形容器必须在 lua_error 的 longjmp 之前释放
+{
+    PolygonsD const current_layer = LuaTableToPolygonsD(L, 2);
+    PolygonsD const prev_layer = LuaTableToPolygonsD(L, 3);
+    // ... 处理逻辑 ...
+    try {
+        // 可能抛出的异常
+    } catch (const std::exception& e) {
+        lua_pushstring(L, e.what());
+    }
+} // 作用域结束，自动释放多边形容器
+return lua_error(L); // 现在可以安全地抛出错误
+```
+
+### 最佳实践指南
+
+1. **使用 guarded() 包装所有可能抛出异常的绑定函数**
+2. **使用 raise_lua_error() 替代直接的 lua_error() 调用**
+3. **将大型对象的生命周期限制在局部作用域中**
+4. **避免在错误路径上持有需要清理的资源**
+5. **使用 RAII 包装器管理动态分配的资源**
+
+**章节来源**
+- [LuaNewObject.hpp:43-93](file://utils/LuaNewObject.hpp#L43-L93)
+- [LuaNewObject.hpp:95-117](file://utils/LuaNewObject.hpp#L95-L117)
+- [LuaAdapter.cpp:19-42](file://2D/LuaAdapter.cpp#L19-L42)
+- [fileoperator/LuaAdapter.cpp:1389-1402](file://fileoperator/LuaAdapter.cpp#L1389-L1402)
+- [fileoperator/LuaAdapter.cpp:1520-1524](file://fileoperator/LuaAdapter.cpp#L1520-L1524)
+- [support/LuaAdapter.cpp:184-203](file://support/LuaAdapter.cpp#L184-L203)
+- [LuaAnyObject.cpp:22-93](file://utils/LuaAnyObject.cpp#L22-L93)
+
 ## 依赖关系分析
 - 外部集成依赖 DllHsBaSlicer 的 C ABI 注册函数
 - 内部依赖 LibHsBaSlicer 的注册函数池与通用类型系统
 - 2D 几何依赖 LuaAdapter 的多边形转换与几何函数
 - 支撑与填充依赖各自的 Lua 接口与 PolygonOperations
+- **新增**：所有绑定函数都依赖 utils 层的内存安全工具
 
 ```mermaid
 graph LR
@@ -410,6 +551,7 @@ External["外部集成"] --> CABI["DllHsBaSlicer C ABI"]
 CABI --> Pools["LibHsBaSlicer 注册函数池"]
 Pools --> Pipeline["流水线执行"]
 Pipeline --> Types["通用类型系统"]
+Pipeline --> Utils["内存安全工具"]
 Pipeline --> Geo["2D 几何与多边形适配器"]
 Pipeline --> Support["自定义支撑生成器"]
 Pipeline --> Fill["自定义填充"]
@@ -423,15 +565,17 @@ Pipeline --> Fill["自定义填充"]
 - [LuaAdapter.cpp:487-491](file://2D/LuaAdapter.cpp#L487-L491)
 - [LuaSupport.cpp:113-178](file://support/LuaSupport.cpp#L113-L178)
 - [PolygonFill.hpp:122-136](file://2D/PolygonFill.hpp#L122-L136)
+- [LuaNewObject.hpp:43-93](file://utils/LuaNewObject.hpp#L43-L93)
 
 **章节来源**
 - [lua_register.h:1-38](file://DllHsBaSlicer/lua_register.h#L1-L38)
 - [LuaAddFunction.hpp:1-78](file://LibHsBaSlicer/Extends/LuaAddFunction.hpp#L1-L78)
 - [lua_pipeline.cpp:950-994](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L950-L994)
 - [LuaCommonTypes.cpp:469-531](file://LibHsBaSlicer/Extends/LuaCommonTypes.cpp#L469-L531)
-- [LuaAdapter.cpp:1-493](file://2D/LuaAdapter.cpp#L1-L493)
-- [LuaSupport.cpp:1-180](file://support/LuaSupport.cpp#L1-L180)
+- [LuaAdapter.cpp:1-518](file://2D/LuaAdapter.cpp#L1-L518)
+- [LuaSupport.cpp:1-282](file://support/LuaSupport.cpp#L1-L282)
 - [PolygonFill.hpp:122-136](file://2D/PolygonFill.hpp#L122-L136)
+- [LuaNewObject.hpp:1-222](file://utils/LuaNewObject.hpp#L1-L222)
 
 ## 性能与数据交换
 - 数据交换格式
@@ -446,8 +590,10 @@ Pipeline --> Fill["自定义填充"]
 - 几何操作优化
   - 使用 PolygonOperations 的批量操作（如 union/intersection）减少中间表数量
   - 合理设置线段分段数（如 makeCircle/makeEllipse 的 segments），平衡精度与性能
-
-[本节为通用指导，不直接分析具体文件]
+- **新增**：内存安全优化
+  - 使用 std::array 缓冲区避免动态分配开销
+  - guarded() 包装器虽然增加少量函数调用开销，但消除了潜在的内存泄漏风险
+  - RAII 模式确保资源在异常情况下也能正确释放
 
 ## 调试与故障排除
 - 常见错误来源
@@ -461,16 +607,16 @@ Pipeline --> Fill["自定义填充"]
 - 错误处理机制
   - LuaSupport::Generate 在 load/pcall/函数调用失败时抛出 RuntimeError
   - PolygonOperations 函数在参数校验失败时调用 luaL_error
+  - **新增**：所有绑定函数现在使用统一的错误处理模式，提供更一致的错误信息格式
 
 **章节来源**
 - [LuaSupport.cpp:131-178](file://support/LuaSupport.cpp#L131-L178)
 - [LuaAdapter.cpp:16-53](file://2D/LuaAdapter.cpp#L16-L53)
 - [lua_pipeline.cpp:982-994](file://LibHsBaSlicer/Extends/lua_pipeline.cpp#L982-L994)
+- [LuaNewObject.hpp:43-93](file://utils/LuaNewObject.hpp#L43-L93)
 
 ## 结论
-HsBaSlicer 的 Lua 脚本系统通过清晰的注册机制、稳定的类型映射和丰富的几何操作，为自定义填充、支撑生成与导出提供了灵活而强大的扩展能力。理解其生命周期、数据交换格式与错误处理机制，有助于编写高效、可靠的脚本，并在生产环境中稳定运行。
-
-[本节为总结性内容，不直接分析具体文件]
+HsBaSlicer 的 Lua 脚本系统通过清晰的注册机制、稳定的类型映射和丰富的几何操作，为自定义填充、支撑生成与导出提供了灵活而强大的扩展能力。**最新的内存安全改进**解决了长期存在的 longjmp 相关内存泄漏和双重释放问题，通过使用 std::array 缓冲区和 guarded() 包装器，确保了跨平台的异常安全性。理解其生命周期、数据交换格式、错误处理机制和内存安全最佳实践，有助于编写高效、可靠且内存安全的脚本，并在生产环境中稳定运行。
 
 ## 附录：Lua API 参考
 
@@ -538,3 +684,14 @@ HsBaSlicer 的 Lua 脚本系统通过清晰的注册机制、稳定的类型映�
 - [LuaCommonTypes.hpp:110-143](file://LibHsBaSlicer/Extends/LuaCommonTypes.hpp#L110-L143)
 - [LuaCommonTypes.cpp:391-435](file://LibHsBaSlicer/Extends/LuaCommonTypes.cpp#L391-L435)
 - [LuaCommonTypes.cpp:438-531](file://LibHsBaSlicer/Extends/LuaCommonTypes.cpp#L438-L531)
+
+### 内存安全工具（新增）
+- guarded<Worker>()：安全的错误抛出包装器
+- raise_lua_error(L, fmt, ...)：异常安全的错误抛出
+- raise_lua_error_with_where(L, fmt, ...)：带位置信息的错误抛出
+- NewLuaObject<T>()：安全的对象创建
+- LuaGC<T>()：安全的对象销毁
+
+**章节来源**
+- [LuaNewObject.hpp:43-137](file://utils/LuaNewObject.hpp#L43-L137)
+- [LuaNewObject.hpp:167-191](file://utils/LuaNewObject.hpp#L167-L191)

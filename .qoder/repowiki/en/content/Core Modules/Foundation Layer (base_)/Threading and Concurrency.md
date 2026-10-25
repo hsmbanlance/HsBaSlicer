@@ -8,7 +8,16 @@
 - [file_transfer_pipeline.cpp](file://DllHsBaSlicer/file_transfer_pipeline.cpp)
 - [fdm_pipeline.cpp](file://DllHsBaSlicer/fdm_pipeline.cpp)
 - [error.hpp](file://base/error.hpp)
+- [CMakeLists.txt](file://CMakeLists.txt)
+- [feature_check.cmake](file://static_check/feature_check.cmake)
 </cite>
+
+## Update Summary
+**Changes Made**   
+- Updated C++20 coroutine requirements as mandatory features
+- Removed references to conditional compilation guards for core coroutine functionality
+- Clarified that ThreadPoolExecutor integration is now always available
+- Updated compiler requirement information to reflect C++20 mandate
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -22,17 +31,19 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document explains the threading and concurrency primitives in HsBaSlicer’s base directory, focusing on:
+This document explains the threading and concurrency primitives in HsBaSlicer's base directory, focusing on:
 - The `ThreadPool` implementation for parallel task execution, including work distribution, load balancing, and resource management.
-- The coroutine support built on C++20 features for asynchronous operations without callback complexity.
+- The coroutine support built on mandatory C++20 features for asynchronous operations without callback complexity.
 - Concrete usage patterns for parallelizing mesh processing tasks, implementing async file I/O with coroutines, and coordinating multiple concurrent operations.
 - Thread safety patterns, deadlock prevention, performance tuning across hardware configurations, and debugging strategies for concurrent code.
 
 The goal is to help both new and experienced users understand how HsBaSlicer achieves safe, scalable concurrency while keeping APIs clean and composable.
 
+**Updated** C++20 coroutines are now a mandatory feature with no conditional compilation guards for core functionality.
+
 ## Project Structure
 The relevant concurrency components live under `base/`, while real-world usage appears in pipeline and library modules:
-- `base/thread_pool.hpp`: thread pool and optional coroutine executor integration.
+- `base/thread_pool.hpp`: thread pool and coroutine executor integration (always available).
 - `base/coroutine.hpp`: C++20 coroutine framework, executors, task types, generators, and mapping utilities.
 - `LibHsBaSlicer/Floor/sla_floor.cpp`: demonstrates parallel layer rendering using `ThreadPool`.
 - `DllHsBaSlicer/file_transfer_pipeline.cpp`: demonstrates async file transfer via coroutines.
@@ -65,21 +76,23 @@ CORO --> FDM
 - [file_transfer_pipeline.cpp:115-149](file://DllHsBaSlicer/file_transfer_pipeline.cpp#L115-L149)
 
 **Section sources**
-- [thread_pool.hpp:1-214](file://base/thread_pool.hpp#L1-L214)
-- [coroutine.hpp:1-1091](file://base/coroutine.hpp#L1-L1091)
+- [thread_pool.hpp:1-212](file://base/thread_pool.hpp#L1-L212)
+- [coroutine.hpp:1-1051](file://base/coroutine.hpp#L1-L1051)
 - [sla_floor.cpp:430-609](file://LibHsBaSlicer/Floor/sla_floor.cpp#L430-L609)
 - [file_transfer_pipeline.cpp:1-198](file://DllHsBaSlicer/file_transfer_pipeline.cpp#L1-L198)
 - [fdm_pipeline.cpp:200-497](file://DllHsBaSlicer/fdm_pipeline.cpp#L200-L497)
 
 ## Core Components
-- ThreadPool: a bounded worker-thread pool that accepts arbitrary callable tasks, returns futures, tracks pending/active counts, supports waiting for completion, and integrates with coroutines through an executor interface when available.
-- Coroutine Framework: provides executors (`NoopExecutor`, `AsyncExecutor`, and optional `ThreadPoolExecutor`), a generic `Task<T, Executor>` type with chaining callbacks (`then`, `catching`, `finally`), a generator abstraction, and allocator-aware variants.
+- ThreadPool: a bounded worker-thread pool that accepts arbitrary callable tasks, returns futures, tracks pending/active counts, supports waiting for completion, and integrates with coroutines through an executor interface.
+- Coroutine Framework: provides executors (`NoopExecutor`, `AsyncExecutor`, and `ThreadPoolExecutor`), a generic `Task<T, Executor>` type with chaining callbacks (`then`, `catching`, `finally`), a generator abstraction, and allocator-aware variants.
 
 Key responsibilities:
 - Work distribution: `ThreadPool::submit` enqueues tasks; workers pull from a shared queue.
 - Load balancing: dynamic scheduling pattern where each worker repeatedly fetches the next index until exhaustion.
 - Resource management: controlled number of worker threads, graceful shutdown, exception handling within workers, and lifecycle synchronization.
 - Async composition: coroutines enable structured asynchronous workflows without nested callbacks.
+
+**Updated** The `ThreadPoolExecutor` is now always available without conditional compilation guards, providing seamless integration between thread pools and coroutines.
 
 **Section sources**
 - [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
@@ -100,15 +113,13 @@ participant Caller as "Caller"
 participant Task as "Task<T, Executor>"
 participant Promise as "promise_type"
 participant Executor as "IExecutor"
-participant Pool as "ThreadPool (optional)"
+participant Pool as "ThreadPool"
 Caller->>Task : co_await other_task()
 Task->>Promise : await_transform(other_task)
 Promise-->>Task : TaskAwaiter
 Task->>Executor : execute(resume_handle)
-alt Executor is ThreadPoolExecutor
 Executor->>Pool : submit(lambda)
 Pool-->>Executor : task scheduled
-end
 Note over Task,Executor : Coroutine suspends until result
 Executor-->>Task : resume()
 Task-->>Caller : value or exception
@@ -247,6 +258,8 @@ TaskAwaiter~T, Executor~ --> Task~T, Executor~ : "awaits"
 - [coroutine.hpp:205-382](file://base/coroutine.hpp#L205-L382)
 - [thread_pool.hpp:164-209](file://base/thread_pool.hpp#L164-L209)
 
+**Updated** The `ThreadPoolExecutor` is now part of the standard coroutine API without requiring conditional compilation flags.
+
 **Section sources**
 - [coroutine.hpp:47-73](file://base/coroutine.hpp#L47-L73)
 - [coroutine.hpp:81-122](file://base/coroutine.hpp#L81-L122)
@@ -290,7 +303,7 @@ Concrete patterns:
 The file transfer pipeline wraps asynchronous file operations into a coroutine:
 - Builds internal configuration from C ABI inputs.
 - Wraps progress callbacks to bridge between C and C++.
-- Calls the library’s `TransferFiles` function and maps its result into an internal structure.
+- Calls the library's `TransferFiles` function and maps its result into an internal structure.
 - Exposes synchronous and asynchronous C API entry points:
   - Synchronous: constructs a task and blocks on `get_result`.
   - Asynchronous: chains `.then` to deliver results via a callback.
@@ -344,7 +357,7 @@ Orchestrator->>Callback : .then(...)
 [No sources needed since this diagram shows conceptual workflow, not actual code structure]
 
 ## Dependency Analysis
-- `ThreadPool` depends on standard concurrency primitives and includes `coroutine.hpp` to optionally expose `ThreadPoolExecutor`.
+- `ThreadPool` depends on standard concurrency primitives and includes `coroutine.hpp` to expose `ThreadPoolExecutor`.
 - `ThreadPoolExecutor` implements `IExecutor` and defers execution to a `ThreadPool`, either user-provided or default-initialized.
 - Coroutines depend on executors to control where resumed code runs.
 - Real modules depend on these abstractions:
@@ -367,9 +380,11 @@ FTP["file_transfer_pipeline.cpp"] --> CORO
 - [fdm_pipeline.cpp:216-447](file://DllHsBaSlicer/fdm_pipeline.cpp#L216-L447)
 - [file_transfer_pipeline.cpp:115-149](file://DllHsBaSlicer/file_transfer_pipeline.cpp#L115-L149)
 
+**Updated** All coroutine functionality is now always available without conditional compilation.
+
 **Section sources**
-- [thread_pool.hpp:1-214](file://base/thread_pool.hpp#L1-L214)
-- [coroutine.hpp:1-1091](file://base/coroutine.hpp#L1-L1091)
+- [thread_pool.hpp:1-212](file://base/thread_pool.hpp#L1-L212)
+- [coroutine.hpp:1-1051](file://base/coroutine.hpp#L1-L1051)
 - [sla_floor.cpp:430-609](file://LibHsBaSlicer/Floor/sla_floor.cpp#L430-L609)
 - [fdm_pipeline.cpp:200-497](file://DllHsBaSlicer/fdm_pipeline.cpp#L200-L497)
 - [file_transfer_pipeline.cpp:1-198](file://DllHsBaSlicer/file_transfer_pipeline.cpp#L1-L198)
@@ -391,7 +406,7 @@ FTP["file_transfer_pipeline.cpp"] --> CORO
   - For I/O-heavy pipelines, prefer coroutines to avoid blocking threads.
   - For CPU-heavy per-layer work, use `ThreadPool` with appropriate sizing.
 
-[No sources needed since this section provides general guidance]
+**Updated** Compiler requirements: C++20 is now mandatory, ensuring consistent coroutine support across all builds.
 
 ## Troubleshooting Guide
 Common issues and remedies:
@@ -406,6 +421,8 @@ Common issues and remedies:
   - Use progress callbacks in pipelines to identify stuck stages.
   - Validate executor binding to ensure coroutines resume on expected threads.
 
+**Updated** No need to check for `HSBA_ENABLE_THREAD_POOL_COROUTINE` or similar preprocessor guards when using coroutine features.
+
 **Section sources**
 - [thread_pool.hpp:67-90](file://base/thread_pool.hpp#L67-L90)
 - [thread_pool.hpp:118-154](file://base/thread_pool.hpp#L118-L154)
@@ -415,4 +432,6 @@ Common issues and remedies:
 - [error.hpp:1-200](file://base/error.hpp#L1-L200)
 
 ## Conclusion
-HsBaSlicer’s concurrency model combines a robust `ThreadPool` for CPU-bound parallelism with a flexible C++20 coroutine framework for asynchronous orchestration. By separating concerns—parallel work distribution versus async workflow composition—the system remains efficient, testable, and extensible. Real modules demonstrate best practices: dynamic load balancing for uneven workloads, careful executor selection, and clear separation between parallelizable and serial stages. With proper sizing, exception handling, and progress instrumentation, developers can build high-performance mesh processing and file I/O pipelines that scale across diverse hardware configurations.
+HsBaSlicer's concurrency model combines a robust `ThreadPool` for CPU-bound parallelism with a flexible C++20 coroutine framework for asynchronous orchestration. With C++20 coroutines now mandatory, the system provides consistent, reliable asynchronous programming capabilities across all supported platforms. By separating concerns—parallel work distribution versus async workflow composition—the system remains efficient, testable, and extensible. Real modules demonstrate best practices: dynamic load balancing for uneven workloads, careful executor selection, and clear separation between parallelizable and serial stages. With proper sizing, exception handling, and progress instrumentation, developers can build high-performance mesh processing and file I/O pipelines that scale across diverse hardware configurations.
+
+**Updated** The removal of conditional compilation guards simplifies the development experience and ensures consistent behavior across all builds, making the concurrency primitives more accessible and reliable for developers.

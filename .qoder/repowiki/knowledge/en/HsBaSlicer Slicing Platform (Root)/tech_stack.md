@@ -1,0 +1,1 @@
+CMake 3.28+ with C++20/C11; vcpkg for dependency management (protobuf, rapidjson, eigen3, openssl, opencv, libigl, openvdb, sqlpp11, lua, tinyxml2, yaml-cpp, magic_enum); cpp-httplib pulled in only through the `rest-api` vcpkg manifest feature; Boost.Log for logging; Clipper2, miniz/bit7z for geometry/compression; Doxygen for docs.

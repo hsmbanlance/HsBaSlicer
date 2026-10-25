@@ -1,0 +1,1 @@
+Top-level CMake orchestrator that composes the HsBaSlicer slicing platform — shared libraries, DllHsBaSlicer C ABI, LibHsBaSlicer C++ API, optional REST server, samples and tests — behind feature-gated vcpkg features.
