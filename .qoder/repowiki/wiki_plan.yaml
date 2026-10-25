@@ -49,6 +49,17 @@ repowiki:
         每页页脚提供指向另一语言对应页面的链接。源码中保留 repowiki 自带的 <cite>、Section sources、Diagram sources、
         file:// 标记（发布脚本 repowiki_to_github_wiki.py::clean_content 会在发布时剥离），不要新增其他无法被清理器识别的噪声。
       author: "HsBaSlicer docs"
+    - text: >-
+        必须覆盖可选 RESTful API 服务模块 restapi/（构建产物 HsBaSlicerRestServer）：在「核心模块详解」与
+        「API 参考文档」下各以其语言命名合成为一页实质综合页（勿拆碎片页），内容基于源码实证：
+        启用双门控 -DHSBA_BUILD_REST_API=ON 且 VCPKG_MANIFEST_FEATURES=rest-api（桌面专属，vcpkg 端口 cpp-httplib
+        的 CMake 包名为 httplib）；端点清单取自 routes.cpp（/api/health、/api/version、/api/pipelines 及 /api/kinds 别名、
+        默认配置查询、/api/config/convert 双向 proto↔文本、/api/jobs 异步作业队列提交/轮询/结果下载/删除、
+        /api/params 持久化）；JSON+XML 双格式协商优先级（?format= > Accept > server.default_format）；
+        运行时配置来自 restapi.ini（监听地址/端口/并发/TTL/[paramstore] 后端）；架构分层 job_manager →
+        pipeline_executor（转发 DllHsBaSlicer C ABI）→ config_bridge（复用 struct_json 反射序列化）；
+        测试位于 tests/RestApi/（ctest -R restapi）。不得臆造未在 routes.cpp 中注册的端点。
+      author: "HsBaSlicer docs"
 
   # documents 为页面白名单：一旦提供，生成器严格按列表输出。
   # 为「最大化有效内容」，此处留空，让生成器保留完整页面；notes 已注入对照/去重/质量标准作为软约束。
@@ -60,6 +71,12 @@ knowledgecard:
     - text: >-
         知识卡模块划分与上述 13 个分类对齐，尤其将模型处理、切片引擎、填充系统、支撑系统、路径规划作为独立核心模块建卡；
         不要为重名的页面（如重复的网格模型实现、填充算法）重复建卡。
+      author: "HsBaSlicer docs"
+    - text: >-
+        为可选 RESTful API 服务单独建一张模块卡（restapi/ 目录）：边界=基于 cpp-httplib 的 HTTP 服务进程，
+        经 DllHsBaSlicer C ABI 代理完整切片流水线；职责=端点路由、JSON/XML 协商、异步作业队列、配置编解码桥接、
+        restapi.ini 加载；依赖方向=restapi → DllHsBaSlicer(pipelinetypes C ABI) + fileoperator(ParamStore) +
+        utils(struct_json) + httplib；与 C ABI 直接调用方（samples/Lua）互不依赖。勿并入切片引擎或集成指南卡。
       author: "HsBaSlicer docs"
 
 scope:
