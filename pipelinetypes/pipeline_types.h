@@ -17,6 +17,44 @@ extern "C"
 #endif  // __cplusplus
 
     /* ========================================================================
+     *  Common Progress Types
+     * ====================================================================== */
+
+    /**
+     * @brief Stable pipeline stage identifiers for GUI progress displays.
+     *
+     * The human readable stage text handed to HsBaProgressCallback is kept as-is
+     * for backward compatibility; hosts that need a machine-readable stage (to
+     * colour a progress bar, build a stage timeline or translate the label) map
+     * the text to this enum with HsBaStageFromText() and get a stable snake_case
+     * identifier back with HsBaStageName(). A stage text that matches none of the
+     * known pipeline stages maps to HSBA_STAGE_UNKNOWN, which is what a Lua-driven
+     * custom pipeline reports for almost every tick.
+     */
+    typedef enum HsBaStage
+    {
+        HSBA_STAGE_UNKNOWN = 0,           ///< Unrecognised stage text (Lua-reported stages, custom scripts)
+        HSBA_STAGE_LOAD_MODEL = 1,        ///< Model loading started
+        HSBA_STAGE_MODEL_LOADED = 2,      ///< Model loaded, geometry validated
+        HSBA_STAGE_SLICING = 3,           ///< Layer slicing started
+        HSBA_STAGE_SLICING_LAYER = 4,     ///< Layer slicing in progress
+        HSBA_STAGE_SLICE_DONE = 5,        ///< Layer slicing finished
+        HSBA_STAGE_FLOOR = 6,             ///< Floor / raft generation started (SLA)
+        HSBA_STAGE_FLOOR_DONE = 7,        ///< Floor / raft generation finished (SLA)
+        HSBA_STAGE_SUPPORT = 8,           ///< Support generation started
+        HSBA_STAGE_SUPPORT_DONE = 9,      ///< Support generation finished
+        HSBA_STAGE_SUPPORT_DISABLED = 10, ///< Support stage skipped (disabled or spiral mode)
+        HSBA_STAGE_FILL = 11,             ///< Infill started
+        HSBA_STAGE_FILLING_LAYER = 12,    ///< Infill in progress
+        HSBA_STAGE_FILL_DONE = 13,        ///< Infill finished
+        HSBA_STAGE_PATH = 14,             ///< Tool-path / G-code generation started
+        HSBA_STAGE_WRITE_FILE = 15,       ///< Writing the output artefact
+        HSBA_STAGE_EXPORT = 16,           ///< Packaging / Lua export in progress
+        HSBA_STAGE_DONE = 17,             ///< Pipeline finished
+        HSBA_STAGE_CANCELLED = 18         ///< Pipeline stopped because cancellation was requested
+    } HsBaStage_t;
+
+    /* ========================================================================
      *  FDM Types
      * ====================================================================== */
 
@@ -113,6 +151,10 @@ extern "C"
         /* Output Configuration */
         const char* output_path;  ///< Output G-code file path (can be NULL)
 
+        /* GUI Support (appended last; keep at the struct tail so older hosts stay readable) */
+        int capture_geometry;  ///< Store per-layer geometry for preview (0=false, 1=true), default 0
+        const void* cancel_flag;  ///< Pointer to a std::atomic<bool> cancellation request (NULL = not
+                                  ///< cancellable). The flag owner must outlive the pipeline run.
     } HsBaFdmPipelineConfig_t;
 
     /**
@@ -127,6 +169,8 @@ extern "C"
         char* gcode_content;     ///< G-code content (UTF-8, caller must free)
         char* error_message;     ///< Error message (UTF-8, caller must free)
         double elapsed_seconds;  ///< Elapsed time (seconds)
+        long long geometry_id;   ///< Snapshot id for HsBaGetLayerGeometry (0 = none); release with
+                                 ///< HsBaReleaseGeometrySnapshot. Valid only when capture_geometry was set.
     } HsBaFdmPipelineResult_t;
 
     /**
@@ -218,6 +262,9 @@ extern "C"
         int image_width;                ///< Image width in pixels (0 = auto), default 0
         int image_height;               ///< Image height in pixels (0 = auto), default 0
 
+        /* GUI Support (appended last; see the FDM config note) */
+        int capture_geometry;  ///< Store per-layer geometry for preview (0=false, 1=true), default 0
+        const void* cancel_flag;  ///< Pointer to a std::atomic<bool> cancellation request (NULL = not cancellable)
     } HsBaSlaPipelineConfig_t;
 
     /**
@@ -232,6 +279,8 @@ extern "C"
         char* export_path;       ///< Path to exported zip file (UTF-8, caller must free)
         char* error_message;     ///< Error message (UTF-8, caller must free)
         double elapsed_seconds;  ///< Elapsed time (seconds)
+        long long geometry_id;   ///< Snapshot id for HsBaGetLayerGeometry (0 = none); release with
+                                 ///< HsBaReleaseGeometrySnapshot
     } HsBaSlaPipelineResult_t;
 
     /**
@@ -283,6 +332,9 @@ extern "C"
         /* Output Configuration */
         const char* output_path;  ///< Output file path (can be NULL)
 
+        /* GUI Support (appended last; see the FDM config note) */
+        int capture_geometry;  ///< Store per-layer outlines for preview (0=false, 1=true), default 0
+        const void* cancel_flag;  ///< Pointer to a std::atomic<bool> cancellation request (NULL = not cancellable)
     } HsBaSlsPipelineConfig_t;
 
     /**
@@ -297,6 +349,8 @@ extern "C"
         char* export_path;       ///< Path to exported output file (UTF-8, caller must free)
         char* error_message;     ///< Error message (UTF-8, caller must free)
         double elapsed_seconds;  ///< Elapsed time (seconds)
+        long long geometry_id;   ///< Snapshot id for HsBaGetLayerGeometry (0 = none); release with
+                                 ///< HsBaReleaseGeometrySnapshot
     } HsBaSlsPipelineResult_t;
 
     /**
@@ -376,6 +430,10 @@ extern "C"
         const char* export_lua_script;      ///< Export Lua script path (required)
         const char* export_lua_func;        ///< Export Lua function name
         const char* output_path;            ///< Output file path (can be NULL)
+
+        /* GUI Support (appended last; see the FDM config note) */
+        int capture_geometry;   ///< Store per-layer outlines for preview (0=false, 1=true), default 0
+        const void* cancel_flag;  ///< Pointer to a std::atomic<bool> cancellation request (NULL = not cancellable)
     } HsBaSlmPipelineConfig_t;
 
     /**
@@ -388,6 +446,8 @@ extern "C"
         char* export_path;       ///< Path to exported result (UTF-8, caller must free)
         char* error_message;     ///< Error message (UTF-8, caller must free)
         double elapsed_seconds;  ///< Elapsed time (seconds)
+        long long geometry_id;   ///< Snapshot id for HsBaGetLayerGeometry (0 = none); release with
+                                 ///< HsBaReleaseGeometrySnapshot
     } HsBaSlmPipelineResult_t;
 
     /**
@@ -436,6 +496,10 @@ extern "C"
         const char* export_lua_script;  ///< Export Lua script path (required)
         const char* export_lua_func;    ///< Export Lua function name
         const char* output_path;        ///< Output file path (can be NULL)
+
+        /* GUI Support (appended last; see the FDM config note) */
+        int capture_geometry;   ///< Store per-layer outlines for preview (0=false, 1=true), default 0
+        const void* cancel_flag;  ///< Pointer to a std::atomic<bool> cancellation request (NULL = not cancellable)
     } HsBaLomPipelineConfig_t;
 
     /**
@@ -448,6 +512,8 @@ extern "C"
         char* export_path;       ///< Path to exported result (UTF-8, caller must free)
         char* error_message;     ///< Error message (UTF-8, caller must free)
         double elapsed_seconds;  ///< Elapsed time (seconds)
+        long long geometry_id;   ///< Snapshot id for HsBaGetLayerGeometry (0 = none); release with
+                                 ///< HsBaReleaseGeometrySnapshot
     } HsBaLomPipelineResult_t;
 
     /**
@@ -498,6 +564,10 @@ extern "C"
         int spiral_mode;  ///< Spiralize outer contour into a continuous rising path (0=false, 1=true), default 0
         int randomize_start_point;  ///< Randomize closed contour start points on edge interiors per layer (0=false,
                                     ///< 1=true), default 0
+
+        /* GUI Support (appended last; see the FDM config note) */
+        int capture_geometry;   ///< Store per-layer outlines for preview (0=false, 1=true), default 0
+        const void* cancel_flag;  ///< Pointer to a std::atomic<bool> cancellation request (NULL = not cancellable)
     } HsBaTdpPipelineConfig_t;
 
     /**
@@ -510,6 +580,8 @@ extern "C"
         char* export_path;       ///< Path to exported result (UTF-8, caller must free)
         char* error_message;     ///< Error message (UTF-8, caller must free)
         double elapsed_seconds;  ///< Elapsed time (seconds)
+        long long geometry_id;   ///< Snapshot id for HsBaGetLayerGeometry (0 = none); release with
+                                 ///< HsBaReleaseGeometrySnapshot
     } HsBaTdpPipelineResult_t;
 
     /**
@@ -604,6 +676,10 @@ extern "C"
         int spiral_mode;  ///< Deposit the outer wall as one continuous, Z-rising bead (0=false, 1=true), default 0
         int randomize_start_point;  ///< Randomize closed contour start points on edge interiors per layer (0=false,
                                     ///< 1=true), default 0
+
+        /* GUI Support (appended last; see the FDM config note) */
+        int capture_geometry;   ///< Store per-layer outlines for preview (0=false, 1=true), default 0
+        const void* cancel_flag;  ///< Pointer to a std::atomic<bool> cancellation request (NULL = not cancellable)
     } HsBaWaamPipelineConfig_t;
 
     /**
@@ -616,6 +692,8 @@ extern "C"
         char* output_path;       ///< Path to the generated robot program (UTF-8, caller must free)
         char* error_message;     ///< Error message (UTF-8, caller must free)
         double elapsed_seconds;  ///< Elapsed time (seconds)
+        long long geometry_id;   ///< Snapshot id for HsBaGetLayerGeometry (0 = none); release with
+                                 ///< HsBaReleaseGeometrySnapshot
     } HsBaWaamPipelineResult_t;
 
     /**
@@ -651,6 +729,9 @@ extern "C"
         const char** file_paths;  ///< Array of file paths to transfer (must not be NULL)
         int file_count;           ///< Number of files in file_paths array
 
+        /* GUI Support (appended last; capture_geometry is unused by this pipeline) */
+        int capture_geometry;   ///< Ignored, kept for struct uniformity, default 0
+        const void* cancel_flag;  ///< Pointer to a std::atomic<bool> cancellation request (NULL = not cancellable)
     } HsBaFileTransferPipelineConfig_t;
 
     /**
@@ -665,6 +746,7 @@ extern "C"
         int total_files;         ///< Total number of files requested
         char* error_message;     ///< Error message (UTF-8, caller must free)
         double elapsed_seconds;  ///< Elapsed time (seconds)
+        long long geometry_id;   ///< Always 0: this pipeline produces no layer geometry
     } HsBaFileTransferPipelineResult_t;
 
     /**
@@ -708,6 +790,10 @@ extern "C"
         /* Output Configuration */
         const char* output_path;  ///< Default output path passed to Lua as `output_path` (can be NULL)
 
+        /* GUI Support (appended last; capture_geometry is unused because the layer data
+         * lives inside the Lua script, and HsBaStage mapping is best-effort here) */
+        int capture_geometry;   ///< Ignored, kept for struct uniformity, default 0
+        const void* cancel_flag;  ///< Pointer to a std::atomic<bool> cancellation request (NULL = not cancellable)
     } HsBaCustomPipelineConfig_t;
 
     /**
@@ -723,6 +809,7 @@ extern "C"
         char* result_string;     ///< String returned by the Lua entry function (caller must free)
         char* error_message;     ///< Error message (UTF-8, caller must free)
         double elapsed_seconds;  ///< Elapsed time (seconds)
+        long long geometry_id;   ///< Always 0: layer data of a Lua-driven pipeline stays inside the script
     } HsBaCustomPipelineResult_t;
 
     /**
@@ -787,6 +874,8 @@ extern "C"
         cfg.infill_lua_script = 0;
         cfg.infill_lua_func = 0;
         cfg.output_path = 0;
+        cfg.capture_geometry = 0;
+        cfg.cancel_flag = 0;
         return cfg;
     }
 
@@ -829,6 +918,8 @@ extern "C"
         cfg.image_type = HSBA_SLA_IMAGE_PNG;
         cfg.image_width = 0;
         cfg.image_height = 0;
+        cfg.capture_geometry = 0;
+        cfg.cancel_flag = 0;
         return cfg;
     }
 
@@ -851,6 +942,8 @@ extern "C"
         cfg.export_lua_script = 0;
         cfg.export_lua_func = 0;
         cfg.output_path = 0;
+        cfg.capture_geometry = 0;
+        cfg.cancel_flag = 0;
         return cfg;
     }
 
@@ -876,6 +969,8 @@ extern "C"
         cfg.export_lua_script = 0;
         cfg.export_lua_func = 0;
         cfg.output_path = 0;
+        cfg.capture_geometry = 0;
+        cfg.cancel_flag = 0;
         return cfg;
     }
 
@@ -901,6 +996,8 @@ extern "C"
         cfg.export_lua_script = 0;
         cfg.export_lua_func = 0;
         cfg.output_path = 0;
+        cfg.capture_geometry = 0;
+        cfg.cancel_flag = 0;
         return cfg;
     }
 
@@ -926,6 +1023,8 @@ extern "C"
         cfg.output_path = 0;
         cfg.spiral_mode = 0;
         cfg.randomize_start_point = 0;
+        cfg.capture_geometry = 0;
+        cfg.cancel_flag = 0;
         return cfg;
     }
 
@@ -957,6 +1056,8 @@ extern "C"
         cfg.output_path = 0;
         cfg.spiral_mode = 0;
         cfg.randomize_start_point = 0;
+        cfg.capture_geometry = 0;
+        cfg.cancel_flag = 0;
         return cfg;
     }
 
@@ -972,6 +1073,8 @@ extern "C"
         cfg.pool_size = 4;
         cfg.file_paths = 0;
         cfg.file_count = 0;
+        cfg.capture_geometry = 0;
+        cfg.cancel_flag = 0;
         return cfg;
     }
 
@@ -989,6 +1092,8 @@ extern "C"
         cfg.model_name = 0;
         cfg.model_path = 0;
         cfg.output_path = 0;
+        cfg.capture_geometry = 0;
+        cfg.cancel_flag = 0;
         return cfg;
     }
 
@@ -1013,6 +1118,27 @@ extern "C"
         HSBA_PIPELINE_FILETRANSFER,  ///< File transfer pipeline
         HSBA_PIPELINE_KIND_COUNT     ///< Number of pipeline kinds
     } HsBaPipelineKind;
+
+    /**
+     * @brief Normalized view of any pipeline result (the C mirror of the REST SliceOutcome).
+     *
+     * FDM keeps its G-code in inline_content, the image/vector pipelines report their
+     * artefact in output_path, and the file-transfer pipeline fills the two counters.
+     * All strings are malloc-owned by the library: copy them out, then release the view
+     * with HsBaFreeJobResultView.
+     */
+    typedef struct HsBaJobResultView
+    {
+        int success;             ///< Success flag (0=false, 1=true)
+        int total_layers;        ///< Layer count (0 for file transfer)
+        long long geometry_id;   ///< Layer-geometry snapshot id (0 = none)
+        char* inline_content;    ///< G-code / robot program / Lua return text (NULL when none)
+        char* output_path;       ///< export_path / output_path (NULL when none)
+        char* error_message;     ///< Failure text (UTF-8, NULL when successful)
+        double elapsed_seconds;  ///< Wall-clock elapsed time
+        int files_transferred;   ///< File-transfer: succeeded count
+        int total_files;         ///< File-transfer: requested count
+    } HsBaJobResultView_t;
 
     /**
      * @brief ParamStore database backend (mobile platforms support SQLite only).

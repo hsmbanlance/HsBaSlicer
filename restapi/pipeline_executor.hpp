@@ -35,6 +35,8 @@ struct SliceOutcome
     double elapsed_seconds = 0.0;  ///< Wall-clock elapsed time.
     int files_transferred = 0;     ///< File-transfer: succeeded count.
     int total_files = 0;           ///< File-transfer: requested count.
+    long long geometry_id = 0;     ///< Layer-geometry snapshot id (0 when none was captured).
+    int cancelled = 0;             ///< 1 when the run stopped because cancellation was requested.
 };
 
 /** @brief Whether @p kind is a supported pipeline kind. */
@@ -58,6 +60,21 @@ void* CreateDefaultConfig(HsBaPipelineKind kind);
 
 /** @brief Release a config struct produced by CreateDefaultConfig (string fields live in the arena). */
 void DestroyConfig(HsBaPipelineKind kind, void* config);
+
+/**
+ * @brief Enable or disable per-layer geometry capture of a config.
+ *
+ * Written straight into the struct field instead of through config_bridge, because the
+ * tail-added ABI fields are deliberately not part of the reflected parameter table (no
+ * wide-table column, no proto field, no JSON key of a slicing config).
+ */
+void SetCaptureGeometry(HsBaPipelineKind kind, void* config, int enabled);
+
+/**
+ * @brief Point a config at the cancellation flag a running job polls.
+ * @param flag Address of a std::atomic<bool> that outlives the run (owned by the job record).
+ */
+void SetCancelFlag(HsBaPipelineKind kind, void* config, const void* flag);
 
 /**
  * @brief Run a kind's pipeline synchronously and capture a normalized outcome.

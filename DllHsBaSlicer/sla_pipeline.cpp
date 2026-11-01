@@ -4,6 +4,7 @@
  */
 #include "sla_pipeline.h"
 
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -23,6 +24,8 @@
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
 #include "base/coroutine.hpp"
 #include "base/error.hpp"
+#include "geometry_store.hpp"
+#include "job_control.h"
 #include "pipeline_parallel.hpp"
 
 namespace HsBa::Slicer::Pipeline
@@ -44,6 +47,8 @@ struct InternalSlaResult
     std::string export_path;
     std::string error_message;
     double elapsed_seconds = 0.0;
+    bool cancelled = false;
+    long long geometry_id = 0;  ///< Snapshot id of the captured layer geometry (0 = none)
 };
 
 struct InternalSlaConfig
@@ -82,6 +87,27 @@ struct InternalSlaConfig
     int image_height = 0;
     HsBaSlaProgressCallback progress_cb = nullptr;
     void* progress_user_data = nullptr;
+    bool capture_geometry = false;
+    const void* cancel_flag = nullptr;  ///< std::atomic<bool>* set by the host or by its job handle
+
+    // Cancellation is cooperative and only observed at stage boundaries: throwing from the
+    // throttled progress callback of the layer-parallel slicing stage would abandon sibling
+    // worker tasks still writing into layer_outlines (see base/parallel.hpp). The parallel
+    // layer functor therefore skips its remaining work as soon as the flag is set.
+    /** @brief Whether the host asked this run to stop. */
+    bool CancelRequested() const
+    {
+        return cancel_flag && static_cast<const std::atomic<bool>*>(cancel_flag)->load(std::memory_order_relaxed);
+    }
+
+    /** @brief Throw at a cancellation point so the run unwinds as a cancelled result. */
+    void CheckCancel() const
+    {
+        if (CancelRequested())
+        {
+            throw CancelledError("pipeline cancelled");
+        }
+    }
 };
 
 struct OwnedCString
@@ -278,6 +304,8 @@ InternalSlaConfig BuildSlaConfig(const HsBaSlaPipelineConfig_t* cfg, HsBaSlaProg
     ic.image_height = cfg->image_height;
     ic.progress_cb = cb;
     ic.progress_user_data = ud;
+    ic.capture_geometry = cfg->capture_geometry != 0;
+    ic.cancel_flag = cfg->cancel_flag;
     return ic;
 }
 
@@ -292,6 +320,7 @@ HsBaSlaPipelineResult_t ToCResult(const InternalSlaResult& ir)
     cr.export_path = export_path.release();
     cr.error_message = error.release();
     cr.elapsed_seconds = ir.elapsed_seconds;
+    cr.geometry_id = ir.geometry_id;
     return cr;
 }
 
@@ -347,6 +376,10 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
             total_layers,
             [&](int i)
             {
+                if (cfg.CancelRequested())
+                {
+                    return;  // stop computing, the stage reports cancellation right after the await
+                }
                 float const z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
                 layer_outlines[i] = SliceLayer(*topo, z);
             },
@@ -355,9 +388,11 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
                 int const progress = 15 + (done * 20) / total_layers;
                 ReportProgress(cfg, progress, "Slicing layer");
             });
+        cfg.CheckCancel();
         ReportProgress(cfg, 35, "Slicing complete");
 
         // ========== Stage 3: Floor / Raft ==========
+        cfg.CheckCancel();
         ReportProgress(cfg, 40, "Generating floor...");
         Polygons const bottom_int = Integerization(layer_outlines[0]);
 
@@ -384,6 +419,7 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
         ReportProgress(cfg, 50, "Floor generation complete");
 
         // ========== Stage 4: Support ==========
+        cfg.CheckCancel();
         std::vector<PolygonsD> layer_supports(total_layers);
         if (cfg.enable_support)
         {
@@ -425,7 +461,23 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
         }
 
         // ========== Stage 5: Export via LibHsBaSlicer SlaPackage ==========
+        cfg.CheckCancel();
         ReportProgress(cfg, 75, "Exporting...");
+
+        // Snapshot the contours before the package takes its own copy. The floor lives only
+        // on layer 0, so it is published through the fills slot of that layer.
+        if (cfg.capture_geometry)
+        {
+            std::vector<double> geometry_zs(total_layers);
+            for (int i = 0; i < total_layers; ++i)
+            {
+                geometry_zs[i] = static_cast<double>(GetLayerZ(i, cfg.first_layer_height, cfg.layer_height));
+            }
+            std::vector<PolygonsD> layer_fills(total_layers);
+            layer_fills[0] = floor_result_d;
+            result.geometry_id =
+                CaptureLayerGeometry(HSBA_PIPELINE_SLA, layer_outlines, layer_fills, layer_supports, geometry_zs);
+        }
 
         std::string output_zip = cfg.output_path;
         if (output_zip.empty())
@@ -470,6 +522,14 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
 
         ReportProgress(cfg, 100, "Pipeline complete");
     }
+    catch (const CancelledError& e)
+    {
+        result.success = false;
+        result.cancelled = true;
+        // The "Cancelled" prefix is what the C ABI callers use to tell a cancelled run
+        // apart from a failed one, since the result structs carry no status field.
+        result.error_message = std::string("Cancelled: ") + e.what();
+    }
     catch (const RuntimeError& e)
     {
         result.success = false;
@@ -480,6 +540,28 @@ Utils::Task<InternalSlaResult> RunSlaPipelineAsync(const InternalSlaConfig& cfg)
     result.elapsed_seconds = std::chrono::duration<double>(end_time - start_time).count();
 
     co_return result;
+}
+
+// Carries the caller's result callback across the job thread boundary.
+struct SlaAsyncThunk
+{
+    HsBaSlaResultCallback callback = nullptr;
+    void* user_data = nullptr;
+};
+
+/**
+ * @brief Job completion hook of HsBaRunSlaPipelineAsync.
+ *
+ * The job owns the temporary result struct and its strings, and releases both once this
+ * callback returns, matching the copy-then-HsBaFreeSlaPipelineResult contract.
+ */
+void DeliverSlaResult(void* typed_result, void* thunk)
+{
+    const std::unique_ptr<SlaAsyncThunk> owned(static_cast<SlaAsyncThunk*>(thunk));
+    if (owned->callback && typed_result)
+    {
+        owned->callback(*static_cast<HsBaSlaPipelineResult_t*>(typed_result), owned->user_data);
+    }
 }
 
 }  // anonymous namespace
@@ -506,18 +588,13 @@ HSBA_SLICER_API void HsBaRunSlaPipelineAsync(const HsBaSlaPipelineConfig_t* conf
                                              void* user_data, HsBaSlaResultCallback result_callback,
                                              void* result_user_data)
 {
-    auto shared_cfg = std::make_shared<HsBa::Slicer::Pipeline::InternalSlaConfig>(
-        HsBa::Slicer::Pipeline::BuildSlaConfig(config, callback, user_data));
-    auto task = HsBa::Slicer::Pipeline::RunSlaPipelineAsync(*shared_cfg);
-    task.then(
-        [shared_cfg, result_callback, result_user_data](const HsBa::Slicer::Pipeline::InternalSlaResult& ir)
-        {
-            auto cr = HsBa::Slicer::Pipeline::ToCResult(ir);
-            if (result_callback)
-            {
-                result_callback(cr, result_user_data);
-            }
-        });  // NOLINT(clang-analyzer-unix.Malloc) C-ABI ownership transfer: result_callback frees cr strings
+    // Delegate to the job machinery: the configuration is deep-copied, so neither config nor
+    // its strings have to outlive this call, and the caller is not blocked any more.
+    auto* thunk = new HsBa::Slicer::Pipeline::SlaAsyncThunk();
+    thunk->callback = result_callback;
+    thunk->user_data = result_user_data;
+    HsBa::Slicer::Pipeline::SubmitLegacyJob(HSBA_PIPELINE_SLA, config, callback, user_data,
+                                            &HsBa::Slicer::Pipeline::DeliverSlaResult, thunk);
 }
 
 HSBA_SLICER_API void HsBaFreeSlaPipelineResult(HsBaSlaPipelineResult_t* result)

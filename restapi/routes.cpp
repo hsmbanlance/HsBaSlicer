@@ -12,6 +12,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -20,6 +21,7 @@
 
 #include <httplib.h>
 
+#include "DllHsBaSlicer/geometry_export.h"
 #include "DllHsBaSlicer/initialize.h"
 #include "DllHsBaSlicer/param_store_pipeline.h"
 #include "DllHsBaSlicer/version_info.h"
@@ -79,6 +81,45 @@ struct UploadList
 {
     std::vector<UploadInfo> uploads;
     long long count = 0;
+};
+
+/** @brief Serializable geometry overview (GET /api/jobs/{id}/geometry). */
+struct GeometrySummaryView
+{
+    std::string id;                    ///< Job identifier.
+    long long geometry_id = 0;         ///< Snapshot handle a native host may query directly.
+    int layer_count = 0;               ///< Layers held by the snapshot.
+    std::vector<double> bounds;        ///< min_x, min_y, max_x, max_y over every layer.
+    std::vector<double> z_heights;     ///< Per-layer platform height, only with ?full=1.
+    std::vector<double> layer_bounds;  ///< Four values per layer, only with ?full=1.
+};
+
+/** @brief One contour/infill/support ring of a layer (?xy is flat to keep the body small). */
+struct RingView
+{
+    int point_count = 0;  ///< Vertices stored in @ref xy.
+    int closed = 0;       ///< 1 = closed contour, 0 = open polyline.
+    std::vector<double> xy;
+};
+
+/** @brief Serializable single-layer geometry (GET /api/jobs/{id}/geometry/{layer}). */
+struct LayerGeometryView
+{
+    std::string id;              ///< Job identifier.
+    int layer_index = 0;         ///< Zero-based layer.
+    double z_height = 0.0;       ///< Platform height of the layer (mm).
+    std::vector<double> bounds;  ///< min_x, min_y, max_x, max_y of this layer.
+    std::vector<RingView> outlines;
+    std::vector<RingView> fills;
+    std::vector<RingView> supports;
+};
+
+/** @brief Serializable cancellation acknowledgement (POST /api/jobs/{id}/cancel). */
+struct CancelView
+{
+    std::string id;
+    std::string state;   ///< State the job is heading to ("cancelled").
+    std::string detail;  ///< What the server actually did.
 };
 
 /** @brief Serializable root-index payload. */
@@ -221,6 +262,34 @@ std::size_t ParseSizeParam(const Request& req, const char* name, std::size_t def
     return static_cast<std::size_t>(parsed);
 }
 
+// Strict unsigned decimal parse for a path segment (a layer index must not silently
+// degrade to 0, otherwise a typo would return the wrong layer instead of an error).
+bool ParseIndex(const std::string& raw, int& out)
+{
+    if (raw.empty() || raw.size() > 9)
+    {
+        return false;
+    }
+    int value = 0;
+    for (char c : raw)
+    {
+        if (c < '0' || c > '9')
+        {
+            return false;
+        }
+        value = value * 10 + (c - '0');
+    }
+    out = value;
+    return true;
+}
+
+// Whether ?geometry=1 (or =true) was asked for on a submission request.
+bool WantsGeometry(const Request& req)
+{
+    const std::string raw = req.get_param_value("geometry");
+    return raw == "1" || raw == "true";
+}
+
 // ---------------------------- handlers ----------------------------
 void HandleHealth(const Request& req, Response& res, const Ctx& ctx)
 {
@@ -354,6 +423,13 @@ void SubmitMultipartJob(const Request& req, Response& res, Ctx& ctx, HsBaPipelin
     }
 
     // Submit takes ownership of config + arena (and frees them if the queue is full).
+    if (WantsGeometry(req))
+    {
+        // Capturing layer geometry is a runtime switch rather than a reflected parameter,
+        // so it goes straight into the struct tail and never reaches the config JSON,
+        // the proto message or the parameter wide table.
+        SetCaptureGeometry(kind, config, 1);
+    }
     const std::string id = ctx.jobs.Submit(kind, config, std::move(arena), job_id);
     if (id.empty())
     {
@@ -403,6 +479,10 @@ void HandleSubmitJob(const Request& req, Response& res, Ctx& ctx, const std::str
     }
 
     // Submit takes ownership of config + arena (and frees them if the queue is full).
+    if (WantsGeometry(req))
+    {
+        SetCaptureGeometry(kind, config, 1);
+    }
     const std::string id = ctx.jobs.Submit(kind, config, std::move(arena));
     if (id.empty())
     {
@@ -437,6 +517,12 @@ void HandleJobResult(const Request& req, Response& res, Ctx& ctx, const std::str
         {
             ReplyError(res, 404, "job not found", id, fmt);
         }
+        else if (JobStatusView status; ctx.jobs.Status(id, status) && status.state == "cancelled")
+        {
+            // A cancelled run produced partial work at best, so it is reported apart
+            // from a plain pipeline failure instead of as "not finished successfully".
+            ReplyError(res, 409, "job was cancelled", id, fmt);
+        }
         else
         {
             ReplyError(res, 409, "job not finished successfully", id, fmt);
@@ -467,6 +553,157 @@ void HandleJobResult(const Request& req, Response& res, Ctx& ctx, const std::str
         return;
     }
     ReplyError(res, 404, "no downloadable result for this pipeline", id, fmt);
+}
+
+// ---------------------------- layer geometry and cancellation ----------------------------
+// Both geometry endpoints are thin adapters over the same C ABI the native GUIs call:
+// the snapshot pool stays inside the DLL and this layer only turns rings into
+// JSON/XML. Geometry exists for a job once its run reached the final stages, which is
+// exactly when the job turns terminal, so a still-queued or running job has nothing.
+
+// Turn one C ring array into serializable views; the arrays live in the single block
+// handed out by HsBaGetLayerGeometry, so the copies below must precede its release.
+void AppendRings(std::vector<RingView>& dst, const HsBaRing_t* rings, int count)
+{
+    if (count > 0)
+    {
+        dst.reserve(dst.size() + static_cast<std::size_t>(count));
+    }
+    for (int i = 0; i < count; ++i)
+    {
+        // A ring without coordinates is reported as empty rather than dropped, so the
+        // caller can still align its index with the snapshot's ring array.
+        const int points = (rings[i].xy && rings[i].point_count > 0) ? rings[i].point_count : 0;
+        RingView ring;
+        ring.point_count = points;
+        ring.closed = points > 0 ? rings[i].closed : 0;
+        if (points > 0)
+        {
+            ring.xy.assign(rings[i].xy, rings[i].xy + 2ull * static_cast<std::size_t>(points));
+        }
+        dst.push_back(std::move(ring));
+    }
+}
+
+void HandleJobGeometry(const Request& req, Response& res, Ctx& ctx, const std::string& id)
+{
+    const DataFormat fmt = TargetFormat(req, ctx.cfg);
+    long long geometry_id = 0;
+    if (!ctx.jobs.GeometryId(id, geometry_id))
+    {
+        ReplyError(res, 404, ctx.jobs.Exists(id) ? "job captured no layer geometry" : "job not found",
+                   ctx.jobs.Exists(id) ? "submit with ?geometry=1" : id, fmt);
+        return;
+    }
+    const int layers = HsBaGeometryLayerCount(geometry_id);
+    if (layers <= 0)
+    {
+        ReplyError(res, 404, "geometry snapshot is no longer available", id, fmt);
+        return;
+    }
+
+    const bool full = req.get_param_value("full") == "1" || req.get_param_value("full") == "true";
+    GeometrySummaryView view;
+    view.id = id;
+    view.geometry_id = geometry_id;
+    view.layer_count = layers;
+    double lo[2] = {std::numeric_limits<double>::max(), std::numeric_limits<double>::max()};
+    double hi[2] = {std::numeric_limits<double>::lowest(), std::numeric_limits<double>::lowest()};
+    bool saw_bounds = false;
+    for (int i = 0; i < layers; ++i)
+    {
+        HsBaLayerGeometry_t geom{};
+        if (!HsBaGetLayerGeometry(geometry_id, i, &geom))
+        {
+            continue;
+        }
+        for (int k = 0; k < 2; ++k)
+        {
+            lo[k] = (std::min)(lo[k], geom.bounds_min[k]);
+            hi[k] = (std::max)(hi[k], geom.bounds_max[k]);
+        }
+        saw_bounds = true;
+        if (full)
+        {
+            view.z_heights.push_back(geom.z_height);
+            const double per_layer[4] = {geom.bounds_min[0], geom.bounds_min[1], geom.bounds_max[0],
+                                         geom.bounds_max[1]};
+            view.layer_bounds.insert(view.layer_bounds.end(), std::begin(per_layer), std::end(per_layer));
+        }
+        HsBaFreeLayerGeometry(&geom);
+    }
+    if (saw_bounds)
+    {
+        view.bounds = {lo[0], lo[1], hi[0], hi[1]};
+    }
+    ReplyValue(res, 200, view, fmt, "Geometry");
+}
+
+void HandleJobLayerGeometry(const Request& req, Response& res, Ctx& ctx, const std::string& id,
+                            const std::string& layer_raw)
+{
+    const DataFormat fmt = TargetFormat(req, ctx.cfg);
+    int layer = 0;
+    if (!ParseIndex(layer_raw, layer))
+    {
+        ReplyError(res, 400, "layer index must be a non-negative integer", layer_raw, fmt);
+        return;
+    }
+    long long geometry_id = 0;
+    if (!ctx.jobs.GeometryId(id, geometry_id))
+    {
+        ReplyError(res, 404, ctx.jobs.Exists(id) ? "job captured no layer geometry" : "job not found",
+                   ctx.jobs.Exists(id) ? "submit with ?geometry=1" : id, fmt);
+        return;
+    }
+    const int layers = HsBaGeometryLayerCount(geometry_id);
+    if (layers <= 0)
+    {
+        ReplyError(res, 404, "geometry snapshot is no longer available", id, fmt);
+        return;
+    }
+    if (layer >= layers)
+    {
+        ReplyError(res, 404, "layer index out of range", "layer_count=" + std::to_string(layers), fmt);
+        return;
+    }
+    HsBaLayerGeometry_t geom{};
+    if (!HsBaGetLayerGeometry(geometry_id, layer, &geom))
+    {
+        ReplyError(res, 404, "geometry snapshot is no longer available", id, fmt);
+        return;
+    }
+    LayerGeometryView view;
+    view.id = id;
+    view.layer_index = geom.layer_index;
+    view.z_height = geom.z_height;
+    view.bounds = {geom.bounds_min[0], geom.bounds_min[1], geom.bounds_max[0], geom.bounds_max[1]};
+    AppendRings(view.outlines, geom.outlines, geom.outline_count);
+    AppendRings(view.fills, geom.fills, geom.fill_count);
+    AppendRings(view.supports, geom.supports, geom.support_count);
+    HsBaFreeLayerGeometry(&geom);
+    ReplyValue(res, 200, view, fmt, "LayerGeometry");
+}
+
+void HandleCancelJob(const Request& req, Response& res, Ctx& ctx, const std::string& id)
+{
+    const DataFormat fmt = TargetFormat(req, ctx.cfg);
+    switch (ctx.jobs.Cancel(id))
+    {
+    case CancelResult::Accepted:
+        // 202, not 200: the run is still unwinding to its next stage or layer checkpoint.
+        ReplyValue(res, 202, CancelView{id, "cancelled", "cancellation requested"}, fmt, "Job");
+        break;
+    case CancelResult::Removed:
+        ReplyValue(res, 202, CancelView{id, "cancelled", "queued job removed before it started"}, fmt, "Job");
+        break;
+    case CancelResult::AlreadyTerminal:
+        ReplyError(res, 409, "job already finished", id, fmt);
+        break;
+    case CancelResult::NotFound:
+        ReplyError(res, 404, "job not found", id, fmt);
+        break;
+    }
 }
 
 void HandleConfigConvert(const Request& req, Response& res, Ctx& ctx)
@@ -750,6 +987,14 @@ void RegisterRoutes(httplib::Server& svr, Ctx& ctx)
             [&ctx](const Request& req, Response& res) { HandleDefaultConfig(req, res, ctx, req.matches[1].str()); });
     svr.Post("/api/config/convert", [&ctx](const Request& req, Response& res) { HandleConfigConvert(req, res, ctx); });
     svr.Post("/api/jobs", [&ctx](const Request& req, Response& res) { HandleSubmitJob(req, res, ctx, std::string()); });
+    // httplib matches regex routes in registration order, so every more specific
+    // /api/jobs/... pattern below must stay ahead of the catch-all job routes.
+    svr.Post(R"(/api/jobs/([^/]+)/cancel)",
+             [&ctx](const Request& req, Response& res) { HandleCancelJob(req, res, ctx, req.matches[1].str()); });
+    svr.Get(R"(/api/jobs/([^/]+)/geometry/([^/]+))", [&ctx](const Request& req, Response& res)
+            { HandleJobLayerGeometry(req, res, ctx, req.matches[1].str(), req.matches[2].str()); });
+    svr.Get(R"(/api/jobs/([^/]+)/geometry)",
+            [&ctx](const Request& req, Response& res) { HandleJobGeometry(req, res, ctx, req.matches[1].str()); });
     svr.Post(R"(/api/jobs/([^/]+))",
              [&ctx](const Request& req, Response& res) { HandleSubmitJob(req, res, ctx, req.matches[1].str()); });
     svr.Get("/api/jobs", [&ctx](const Request& req, Response& res) { HandleListJobs(req, res, ctx); });

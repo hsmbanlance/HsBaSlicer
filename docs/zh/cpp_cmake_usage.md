@@ -522,4 +522,5 @@ target_link_libraries(my_app PRIVATE HsBaSlicer::LibHsBaSlicer)
 - [LibHsBaSlicer 模块](./LibHsBaSlicer/) — 核心 C++ 切片 API 详解
 - [DllHsBaSlicer 模块](./DllHsBaSlicer/) — C ABI 流水线接口与跨平台集成
 - [Qt / wxWidgets 集成](./DllHsBaSlicer/qt_wxwidgets_integration.md)
+- [GUI 支撑 API](./DllHsBaSlicer/gui_support_api.md) — 结构化进度阶段、层几何快照、作业句柄与取消
 - [Unity / Unreal Engine 集成](./DllHsBaSlicer/game_engine_integration.md)

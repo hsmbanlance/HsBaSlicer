@@ -50,6 +50,9 @@ LibHsBaSlicer  ← C++ 静态库：预处理 / 切片 / 支撑 / 填充 / 路径
 | `pipeline_convert.h` | Proto 序列化字节 ↔ C 结构体转换 |
 | `lua_register.h` | Lua 扩展函数注册接口（2D/3D/File/事件回调） |
 | `event_source_register.h` | C++ 事件源注册接口（Zipper 进度 / DB 事件） |
+| `progress_stage.h` | 进度阶段分类接口（阶段文本 ↔ 枚举 ↔ 稳定标识符） |
+| `geometry_export.h` | 层几何快照查询接口（轮廓/填充/支撑环、引用计数与回收） |
+| `job_control.h` | 作业句柄接口（真异步提交、取消、轮询、统一结果视图） |
 | `version_info.h` | 版本信息（JSON / XML 字符串） |
 | `pipelinetypes/pipeline_types.h` | 全部配置/结果结构体、枚举、回调类型与内联默认值初始化器（**无 DLL 依赖**，可独立包含） |
 
@@ -684,6 +687,38 @@ int main(void) {
 }
 ```
 
+### GUI 支撑接口（结构化进度 / 层几何 / 作业取消）
+
+面向图形宿主的三个头文件，签名、内存与线程契约、以及各工艺槽位映射的完整说明见
+**[GUI 支撑 API](./gui_support_api.md)**，此处只列出入口：
+
+```c
+/* progress_stage.h —— 把进度文本分类成稳定枚举 */
+HsBaStage_t HsBaStageFromText(const char* stage);
+const char* HsBaStageName(HsBaStage_t stage);   // "slicing.layer" 等 snake_case 标识符
+const char* HsBaStageLabel(HsBaStage_t stage);  // 英文显示标签
+
+/* job_control.h —— 真正非阻塞的作业句柄 */
+HsBaJobHandle HsBaSubmitJob(HsBaPipelineKind kind, const void* config,
+                            HsBaProgressCallbackEx on_progress, void* progress_user_data,
+                            HsBaJobDoneCallback on_done, void* done_user_data);
+int HsBaCancelJob(HsBaJobHandle job);
+int HsBaWaitJob(HsBaJobHandle job, long long timeout_ms);
+int HsBaJobGetProgress(HsBaJobHandle job, int* percent, HsBaStage_t* stage, char* text_out, int text_cap);
+int HsBaJobCopyResult(HsBaJobHandle job, HsBaJobResultView_t* out);
+void HsBaReleaseJob(HsBaJobHandle job);
+
+/* geometry_export.h —— 配置 capture_geometry=1 后可读的逐层几何 */
+int HsBaGeometryLayerCount(long long geometry_id);
+int HsBaGetLayerGeometry(long long geometry_id, int layer_index, HsBaLayerGeometry_t* out);
+void HsBaFreeLayerGeometry(HsBaLayerGeometry_t* geom);
+long long HsBaRetainGeometrySnapshot(long long geometry_id);
+void HsBaReleaseGeometrySnapshot(long long geometry_id);
+```
+
+同步/异步入口的配置与结果结构体尾部相应新增 `capture_geometry` / `cancel_flag` / `geometry_id`
+三个字段（**需重编译**，且这三个字段不进反射表，故不出现在配置 JSON / proto / 参数宽表中）。
+
 ## 回调与线程模型
 
 ```c
@@ -693,8 +728,9 @@ typedef void (*HsBaResultCallback)(HsBaFdmPipelineResult_t result, void* user_da
 
 - 进度与结果回调均在**库内部工作线程**上触发，**不会**在调用方 UI 线程执行；
 - 宿主（Qt/wxWidgets/Unity/UE）收到回调后，需自行调度回 UI/游戏线程再更新界面；
-- `stage` 为 UTF-8 编码字符串，仅在回调期间有效，如需留存请自行拷贝；
-- 异步接口的 `config` 指针仅在调用期间被读取，返回后即可释放或复用。
+- `stage` 为 UTF-8 编码字符串，仅在回调期间有效，如需留存请自行拷贝；需要稳定语义时用 `HsBaStageFromText(stage)` 分类；
+- 异步接口的 `config` 指针仅在调用期间被读取，返回后即可释放或复用（实现内部深拷贝，含所有字符串）；
+- **`HsBaRun*PipelineAsync` 历史上等价于阻塞**：其协程执行器在返回前 join，调用线程并未解放。该行为已修正，同时`HsBaSubmitJob`提供带句柄、可取消、可轮询的真异步语义；若代码依赖“Async 会阻塞”这一旧事实，请改用 `HsBaWaitJob` 或结果回调。
 
 ## 内存管理规则
 
@@ -704,6 +740,8 @@ typedef void (*HsBaResultCallback)(HsBaFdmPipelineResult_t result, void* user_da
 4. 模型句柄（`HsBaLoadModel` / `HsBaGetModel` / `HsBaBoolean*` / `HsBaThickSolidModel` 返回的 `void*`）必须用 `HsBaReleaseModelHandle()` 释放引用；
 5. `pipeline_types.h` 还提供无 DLL 依赖的内联初始化器 `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()` / `HsBaSlmConfigDefault()` / `HsBaLomConfigDefault()` / `HsBaTdpConfigDefault()` / `HsBaWaamConfigDefault()` / `HsBaFileTransferConfigDefault()`，便于纯头文件场景（如 P/Invoke 结构体对照）使用；
 6. Proto 反序列化（`*FromProtoBytes`）产生的字符串字段由 `malloc` 分配，必须调用对应的 `HsBaFree*ConfigStrings()` 释放（Custom 结果例外，用 `HsBaFreeCustomPipelineResult()`）；`*ToProtoBytes` 产生的 `out_data` 缓冲区由调用方 `free`。
+7. 作业句柄（`HsBaJobHandle`）提交时持两个引用：完成回调自动释放库引用，调用方必须对自己的引用调用一次 `HsBaReleaseJob`；`HsBaJobCopyResult` 交出的三个字符串由 `malloc` 持有，用 `HsBaFreeJobResultView()` 统一释放；
+8. `HsBaGetLayerGeometry` 用单次 `malloc` 交出整块内存，所有环/坐标指针均指向其内部：**禁止逐个 `free`**，只能调用一次 `HsBaFreeLayerGeometry()`；快照本体由池按 `HSBA_GEOMETRY_POOL_MAX`（默认 4）上限回收，长时间持有预览请用 `HsBaRetainGeometrySnapshot()` / `HsBaReleaseGeometrySnapshot()` 成对管理。
 
 ## 最小示例（C/C++）
 
@@ -735,6 +773,7 @@ int main(void)
 ## 集成指南
 
 - **[Qt / wxWidgets 桌面框架集成](./qt_wxwidgets_integration.md)** —— CMake 链接、工作线程、进度条、信号槽 / CallAfter 调度
+- **[GUI 支撑 API](./gui_support_api.md)** —— 结构化进度阶段、层几何快照、作业句柄与取消
 - **[Unity / Unreal Engine 游戏引擎集成](./game_engine_integration.md)** —— C# P/Invoke、UE ThirdParty 模块、Blueprint 封装、各平台打包
 
 ## 相关示例

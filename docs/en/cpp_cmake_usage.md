@@ -523,4 +523,5 @@ target_link_libraries(my_app PRIVATE HsBaSlicer::LibHsBaSlicer)
 - [LibHsBaSlicer Module](./LibHsBaSlicer/) — Core C++ slicing API reference
 - [DllHsBaSlicer Module](./DllHsBaSlicer/) — C ABI pipeline interface & cross-platform integration
 - [Qt / wxWidgets Integration](./DllHsBaSlicer/qt_wxwidgets_integration.md)
+- [GUI Support API](./DllHsBaSlicer/gui_support_api.md) — structured progress stages, layer geometry snapshots, job handles and cancellation
 - [Unity / Unreal Engine Integration](./DllHsBaSlicer/game_engine_integration.md)

@@ -4,6 +4,7 @@
  */
 #include "tdp_pipeline.h"
 
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -21,6 +22,8 @@
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
 #include "base/coroutine.hpp"
 #include "base/error.hpp"
+#include "geometry_store.hpp"
+#include "job_control.h"
 #include "pipeline_parallel.hpp"
 
 namespace HsBa::Slicer::Pipeline
@@ -35,6 +38,8 @@ struct InternalTdpResult
     std::string export_path;
     std::string error_message;
     double elapsed_seconds = 0.0;
+    bool cancelled = false;
+    long long geometry_id = 0;  ///< Snapshot id of the captured layer geometry (0 = none)
 };
 
 struct InternalTdpConfig
@@ -56,6 +61,27 @@ struct InternalTdpConfig
     bool randomize_start_point = false;
     HsBaTdpProgressCallback progress_cb = nullptr;
     void* progress_user_data = nullptr;
+    bool capture_geometry = false;
+    const void* cancel_flag = nullptr;  ///< std::atomic<bool>* set by the host or by its job handle
+
+    // Cancellation is cooperative and only observed at stage boundaries: throwing from the
+    // throttled progress callback of the layer-parallel slicing stage would abandon sibling
+    // worker tasks still writing into layer_outlines (see base/parallel.hpp). The parallel
+    // layer functor therefore skips its remaining work as soon as the flag is set.
+    /** @brief Whether the host asked this run to stop. */
+    bool CancelRequested() const
+    {
+        return cancel_flag && static_cast<const std::atomic<bool>*>(cancel_flag)->load(std::memory_order_relaxed);
+    }
+
+    /** @brief Throw at a cancellation point so the run unwinds as a cancelled result. */
+    void CheckCancel() const
+    {
+        if (CancelRequested())
+        {
+            throw CancelledError("pipeline cancelled");
+        }
+    }
 };
 
 struct OwnedCString
@@ -186,6 +212,8 @@ InternalTdpConfig BuildTdpConfig(const HsBaTdpPipelineConfig_t* cfg, HsBaTdpProg
     ic.randomize_start_point = cfg->randomize_start_point != 0;
     ic.progress_cb = cb;
     ic.progress_user_data = ud;
+    ic.capture_geometry = cfg->capture_geometry != 0;
+    ic.cancel_flag = cfg->cancel_flag;
     return ic;
 }
 
@@ -200,6 +228,7 @@ HsBaTdpPipelineResult_t ToCResult(const InternalTdpResult& ir)
     cr.export_path = export_path.release();
     cr.error_message = error.release();
     cr.elapsed_seconds = ir.elapsed_seconds;
+    cr.geometry_id = ir.geometry_id;
     return cr;
 }
 
@@ -253,6 +282,10 @@ Utils::Task<InternalTdpResult> RunTdpPipelineAsync(const InternalTdpConfig& cfg)
             total_layers,
             [&](int i)
             {
+                if (cfg.CancelRequested())
+                {
+                    return;  // stop computing, the stage reports cancellation right after the await
+                }
                 float const z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
                 layer_z_heights[i] = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height);
                 layer_outlines[i] = SliceLayer(*topo, z);
@@ -270,6 +303,7 @@ Utils::Task<InternalTdpResult> RunTdpPipelineAsync(const InternalTdpConfig& cfg)
                 int const progress = 15 + (done * 35) / total_layers;
                 ReportProgress(cfg, progress, "Slicing layer");
             });
+        cfg.CheckCancel();
         ReportProgress(cfg, 50, "Slicing complete");
 
         // ========== Stage 3: Export via Lua ==========
@@ -280,6 +314,18 @@ Utils::Task<InternalTdpResult> RunTdpPipelineAsync(const InternalTdpConfig& cfg)
             result.success = false;
             result.error_message = "3DP export requires a Lua export script (export_lua_script)";
             co_return result;
+        }
+
+        // 3DP has no infill or support slots, so only the (already seam-rotated) outlines
+        // are published.
+        if (cfg.capture_geometry)
+        {
+            std::vector<double> geometry_zs(total_layers);
+            for (int i = 0; i < total_layers; ++i)
+            {
+                geometry_zs[i] = static_cast<double>(layer_z_heights[i]);
+            }
+            result.geometry_id = CaptureLayerGeometry(HSBA_PIPELINE_TDP, layer_outlines, {}, {}, geometry_zs);
         }
 
         ReportProgress(cfg, 60, "Exporting via Lua script...");
@@ -315,6 +361,14 @@ Utils::Task<InternalTdpResult> RunTdpPipelineAsync(const InternalTdpConfig& cfg)
 
         ReportProgress(cfg, 100, "Pipeline complete");
     }
+    catch (const CancelledError& e)
+    {
+        result.success = false;
+        result.cancelled = true;
+        // The "Cancelled" prefix is what the C ABI callers use to tell a cancelled run
+        // apart from a failed one, since the result structs carry no status field.
+        result.error_message = std::string("Cancelled: ") + e.what();
+    }
     catch (const RuntimeError& e)
     {
         result.success = false;
@@ -325,6 +379,28 @@ Utils::Task<InternalTdpResult> RunTdpPipelineAsync(const InternalTdpConfig& cfg)
     result.elapsed_seconds = std::chrono::duration<double>(end_time - start_time).count();
 
     co_return result;
+}
+
+// Carries the caller's result callback across the job thread boundary.
+struct TdpAsyncThunk
+{
+    HsBaTdpResultCallback callback = nullptr;
+    void* user_data = nullptr;
+};
+
+/**
+ * @brief Job completion hook of HsBaRunTdpPipelineAsync.
+ *
+ * The job owns the temporary result struct and its strings, and releases both once this
+ * callback returns, matching the copy-then-HsBaFreeTdpPipelineResult contract.
+ */
+void DeliverTdpResult(void* typed_result, void* thunk)
+{
+    const std::unique_ptr<TdpAsyncThunk> owned(static_cast<TdpAsyncThunk*>(thunk));
+    if (owned->callback && typed_result)
+    {
+        owned->callback(*static_cast<HsBaTdpPipelineResult_t*>(typed_result), owned->user_data);
+    }
 }
 
 }  // anonymous namespace
@@ -351,18 +427,13 @@ HSBA_SLICER_API void HsBaRunTdpPipelineAsync(const HsBaTdpPipelineConfig_t* conf
                                              void* user_data, HsBaTdpResultCallback result_callback,
                                              void* result_user_data)
 {
-    auto shared_cfg = std::make_shared<HsBa::Slicer::Pipeline::InternalTdpConfig>(
-        HsBa::Slicer::Pipeline::BuildTdpConfig(config, callback, user_data));
-    auto task = HsBa::Slicer::Pipeline::RunTdpPipelineAsync(*shared_cfg);
-    task.then(
-        [shared_cfg, result_callback, result_user_data](const HsBa::Slicer::Pipeline::InternalTdpResult& ir)
-        {
-            auto cr = HsBa::Slicer::Pipeline::ToCResult(ir);
-            if (result_callback)
-            {
-                result_callback(cr, result_user_data);
-            }
-        });  // NOLINT(clang-analyzer-unix.Malloc) C-ABI ownership transfer: result_callback frees cr strings
+    // Delegate to the job machinery: the configuration is deep-copied, so neither config nor
+    // its strings have to outlive this call, and the caller is not blocked any more.
+    auto* thunk = new HsBa::Slicer::Pipeline::TdpAsyncThunk();
+    thunk->callback = result_callback;
+    thunk->user_data = result_user_data;
+    HsBa::Slicer::Pipeline::SubmitLegacyJob(HSBA_PIPELINE_TDP, config, callback, user_data,
+                                            &HsBa::Slicer::Pipeline::DeliverTdpResult, thunk);
 }
 
 HSBA_SLICER_API void HsBaFreeTdpPipelineResult(HsBaTdpPipelineResult_t* result)

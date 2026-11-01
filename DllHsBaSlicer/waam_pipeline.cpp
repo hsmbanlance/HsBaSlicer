@@ -4,6 +4,7 @@
  */
 #include "waam_pipeline.h"
 
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -19,6 +20,8 @@
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
 #include "base/coroutine.hpp"
 #include "base/error.hpp"
+#include "geometry_store.hpp"
+#include "job_control.h"
 #include "pipeline_parallel.hpp"
 
 namespace HsBa::Slicer::Pipeline
@@ -33,6 +36,8 @@ struct InternalWaamResult
     std::string output_path;
     std::string error_message;
     double elapsed_seconds = 0.0;
+    bool cancelled = false;
+    long long geometry_id = 0;  ///< Snapshot id of the captured layer geometry (0 = none)
 };
 
 struct InternalWaamConfig
@@ -60,6 +65,27 @@ struct InternalWaamConfig
     bool randomize_start_point = false;
     HsBaWaamProgressCallback progress_cb = nullptr;
     void* progress_user_data = nullptr;
+    bool capture_geometry = false;
+    const void* cancel_flag = nullptr;  ///< std::atomic<bool>* set by the host or by its job handle
+
+    // Cancellation is cooperative and only observed at stage boundaries: throwing from the
+    // throttled progress callback of the bead-parallel slicing stage would abandon sibling
+    // worker tasks still writing into layer_outlines (see base/parallel.hpp). The parallel
+    // layer functor therefore skips its remaining work as soon as the flag is set.
+    /** @brief Whether the host asked this run to stop. */
+    bool CancelRequested() const
+    {
+        return cancel_flag && static_cast<const std::atomic<bool>*>(cancel_flag)->load(std::memory_order_relaxed);
+    }
+
+    /** @brief Throw at a cancellation point so the run unwinds as a cancelled result. */
+    void CheckCancel() const
+    {
+        if (CancelRequested())
+        {
+            throw CancelledError("pipeline cancelled");
+        }
+    }
 };
 
 struct OwnedCString
@@ -156,6 +182,8 @@ InternalWaamConfig BuildWaamConfig(const HsBaWaamPipelineConfig_t* cfg, HsBaWaam
     ic.randomize_start_point = cfg->randomize_start_point != 0;
     ic.progress_cb = cb;
     ic.progress_user_data = ud;
+    ic.capture_geometry = cfg->capture_geometry != 0;
+    ic.cancel_flag = cfg->cancel_flag;
     return ic;
 }
 
@@ -170,6 +198,7 @@ HsBaWaamPipelineResult_t ToCResult(const InternalWaamResult& ir)
     cr.output_path = output_path.release();
     cr.error_message = error.release();
     cr.elapsed_seconds = ir.elapsed_seconds;
+    cr.geometry_id = ir.geometry_id;
     return cr;
 }
 
@@ -221,6 +250,10 @@ Utils::Task<InternalWaamResult> RunWaamPipelineAsync(const InternalWaamConfig& c
             total_layers,
             [&](int i)
             {
+                if (cfg.CancelRequested())
+                {
+                    return;  // stop computing, the stage reports cancellation right after the await
+                }
                 float const z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
                 layer_z_heights[i] = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height);
                 layer_outlines[i] = SliceLayer(*topo, z);
@@ -238,12 +271,26 @@ Utils::Task<InternalWaamResult> RunWaamPipelineAsync(const InternalWaamConfig& c
                 int const progress = 15 + (done * 45) / total_layers;
                 ReportProgress(cfg, progress, "Slicing bead layer");
             });
+        cfg.CheckCancel();
         ReportProgress(cfg, 60, "Slicing complete");
 
         // ========== Stage 3: Robot path export ==========
         // WAAM output is a robot language program built from the deposition
         // contours; a Lua script is optional (built-in ABB/KUKA/FANUC if absent).
+        cfg.CheckCancel();
         ReportProgress(cfg, 70, "Generating robot path...");
+
+        // WAAM has no infill or support slots, so only the (already seam-rotated)
+        // bead outlines are published.
+        if (cfg.capture_geometry)
+        {
+            std::vector<double> geometry_zs(total_layers);
+            for (int i = 0; i < total_layers; ++i)
+            {
+                geometry_zs[i] = static_cast<double>(layer_z_heights[i]);
+            }
+            result.geometry_id = CaptureLayerGeometry(HSBA_PIPELINE_WAAM, layer_outlines, {}, {}, geometry_zs);
+        }
 
         std::string output_path = cfg.output_path;
         if (output_path.empty())
@@ -282,6 +329,14 @@ Utils::Task<InternalWaamResult> RunWaamPipelineAsync(const InternalWaamConfig& c
 
         ReportProgress(cfg, 100, "Pipeline complete");
     }
+    catch (const CancelledError& e)
+    {
+        result.success = false;
+        result.cancelled = true;
+        // The "Cancelled" prefix is what the C ABI callers use to tell a cancelled run
+        // apart from a failed one, since the result structs carry no status field.
+        result.error_message = std::string("Cancelled: ") + e.what();
+    }
     catch (const RuntimeError& e)
     {
         result.success = false;
@@ -292,6 +347,28 @@ Utils::Task<InternalWaamResult> RunWaamPipelineAsync(const InternalWaamConfig& c
     result.elapsed_seconds = std::chrono::duration<double>(end_time - start_time).count();
 
     co_return result;
+}
+
+// Carries the caller's result callback across the job thread boundary.
+struct WaamAsyncThunk
+{
+    HsBaWaamResultCallback callback = nullptr;
+    void* user_data = nullptr;
+};
+
+/**
+ * @brief Job completion hook of HsBaRunWaamPipelineAsync.
+ *
+ * The job owns the temporary result struct and its strings, and releases both once this
+ * callback returns, matching the copy-then-HsBaFreeWaamPipelineResult contract.
+ */
+void DeliverWaamResult(void* typed_result, void* thunk)
+{
+    const std::unique_ptr<WaamAsyncThunk> owned(static_cast<WaamAsyncThunk*>(thunk));
+    if (owned->callback && typed_result)
+    {
+        owned->callback(*static_cast<HsBaWaamPipelineResult_t*>(typed_result), owned->user_data);
+    }
 }
 
 }  // anonymous namespace
@@ -318,18 +395,13 @@ HSBA_SLICER_API void HsBaRunWaamPipelineAsync(const HsBaWaamPipelineConfig_t* co
                                               void* user_data, HsBaWaamResultCallback result_callback,
                                               void* result_user_data)
 {
-    auto shared_cfg = std::make_shared<HsBa::Slicer::Pipeline::InternalWaamConfig>(
-        HsBa::Slicer::Pipeline::BuildWaamConfig(config, callback, user_data));
-    auto task = HsBa::Slicer::Pipeline::RunWaamPipelineAsync(*shared_cfg);
-    task.then(
-        [shared_cfg, result_callback, result_user_data](const HsBa::Slicer::Pipeline::InternalWaamResult& ir)
-        {
-            auto cr = HsBa::Slicer::Pipeline::ToCResult(ir);
-            if (result_callback)
-            {
-                result_callback(cr, result_user_data);
-            }
-        });  // NOLINT(clang-analyzer-unix.Malloc) C-ABI ownership transfer: result_callback frees cr strings
+    // Delegate to the job machinery: the configuration is deep-copied, so neither config nor
+    // its strings have to outlive this call, and the caller is not blocked any more.
+    auto* thunk = new HsBa::Slicer::Pipeline::WaamAsyncThunk();
+    thunk->callback = result_callback;
+    thunk->user_data = result_user_data;
+    HsBa::Slicer::Pipeline::SubmitLegacyJob(HSBA_PIPELINE_WAAM, config, callback, user_data,
+                                            &HsBa::Slicer::Pipeline::DeliverWaamResult, thunk);
 }
 
 HSBA_SLICER_API void HsBaFreeWaamPipelineResult(HsBaWaamPipelineResult_t* result)

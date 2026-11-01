@@ -50,6 +50,9 @@ All public headers are exported to `include/HsBaSlicer/` in the install tree.
 | `pipeline_convert.h` | Proto serialized bytes ↔ C struct conversion |
 | `lua_register.h` | Lua extension function registration (2D/3D/File/Event callbacks) |
 | `event_source_register.h` | C++ event source registration (Zipper progress / DB events) |
+| `progress_stage.h` | Progress stage classification (stage text ↔ enum ↔ stable identifier) |
+| `geometry_export.h` | Layer geometry snapshot queries (outline/fill/support rings, refcounting & reclamation) |
+| `job_control.h` | Job handle interface (true async submit, cancellation, polling, unified result view) |
 | `version_info.h` | Version information (JSON / XML strings) |
 | `pipelinetypes/pipeline_types.h` | All config/result structs, enums, callback types and inline default initializers (**no DLL dependency**, can be included standalone) |
 
@@ -684,6 +687,41 @@ int main(void) {
 }
 ```
 
+### GUI Support Interfaces (Structured Progress / Layer Geometry / Job Cancellation)
+
+Three headers aimed at graphical hosts. Full signatures, memory and threading contracts, and the
+per-process-kind slot mapping are documented in **[GUI Support API](./gui_support_api.md)**; only the
+entry points are listed here:
+
+```c
+/* progress_stage.h - classify progress text into a stable enum */
+HsBaStage_t HsBaStageFromText(const char* stage);
+const char* HsBaStageName(HsBaStage_t stage);   // snake_case identifiers such as "slicing.layer"
+const char* HsBaStageLabel(HsBaStage_t stage);  // English display labels
+
+/* job_control.h - genuinely non-blocking job handle */
+HsBaJobHandle HsBaSubmitJob(HsBaPipelineKind kind, const void* config,
+                            HsBaProgressCallbackEx on_progress, void* progress_user_data,
+                            HsBaJobDoneCallback on_done, void* done_user_data);
+int HsBaCancelJob(HsBaJobHandle job);
+int HsBaWaitJob(HsBaJobHandle job, long long timeout_ms);
+int HsBaJobGetProgress(HsBaJobHandle job, int* percent, HsBaStage_t* stage, char* text_out, int text_cap);
+int HsBaJobCopyResult(HsBaJobHandle job, HsBaJobResultView_t* out);
+void HsBaReleaseJob(HsBaJobHandle job);
+
+/* geometry_export.h - per-layer geometry, readable once capture_geometry = 1 */
+int HsBaGeometryLayerCount(long long geometry_id);
+int HsBaGetLayerGeometry(long long geometry_id, int layer_index, HsBaLayerGeometry_t* out);
+void HsBaFreeLayerGeometry(HsBaLayerGeometry_t* geom);
+long long HsBaRetainGeometrySnapshot(long long geometry_id);
+void HsBaReleaseGeometrySnapshot(long long geometry_id);
+```
+
+The config and result structs used by the sync/async entry points gained the trailing fields
+`capture_geometry` / `cancel_flag` / `geometry_id` accordingly (**recompilation required**; these three
+fields are not registered in the reflection table, so they never appear in config JSON / proto / the
+parameter wide table).
+
 ## Callback & Threading Model
 
 ```c
@@ -693,8 +731,9 @@ typedef void (*HsBaResultCallback)(HsBaFdmPipelineResult_t result, void* user_da
 
 - Progress and result callbacks fire on the **library's internal worker thread**, never on the caller's UI thread;
 - Hosts (Qt/wxWidgets/Unity/UE) must marshal back to their UI/game thread before updating widgets;
-- `stage` is a UTF-8 string valid only during the callback — copy it if you need to keep it;
-- The `config` pointer passed to async functions is read only during the call; it may be freed or reused after the call returns.
+- `stage` is a UTF-8 string valid only during the callback — copy it if you need to keep it; use `HsBaStageFromText(stage)` when you need stable semantics;
+- The `config` pointer passed to async functions is read only during the call; it may be freed or reused after the call returns (the implementation deep-copies it, including all strings);
+- **The legacy `HsBaRun*PipelineAsync` entries historically blocked the caller**: their coroutine executor joined before returning, so the calling thread was never freed. That behaviour is now fixed, and `HsBaSubmitJob` additionally offers handle-based, cancellable, pollable true async semantics. If your code relied on "Async actually blocks", switch to `HsBaWaitJob` or a result callback.
 
 ## Memory Management Rules
 
@@ -703,7 +742,9 @@ typedef void (*HsBaResultCallback)(HsBaFdmPipelineResult_t result, void* user_da
 3. Version strings must be freed with `HsBaFreeVersionString()`;
 4. Model handles (`void*` returned by `HsBaLoadModel` / `HsBaGetModel` / `HsBaBoolean*` / `HsBaThickSolidModel`) must be released with `HsBaReleaseModelHandle()`;
 5. `pipeline_types.h` also provides DLL-independent inline initializers `HsBaFdmConfigDefault()` / `HsBaSlaConfigDefault()` / `HsBaSlsConfigDefault()` / `HsBaSlmConfigDefault()` / `HsBaLomConfigDefault()` / `HsBaTdpConfigDefault()` / `HsBaWaamConfigDefault()` / `HsBaFileTransferConfigDefault()`, handy for header-only scenarios (e.g. mirroring structs for P/Invoke);
-6. Proto deserialization (`*FromProtoBytes`) allocates string fields with `malloc`—release them with the matching `HsBaFree*ConfigStrings()` (for Custom results use `HsBaFreeCustomPipelineResult()`); `*ToProtoBytes` output buffers (`out_data`) must be `free`'d by the caller.
+6. Proto deserialization (`*FromProtoBytes`) allocates string fields with `malloc`—release them with the matching `HsBaFree*ConfigStrings()` (for Custom results use `HsBaFreeCustomPipelineResult()`); `*ToProtoBytes` output buffers (`out_data`) must be `free`'d by the caller;
+7. A submitted job handle (`HsBaJobHandle`) holds two references: the library reference is released automatically when the completion callback fires, and the caller **must** call `HsBaReleaseJob` once on its own reference; the three strings handed out by `HsBaJobCopyResult` are `malloc`-owned and released together via `HsBaFreeJobResultView()`;
+8. `HsBaGetLayerGeometry` returns one single `malloc`'d block, so every ring/coordinate pointer inside refers to it: **never `free` them individually** — call `HsBaFreeLayerGeometry()` exactly once. Snapshots themselves are reclaimed by the pool under the `HSBA_GEOMETRY_POOL_MAX` cap (default 4); to keep a preview alive longer, manage it with paired `HsBaRetainGeometrySnapshot()` / `HsBaReleaseGeometrySnapshot()` calls.
 
 ## Minimal Example (C/C++)
 
@@ -735,6 +776,7 @@ int main(void)
 ## Integration Guides
 
 - **[Qt / wxWidgets Desktop Integration](./qt_wxwidgets_integration.md)** — CMake linking, worker threads, progress bars, signal-slot / CallAfter marshalling
+- **[GUI Support API](./gui_support_api.md)** — structured progress stages, layer geometry snapshots, job handles and cancellation
 - **[Unity / Unreal Engine Integration](./game_engine_integration.md)** — C# P/Invoke, UE ThirdParty module, Blueprint wrappers, per-platform packaging
 
 ## Related Samples

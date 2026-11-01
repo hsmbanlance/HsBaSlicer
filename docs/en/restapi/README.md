@@ -89,10 +89,13 @@ are bridged through `param_reflect` reflection field-by-field (`config_bridge`).
 | `GET` | `/api/pipelines` | Supported pipeline kinds. | dispatch table |
 | `GET` | `/api/pipelines/{kind}/default-config` | Default config for a kind. | `HsBaCreateDefault*Config` |
 | `POST` | `/api/config/convert?kind={kind}` | Convert proto bytes → JSON/XML; append `&to=proto` to encode a JSON/XML body → proto bytes. | `HsBa*ConfigFromProtoBytes/ToProtoBytes` |
-| `POST` | `/api/jobs?kind={kind}` or `/api/jobs/{kind}` | Submit a slicing job (JSON/XML body, or `multipart/form-data`, see below). | `HsBaRun*Pipeline` (async) |
+| `POST` | `/api/jobs?kind={kind}` or `/api/jobs/{kind}` | Submit a slicing job (JSON/XML body, or `multipart/form-data`, see below); append `?geometry=1` to capture per-layer geometry for the endpoints below. | `HsBaRun*Pipeline` (async) |
 | `GET` | `/api/jobs?state=&offset=&limit=` | List / paginate jobs (optional state filter). | job queue |
 | `GET` | `/api/jobs/{id}` | Job status (state/progress/result metadata). | job queue |
-| `GET` | `/api/jobs/{id}/result` | Downloadable artifact (gcode text / output file); the file branch names only the file. | job queue |
+| `GET` | `/api/jobs/{id}/result` | Downloadable artifact (gcode text / output file); the file branch names only the file; cancelled jobs get 409. | job queue |
+| `POST` | `/api/jobs/{id}/cancel` | Request cancellation: running → `202` flag set, queued → `202` dropped outright, terminal → `409`, unknown → `404`. | job queue (`cancel_flag`) |
+| `GET` | `/api/jobs/{id}/geometry` | Geometry summary (layer count + global bounds); `?full=1` additionally expands `z_heights` / `layer_bounds`. | `HsBaGeometryLayerCount` |
+| `GET` | `/api/jobs/{id}/geometry/{layer}` | One layer of rings (outlines / fills / supports, coordinates as flat numeric arrays). | `HsBaGetLayerGeometry` |
 | `DELETE` | `/api/jobs/{id}` | Delete a queued or finished job (running jobs are refused); only unlinks its upload. | job queue |
 | `GET` | `/api/uploads?state=&offset=&limit=` | List pooled uploads (`pending` / `in_use` / `terminal`). | upload pool |
 | `GET` | `/api/uploads/{id}` | Details of a single upload. | upload pool |
@@ -106,6 +109,88 @@ are bridged through `param_reflect` reflection field-by-field (`config_bridge`).
 Spec-verbatim aliases are also served: `GET /api/kinds` (≡ `/api/pipelines`),
 `GET /api/config/default/{kind}` (≡ `/api/pipelines/{kind}/default-config`), and
 `POST /api/params/{kind}?key=` (≡ `PUT /api/params/{kind}/{key}`).
+
+## Job cancellation and layer geometry
+
+### State machine
+
+Job `state` is one of `queued`, `running`, `success`, `failed`, `cancelled` (the last three are
+terminal). `progress_stage_id` in `GET /api/jobs/{id}` is a stable stage key (such as
+`slicing.layer`) and reads `unknown` when the pipeline text cannot be classified;
+`geometry_available` / `geometry_layers` are non-zero only after a terminal state.
+
+Cancellation is **cooperative**: pipelines check the flag only at stage boundaries and inside
+per-layer loops, so `202` means "recorded", not "stopped". Work already in flight (mesh loading,
+one Lua callback, a zip run) has to finish. Cancelling a terminal job yields
+`409 job already finished`, while its record stays readable.
+
+```json
+{
+  "id": "7f3c1a2b",
+  "kind": "fdm",
+  "state": "cancelled",
+  "progress_percent": 60,
+  "progress_stage": "Slicing layer",
+  "success": 0,
+  "total_layers": 0,
+  "elapsed_seconds": 4.19,
+  "output_path": "",
+  "error_message": "Cancelled: pipeline cancelled",
+  "progress_stage_id": "cancelled",
+  "geometry_layers": 0,
+  "geometry_available": 0
+}
+```
+
+### Enabling capture at submission
+
+`POST /api/jobs/{kind}?geometry=1` (also accepts `geometry=true`) sets the struct's
+`capture_geometry` to 1 on the server. The switch is **not part of the config field table**, so it
+never appears in `default-config`, body validation, proto messages or the parameter wide table;
+`custom` and `filetransfer` capture nothing, so both geometry endpoints always answer `404` there.
+
+### `GET /api/jobs/{id}/geometry`
+
+```json
+{
+  "id": "7f3c1a2b",
+  "geometry_id": 12,
+  "layer_count": 214,
+  "bounds": [0.0, 0.0, 68.4, 51.2],
+  "z_heights": [0.2, 0.4],
+  "layer_bounds": [0.0, 0.0, 68.4, 51.2, 0.0, 0.0, 67.9, 50.8]
+}
+```
+
+`z_heights` and `layer_bounds` are emitted **only with `?full=1`**; the default response carries the
+first four fields (a `layer_count` in the thousands is not expanded blindly). `geometry_id` is
+directly usable by a native host in the same process (pass it to `HsBaGetLayerGeometry`); to an HTTP
+client it is just an opaque number.
+
+### `GET /api/jobs/{id}/geometry/{layer}`
+
+```json
+{
+  "id": "7f3c1a2b",
+  "layer_index": 0,
+  "z_height": 0.2,
+  "bounds": [0.0, 0.0, 68.4, 51.2],
+  "outlines": [{"point_count": 4, "closed": 1, "xy": [0.0, 0.0, 68.4, 0.0, 68.4, 51.2, 0.0, 51.2]}],
+  "fills": [{"point_count": 2, "closed": 0, "xy": [1.0, 2.0, 30.0, 2.0]}],
+  "supports": []
+}
+```
+
+Coordinates are millimetres and `xy` is flat `x0,y0,x1,y1,...` (to keep bodies small);
+`closed=1` marks a closed contour, `0` an open polyline. Slot meaning depends on the process: FDM
+fills all three; the SLA raft/bottom sheet appears **only in `fills` of layer 0**; SLS / SLM / LOM /
+TDP / WAAM provide `outlines` only.
+
+Geometry is readable only **after** the job reaches a terminal state (capture happens at the end of
+the pipeline). An out-of-range `{layer}` yields `404 layer index out of range` (with
+`detail` = `layer_count=N`), a non-numeric index yields `400 layer index must be a non-negative
+integer`, and a snapshot already reclaimed by the in-process cap (environment variable
+`HSBA_GEOMETRY_POOL_MAX`, default 4) yields `404 geometry snapshot is no longer available`.
 
 ## Model file upload
 
@@ -247,18 +332,26 @@ above — nothing here changes the endpoint, format, upload or authorization con
 2. Edit the fields and `POST /api/jobs/{kind}` with the config body → `202` and
    `Location: /api/jobs/{id}`. When the model is not already on a server-side path, send
    `multipart/form-data` instead and attach it in the same request (previous section).
-3. Poll `GET /api/jobs/{id}` until `state` is `success` or `failed`.
+3. Poll `GET /api/jobs/{id}` until `state` is `success`, `failed` or `cancelled`.
 4. On success fetch `GET /api/jobs/{id}/result`.
+5. (Optional) Submit with `?geometry=1`, then read `GET /api/jobs/{id}/geometry` for the summary and
+   `GET /api/jobs/{id}/geometry/{layer}` for single-layer outlines to draw a preview.
+6. (Optional) `POST /api/jobs/{id}/cancel` to stop a running job; after cancellation the result
+   endpoint answers `409`.
 
 ## Errors
 
 Failures are uniform `{code, message, detail}` JSON / `<Error>` XML:
-`400` invalid kind/body/config conversion or a missing multipart part, `401` missing or
+`400` invalid kind/body/config conversion, a missing multipart part, or a geometry layer index that
+is not a non-negative integer; `401` missing or
 wrong credentials (`WWW-Authenticate: Bearer realm="HsBaSlicer"`), `404` unknown
-job/upload/key, `409` job not finished (result), still running (job delete), or upload still
+job/upload/key, or geometry that was never captured / was reclaimed / a layer index out of range,
+`409` job not finished (result), cancelled (result: `job was cancelled`), still running (job delete),
+already terminal (cancel request), or upload still
 referenced by a job (upload delete), `413` model larger than `[upload] max_file_mb`, `429`
 queue full, `503` ParamStore not configured / model upload disabled / upload pool full.
-`DELETE /api/jobs/{id}` and `DELETE /api/uploads/{id}` return `204` on success.
+`DELETE /api/jobs/{id}` and `DELETE /api/uploads/{id}` return `204` on success; `POST
+/api/jobs/{id}/cancel` returns `202` (the run is still unwinding, not already stopped).
 
 ## Security note
 

@@ -4,6 +4,7 @@
  */
 #include "fdm_pipeline.h"
 
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -24,6 +25,8 @@
 #include "base/coroutine.hpp"
 #include "base/encoding_convert.hpp"
 #include "base/error.hpp"
+#include "geometry_store.hpp"
+#include "job_control.h"
 #include "paths/gcodepath.hpp"
 #include "pipeline_parallel.hpp"
 
@@ -40,6 +43,8 @@ struct InternalResult
     std::string gcode_content;
     std::string error_message;
     double elapsed_seconds = 0.0;
+    bool cancelled = false;
+    long long geometry_id = 0;  ///< Snapshot id of the captured layer geometry (0 = none)
 };
 
 // Internal configuration
@@ -70,6 +75,28 @@ struct InternalConfig
     std::string output_path;
     HsBaProgressCallback progress_cb = nullptr;
     void* progress_user_data = nullptr;
+    bool capture_geometry = false;
+    const void* cancel_flag = nullptr;  ///< std::atomic<bool>* set by the host or by its job handle
+
+    // Cancellation is cooperative: the flag is only polled at stage boundaries and inside
+    // serial loops, because an exception escaping the throttled progress callback of a
+    // layer-parallel stage would abandon sibling worker tasks still writing into the
+    // caller's layer vectors. Parallel stages therefore observe the request as soon as
+    // their remaining iterations are skipped (see CancelRequested in the layer functors).
+    /** @brief Whether the host asked this run to stop. */
+    bool CancelRequested() const
+    {
+        return cancel_flag && static_cast<const std::atomic<bool>*>(cancel_flag)->load(std::memory_order_relaxed);
+    }
+
+    /** @brief Throw at a cancellation point so the run unwinds as a cancelled result. */
+    void CheckCancel() const
+    {
+        if (CancelRequested())
+        {
+            throw CancelledError("pipeline cancelled");
+        }
+    }
 };
 
 // RAII guard: ensures malloc-allocated C strings are freed on exception/early return
@@ -223,6 +250,8 @@ InternalConfig BuildConfig(const HsBaFdmPipelineConfig_t* cfg, HsBaProgressCallb
     ic.output_path = cfg->output_path ? cfg->output_path : "";
     ic.progress_cb = cb;
     ic.progress_user_data = ud;
+    ic.capture_geometry = cfg->capture_geometry != 0;
+    ic.cancel_flag = cfg->cancel_flag;
     return ic;
 }
 
@@ -237,6 +266,7 @@ HsBaFdmPipelineResult_t ToCResult(const InternalResult& ir)
     cr.gcode_content = content.release();
     cr.error_message = error.release();
     cr.elapsed_seconds = ir.elapsed_seconds;
+    cr.geometry_id = ir.geometry_id;
     return cr;
 }
 
@@ -298,6 +328,10 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             total_layers,
             [&](int i)
             {
+                if (cfg.CancelRequested())
+                {
+                    return;  // stop computing, the stage reports cancellation right after the await
+                }
                 float const z = GetLayerZ(i, cfg.first_layer_height, cfg.layer_height) + z_offset;
                 layer_outlines[i] = SliceLayer(*topo, z);
             },
@@ -306,9 +340,11 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
                 int const progress = 15 + (done * 25) / total_layers;
                 ReportProgress(cfg, progress, "Slicing layer");
             });
+        cfg.CheckCancel();
         ReportProgress(cfg, 40, "Slicing complete");
 
         // ========== Stage 3: Support ==========
+        cfg.CheckCancel();
         std::vector<PolygonsD> layer_supports(total_layers);
         if (cfg.spiral_mode)
         {
@@ -340,6 +376,7 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
         }
 
         // ========== Stage 4: Infill ==========
+        cfg.CheckCancel();
         ReportProgress(cfg, 65, "Generating fills...");
         std::vector<PolygonsD> layer_fills(total_layers);
 
@@ -360,6 +397,10 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
         // safely; Lua infill uses a shared interpreter and must stay serial.
         auto cpp_fill_layer = [&](int i)
         {
+            if (cfg.CancelRequested())
+            {
+                return;
+            }
             if (layer_outlines[i].empty())
             {
                 return;
@@ -390,6 +431,7 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             // Serial per layer: Lua interpreter state is not shared across threads
             for (int i = 0; i < total_layers; ++i)
             {
+                cfg.CheckCancel();
                 if (!layer_outlines[i].empty())
                 {
                     Polygons const int_polys = Integerization(layer_outlines[i]);
@@ -418,10 +460,24 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
                                                 ReportProgress(cfg, progress, "Filling layer");
                                             });
         }
+        cfg.CheckCancel();
         ReportProgress(cfg, 85, "Fill generation complete");
 
         // ========== Stage 5: Path generation ==========
         ReportProgress(cfg, 90, "Generating G-code paths...");
+
+        // Hand the layer contours to the geometry snapshot pool before path generation
+        // consumes them; the copy keeps the pipeline's own data untouched.
+        if (cfg.capture_geometry)
+        {
+            std::vector<double> geometry_zs(total_layers);
+            for (int i = 0; i < total_layers; ++i)
+            {
+                geometry_zs[i] = static_cast<double>(GetLayerZ(i, cfg.first_layer_height, cfg.layer_height));
+            }
+            result.geometry_id =
+                CaptureLayerGeometry(HSBA_PIPELINE_FDM, layer_outlines, layer_fills, layer_supports, geometry_zs);
+        }
 
         if (cfg.spiral_mode)
         {
@@ -482,6 +538,14 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
 
         ReportProgress(cfg, 100, "Pipeline complete");
     }
+    catch (const CancelledError& e)
+    {
+        result.success = false;
+        result.cancelled = true;
+        // The "Cancelled" prefix is what the C ABI callers use to tell a cancelled run
+        // apart from a failed one, since the result structs carry no status field.
+        result.error_message = std::string("Cancelled: ") + e.what();
+    }
     catch (const RuntimeError& e)
     {
         result.success = false;
@@ -492,6 +556,29 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
     result.elapsed_seconds = std::chrono::duration<double>(end_time - start_time).count();
 
     co_return result;
+}
+
+// Carries the caller's result callback across the job thread boundary.
+struct FdmAsyncThunk
+{
+    HsBaResultCallback callback = nullptr;
+    void* user_data = nullptr;
+};
+
+/**
+ * @brief Job completion hook of HsBaRunFdmPipelineAsync.
+ *
+ * The job owns the temporary result struct and its strings; it releases both as soon
+ * as this callback returns, which matches the existing contract of taking a copy and
+ * calling HsBaFreePipelineResult.
+ */
+void DeliverFdmResult(void* typed_result, void* thunk)
+{
+    const std::unique_ptr<FdmAsyncThunk> owned(static_cast<FdmAsyncThunk*>(thunk));
+    if (owned->callback && typed_result)
+    {
+        owned->callback(*static_cast<HsBaFdmPipelineResult_t*>(typed_result), owned->user_data);
+    }
 }
 
 }  // anonymous namespace
@@ -518,19 +605,13 @@ HSBA_SLICER_API void HsBaRunFdmPipelineAsync(const HsBaFdmPipelineConfig_t* conf
                                              void* user_data, HsBaResultCallback result_callback,
                                              void* result_user_data)
 {
-    // Heap-allocate config to keep its lifetime safe during coroutine execution
-    auto shared_cfg = std::make_shared<HsBa::Slicer::Pipeline::InternalConfig>(
-        HsBa::Slicer::Pipeline::BuildConfig(config, callback, user_data));
-    auto task = HsBa::Slicer::Pipeline::RunPipelineAsync(*shared_cfg);
-    task.then(
-        [shared_cfg, result_callback, result_user_data](const HsBa::Slicer::Pipeline::InternalResult& ir)
-        {
-            auto cr = HsBa::Slicer::Pipeline::ToCResult(ir);
-            if (result_callback)
-            {
-                result_callback(cr, result_user_data);
-            }
-        });  // NOLINT(clang-analyzer-unix.Malloc) C-ABI ownership transfer: result_callback frees cr strings
+    // Delegate to the job machinery: the configuration is deep-copied, so neither config nor
+    // its strings have to outlive this call, and the caller is not blocked any more.
+    auto* thunk = new HsBa::Slicer::Pipeline::FdmAsyncThunk();
+    thunk->callback = result_callback;
+    thunk->user_data = result_user_data;
+    HsBa::Slicer::Pipeline::SubmitLegacyJob(HSBA_PIPELINE_FDM, config, callback, user_data,
+                                            &HsBa::Slicer::Pipeline::DeliverFdmResult, thunk);
 }
 
 HSBA_SLICER_API void HsBaFreePipelineResult(HsBaFdmPipelineResult_t* result)

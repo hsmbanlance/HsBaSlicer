@@ -77,10 +77,13 @@ ini 未给出对应值时生效（镜像因此可以不含 token）。文件缺�
 | `GET` | `/api/pipelines` | 支持的 pipeline 种类。 | 分发表 |
 | `GET` | `/api/pipelines/{kind}/default-config` | 某 kind 的默认配置。 | `HsBaCreateDefault*Config` |
 | `POST` | `/api/config/convert?kind={kind}` | proto 字节 → JSON/XML；追加 `&to=proto` 则把 JSON/XML 请求体编码为 proto 字节。 | `HsBa*ConfigFromProtoBytes/ToProtoBytes` |
-| `POST` | `/api/jobs?kind={kind}` 或 `/api/jobs/{kind}` | 提交切片作业（JSON/XML 请求体，或 `multipart/form-data`，见下）。 | `HsBaRun*Pipeline`（异步） |
+| `POST` | `/api/jobs?kind={kind}` 或 `/api/jobs/{kind}` | 提交切片作业（JSON/XML 请求体，或 `multipart/form-data`，见下）；追加 `?geometry=1` 则采集逐层几何供下列端点查询。 | `HsBaRun*Pipeline`（异步） |
 | `GET` | `/api/jobs?state=&offset=&limit=` | 作业列表 / 分页（可选状态过滤）。 | 作业队列 |
 | `GET` | `/api/jobs/{id}` | 作业状态（进度/结果元数据）。 | 作业队列 |
-| `GET` | `/api/jobs/{id}/result` | 下载产物（gcode 文本 / 输出文件）；文件分支只回报文件名。 | 作业队列 |
+| `GET` | `/api/jobs/{id}/result` | 下载产物（gcode 文本 / 输出文件）；文件分支只回报文件名；已取消的作业返回 409。 | 作业队列 |
+| `POST` | `/api/jobs/{id}/cancel` | 请求取消：运行中 → `202` 置位，排队中 → `202` 直接摘除，终态 → `409`，未知 → `404`。 | 作业队列（`cancel_flag`） |
+| `GET` | `/api/jobs/{id}/geometry` | 几何摘要（层数 + 全局包围盒）；`?full=1` 时额外展开逐层 `z_heights` / `layer_bounds`。 | `HsBaGeometryLayerCount` |
+| `GET` | `/api/jobs/{id}/geometry/{layer}` | 单层环数据（轮廓 / 填充 / 支撑，坐标为扁平数值数组）。 | `HsBaGetLayerGeometry` |
 | `DELETE` | `/api/jobs/{id}` | 删除排队中或已终态的作业（运行中拒绝），只解除上传关联。 | 作业队列 |
 | `GET` | `/api/uploads?state=&offset=&limit=` | 列出上传池条目（`pending`/`in_use`/`terminal`）。 | 上传池 |
 | `GET` | `/api/uploads/{id}` | 单条上传详情。 | 上传池 |
@@ -93,6 +96,82 @@ ini 未给出对应值时生效（镜像因此可以不含 token）。文件缺�
 同时提供服务字面量（实施计划）别名：`GET /api/kinds`（≡ `/api/pipelines`）、
 `GET /api/config/default/{kind}`（≡ `/api/pipelines/{kind}/default-config`）、
 `POST /api/params/{kind}?key=`（≡ `PUT /api/params/{kind}/{key}`）。
+
+## 作业取消与层几何
+
+### 状态机
+
+作业 `state` 取值：`queued`、`running`、`success`、`failed`、`cancelled`（后三者为终态）。
+`GET /api/jobs/{id}` 的 `progress_stage_id` 是稳定阶段标识符（如 `slicing.layer`），无法分类时
+为 `unknown`；`geometry_available` / `geometry_layers` 只在终态后非零。
+
+取消是**协作式**的：流水线只在阶段边界与逐层循环内检查标志，因此 `202` 代的是“已登记”而非
+“已停止”；正在进行的大块工作（网格加载、一次 Lua 回调、zip 压缩）必须跑完。终态后再 `POST
+cancel` 会得到 `409 job already finished`，但作业记录仍可查。
+
+```json
+{
+  "id": "7f3c1a2b",
+  "kind": "fdm",
+  "state": "cancelled",
+  "progress_percent": 60,
+  "progress_stage": "Slicing layer",
+  "success": 0,
+  "total_layers": 0,
+  "elapsed_seconds": 4.19,
+  "output_path": "",
+  "error_message": "Cancelled: pipeline cancelled",
+  "progress_stage_id": "cancelled",
+  "geometry_layers": 0,
+  "geometry_available": 0
+}
+```
+
+### 提交时开启几何采集
+
+`POST /api/jobs/{kind}?geometry=1`（也接受 `geometry=true`）在服务端把结构体的
+`capture_geometry` 置 1。该开关**不属于配置字段表**，因此不会出现在 `default-config`、请求体
+校验、proto 消息或参数宽表中；`custom` 与 `filetransfer` 不采集几何，这两个端点永远返回 `404`。
+
+### `GET /api/jobs/{id}/geometry`
+
+```json
+{
+  "id": "7f3c1a2b",
+  "geometry_id": 12,
+  "layer_count": 214,
+  "bounds": [0.0, 0.0, 68.4, 51.2],
+  "z_heights": [0.2, 0.4],
+  "layer_bounds": [0.0, 0.0, 68.4, 51.2, 0.0, 0.0, 67.9, 50.8]
+}
+```
+
+`z_heights` 与 `layer_bounds` **仅在 `?full=1` 时输出**；默认响应只有前四个字段（`layer_count` 可达
+上千，故不全量展开）。`geometry_id` 对原生宿主直接可用（同一进程内可传给 `HsBaGetLayerGeometry`），
+对 HTTP 客户端只是个不透明数字。
+
+### `GET /api/jobs/{id}/geometry/{layer}`
+
+```json
+{
+  "id": "7f3c1a2b",
+  "layer_index": 0,
+  "z_height": 0.2,
+  "bounds": [0.0, 0.0, 68.4, 51.2],
+  "outlines": [{"point_count": 4, "closed": 1, "xy": [0.0, 0.0, 68.4, 0.0, 68.4, 51.2, 0.0, 51.2]}],
+  "fills": [{"point_count": 2, "closed": 0, "xy": [1.0, 2.0, 30.0, 2.0]}],
+  "supports": []
+}
+```
+
+坐标单位为毫米，`xy` 是扁平的 `x0,y0,x1,y1,...`（以此控制响应体体积）；`closed=1` 为闭合轮廓，
+`0` 为开放折线。槽位含义按工艺不同：FDM 三个槽均有数据；SLA 的地板/筏层只出现在 **layer 0 的
+`fills`**；SLS / SLM / LOM / TDP / WAAM 只有 `outlines`。
+
+几何只在作业**终态之后**可读（采集发生在流水线末尾）；越界的 `{layer}` 返回
+`404 layer index out of range`（`detail` 带 `layer_count=N`），非数字层号返回
+`400 layer index must be a non-negative integer`，快照被进程内池上限（环境变量
+`HSBA_GEOMETRY_POOL_MAX`，默认 4）回收后返回 `404 geometry snapshot is no longer available`。
 
 ## 模型文件上传
 
@@ -213,17 +292,21 @@ node server.js --rest-url http://127.0.0.1:8080 --token "$HSBA_REST_AUTH_TOKEN"
 1. `GET /api/pipelines/{kind}/default-config` 获取模板。
 2. 修改字段后 `POST /api/jobs/{kind}` 提交配置体 → `202` 且 `Location: /api/jobs/{id}`；
    若模型不在服务端本地路径上，改用 `multipart/form-data` 一并上传（见上节）。
-3. 轮询 `GET /api/jobs/{id}` 直到 `state` 为 `success` 或 `failed`。
+3. 轮询 `GET /api/jobs/{id}` 直到 `state` 为 `success`、`failed` 或 `cancelled`。
 4. 成功后取 `GET /api/jobs/{id}/result`。
+5. （可选）提交时加 `?geometry=1`，终态后用 `GET /api/jobs/{id}/geometry` 拿摘要、
+   `GET /api/jobs/{id}/geometry/{layer}` 拿单层轮廓做预览绘制。
+6. （可选）`POST /api/jobs/{id}/cancel` 中途取消；取消后 `result` 端点返回 `409`。
 
 ## 错误
 
 失败响应统一为 `{code, message, detail}` JSON / `<Error>` XML：`400` kind/body/config 转换非法
-或缺 multipart part、`401` 缺凭据或凭据不匹配（附 `WWW-Authenticate: Bearer realm="HsBaSlicer"`）、
-`404` 作业/上传/key 不存在、`409` 作业未完成（取结果）、仍在运行（删除作业），或上传仍被作业引用
+或缺 multipart part（几何层号非非负整数也在此列）、`401` 缺凭据或凭据不匹配（附 `WWW-Authenticate: Bearer realm="HsBaSlicer"`）、
+`404` 作业/上传/key 不存在，或几何未采集 / 快照已回收 / 层号越界、`409` 作业未完成（取结果）、
+已取消（取结果，`job was cancelled`）、仍在运行（删除作业）、已终态（取消请求），或上传仍被作业引用
 （删除上传）、`413` 模型文件超过 `[upload] max_file_mb`、`429` 队列已满、`503` 未配置 ParamStore
 或未启用模型上传 / 上传池已满。`DELETE /api/jobs/{id}` 与 `DELETE /api/uploads/{id}` 成功
-返回 `204`。
+返回 `204`；`POST /api/jobs/{id}/cancel` 成功返回 `202`（取消尚在展开中，不是已完成）。
 
 ## 安全说明
 

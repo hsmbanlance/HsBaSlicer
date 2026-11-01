@@ -1508,6 +1508,95 @@ if(HSBA_USE_DLL_LOADER)
 endif()
 
 # ---------------------------------------------------------------------------
+# GUI support API tests: structured progress stages, layer geometry snapshots and
+# cancellable job handles. They link DllHsBaSlicer because that is where the C ABI
+# under test is published; gui_geometry_store_test is the exception, it compiles the
+# internal snapshot translation unit because the pool itself is not part of the ABI.
+# ---------------------------------------------------------------------------
+if(TARGET DllHsBaSlicer)
+  # progress stage classification (HsBaStageFromText / HsBaStageName)
+  add_executable(gui_progress_stage_test
+      GuiApi/progress_stage_test.cpp
+  )
+
+  target_link_libraries(gui_progress_stage_test
+      PRIVATE
+      DllHsBaSlicer
+      HsBaPipelineTypes
+      Boost::unit_test_framework
+  )
+
+  target_include_directories(gui_progress_stage_test PRIVATE ${CMAKE_SOURCE_DIR})
+  target_compile_definitions(gui_progress_stage_test PRIVATE BOOST_TEST_DYN_LINK)
+
+  enable_testing()
+  add_test(NAME gui_progress_stage_test COMMAND $<TARGET_FILE:gui_progress_stage_test>)
+
+  if(HSBA_RUN_TESTS_AFTER_BUILD)
+    add_custom_command(TARGET gui_progress_stage_test POST_BUILD
+      COMMAND ${CMAKE_CTEST_COMMAND} -V -R gui_progress_stage_test
+    )
+  endif()
+
+  # snapshot pool (LRU bound, reference counting, single-block ownership)
+  add_executable(gui_geometry_store_test
+      GuiApi/geometry_store_test.cpp
+      ${CMAKE_SOURCE_DIR}/DllHsBaSlicer/geometry_store.cpp
+  )
+
+  target_link_libraries(gui_geometry_store_test
+      PRIVATE
+      HsBaSlicer2D
+      HsBaSlicerBase
+      HsBaPipelineTypes
+      Boost::unit_test_framework
+  )
+
+  # The exported queries are implemented by the translation unit compiled above, so the
+  # test has to see the export flavour of HSBA_SLICER_API instead of the import one.
+  target_compile_definitions(gui_geometry_store_test
+      PRIVATE
+      BOOST_TEST_DYN_LINK
+      HSBA_SLICER_EXPORTS
+  )
+
+  target_include_directories(gui_geometry_store_test PRIVATE ${CMAKE_SOURCE_DIR})
+
+  enable_testing()
+  add_test(NAME gui_geometry_store_test COMMAND $<TARGET_FILE:gui_geometry_store_test>)
+
+  if(HSBA_RUN_TESTS_AFTER_BUILD)
+    add_custom_command(TARGET gui_geometry_store_test POST_BUILD
+      COMMAND ${CMAKE_CTEST_COMMAND} -V -R gui_geometry_store_test
+    )
+  endif()
+
+  # job handle lifecycle (submit, cancel, wait, result view)
+  add_executable(gui_job_control_test
+      GuiApi/job_control_test.cpp
+  )
+
+  target_link_libraries(gui_job_control_test
+      PRIVATE
+      DllHsBaSlicer
+      HsBaPipelineTypes
+      Boost::unit_test_framework
+  )
+
+  target_include_directories(gui_job_control_test PRIVATE ${CMAKE_SOURCE_DIR})
+  target_compile_definitions(gui_job_control_test PRIVATE BOOST_TEST_DYN_LINK)
+
+  enable_testing()
+  add_test(NAME gui_job_control_test COMMAND $<TARGET_FILE:gui_job_control_test>)
+
+  if(HSBA_RUN_TESTS_AFTER_BUILD)
+    add_custom_command(TARGET gui_job_control_test POST_BUILD
+      COMMAND ${CMAKE_CTEST_COMMAND} -V -R gui_job_control_test
+    )
+  endif()
+endif()
+
+# ---------------------------------------------------------------------------
 # REST API server unit tests. Gated by HSBA_BUILD_REST_API, the same option that
 # builds HsBaSlicerRestServer, so a default build neither builds restapi nor
 # advertises tests for it. Every case links HsBaSlicerRestApi - the shared

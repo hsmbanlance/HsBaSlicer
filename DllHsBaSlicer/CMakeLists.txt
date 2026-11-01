@@ -7,6 +7,13 @@ if(IOS OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
   ../cpp.hint
   initialize.h
   initialize.cpp
+  progress_stage.h
+  progress_stage.cpp
+  geometry_export.h
+  geometry_store.hpp
+  geometry_store.cpp
+  job_control.h
+  job_control.cpp
   fdm_pipeline.h
   fdm_pipeline.cpp
   sla_pipeline.h
@@ -45,6 +52,13 @@ else()
   ../cpp.hint
   initialize.h
   initialize.cpp
+  progress_stage.h
+  progress_stage.cpp
+  geometry_export.h
+  geometry_store.hpp
+  geometry_store.cpp
+  job_control.h
+  job_control.cpp
   fdm_pipeline.h
   fdm_pipeline.cpp
   sla_pipeline.h

@@ -600,10 +600,22 @@ install(FILES
     DllHsBaSlicer/fdm_pipeline.h
     DllHsBaSlicer/sla_pipeline.h
     DllHsBaSlicer/sls_pipeline.h
+    DllHsBaSlicer/slm_pipeline.h
+    DllHsBaSlicer/lom_pipeline.h
+    DllHsBaSlicer/tdp_pipeline.h
+    DllHsBaSlicer/waam_pipeline.h
+    DllHsBaSlicer/file_transfer_pipeline.h
     DllHsBaSlicer/custom_pipeline.h
     DllHsBaSlicer/param_store_pipeline.h
     DllHsBaSlicer/pipeline_convert.h
     DllHsBaSlicer/initialize.h
+    DllHsBaSlicer/model_preprocess.h
+    DllHsBaSlicer/lua_register.h
+    DllHsBaSlicer/event_source_register.h
+    DllHsBaSlicer/version_info.h
+    DllHsBaSlicer/progress_stage.h
+    DllHsBaSlicer/geometry_export.h
+    DllHsBaSlicer/job_control.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer
 )
 

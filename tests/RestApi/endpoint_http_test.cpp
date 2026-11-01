@@ -268,6 +268,61 @@ private:
     std::atomic<bool> released_{false};
 };
 
+/**
+ * @brief Pipeline stand-in that finishes only once the job's cancellation flag is raised.
+ *
+ * Mirrors what a real cooperative pipeline does: report a tick, watch the flag the queue
+ * wrote into the config tail, then return the "Cancelled" text the C ABI reserves for an
+ * abandoned run. The wait is bounded to ten seconds so a lost request fails a check
+ * instead of hanging the suite.
+ */
+JobManager::Runner CancelAwaitingPipeline()
+{
+    return [](HsBaPipelineKind, const void* config, HsBaProgressCallback cb, void* ud)
+    {
+        const auto* fdm = static_cast<const HsBaFdmPipelineConfig_t*>(config);
+        const auto* flag = static_cast<const std::atomic<bool>*>(fdm->cancel_flag);
+        if (cb)
+        {
+            cb(25, "Slicing layer", ud);
+        }
+        for (int i = 0; i < 2000 && (flag == nullptr || !flag->load()); ++i)
+        {
+            std::this_thread::sleep_for(5ms);
+        }
+        SliceOutcome outcome;
+        outcome.success = 0;
+        outcome.error_message = "Cancelled: pipeline cancelled";
+        return outcome;
+    };
+}
+
+/**
+ * @brief Pipeline stand-in that echoes the two ABI tail switches back as inline text.
+ *
+ * ?geometry=1 is deliberately not a reflected parameter, so it never shows up in the config
+ * JSON a client can read back; the only observable proof that it crossed the HTTP boundary is
+ * the struct field it writes. Reporting the flag as well shows that every submission, even
+ * without ?geometry=1, is cancellable while capture stays off by default.
+ */
+JobManager::Runner SwitchEchoPipeline()
+{
+    return [](HsBaPipelineKind, const void* config, HsBaProgressCallback cb, void* ud)
+    {
+        const auto* fdm = static_cast<const HsBaFdmPipelineConfig_t*>(config);
+        SliceOutcome outcome;
+        outcome.success = 1;
+        outcome.total_layers = 2;
+        outcome.inline_content =
+            "capture=" + std::to_string(fdm->capture_geometry) + " cancel=" + (fdm->cancel_flag ? "yes" : "no") + "\n";
+        if (cb)
+        {
+            cb(100, "Pipeline complete", ud);
+        }
+        return outcome;
+    };
+}
+
 /** @brief Knobs an EndpointServer instance needs before its members are built. */
 struct ServerOptions
 {
@@ -727,6 +782,140 @@ BOOST_AUTO_TEST_CASE(token_gate_protects_a_non_loopback_binding)
     BOOST_CHECK_EQUAL(srv.Get("/api/jobs", {{"Authorization", "Bearer s3cret-token"}})->status, 200);
     BOOST_CHECK_EQUAL(srv.Get("/api/health")->status, 200);
     BOOST_CHECK_EQUAL(srv.Get("/")->status, 200);
+
+    // The geometry and cancellation routes are registered behind the same pre-routing gate,
+    // so nobody can cancel or scrape somebody else's run anonymously - and once the
+    // credentials are there, the requests reach the handlers instead of being refused.
+    BOOST_CHECK_EQUAL(srv.Get("/api/jobs/job-1/geometry")->status, 401);
+    BOOST_CHECK_EQUAL(srv.Get("/api/jobs/job-1/geometry/0")->status, 401);
+    BOOST_CHECK_EQUAL(srv.Post("/api/jobs/job-1/cancel", "", "application/json")->status, 401);
+    BOOST_CHECK_EQUAL(srv.Get("/api/jobs/job-1/geometry", {{"X-API-Key", "s3cret-token"}})->status, 404);
+    BOOST_CHECK_EQUAL(
+        srv.Post("/api/jobs/job-1/cancel", "", "application/json", {{"X-API-Key", "s3cret-token"}})->status, 404);
+}
+
+BOOST_AUTO_TEST_CASE(geometry_switch_reaches_the_config_and_the_endpoints_stay_honest)
+{
+    EndpointServer srv{SwitchEchoPipeline()};
+
+    const std::string plain =
+        srv.AcceptedJobId(srv.Post("/api/jobs/fdm", R"({"layer_height": 2})", "application/json"));
+    BOOST_REQUIRE_EQUAL(srv.WaitJobState(plain, "success"), "success");
+    const httplib::Result plain_result = srv.Get("/api/jobs/" + plain + "/result");
+    BOOST_REQUIRE(Responded(plain_result));
+    // Capture stays off unless it is asked for, yet every job is cancellable from the start.
+    BOOST_CHECK_EQUAL(plain_result->body, "capture=0 cancel=yes\n");
+
+    const std::string captured =
+        srv.AcceptedJobId(srv.Post("/api/jobs/fdm?geometry=1", R"({"layer_height": 2})", "application/json"));
+    BOOST_REQUIRE_EQUAL(srv.WaitJobState(captured, "success"), "success");
+    BOOST_CHECK_EQUAL(srv.Get("/api/jobs/" + captured + "/result")->body, "capture=1 cancel=yes\n");
+
+    // The status view must never advertise geometry a client cannot download. The mock ran
+    // no pipeline kernel and therefore captured nothing, so both routes stay misses.
+    const httplib::Result status = srv.Get("/api/jobs/" + captured);
+    bool counted = false;
+    BOOST_CHECK_EQUAL(JsonNumber(status->body, "geometry_available", counted), 0);
+    BOOST_CHECK(counted);
+    BOOST_CHECK_EQUAL(JsonNumber(status->body, "geometry_layers", counted), 0);
+    BOOST_CHECK(counted);
+    // A finished run is classified as well, so a timeline can end on a stable key.
+    BOOST_CHECK_EQUAL(JsonMember(status->body, "progress_stage_id"), "done");
+
+    const httplib::Result summary = srv.Get("/api/jobs/" + captured + "/geometry");
+    BOOST_REQUIRE(Responded(summary));
+    BOOST_CHECK_EQUAL(summary->status, 404);
+    BOOST_CHECK_EQUAL(JsonMember(summary->body, "message"), "job captured no layer geometry");
+    BOOST_CHECK_EQUAL(JsonMember(summary->body, "detail"), "submit with ?geometry=1");
+    BOOST_CHECK_EQUAL(srv.Get("/api/jobs/" + captured + "/geometry/0")->status, 404);
+
+    // A layer segment has to be a plain number, otherwise a typo would silently serve layer 0.
+    const httplib::Result bad = srv.Get("/api/jobs/" + captured + "/geometry/0x1");
+    BOOST_REQUIRE(Responded(bad));
+    BOOST_CHECK_EQUAL(bad->status, 400);
+    BOOST_CHECK_EQUAL(JsonMember(bad->body, "message"), "layer index must be a non-negative integer");
+
+    // Unknown jobs miss on the geometry routes exactly as they do on the status route.
+    const httplib::Result ghost = srv.Get("/api/jobs/job-does-not-exist/geometry");
+    BOOST_REQUIRE(Responded(ghost));
+    BOOST_CHECK_EQUAL(ghost->status, 404);
+    BOOST_CHECK_EQUAL(JsonMember(ghost->body, "message"), "job not found");
+
+    const httplib::Result xml = srv.Get("/api/jobs/" + captured + "/geometry?format=xml");
+    BOOST_REQUIRE(Responded(xml));
+    BOOST_CHECK_EQUAL(xml->status, 404);
+    BOOST_CHECK(xml->body.find("<Error") != std::string::npos);
+
+    // A finished job has nothing left to cancel, and that is a conflict, not a missing file.
+    const httplib::Result late = srv.Post("/api/jobs/" + captured + "/cancel", "", "application/json");
+    BOOST_REQUIRE(Responded(late));
+    BOOST_CHECK_EQUAL(late->status, 409);
+    BOOST_CHECK_EQUAL(JsonMember(late->body, "message"), "job already finished");
+    BOOST_CHECK_EQUAL(srv.Post("/api/jobs/job-does-not-exist/cancel", "", "application/json")->status, 404);
+}
+
+BOOST_AUTO_TEST_CASE(post_cancel_stops_a_running_job_and_voids_its_result)
+{
+    EndpointServer srv{CancelAwaitingPipeline()};
+    TempDir scratch{"cancel"};
+    const std::string id = srv.SubmitArtifactJob(scratch, "run.gcode");
+    BOOST_REQUIRE_EQUAL(srv.WaitJobState(id, "running"), "running");
+
+    // Nothing is readable while the run is still going: no geometry (a plain miss) and no
+    // result (a conflict), so a GUI cannot mistake partial output for a finished slice.
+    BOOST_CHECK_EQUAL(srv.Get("/api/jobs/" + id + "/geometry")->status, 404);
+    const httplib::Result pending = srv.Get("/api/jobs/" + id + "/result");
+    BOOST_REQUIRE(Responded(pending));
+    BOOST_CHECK_EQUAL(pending->status, 409);
+    BOOST_CHECK_EQUAL(JsonMember(pending->body, "message"), "job not finished successfully");
+
+    const httplib::Result ack = srv.Post("/api/jobs/" + id + "/cancel", "", "application/json");
+    BOOST_REQUIRE(Responded(ack));
+    // 202, because the server only agreed to ask: the state turns at the next checkpoint.
+    BOOST_CHECK_EQUAL(ack->status, 202);
+    BOOST_CHECK_EQUAL(JsonMember(ack->body, "id"), id);
+    BOOST_CHECK_EQUAL(JsonMember(ack->body, "state"), "cancelled");
+    BOOST_CHECK_EQUAL(JsonMember(ack->body, "detail"), "cancellation requested");
+
+    BOOST_REQUIRE_EQUAL(srv.WaitJobState(id, "cancelled"), "cancelled");
+    const httplib::Result status = srv.Get("/api/jobs/" + id);
+    BOOST_REQUIRE(Responded(status));
+    BOOST_CHECK_EQUAL(JsonMember(status->body, "progress_stage_id"), "cancelled");
+    BOOST_CHECK_EQUAL(JsonMember(status->body, "error_message"), "Cancelled: pipeline cancelled");
+
+    // A cancelled run is reported apart from a plain failure, in both response formats.
+    const httplib::Result result = srv.Get("/api/jobs/" + id + "/result");
+    BOOST_REQUIRE(Responded(result));
+    BOOST_CHECK_EQUAL(result->status, 409);
+    BOOST_CHECK_EQUAL(JsonMember(result->body, "message"), "job was cancelled");
+
+    const httplib::Result xml = srv.Get("/api/jobs/" + id + "?format=xml");
+    BOOST_REQUIRE(Responded(xml));
+    BOOST_CHECK(xml->body.find("<state>cancelled</state>") != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(post_cancel_of_a_queued_job_removes_it_without_running_it)
+{
+    BlockingPipeline gate;
+    EndpointServer srv{gate.AsRunner(), ServerOptions{/*workers=*/1, /*max_jobs=*/8}};
+    TempDir scratch{"cancel-queue"};
+
+    const std::string blocker = srv.SubmitArtifactJob(scratch, "blocker.gcode");
+    BOOST_CHECK(gate.WaitUntilRunning());
+    const std::string queued = srv.SubmitArtifactJob(scratch, "queued.gcode");
+    BOOST_CHECK_EQUAL(JsonMember(srv.Get("/api/jobs/" + queued)->body, "state"), "queued");
+
+    const httplib::Result ack = srv.Post("/api/jobs/" + queued + "/cancel", "", "application/json");
+    BOOST_REQUIRE(Responded(ack));
+    BOOST_CHECK_EQUAL(ack->status, 202);
+    BOOST_CHECK_EQUAL(JsonMember(ack->body, "detail"), "queued job removed before it started");
+
+    // A job that never started leaves no record behind, so it cannot be cancelled twice.
+    BOOST_CHECK_EQUAL(srv.Get("/api/jobs/" + queued)->status, 404);
+    BOOST_CHECK_EQUAL(srv.Post("/api/jobs/" + queued + "/cancel", "", "application/json")->status, 404);
+
+    gate.Release();
+    BOOST_CHECK_EQUAL(srv.WaitJobState(blocker, "success"), "success");
 }
 
 BOOST_AUTO_TEST_CASE(proto_conversion_round_trips_over_http)
