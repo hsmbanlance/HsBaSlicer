@@ -21,6 +21,10 @@
 
 // Project headers: GMF-defined types (ModelInfo, etc.) are not exported by
 // C++20 modules (standard limitation). Consumers must include them directly.
+// The same holds for the Point2/Polygon/Polygons/Point2D/PolygonD/PolygonsD/
+// LuaRegFunc aliases: the module re-exports them on MSVC only, so on Clang/GCC
+// add "2D/IntPolygon.hpp", "2D/FloatPolygons.hpp" and
+// "LibHsBaSlicer/Extends/LuaAddFunction.hpp" whenever those names are used.
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "pipelinetypes/pipeline_types.h"
 

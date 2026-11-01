@@ -27,6 +27,24 @@ struct ServerConfig
     int max_concurrent_jobs = 2;          ///< Worker threads executing slicing jobs concurrently.
     int max_jobs = 128;                   ///< Upper bound on tracked jobs (429 when exceeded).
     int result_ttl_seconds = 3600;        ///< Retention time of a finished job result, seconds.
+    std::string tls_cert;                 ///< [server] tls_cert: PEM certificate path (empty = plain HTTP).
+    std::string tls_key;                  ///< [server] tls_key: PEM private key path (empty = plain HTTP).
+    bool require_tls = false;             ///< Refuse to start unless a certificate/key pair is configured.
+
+    /* [auth] */
+    bool auth_enabled = false;  ///< Require a shared token on non-loopback bindings.
+    std::string auth_token;     ///< The token checked against Authorization: Bearer / X-API-Key.
+
+    /* [upload] */
+    bool upload_enabled = false;                ///< True when [upload] dir names a writable root.
+    std::string upload_dir;                     ///< Upload root (empty = multipart uploads disabled).
+    int upload_max_files = 256;                 ///< Retained model files; never below HSBA_MODEL_POOL_SIZE.
+    long long upload_ttl_seconds = 604800;      ///< Retention clock, counted from the job's terminal state.
+    std::string upload_evict_mode = "both";     ///< ttl | count | both | manual.
+    int upload_max_file_mb = 256;               ///< Per-file size cap.
+    int upload_max_request_mb = 260;            ///< Whole-request body cap (multipart overhead included).
+    long long upload_max_total_mb = 0;          ///< Directory-wide size cap (0 = unlimited).
+    int upload_sweep_interval_seconds = 60;     ///< Background retention sweep period.
 
     /* [paramstore] */
     bool paramstore_enabled = false;                                       ///< True when a backend was configured.

@@ -2,6 +2,7 @@
  * @brief Async job-queue state machine tests with an injected mock pipeline runner.
  * @author HsBa
  */
+#include <atomic>
 #include <chrono>
 #include <string>
 #include <thread>
@@ -108,6 +109,44 @@ BOOST_AUTO_TEST_CASE(finished_jobs_are_reaped_after_ttl)
     BOOST_CHECK(!second.empty());
     BOOST_CHECK(!jm.Exists(first));
     BOOST_CHECK(jm.Exists(second));
+}
+
+BOOST_AUTO_TEST_CASE(preallocated_id_is_respected)
+{
+    JobManager jm(1, 8, 1h, SuccessRunner());
+    // The REST layer reserves the id before writing the uploaded model so the
+    // file can live in a per-job directory; Submit must then reuse it verbatim.
+    const std::string reserved = jm.NextId();
+    const std::string submitted = jm.Submit(HSBA_PIPELINE_FDM, CreateDefaultConfig(HSBA_PIPELINE_FDM), StringArena{},
+                                            reserved);
+    BOOST_CHECK_EQUAL(submitted, reserved);
+    BOOST_CHECK(jm.Exists(reserved));
+    // The counter advanced past the reserved id, so the next reservation differs.
+    BOOST_CHECK(jm.NextId() != reserved);
+}
+
+BOOST_AUTO_TEST_CASE(terminal_callback_fires_once_with_the_job_id)
+{
+    std::atomic<int> calls{0};
+    std::string observed;
+    JobManager jm(1, 8, 1h, SuccessRunner(),
+                  [&calls, &observed](const std::string& job_id)
+                  {
+                      ++calls;
+                      observed = job_id;
+                  });
+    const std::string id = jm.Submit(HSBA_PIPELINE_FDM, CreateDefaultConfig(HSBA_PIPELINE_FDM), StringArena{});
+    BOOST_REQUIRE(!id.empty());
+
+    JobStatusView view;
+    BOOST_REQUIRE(WaitForTerminal(jm, id, view));
+    // The sink runs outside the job mutex, so it may land just after the status flips.
+    for (int i = 0; i < 200 && calls.load() == 0; ++i)
+    {
+        std::this_thread::sleep_for(10ms);
+    }
+    BOOST_CHECK_EQUAL(calls.load(), 1);
+    BOOST_CHECK_EQUAL(observed, id);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

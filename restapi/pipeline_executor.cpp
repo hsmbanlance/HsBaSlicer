@@ -47,6 +47,15 @@ void CaptureExtra(SliceOutcome& o, const R& r)
     }
 }
 
+// FDM keeps its G-code in memory (the result struct has no path field), so the file the
+// pipeline wrote is reported from the config the caller supplied. Other kinds read the
+// path out of their own result struct.
+std::string FdmOutputPath(int success, const void* cfg)
+{
+    const auto* fdm = static_cast<const HsBaFdmPipelineConfig_t*>(cfg);
+    return (success != 0 && fdm->output_path) ? std::string(fdm->output_path) : std::string();
+}
+
 // ---- per-kind operations ---------------------------------------------------
 #define HSBA_DEFINE_KIND(ENUM_NAME, WIRE, CFG, RES, CREATE, RUN, FREE, PATH_EXPR, INLINE_EXPR, LAYERS_EXPR, FT_EXPR,   \
                          FROM_PROTO, TO_PROTO, FREE_STRINGS)                                                           \
@@ -93,8 +102,8 @@ void CaptureExtra(SliceOutcome& o, const R& r)
     }
 
 HSBA_DEFINE_KIND(FDM, "fdm", HsBaFdmPipelineConfig_t, HsBaFdmPipelineResult_t, HsBaCreateDefaultConfig,
-                 HsBaRunFdmPipeline, HsBaFreePipelineResult, (std::string()), SafeStr(r.gcode_content), r.total_layers,
-                 0, HsBaFdmConfigFromProtoBytes, HsBaFdmConfigToProtoBytes, HsBaFreeFdmConfigStrings)
+                 HsBaRunFdmPipeline, HsBaFreePipelineResult, FdmOutputPath(r.success, cfg), SafeStr(r.gcode_content),
+                 r.total_layers, 0, HsBaFdmConfigFromProtoBytes, HsBaFdmConfigToProtoBytes, HsBaFreeFdmConfigStrings)
 HSBA_DEFINE_KIND(SLA, "sla", HsBaSlaPipelineConfig_t, HsBaSlaPipelineResult_t, HsBaCreateDefaultSlaConfig,
                  HsBaRunSlaPipeline, HsBaFreeSlaPipelineResult, SafeStr(r.export_path), (std::string()), r.total_layers,
                  0, HsBaSlaConfigFromProtoBytes, HsBaSlaConfigToProtoBytes, HsBaFreeSlaConfigStrings)

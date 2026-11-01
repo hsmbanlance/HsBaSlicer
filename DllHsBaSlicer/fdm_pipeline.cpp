@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <memory>
 #include <string>
@@ -21,6 +22,7 @@
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
 #include "base/coroutine.hpp"
+#include "base/encoding_convert.hpp"
 #include "base/error.hpp"
 #include "paths/gcodepath.hpp"
 #include "pipeline_parallel.hpp"
@@ -138,6 +140,32 @@ void ReportProgress(const InternalConfig& cfg, int percent, const std::string& s
     {
         cfg.progress_cb(percent, stage.c_str(), cfg.progress_user_data);
     }
+}
+
+// Persist the generated G-code when the caller asked for a file. Every other pipeline
+// writes its configured output_path; FDM used to keep the content in memory only, so a
+// caller that passes nothing but a path (the REST server does) got no artifact back.
+bool SaveGCode(const std::string& gcode, const std::string& output_path)
+{
+    const std::filesystem::path path = utf8_to_path(output_path);
+    std::error_code ec;
+    if (!path.parent_path().empty())
+    {
+        std::filesystem::create_directories(path.parent_path(), ec);
+        if (ec)
+        {
+            return false;
+        }
+    }
+    // The path is already native (wide on Windows), so ofstream handles any Unicode name.
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out)
+    {
+        return false;
+    }
+    out.write(gcode.data(), static_cast<std::streamsize>(gcode.size()));
+    out.flush();
+    return out.good();
 }
 
 InternalConfig BuildConfig(const HsBaFdmPipelineConfig_t* cfg, HsBaProgressCallback cb, void* ud)
@@ -439,6 +467,16 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             {
                 result.success = false;
                 result.error_message = "Failed to generate G-code path";
+            }
+        }
+
+        if (result.success && !cfg.output_path.empty())
+        {
+            ReportProgress(cfg, 97, "Writing G-code file...");
+            if (!SaveGCode(result.gcode_content, cfg.output_path))
+            {
+                result.success = false;
+                result.error_message = "Failed to write G-code to " + cfg.output_path;
             }
         }
 

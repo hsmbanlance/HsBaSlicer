@@ -109,10 +109,13 @@
       ]
     },
     "rest-api": {
-      "description": "Build the optional RESTful API server executable (HsBaSlicerRestServer) backed by cpp-httplib. Enable together with the CMake option HSBA_BUILD_REST_API=ON; desktop platforms only. Not part of default-features.",
+      "description": "Build the optional RESTful API server executable (HsBaSlicerRestServer) backed by cpp-httplib. Enable together with the CMake option HSBA_BUILD_REST_API=ON; desktop platforms only. Not part of default-features. The openssl port feature is required for the HTTPS (tls_cert/tls_key) support of the server.",
       "dependencies": [
         {
           "name": "cpp-httplib",
+          "features": [
+            "openssl"
+          ],
           "platform": "windows | linux | osx"
         }
       ]

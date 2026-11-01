@@ -264,7 +264,9 @@ store.freeLoaded(ParamStoreKind::Fdm, &out);  // release the loaded heap strings
 import hsba.slicer;
 using namespace HsBa::Slicer;
 
-// Type alias exported: LuaRegFunc = std::function<void(lua_State*)>
+// LuaRegFunc is exported by the module on MSVC only; on Clang/GCC first
+// #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp" (passing a lambda needs
+// no name for the alias thanks to implicit conversion)
 add2DFunction([](lua_State* L) { /* register 2D functions */ });
 add3DFunction([](lua_State* L) { /* register 3D functions */ });
 addFileFunction([](lua_State* L) { /* register File functions */ });
@@ -298,7 +300,7 @@ using namespace HsBa::Slicer;
 std::string json = versionJson();
 std::string xml  = versionXml();
 
-// Polygon precision conversion
+// Polygon precision conversion (Polygons/PolygonsD need the 2D headers on Clang/GCC)
 PolygonsD doubles = toDouble(int_polys);   // int -> double
 Polygons ints     = toInt(double_polys);   // double -> int
 
@@ -324,7 +326,15 @@ auto ft_cfg   = defaultFileTransferConfig();
 >    #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"  // ModelInfo
 >    #include "pipelinetypes/pipeline_types.h"                 // HsBaFdmPipelineConfig_t, etc.
 >    ```
-> 2. Standard library headers are unaffected; `#include`/`import` ordering is not sensitive under Clang/GCC.
+> 2. **Type aliases are not exported either**: `Point2`/`Polygon`/`Polygons`/`Point2D`/`PolygonD`/`PolygonsD`/`LuaRegFunc` already live in `HsBa::Slicer` through the GMF headers. Re-declaring them in the module purview is a conflicting declaration for GCC (>= 15) and Clang (older GCC and MSVC tolerate it), so the module re-exports these aliases on MSVC only; elsewhere consumers must include them directly:
+>    ```cpp
+>    #include "2D/IntPolygon.hpp"                        // Point2, Polygon, Polygons
+>    #include "2D/FloatPolygons.hpp"                     // Point2D, PolygonD, PolygonsD
+>    #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp" // LuaRegFunc
+>    ```
+>    Passing lambdas straight to `add2DFunction`/`toDouble` and similar never names those aliases, so those includes can be omitted.
+> 3. Standard library headers are unaffected; `#include`/`import` ordering is not sensitive under Clang/GCC.
+> 4. **The module wrapper needs GCC >= 16**: headers in the GMF (Eigen, libstdc++) inevitably declare internal-linkage (TU-local) names such as `const int Dynamic = -1;`. Exporting declarations that reference them violates the `[module.interface]` rule that an interface entity shall not expose a TU-local entity. GCC >= 16 downgrades this to the `-Wexpose-global-module-tu-local` warning, which can be silenced with `-Wno-`; GCC 15 and earlier emit a **hard error** that cannot be suppressed. `check_cxx_modules_tu_local_exposure()` probes this at configure time and flips `HSBA_SLICER_MODULE` to `OFF` when the wrapper cannot be built (message: `C++20 modules: ... HSBA_SLICER_MODULE disabled.`). Fall back to the LibHsBaSlicer header API or the DllHsBaSlicer C ABI in that case.
 
 > **General**
 >
@@ -450,7 +460,7 @@ target_link_libraries(my_app PRIVATE DllHsBaSlicer)        # C ABI version
 | Option | Default | Description |
 | --- | --- | --- |
 | `BUILD_SHARED_LIBS` | `ON` | Build shared libraries (OFF for static) |
-| `HSBA_SLICER_MODULE` | `ON` | Build ModuleHsBaSlicer C++20 module wrapper |
+| `HSBA_SLICER_MODULE` | `ON` | Build ModuleHsBaSlicer C++20 module wrapper (automatically forced to `OFF` when the compiler fails the TU-local exposure probe) |
 | `HSBA_SLICER_BUILD_SAMPLES` | `ON` | Build sample programs |
 | `HSBA_SLICER_USE_TESTS` | `ON` | Build tests |
 | `HSBA_COVERAGE` | `OFF` | GCC/Clang gcov instrumentation + `coverage` target (core 45% / other 25% line gates, anti-regression baselines; static_tests are compile-only and excluded); see the `linux-coverage` preset |

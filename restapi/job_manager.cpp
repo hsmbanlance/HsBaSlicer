@@ -40,8 +40,8 @@ struct ProgressCtx
 };
 }  // namespace
 
-JobManager::JobManager(int workers, int max_jobs, std::chrono::seconds ttl, Runner runner)
-    : max_jobs_(max_jobs > 0 ? max_jobs : 1), ttl_(ttl), runner_(std::move(runner))
+JobManager::JobManager(int workers, int max_jobs, std::chrono::seconds ttl, Runner runner, TerminalSink on_terminal)
+    : max_jobs_(max_jobs > 0 ? max_jobs : 1), ttl_(ttl), runner_(std::move(runner)), on_terminal_(std::move(on_terminal))
 {
     if (!runner_)
     {
@@ -80,7 +80,14 @@ JobManager::~JobManager()
     }
 }
 
-std::string JobManager::Submit(HsBaPipelineKind kind, void* config, StringArena arena)
+std::string JobManager::NextId() const
+{
+    std::lock_guard<std::mutex> lk(mtx_);
+    return "job-" + std::to_string(next_id_ + 1);
+}
+
+std::string JobManager::Submit(HsBaPipelineKind kind, void* config, StringArena arena,
+                              const std::string& preallocated_id)
 {
     std::lock_guard<std::mutex> lk(mtx_);
     ReapLocked(std::chrono::steady_clock::now());
@@ -91,7 +98,26 @@ std::string JobManager::Submit(HsBaPipelineKind kind, void* config, StringArena 
         return {};
     }
     auto job = std::make_unique<JobEntry>();
-    job->id = "job-" + std::to_string(++next_id_);
+    if (preallocated_id.empty())
+    {
+        job->id = "job-" + std::to_string(++next_id_);
+    }
+    else
+    {
+        job->id = preallocated_id;
+        // Keep the generated-id counter ahead of any externally reserved id.
+        const auto pos = preallocated_id.find_last_of('-');
+        if (pos != std::string::npos)
+        {
+            try
+            {
+                next_id_ = std::max(next_id_, std::stoull(preallocated_id.substr(pos + 1)));
+            }
+            catch (const std::exception&)
+            {
+            }
+        }
+    }
     job->kind = kind;
     job->state = JobState::Queued;
     job->config = config;
@@ -313,26 +339,39 @@ void JobManager::Execute(JobEntry* job)
     // Release the config struct and its string arena now that the run is done.
     DestroyConfig(job->kind, job->config);
 
-    std::lock_guard<std::mutex> lk(mtx_);
-    job->config = nullptr;
-    job->arena.clear();
-    job->outcome = std::move(outcome);
-    if (failed_exception)
+    std::string finished_id;
     {
-        job->state = JobState::Failed;
-        job->error_message = thrown;
+        std::lock_guard<std::mutex> lk(mtx_);
+        job->config = nullptr;
+        job->arena.clear();
+        job->outcome = std::move(outcome);
+        if (failed_exception)
+        {
+            job->state = JobState::Failed;
+            job->error_message = thrown;
+        }
+        else
+        {
+            job->state = job->outcome.success ? JobState::Success : JobState::Failed;
+            job->error_message = job->outcome.error_message;
+        }
+        job->percent = 100;
+        job->finish = std::chrono::steady_clock::now();
+        finished_id = job->id;
     }
-    else
+    // Notify outside the lock: the sink starts the upload-pool retention clock and
+    // may take its own locks, so holding mtx_ here would invite lock-order issues.
+    if (on_terminal_)
     {
-        job->state = job->outcome.success ? JobState::Success : JobState::Failed;
-        job->error_message = job->outcome.error_message;
+        on_terminal_(finished_id);
     }
-    job->percent = 100;
-    job->finish = std::chrono::steady_clock::now();
 }
 
 void JobManager::ReapLocked(std::chrono::steady_clock::time_point now)
 {
+    // Only the job record is dropped here. Uploaded model files live in the upload
+    // pool and are reclaimed on their own (much longer) schedule, so reaping a
+    // finished job must never delete its source file.
     for (auto it = jobs_.begin(); it != jobs_.end();)
     {
         const JobEntry& job = *it->second;

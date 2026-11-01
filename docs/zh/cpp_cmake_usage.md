@@ -264,7 +264,8 @@ store.freeLoaded(ParamStoreKind::Fdm, &out);  // 释放读取到的堆字符串
 import hsba.slicer;
 using namespace HsBa::Slicer;
 
-// 类型别名已导出：LuaRegFunc = std::function<void(lua_State*)>
+// MSVC 下 LuaRegFunc 随模块导出；Clang/GCC 需先 #include
+// "LibHsBaSlicer/Extends/LuaAddFunction.hpp"（lambda 隐式转换无需命名该别名）
 add2DFunction([](lua_State* L) { /* 注册 2D 函数 */ });
 add3DFunction([](lua_State* L) { /* 注册 3D 函数 */ });
 addFileFunction([](lua_State* L) { /* 注册 File 函数 */ });
@@ -298,7 +299,7 @@ using namespace HsBa::Slicer;
 std::string json = versionJson();
 std::string xml  = versionXml();
 
-// 多边形精度转换
+// 多边形精度转换（Polygons/PolygonsD 别名在 Clang/GCC 下需自行包含 2D 头文件）
 PolygonsD doubles = toDouble(int_polys);   // int -> double
 Polygons ints     = toInt(double_polys);   // double -> int
 
@@ -324,7 +325,15 @@ auto ft_cfg   = defaultFileTransferConfig();
 >    #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"  // ModelInfo
 >    #include "pipelinetypes/pipeline_types.h"                 // HsBaFdmPipelineConfig_t 等
 >    ```
-> 2. 标准库头文件无此限制，`#include` 和 `import` 的顺序在 Clang/GCC 下不敏感。
+> 2. **类型别名同样不导出**：`Point2`/`Polygon`/`Polygons`/`Point2D`/`PolygonD`/`PolygonsD`/`LuaRegFunc` 在 GMF 头文件中已属于 `HsBa::Slicer`，模块内重复声明会被 GCC（≥ 15）/Clang 判为 conflicting declaration（旧版 GCC 与 MSVC 容忍）。因此模块仅在 MSVC 下导出这些别名；其他编译器需消费者自行包含：
+>    ```cpp
+>    #include "2D/IntPolygon.hpp"                        // Point2, Polygon, Polygons
+>    #include "2D/FloatPolygons.hpp"                     // Point2D, PolygonD, PolygonsD
+>    #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp" // LuaRegFunc
+>    ```
+>    仅把 lambda 实参传给 `add2DFunction`/`toDouble` 等接口时无需命名这些别名，可省略上述包含。
+> 3. 标准库头文件无此限制，`#include` 和 `import` 的顺序在 Clang/GCC 下不敏感。
+> 4. **模块包装层要求 GCC ≥ 16**：GMF 头文件（Eigen、libstdc++）必然带有内部链接（TU-local）的名字，例如 `const int Dynamic = -1;`；模块接口导出引用这些名字的声明会违反 `[module.interface]`"不得暴露 TU-local 实体"。GCC 16 起该诊断降级为 `-Wexpose-global-module-tu-local` 警告，可用 `-Wno-` 关闭；GCC 15 及更早版本是**硬错误**且无法抑制。配置阶段 `check_cxx_modules_tu_local_exposure()` 会实测这一行为，判定不可构建时自动把 `HSBA_SLICER_MODULE` 置为 `OFF`（输出 `C++20 modules: ... HSBA_SLICER_MODULE disabled.`），此时请改用 LibHsBaSlicer 头文件版 API 或 DllHsBaSlicer C ABI。
 
 > **通用**
 >
@@ -450,7 +459,7 @@ target_link_libraries(my_app PRIVATE DllHsBaSlicer)        # C ABI 版
 | 选项 | 默认值 | 说明 |
 | --- | --- | --- |
 | `BUILD_SHARED_LIBS` | `ON` | 构建共享库（OFF 则为静态库） |
-| `HSBA_SLICER_MODULE` | `ON` | 构建 ModuleHsBaSlicer C++20 模块包装层 |
+| `HSBA_SLICER_MODULE` | `ON` | 构建 ModuleHsBaSlicer C++20 模块包装层（编译器无法通过 TU-local 暴露探测时会被自动置为 `OFF`） |
 | `HSBA_SLICER_BUILD_SAMPLES` | `ON` | 构建示例程序 |
 | `HSBA_SLICER_USE_TESTS` | `ON` | 构建测试 |
 | `HSBA_COVERAGE` | `OFF` | GCC/Clang gcov 覆盖率插桩并提供 `coverage` 门禁目标（核心 45% / 其他 25% 行覆盖率，为防回归基线；static_tests 仅编译期检查且不计入），配合 `linux-coverage` 预设使用 |

@@ -135,11 +135,21 @@ jobs:
         C_COMPILER: ${{ matrix.os == 'ubuntu-latest' && 'gcc' || 'clang' }}
         CXX_COMPILER: ${{ matrix.os == 'ubuntu-latest' && 'g++' || 'clang++' }}
       run: |
+        # The optional REST API server is enabled on Linux only. HSBA_BUILD_REST_API is
+        # OFF by default and its unit tests are gated by the same option, so without
+        # this the restapi sources (routes.cpp included) would never compile in CI and
+        # an incompatible cpp-httplib release could break the module unnoticed.
+        # macOS keeps the default configuration.
+        REST_API_ARGS=""
+        if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+          REST_API_ARGS="-DHSBA_BUILD_REST_API=ON -DVCPKG_MANIFEST_FEATURES=rest-api"
+        fi
         cmake -B build -S . -G Ninja \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
           -DCMAKE_C_COMPILER=$C_COMPILER \
           -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
-          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+          $REST_API_ARGS
 
     - name: Configure CMake (Windows)
       if: runner.os == 'Windows'
@@ -168,6 +178,56 @@ jobs:
         cd build/tests
         ctest --build-config Release --output-on-failure --parallel 2
       continue-on-error: true
+
+    - name: Test REST API (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      shell: bash
+      run: |
+        # These cases exist only when HSBA_BUILD_REST_API=ON and they link the real
+        # HsBaSlicerRestApi library, so a failure here means the HTTP layer regressed.
+        ctest --test-dir build/tests -R "restapi_" --output-on-failure
+
+    - name: Restore the sample model (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      uses: actions/cache@v4
+      with:
+        path: samples/FDM/models
+        key: stanford-bunny-${{ hashFiles('samples/FDM/CMakeLists.txt') }}
+
+    - name: Fetch the sample model (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      shell: bash
+      run: |
+        # The console's end-to-end case slices the same public-domain model the samples build
+        # downloads. Fetching it here rather than inside the test turns an unreachable upstream
+        # into a red step instead of a suite that quietly reports as skipped.
+        model=samples/FDM/models/stanford_bunny.stl
+        mkdir -p samples/FDM/models
+        if [ ! -s "$model" ]; then
+          curl -fsSL --retry 3 --retry-delay 2 -o "$model" \
+            https://upload.wikimedia.org/wikipedia/commons/4/43/Stanford_Bunny.stl
+        fi
+        # A saved error page would still be a file; the test only accepts a real mesh.
+        test "$(stat -c%s "$model")" -gt 1000000
+
+    - name: Test REST console against the real server (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      shell: bash
+      env:
+        HSBA_REST_SERVER: build/bin/Release/HsBaSlicerRestServer
+      run: |
+        # Every pipeline that writes a file is run against the real binary and checked for the path
+        # it reports, the file behind it and the download it serves, so this step must not fall
+        # back to a skip.
+        if [ ! -x "$HSBA_REST_SERVER" ]; then
+          echo "HsBaSlicerRestServer missing at $HSBA_REST_SERVER" >&2
+          exit 1
+        fi
+        if ! command -v node >/dev/null 2>&1; then
+          echo "node is not on PATH; cannot run the console end-to-end case" >&2
+          exit 1
+        fi
+        node --test webui/test/e2e.test.js
 
     - name: Build (Windows)
       if: runner.os == 'Windows'

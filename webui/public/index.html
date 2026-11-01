@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>HsBaSlicer REST Console</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/app.css">
+<script src="/httphelpers.js" defer></script>
+<script src="/app.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">HS</span>
+    <div>
+      <h1>HsBaSlicer REST Console</h1>
+      <p id="origin" class="muted mono"></p>
+    </div>
+  </div>
+  <div class="status">
+    <span id="health" class="badge badge-idle">checking</span>
+    <span id="version" class="muted mono"></span>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Credentials</h2>
+    <div class="row">
+      <label for="token">API token</label>
+      <input id="token" type="password" autocomplete="off" spellcheck="false"
+             placeholder="only needed when the REST server requires one">
+      <button id="token-save" type="button">Save</button>
+      <button id="token-clear" type="button">Clear</button>
+    </div>
+    <p class="muted">Kept in this browser's <span class="mono">localStorage</span> and sent as
+      <span class="mono">X-API-Key</span>. Leave it empty when the console was started with
+      <span class="mono">--token</span>: the proxy injects the token server-side and the secret
+      never reaches the page.</p>
+  </section>
+
+  <section class="card">
+    <h2>Slicing</h2>
+    <div class="row">
+      <label for="kind">Pipeline</label>
+      <select id="kind"></select>
+      <button id="load-config" type="button">Load default config</button>
+      <label class="file-label" for="model">Model file</label>
+      <input id="model" type="file">
+      <button id="submit" type="button" class="primary">Submit job</button>
+    </div>
+    <textarea id="config" spellcheck="false" placeholder="{}"></textarea>
+    <p class="muted">Attach a model file to submit <span class="mono">multipart/form-data</span>
+      (the REST server stores it in its upload pool); leave it empty when the config already
+      names a server-side <span class="mono">model_path</span>. The <span class="mono">Output</span>
+      column shows the server-side result path reported by the API; click a path to copy it,
+      hover the state of a failed job for its error message, and use
+      <span class="mono">Preview</span> to read the result itself in the panel below the table.</p>
+  </section>
+
+  <section class="card">
+    <h2>Jobs
+      <button id="jobs-refresh" type="button" class="ghost">Refresh</button>
+      <label class="check"><input id="jobs-auto" type="checkbox" checked> auto</label>
+    </h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Job</th><th>Pipeline</th><th>State</th><th>Progress</th>
+            <th>Layers</th><th>Elapsed</th><th>Output</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="jobs-body">
+          <tr><td colspan="8" class="empty">no jobs yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 id="preview-title">Result preview
+      <button id="preview-clear" type="button" class="ghost">Clear</button>
+    </h2>
+    <p id="preview-meta" class="muted">no result previewed yet</p>
+    <pre id="preview" class="preview" hidden></pre>
+    <p class="muted">Only the start of a text result is rendered (G-code from a real model is far
+      larger than this panel); <span class="mono">Result</span> still downloads the whole file.</p>
+  </section>
+
+  <section class="card">
+    <h2>Uploads <button id="uploads-refresh" type="button" class="ghost">Refresh</button></h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Upload</th><th>Job</th><th>File</th><th>Stored path</th><th>Size</th>
+            <th>State</th><th>Expires</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="uploads-body">
+          <tr><td colspan="8" class="empty">upload pool not queried yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Log</h2>
+    <pre id="log"></pre>
+  </section>
+</main>
+
+<footer class="muted">
+  Proxied endpoints: <span class="mono">/api/health</span>, <span class="mono">/api/version</span>,
+  <span class="mono">/api/pipelines</span>, <span class="mono">/api/jobs</span>,
+  <span class="mono">/api/uploads</span>.
+</footer>
+</body>
+</html>

@@ -91,18 +91,39 @@ public:
      */
     using Runner = std::function<SliceOutcome(HsBaPipelineKind, const void*, HsBaProgressCallback, void*)>;
 
-    /** @param workers  concurrent job slots; @param max_jobs tracked-job cap; @param ttl finished-job retention. */
-    JobManager(int workers, int max_jobs, std::chrono::seconds ttl, Runner runner = {});
+    /**
+     * @brief Terminal-state observer, invoked once per job after it finishes
+     *        (never under the job mutex, so it may call back into the server).
+     *        The REST layer uses it to start the upload-pool retention clock.
+     */
+    using TerminalSink = std::function<void(const std::string& job_id)>;
+
+    /**
+     * @param workers      concurrent job slots; @param max_jobs tracked-job cap;
+     * @param ttl          finished-job retention; @param runner see Runner;
+     * @param on_terminal  terminal observer (may be empty).
+     */
+    JobManager(int workers, int max_jobs, std::chrono::seconds ttl, Runner runner = {},
+               TerminalSink on_terminal = {});
     ~JobManager();
 
     JobManager(const JobManager&) = delete;
     JobManager& operator=(const JobManager&) = delete;
 
     /**
+     * @brief Reserve the id the next Submit() will hand out ("job-<n>").
+     *        Lets the REST layer create per-job scratch files (uploaded models)
+     *        before the job entry exists.
+     */
+    std::string NextId() const;
+
+    /**
      * @brief Enqueue a job, taking ownership of @p config and @p arena.
+     * @param preallocated_id  An id from NextId() (or test-owned unique id); when empty,
+     *                         the manager generates one.
      * @return New job id, or an empty string when the queue is full (HTTP 429).
      */
-    std::string Submit(HsBaPipelineKind kind, void* config, StringArena arena);
+    std::string Submit(HsBaPipelineKind kind, void* config, StringArena arena, const std::string& preallocated_id = {});
 
     /** @brief Snapshot a job's status, or false when @p id is unknown. */
     bool Status(const std::string& id, JobStatusView& out) const;
@@ -156,6 +177,7 @@ private:
     int max_jobs_ = 128;
     std::chrono::seconds ttl_{3600};
     Runner runner_;
+    TerminalSink on_terminal_;
 };
 
 }  // namespace HsBa::Slicer::RestApi

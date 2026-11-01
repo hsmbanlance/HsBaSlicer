@@ -81,13 +81,22 @@ public:
 // ===========================================================================
 // Type aliases (re-exported for consumer convenience)
 // ===========================================================================
-
+// These aliases already exist in namespace HsBa::Slicer through the GMF
+// headers (2D/IntPolygon.hpp, 2D/FloatPolygons.hpp,
+// LibHsBaSlicer/Extends/LuaAddFunction.hpp). GMF entities belong to the global
+// module and cannot be exported; re-declaring the same qualified name in the
+// module purview is a conflicting declaration, which GCC (>= 15) and Clang
+// reject. MSVC still tolerates it, so the re-export is kept only there
+// (clang-cl defines _MSC_VER too, but follows Clang's stricter checking).
+// On Clang/GCC consumers must #include those headers to name the types.
+#if defined(_MSC_VER) && !defined(__clang__)
 using Point2    = Clipper2Lib::Point64;
 using Polygon   = Clipper2Lib::Path64;
 using Polygons  = Clipper2Lib::Paths64;
 using Point2D   = Clipper2Lib::PointD;
 using PolygonD  = Clipper2Lib::PathD;
 using PolygonsD = Clipper2Lib::PathsD;
+#endif
 
 // Re-export pipeline_types.h config/result types
 using ::HsBaFillMode_t;
@@ -119,8 +128,11 @@ using Support::SupportConfig;
 using Support::FdmSupportConfig;
 using Support::SlaSupportConfig;
 
-// Re-export Lua registration function type
+// Re-export Lua registration function type (MSVC only, see alias note above;
+// elsewhere it comes from LibHsBaSlicer/Extends/LuaAddFunction.hpp)
+#if defined(_MSC_VER) && !defined(__clang__)
 using LuaRegFunc = std::function<void(lua_State*)>;
+#endif
 
 // Re-export event callback function type
 using ZipperEventCallbackFunc = std::function<void(double, std::string_view)>;
@@ -205,7 +217,7 @@ struct FdmResult
 class FdmPipeline
 {
 public:
-    explicit FdmPipeline(HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault());
+    explicit FdmPipeline(HsBaFdmPipelineConfig_t cfg = defaultFdmConfig());
 
     /// @brief Run full pipeline on a model.
     /// @throws SlicerError on failure.
@@ -239,7 +251,7 @@ struct SlaResult
 class SlaPipeline
 {
 public:
-    explicit SlaPipeline(HsBaSlaPipelineConfig_t cfg = HsBaSlaConfigDefault());
+    explicit SlaPipeline(HsBaSlaPipelineConfig_t cfg = defaultSlaConfig());
 
     /// @brief Run full SLA pipeline and save to zip.
     /// @throws SlicerError on failure.
@@ -265,7 +277,7 @@ private:
 class SlsPipeline
 {
 public:
-    explicit SlsPipeline(HsBaSlsPipelineConfig_t cfg = HsBaSlsConfigDefault());
+    explicit SlsPipeline(HsBaSlsPipelineConfig_t cfg = defaultSlsConfig());
 
     /// @brief Run SLS export via Lua script.
     /// @throws SlicerError on failure.
@@ -283,7 +295,7 @@ private:
 class SlmPipeline
 {
 public:
-    explicit SlmPipeline(HsBaSlmPipelineConfig_t cfg = HsBaSlmConfigDefault());
+    explicit SlmPipeline(HsBaSlmPipelineConfig_t cfg = defaultSlmConfig());
 
     /// @brief Run SLM export via Lua script.
     /// @throws SlicerError on failure.
@@ -301,7 +313,7 @@ private:
 class LomPipeline
 {
 public:
-    explicit LomPipeline(HsBaLomPipelineConfig_t cfg = HsBaLomConfigDefault());
+    explicit LomPipeline(HsBaLomPipelineConfig_t cfg = defaultLomConfig());
 
     /// @brief Run LOM export via Lua script.
     /// @throws SlicerError on failure.
@@ -319,7 +331,7 @@ private:
 class TdpPipeline
 {
 public:
-    explicit TdpPipeline(HsBaTdpPipelineConfig_t cfg = HsBaTdpConfigDefault());
+    explicit TdpPipeline(HsBaTdpPipelineConfig_t cfg = defaultTdpConfig());
 
     /// @brief Run 3DP export via Lua script.
     /// @throws SlicerError on failure.
@@ -337,7 +349,7 @@ private:
 class WaamPipeline
 {
 public:
-    explicit WaamPipeline(HsBaWaamPipelineConfig_t cfg = HsBaWaamConfigDefault());
+    explicit WaamPipeline(HsBaWaamPipelineConfig_t cfg = defaultWaamConfig());
 
     /// @brief Run WAAM robot-program export.
     /// @throws SlicerError on failure.
@@ -363,7 +375,7 @@ struct FileTransferOutcome
 class FileTransferPipeline
 {
 public:
-    explicit FileTransferPipeline(HsBaFileTransferPipelineConfig_t cfg = HsBaFileTransferConfigDefault());
+    explicit FileTransferPipeline(HsBaFileTransferPipelineConfig_t cfg = defaultFileTransferConfig());
 
     /// @brief Run file transfer to remote executor.
     /// @throws SlicerError on failure.
@@ -465,7 +477,7 @@ struct CustomLuaResult
 class CustomLuaPipeline
 {
 public:
-    explicit CustomLuaPipeline(HsBaCustomPipelineConfig_t cfg = HsBaCustomConfigDefault());
+    explicit CustomLuaPipeline(HsBaCustomPipelineConfig_t cfg = defaultCustomConfig());
 
     /// @brief Set the progress callback driven by `HsBa.progress()` in Lua.
     void setProgressFunc(std::function<void(int, std::string_view)> func);
@@ -548,7 +560,11 @@ namespace HsBa::Slicer
 {
 
 // ===========================================================================
-// Default config factories (defined here so consumers don't need GMF statics)
+// Default config factories (defined here so consumers don't need GMF statics).
+// They also serve as the classes' default arguments: the C ABI helpers
+// HsBa*ConfigDefault() are `static inline` (internal linkage), and a module
+// interface shall not expose a TU-local entity ([module.interface]), which
+// GCC 15+ diagnoses.
 // ===========================================================================
 
 HsBaFdmPipelineConfig_t defaultFdmConfig() { return HsBaFdmConfigDefault(); }

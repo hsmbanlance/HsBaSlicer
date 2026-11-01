@@ -19,8 +19,40 @@ void PrintUsage(const char* argv0)
                  "  --config <file>   Path to restapi.ini (default: ./restapi.ini)\n"
                  "  --host <addr>     Override the bind address from the ini\n"
                  "  --port <n>        Override the listen port from the ini\n"
-                 "  --help            Show this message\n",
+                 "  --auth-token <t>  Shared token required on non-loopback binds\n"
+                 "  --tls-cert <f>    PEM certificate enabling HTTPS\n"
+                 "  --tls-key <f>     PEM private key matching --tls-cert\n"
+                 "  --require-tls     Refuse to start unless a certificate/key pair is set\n"
+                 "  --help            Show this message\n"
+                 "Environment fallbacks (used only when the ini leaves the value empty):\n"
+                 "  HSBA_REST_AUTH_TOKEN, HSBA_REST_TLS_CERT, HSBA_REST_TLS_KEY\n",
                  argv0);
+}
+
+// Credential material is read from the environment only when the ini did not carry it, so a
+// container image can keep restapi.ini token-free and inject the secret at run time.
+void ApplyEnvFallbacks(HsBa::Slicer::RestApi::ServerConfig& cfg)
+{
+    const auto fill_from_env = [](const char* var_name, std::string& target) -> bool
+    {
+        if (!target.empty())
+        {
+            return false;
+        }
+        const char* const value = std::getenv(var_name);
+        if (value == nullptr || *value == '\0')
+        {
+            return false;
+        }
+        target = value;
+        return true;
+    };
+    if (fill_from_env("HSBA_REST_AUTH_TOKEN", cfg.auth_token))
+    {
+        cfg.auth_enabled = true;
+    }
+    fill_from_env("HSBA_REST_TLS_CERT", cfg.tls_cert);
+    fill_from_env("HSBA_REST_TLS_KEY", cfg.tls_key);
 }
 }  // namespace
 
@@ -28,7 +60,11 @@ int main(int argc, char** argv)
 {
     std::string config_path = "restapi.ini";
     std::string host_override;
+    std::string token_override;
+    std::string cert_override;
+    std::string key_override;
     int port_override = 0;
+    bool require_tls = false;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -38,13 +74,29 @@ int main(int argc, char** argv)
             PrintUsage(argv[0]);
             return 0;
         }
-        if ((arg == "--config" || arg == "-c") && i + 1 < argc)
+        if (arg == "--require-tls")
+        {
+            require_tls = true;
+        }
+        else if ((arg == "--config" || arg == "-c") && i + 1 < argc)
         {
             config_path = argv[++i];
         }
         else if (arg == "--host" && i + 1 < argc)
         {
             host_override = argv[++i];
+        }
+        else if (arg == "--auth-token" && i + 1 < argc)
+        {
+            token_override = argv[++i];
+        }
+        else if (arg == "--tls-cert" && i + 1 < argc)
+        {
+            cert_override = argv[++i];
+        }
+        else if (arg == "--tls-key" && i + 1 < argc)
+        {
+            key_override = argv[++i];
         }
         else if (arg == "--port" && i + 1 < argc)
         {
@@ -70,6 +122,8 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    ApplyEnvFallbacks(cfg);
+
     if (!host_override.empty())
     {
         cfg.host = host_override;
@@ -78,6 +132,21 @@ int main(int argc, char** argv)
     {
         cfg.port = port_override;
     }
+    // Command line outranks ini and environment; a non-empty --auth-token always arms the gate.
+    if (!token_override.empty())
+    {
+        cfg.auth_token = token_override;
+        cfg.auth_enabled = true;
+    }
+    if (!cert_override.empty())
+    {
+        cfg.tls_cert = cert_override;
+    }
+    if (!key_override.empty())
+    {
+        cfg.tls_key = key_override;
+    }
+    cfg.require_tls = cfg.require_tls || require_tls;
 
     return HsBa::Slicer::RestApi::RunServer(cfg);
 }

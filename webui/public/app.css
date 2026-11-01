@@ -1,0 +1,218 @@
+:root {
+  --bg: #10151c;
+  --panel: #18202b;
+  --panel-alt: #1f2836;
+  --line: #2c3644;
+  --text: #e4ebf3;
+  --muted: #8fa1b6;
+  --accent: #4aa3ff;
+  --ok: #37c978;
+  --warn: #f0b429;
+  --error: #ef5f5f;
+  --radius: 10px;
+  font-family: "Segoe UI", "Noto Sans", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 20px 40px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+h1 { font-size: 18px; margin: 0; }
+
+h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  margin: 0 0 12px;
+}
+
+.mono, code, textarea, pre, input, select, button {
+  font-family: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  font-size: 13px;
+}
+
+.muted { color: var(--muted); margin: 6px 0 0; }
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand p { margin: 2px 0 0; }
+
+.logo {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(140deg, var(--accent), #7a5cff);
+  color: #0b1220;
+  font-weight: 700;
+}
+
+.status { display: flex; align-items: center; gap: 10px; }
+
+.badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.badge-idle { border-color: var(--line); }
+.badge-ok { border-color: var(--ok); color: var(--ok); }
+.badge-down { border-color: var(--error); color: var(--error); }
+
+main {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+label { color: var(--muted); }
+
+input[type="password"],
+select {
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-alt);
+  color: var(--text);
+}
+
+input[type="password"] { flex: 1 1 240px; min-width: 180px; }
+
+.file-label,
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.file-label + input[type="file"] { color: var(--muted); max-width: 240px; }
+
+button {
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-alt);
+  color: var(--text);
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.primary { border-color: var(--accent); background: #17395e; }
+button.ghost { margin-left: auto; }
+
+textarea {
+  width: 100%;
+  min-height: 220px;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #0d131b;
+  color: var(--text);
+  resize: vertical;
+}
+
+.table-wrap { overflow-x: auto; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+th, td {
+  padding: 7px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+th { color: var(--muted); font-weight: 600; }
+td.empty { color: var(--muted); text-align: center; }
+td.actions { display: flex; gap: 6px; }
+td.actions button { padding: 4px 9px; }
+
+/* Result/error text of one job: a path the pipeline reported has to be readable in full on
+   screen, so long values wrap over several lines instead of being clipped to an ellipsis. */
+td.path {
+  min-width: 300px;
+  max-width: 420px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+td.path.has-value { color: var(--text); cursor: copy; }
+td.path.has-value:hover { color: var(--accent); }
+
+.state-queued { color: var(--warn); }
+.state-running { color: var(--accent); }
+.state-success { color: var(--ok); }
+.state-failed { color: var(--error); }
+
+/* Job result text: scrollable like the log, but height-dependent so a short preview stays compact. */
+.preview {
+  max-height: 320px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #0d131b;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: inherit;
+}
+#preview-meta { margin-top: 0; }
+
+#log {
+  height: 180px;
+  margin: 0;
+  padding: 10px;
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #0d131b;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.log-line { color: var(--text); }
+.log-ok { color: var(--ok); }
+.log-error { color: var(--error); }
+
+footer {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}

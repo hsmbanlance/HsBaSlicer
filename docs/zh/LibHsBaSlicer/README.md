@@ -490,6 +490,8 @@ FdmResult result = pipeline.run(model);  // 全流程
 **注意**：
 - MSVC 下 `#include` 必须位于 `import` 之前（否则 C2572 重定义错误）
 - GMF 中的项目类型（`ModelInfo` 等）不随模块导出，消费者需自行 `#include`
+- `Point2`/`Polygon`/`Polygons`/`Point2D`/`PolygonD`/`PolygonsD`/`LuaRegFunc` 这些别名仅在 MSVC 下随模块导出：GCC（≥ 15）/Clang 会将在模块内重新声明 GMF 同名实体判为 conflicting declaration，需要命名它们时请自行 `#include "2D/IntPolygon.hpp"`、`#include "2D/FloatPolygons.hpp"`、`#include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"`
 - 配置结构体复用 `pipelinetypes/pipeline_types.h`，禁止重复定义
+- 模块包装层仅能在 MSVC、Clang 或 GCC ≥ 16 上构建：GMF 头文件（Eigen/libstdc++）暴露内部链接实体，GCC 15 视为硬错误，配置阶段探测到后会自动关闭 `HSBA_SLICER_MODULE`，此时请改用传统 `#include` 版 API（见 `samples/LibHsBaSlicer/main_header.cpp`）或 DllHsBaSlicer C ABI
 
 详见 [C++ 使用指南](../cpp_cmake_usage.md#使用-modulehsbaslicerc20-模块版)。
