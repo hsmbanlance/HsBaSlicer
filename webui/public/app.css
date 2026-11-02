@@ -161,7 +161,7 @@ th, td {
 }
 th { color: var(--muted); font-weight: 600; }
 td.empty { color: var(--muted); text-align: center; }
-td.actions { display: flex; gap: 6px; }
+td.actions { display: flex; flex-wrap: wrap; gap: 6px; }
 td.actions button { padding: 4px 9px; }
 
 /* Result/error text of one job: a path the pipeline reported has to be readable in full on
@@ -180,6 +180,36 @@ td.path.has-value:hover { color: var(--accent); }
 .state-running { color: var(--accent); }
 .state-success { color: var(--ok); }
 .state-failed { color: var(--error); }
+.state-cancelled { color: var(--muted); }
+
+/* Layer geometry. The stage clips instead of scrolling, because the viewBox is what the page
+   zooms and pans; a scrollbar around it would fight the drag handler. */
+.geometry-stage {
+  height: 360px;
+  margin-top: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0d131b;
+  cursor: grab;
+  touch-action: none;
+}
+.geometry-stage[hidden] { display: none; }
+#geometry-svg { display: block; width: 100%; height: 100%; }
+
+/* The layer is drawn in millimetres, so a stroke width is in millimetres too unless every path
+   opts out of the viewBox scale: without non-scaling-stroke a zoomed-in contour turns into a band
+   and a zoomed-out one disappears below a pixel. Categories are stroke-only, because filling a
+   closed contour would hide the infill drawn inside it. */
+.geometry-outline path, .geometry-fill path, .geometry-support path {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+.geometry-outline path { stroke: var(--accent); stroke-width: 1.4; }
+.geometry-fill path { stroke: var(--ok); stroke-width: 0.7; opacity: 0.7; }
+.geometry-support path { stroke: var(--warn); stroke-width: 0.7; stroke-dasharray: 3 2; }
+
+input[type="range"] { flex: 1 1 220px; accent-color: var(--accent); }
 
 /* Job result text: scrollable like the log, but height-dependent so a short preview stays compact. */
 .preview {

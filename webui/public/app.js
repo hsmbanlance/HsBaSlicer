@@ -14,6 +14,19 @@ const JOBS_EVERY_MS = 3000;
 const LOG_LIMIT = 200;
 const JOB_COLUMNS = 8;
 const UPLOAD_COLUMNS = 8;
+const FALLBACK_STAGE_WIDTH = 640;
+
+// The one URI literal this bundle contains, and it is never dereferenced: it is the identifier the
+// DOM uses to create real SVG nodes rather than unknown HTML elements, so neither the CSP nor
+// working off the network is affected by it.
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/** The three geometry categories the API reports, each with the checkbox that shows it. */
+const GEOMETRY_GROUPS = [
+  { key: "outlines", className: "geometry-outline", toggle: "geometry-outline" },
+  { key: "fills", className: "geometry-fill", toggle: "geometry-fill" },
+  { key: "supports", className: "geometry-support", toggle: "geometry-support" },
+];
 
 const byId = (id) => document.getElementById(id);
 
@@ -166,9 +179,33 @@ function pathCell(row, index, path, fallback, read) {
   return cell;
 }
 
+/**
+ * What the Layer geometry panel currently shows. The paths are kept after a fetch so that toggling
+ * a category or zooming redraws from memory instead of asking the server for the layer again.
+ */
+const geometry = {
+  id: "",
+  summary: null,
+  layer: 0,
+  z: 0,
+  base: null,
+  mirror: 0,
+  paths: { outlines: [], fills: [], supports: [] },
+  counts: null,
+  zoom: 1,
+  pan: { x: 0, y: 0 },
+};
+
+/** Drag bookkeeping of the geometry stage, in client pixels. */
+let drag = null;
+
 const JOB_ACTIONS = [
   { label: "Preview", enabled: (job) => job.state === "success", handler: (row) => previewResult(row.job.id, row.job.kind) },
   { label: "Result", enabled: (job) => job.state === "success", handler: (row) => downloadResult(row.job.id, row.job.kind) },
+  // geometry_available is the server's own answer to "can the geometry endpoints serve this job":
+  // it already folds in the terminal-state rule and the snapshot pool having recycled this job.
+  { label: "Geometry", enabled: (job) => job.geometry_available === 1, handler: (row) => openGeometry(row.job.id, row.job) },
+  { label: "Cancel", enabled: (job) => job.state === "queued" || job.state === "running", handler: (row) => cancelJob(row.job.id) },
   { label: "Delete", enabled: (job) => job.state !== "running", handler: (row) => deleteJob(row.job.id) },
 ];
 
@@ -184,7 +221,11 @@ function buildJobRow(row, job) {
   cellAt(row, 2, { className: "state-" + job.state, text: job.state, title: job.error_message || "" });
   cellAt(row, 3, {
     className: "muted",
-    text: job.progress_percent + "%" + (job.progress_stage ? " " + job.progress_stage : ""),
+    // A Lua pipeline reports free-form progress text and may report none; the stable stage key the
+    // API derives is the fallback, so a row is never just a bare percentage.
+    text: job.progress_percent + "%" +
+      (job.progress_stage || job.progress_stage_id ? " " + (job.progress_stage || job.progress_stage_id) : ""),
+    title: job.progress_stage_id || "",
   });
   cellAt(row, 4, { text: String(job.total_layers) });
   cellAt(row, 5, { text: formatSeconds(job.elapsed_seconds) });
@@ -386,7 +427,8 @@ async function submitJob() {
     throw new Error("load a default config (or paste one) before submitting");
   }
 
-  const path = "/api/jobs/" + encodeURIComponent(kind);
+  const capture = byId("geometry-capture").checked ? "?geometry=1" : "";
+  const path = "/api/jobs/" + encodeURIComponent(kind) + capture;
   const file = byId("model").files[0];
   let job;
   if (file) {
@@ -495,6 +537,198 @@ function clearPreview() {
   byId("preview-meta").textContent = "no result previewed yet";
 }
 
+/** @brief URL of one geometry endpoint of one job. */
+function geometryPath(id, suffix) {
+  return "/api/jobs/" + encodeURIComponent(id) + suffix;
+}
+
+/** Show a sentence in the panel instead of a drawing, and drop whatever was drawn before. */
+function setGeometryMessage(text) {
+  byId("geometry-stage").hidden = true;
+  byId("geometry-svg").replaceChildren();
+  byId("geometry-meta").textContent = text;
+}
+
+function geometryLayerCount() {
+  return Number((geometry.summary && geometry.summary.layer_count) || 0) || 0;
+}
+
+function setGeometryControlsEnabled(enabled) {
+  byId("geometry-layer").disabled = !enabled;
+  byId("geometry-prev").disabled = !enabled;
+  byId("geometry-next").disabled = !enabled;
+  byId("geometry-reload").disabled = !enabled;
+  byId("geometry-fit").disabled = !enabled;
+}
+
+/**
+ * Open one job's geometry overview and draw its first layer.
+ *
+ * A job that never asked for capture, or whose snapshot has already been recycled by the pool, is
+ * answered by the server with a 404 and its own sentence; that sentence is what the panel shows,
+ * rather than an error being pushed into the log where nobody looking at the drawing would see it.
+ */
+async function openGeometry(id, job) {
+  if (geometry.id !== id) {
+    geometry.id = id;
+    geometry.summary = null;
+    geometry.layer = 0;
+    geometry.zoom = 1;
+    geometry.pan = { x: 0, y: 0 };
+  }
+  try {
+    const summary = await callJson(geometryPath(id, "/geometry"));
+    const count = Number(summary.layer_count) || 0;
+    if (count <= 0) {
+      setGeometryMessage("this job holds no layer geometry - submit it with capture geometry enabled");
+      setGeometryControlsEnabled(false);
+      return;
+    }
+    geometry.summary = summary;
+    geometry.base = HsBaHttp.geometryView(summary.bounds);
+    geometry.mirror = HsBaHttp.mirrorLine(summary.bounds);
+    const slider = byId("geometry-layer");
+    slider.min = "0";
+    slider.max = String(count - 1);
+    slider.value = String(geometry.layer);
+    await showGeometryLayer(geometry.layer);
+    writeLog("opened the geometry of " + id + " (" + count + " layers, " + job.kind + ")", "ok");
+  } catch (error) {
+    setGeometryMessage(error.message + " - the snapshot pool keeps only the last few jobs");
+    setGeometryControlsEnabled(false);
+    writeLog(error.message, "error");
+  }
+}
+
+/** Fetch and draw one layer by index; the index is clamped into what the overview reported. */
+async function showGeometryLayer(index) {
+  if (!geometry.id) {
+    return;
+  }
+  const count = geometryLayerCount();
+  const wanted = Math.max(0, Math.min(count - 1, Math.trunc(Number(index) || 0)));
+  try {
+    const layer = await callJson(geometryPath(geometry.id, "/geometry/" + wanted));
+    const bounds = layer.bounds && layer.bounds.length ? layer.bounds : (geometry.summary || {}).bounds;
+    geometry.layer = wanted;
+    geometry.base = HsBaHttp.geometryView(bounds);
+    geometry.mirror = HsBaHttp.mirrorLine(bounds);
+    geometry.z = Number(layer.z_height) || 0;
+    const drawn = HsBaHttp.layerPaths(layer, geometry.mirror);
+    geometry.paths = drawn;
+    geometry.counts = drawn.counts;
+    byId("geometry-layer-label").textContent = wanted + 1 + " / " + count;
+    byId("geometry-layer").value = String(wanted);
+    setGeometryControlsEnabled(true);
+    renderGeometry();
+  } catch (error) {
+    setGeometryMessage(error.message);
+    setGeometryControlsEnabled(false);
+    writeLog(error.message, "error");
+  }
+}
+
+/** One <g> per category: the class carries the colour, the path data carries the layer. */
+function makeGeometryGroup(group, paths) {
+  const container = document.createElementNS(SVG_NS, "g");
+  container.setAttribute("class", group.className);
+  for (const d of paths) {
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("d", d);
+    container.appendChild(path);
+  }
+  return container;
+}
+
+/** Redraw the current layer from what is already fetched - no request, no re-parse. */
+function renderGeometry() {
+  if (!geometry.base) {
+    return;
+  }
+  const svg = byId("geometry-svg");
+  svg.setAttribute("viewBox", HsBaHttp.currentViewBox(geometry.base, geometry.zoom, geometry.pan));
+  // An empty category gets no <g> at all: a pipeline that reports no supports (most of them) would
+  // otherwise leave an invisible group in the document for every layer that is drawn.
+  const visible = GEOMETRY_GROUPS
+    .filter((group) => byId(group.toggle).checked && (geometry.paths[group.key] || []).length)
+    .map((group) => makeGeometryGroup(group, geometry.paths[group.key]));
+  svg.replaceChildren(...visible);
+  byId("geometry-stage").hidden = false;
+
+  const counts = geometry.counts || { outlines: 0, fills: 0, supports: 0, dropped: 0 };
+  const undrawn = counts.dropped
+    ? " (" + counts.dropped + " paths left undrawn, " + HsBaHttp.GEOMETRY_MAX_PATHS + " is the budget)"
+    : "";
+  byId("geometry-meta").textContent =
+    "layer " + (geometry.layer + 1) + " / " + geometryLayerCount() +
+    ", z " + geometry.z + " mm, outlines " + geometry.paths.outlines.length +
+    " / fills " + geometry.paths.fills.length +
+    " / supports " + geometry.paths.supports.length + undrawn;
+}
+
+/** Step to the neighbouring layer, or do nothing when the current one is already the edge. */
+function stepGeometry(delta) {
+  const count = geometryLayerCount();
+  const next = geometry.layer + delta;
+  if (!count || next < 0 || next > count - 1 || next === geometry.layer) {
+    return;
+  }
+  return showGeometryLayer(next);
+}
+
+/** Fit is the identity at zoom 1, so resetting means dropping zoom and pan, not refetching. */
+function resetGeometryView() {
+  geometry.zoom = 1;
+  geometry.pan = { x: 0, y: 0 };
+  renderGeometry();
+}
+
+function stageWidth() {
+  return Number(byId("geometry-stage").clientWidth) || FALLBACK_STAGE_WIDTH;
+}
+
+function zoomGeometry(event) {
+  if (!geometry.base) {
+    return;
+  }
+  if (typeof event.preventDefault === "function") {
+    event.preventDefault();
+  }
+  const step = Number(event.deltaY) || 0;
+  geometry.zoom = HsBaHttp.clampZoom(geometry.zoom * Math.exp(-step * 0.001));
+  run(renderGeometry);
+}
+
+function beginDrag(event) {
+  if (!geometry.base) {
+    return;
+  }
+  drag = { x: Number(event.clientX) || 0, y: Number(event.clientY) || 0 };
+}
+
+/**
+ * Move the view with the pointer.
+ *
+ * The pan lives in the viewBox's own (already mirrored) space, so both axes follow the pointer and
+ * the flip ringPath applies to the coordinates never has to be repeated here.
+ */
+function moveDrag(event) {
+  if (!drag || !geometry.base) {
+    return;
+  }
+  const perPixel = geometry.base.w / geometry.zoom / stageWidth();
+  const x = Number(event.clientX) || 0;
+  const y = Number(event.clientY) || 0;
+  geometry.pan.x -= (x - drag.x) * perPixel;
+  geometry.pan.y -= (y - drag.y) * perPixel;
+  drag = { x: x, y: y };
+  run(renderGeometry);
+}
+
+function endDrag() {
+  drag = null;
+}
+
 async function deleteJob(id) {
   await call("/api/jobs/" + encodeURIComponent(id), { method: "DELETE" });
   writeLog("deleted " + id, "ok");
@@ -505,6 +739,21 @@ async function deleteUpload(id) {
   await call("/api/uploads/" + encodeURIComponent(id), { method: "DELETE" });
   writeLog("deleted " + id, "ok");
   await refreshUploads();
+}
+
+/**
+ * Ask a running job to stop.
+ *
+ * The request is a request: the pipeline notices it at its next safe point, so the row is expected
+ * to keep saying "running" for a while. The log states that instead of claiming the job is gone.
+ */
+async function cancelJob(id) {
+  const view = await callJson("/api/jobs/" + encodeURIComponent(id) + "/cancel", { method: "POST" });
+  writeLog(
+    "cancel requested for " + id + ": " + (view.detail || "accepted") + "; the job stops at its next safe point",
+    "ok",
+  );
+  await refreshJobs();
 }
 
 function saveToken() {
@@ -537,6 +786,23 @@ function init() {
   byId("uploads-refresh").addEventListener("click", () => run(refreshUploads));
   byId("preview-clear").addEventListener("click", () => run(clearPreview));
   clearPreview();
+
+  byId("geometry-prev").addEventListener("click", () => run(() => stepGeometry(-1)));
+  byId("geometry-next").addEventListener("click", () => run(() => stepGeometry(1)));
+  byId("geometry-reload").addEventListener("click", () => run(() => showGeometryLayer(geometry.layer)));
+  byId("geometry-fit").addEventListener("click", () => run(resetGeometryView));
+  byId("geometry-layer").addEventListener("input", () => run(() => showGeometryLayer(byId("geometry-layer").value)));
+  for (const group of GEOMETRY_GROUPS) {
+    byId(group.toggle).addEventListener("click", () => run(renderGeometry));
+  }
+  const stage = byId("geometry-stage");
+  stage.addEventListener("wheel", zoomGeometry);
+  stage.addEventListener("mousedown", beginDrag);
+  stage.addEventListener("mousemove", moveDrag);
+  stage.addEventListener("mouseup", endDrag);
+  stage.addEventListener("mouseleave", endDrag);
+  setGeometryMessage("no layer geometry previewed yet");
+  setGeometryControlsEnabled(false);
 
   run(refreshVersion);
   run(async () => {

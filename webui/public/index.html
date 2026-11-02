@@ -49,6 +49,7 @@
       <button id="load-config" type="button">Load default config</button>
       <label class="file-label" for="model">Model file</label>
       <input id="model" type="file">
+      <label class="check"><input id="geometry-capture" type="checkbox" checked> capture geometry</label>
       <button id="submit" type="button" class="primary">Submit job</button>
     </div>
     <textarea id="config" spellcheck="false" placeholder="{}"></textarea>
@@ -57,7 +58,9 @@
       names a server-side <span class="mono">model_path</span>. The <span class="mono">Output</span>
       column shows the server-side result path reported by the API; click a path to copy it,
       hover the state of a failed job for its error message, and use
-      <span class="mono">Preview</span> to read the result itself in the panel below the table.</p>
+      <span class="mono">Preview</span> to read the result itself in the panel below the table.
+      <span class="mono">capture geometry</span> adds <span class="mono">?geometry=1</span> to the
+      submission so the <span class="mono">Layer geometry</span> panel below has something to draw.</p>
   </section>
 
   <section class="card">
@@ -78,6 +81,33 @@
         </tbody>
       </table>
     </div>
+  </section>
+
+  <section class="card">
+    <h2 id="geometry-title">Layer geometry
+      <button id="geometry-reload" type="button" class="ghost">Reload layer</button>
+    </h2>
+    <p id="geometry-meta" class="muted">no layer geometry previewed yet</p>
+    <div class="row">
+      <label for="geometry-layer">Layer</label>
+      <button id="geometry-prev" type="button" title="previous layer">-</button>
+      <input id="geometry-layer" type="range" min="0" max="0" value="0" step="1">
+      <button id="geometry-next" type="button" title="next layer">+</button>
+      <span id="geometry-layer-label" class="mono">-</span>
+      <label class="check"><input id="geometry-outline" type="checkbox" checked> outline</label>
+      <label class="check"><input id="geometry-fill" type="checkbox" checked> infill</label>
+      <label class="check"><input id="geometry-support" type="checkbox" checked> support</label>
+      <button id="geometry-fit" type="button">Fit</button>
+    </div>
+    <div id="geometry-stage" class="geometry-stage" hidden>
+      <svg id="geometry-svg" preserveAspectRatio="xMidYMid meet" role="img"></svg>
+    </div>
+    <p class="muted">Drawn from <span class="mono">/api/jobs/{id}/geometry</span>, so the job has to
+      have been submitted with <span class="mono">capture geometry</span> and must have reached a
+      terminal state; <span class="mono">Cancel</span> only asks the pipeline to stop, and it does so
+      at its next safe point. The server keeps snapshots for the last few jobs only, so an older row
+      can report that its snapshot is gone - the panel states the server's own answer verbatim.
+      Scroll to zoom, drag to pan; contours are drawn with a constant line width at every zoom level.</p>
   </section>
 
   <section class="card">
@@ -114,8 +144,10 @@
 </main>
 
 <footer class="muted">
-  Proxied endpoints: <span class="mono">/api/health</span>, <span class="mono">/api/version</span>,
-  <span class="mono">/api/pipelines</span>, <span class="mono">/api/jobs</span>,
+  Every request lives under <span class="mono">/api/*</span> and is proxied to the REST server:
+  <span class="mono">/api/health</span>, <span class="mono">/api/version</span>,
+  <span class="mono">/api/pipelines</span>, <span class="mono">/api/config/default</span>,
+  <span class="mono">/api/jobs</span> (results, layer geometry and cancellation included),
   <span class="mono">/api/uploads</span>.
 </footer>
 </body>

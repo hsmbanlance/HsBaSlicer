@@ -467,6 +467,20 @@ describe("end to end with a real HsBaSlicerRestServer", () => {
     assert.match(payload.message, /unknown pipeline kind/);
   });
 
+  it("proxies a layer geometry request to the real server", async () => {
+    // The console spells no path that server.js does not already forward, so what only the genuine
+    // binary can prove is that a three-segment job sub-resource reaches it intact and the server's
+    // own error body comes back unchanged. Nothing is sliced here on purpose: geometry is only
+    // readable once a job is terminal, and the snapshot pool keeps just the last few jobs.
+    const response = await fetch(`${consoleUrlOf()}/api/jobs/hsba-no-such-job/geometry`);
+    assert.equal(response.status, 404);
+    assert.match(response.headers.get("content-type"), /json/);
+    const payload = await response.json();
+    assert.equal(payload.code, 404);
+    assert.match(payload.message, /not found/);
+    assert.equal(payload.detail, "hsba-no-such-job");
+  });
+
   it("rejects a model part for a pipeline kind that accepts none", async () => {
     const form = new FormData();
     form.set("config", new Blob(["{}"], { type: "application/json" }), "config.json");
