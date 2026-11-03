@@ -30,6 +30,7 @@
 #include "config_bridge.hpp"
 #include "content_negotiate.hpp"
 #include "job_manager.hpp"
+#include "package_reader.hpp"
 #include "pipeline_executor.hpp"
 #include "routes.hpp"
 #include "serialize_value.hpp"
@@ -92,6 +93,7 @@ struct GeometrySummaryView
     std::vector<double> bounds;        ///< min_x, min_y, max_x, max_y over every layer.
     std::vector<double> z_heights;     ///< Per-layer platform height, only with ?full=1.
     std::vector<double> layer_bounds;  ///< Four values per layer, only with ?full=1.
+    int has_path = 0;                  ///< 1 = a continuous path can be read from /geometry/path.
 };
 
 /** @brief One contour/infill/support ring of a layer (?xy is flat to keep the body small). */
@@ -112,6 +114,35 @@ struct LayerGeometryView
     std::vector<RingView> outlines;
     std::vector<RingView> fills;
     std::vector<RingView> supports;
+};
+
+/** @brief Serializable continuous toolpath (GET /api/jobs/{id}/geometry/path). */
+struct GeometryPathView
+{
+    std::string id;
+    long long geometry_id = 0;
+    int point_count = 0;
+    std::vector<double> xyz;      ///< Flat x,y,z triples in millimetres.
+    std::vector<double> bounds;   ///< min_x, min_y, max_x, max_y of the polyline.
+    std::vector<double> z_range;  ///< min_z, max_z.
+};
+
+/** @brief One file of a result package, with the content type this server will answer with. */
+struct PackageEntryView
+{
+    std::string path;                 ///< Name inside the archive, as stored.
+    long long size = 0;               ///< Bytes inside the archive.
+    long long uncompressed_size = 0;  ///< Bytes after expansion.
+    std::string media_type;           ///< Type GET /api/jobs/{id}/package/{entry} reports.
+};
+
+/** @brief Serializable entry listing of a result package (GET /api/jobs/{id}/package). */
+struct PackageListingView
+{
+    std::string id;       ///< Job identifier.
+    std::string name;     ///< Archive file name, without the server-side directory.
+    int entry_count = 0;  ///< Size of @ref entries.
+    std::vector<PackageEntryView> entries;
 };
 
 /** @brief Serializable cancellation acknowledgement (POST /api/jobs/{id}/cancel). */
@@ -607,6 +638,9 @@ void HandleJobGeometry(const Request& req, Response& res, Ctx& ctx, const std::s
     view.id = id;
     view.geometry_id = geometry_id;
     view.layer_count = layers;
+    // Telling the client whether a path exists costs one pool lookup and saves it a
+    // request that can only ever answer 404 for a non-spiral run.
+    view.has_path = HsBaGeometryPathPointCount(geometry_id) > 0 ? 1 : 0;
     double lo[2] = {std::numeric_limits<double>::max(), std::numeric_limits<double>::max()};
     double hi[2] = {std::numeric_limits<double>::lowest(), std::numeric_limits<double>::lowest()};
     bool saw_bounds = false;
@@ -683,6 +717,157 @@ void HandleJobLayerGeometry(const Request& req, Response& res, Ctx& ctx, const s
     AppendRings(view.supports, geom.supports, geom.support_count);
     HsBaFreeLayerGeometry(&geom);
     ReplyValue(res, 200, view, fmt, "LayerGeometry");
+}
+
+void HandleJobGeometryPath(const Request& req, Response& res, Ctx& ctx, const std::string& id)
+{
+    const DataFormat fmt = TargetFormat(req, ctx.cfg);
+    long long geometry_id = 0;
+    if (!ctx.jobs.GeometryId(id, geometry_id))
+    {
+        ReplyError(res, 404, ctx.jobs.Exists(id) ? "job captured no layer geometry" : "job not found",
+                   ctx.jobs.Exists(id) ? "submit with ?geometry=1" : id, fmt);
+        return;
+    }
+    if (HsBaGeometryLayerCount(geometry_id) <= 0)
+    {
+        ReplyError(res, 404, "geometry snapshot is no longer available", id, fmt);
+        return;
+    }
+    HsBaGeometryPath_t path{};
+    if (!HsBaGetGeometryPath(geometry_id, &path))
+    {
+        // The run only deposited per-layer rings, so there is no polyline to hand out.
+        ReplyError(res, 404, "job emitted no continuous path", "spiral_mode=1", fmt);
+        return;
+    }
+    GeometryPathView view;
+    view.id = id;
+    view.geometry_id = geometry_id;
+    view.point_count = path.point_count;
+    // The coordinates live inside the block HsBaGetGeometryPath allocated, so the copy
+    // must happen before the release below.
+    view.xyz.assign(path.xyz, path.xyz + 3ull * static_cast<std::size_t>(path.point_count));
+    view.bounds = {path.bounds_min[0], path.bounds_min[1], path.bounds_max[0], path.bounds_max[1]};
+    view.z_range = {path.z_min, path.z_max};
+    HsBaFreeGeometryPath(&path);
+    ReplyValue(res, 200, view, fmt, "GeometryPath");
+}
+
+// ---------------------------- result package entries ----------------------------
+// A package is whatever a pipeline wrote to output_path as an archive (SLA layer images, the
+// SLS/SLM/LOM/TDP zip bundles). Reading it costs nothing in the job machinery: the archive is on
+// disk and already finished, so these routes open it per request and keep no state.
+
+/**
+ * @brief Shared front of both package routes: the finished archive of @p id, or a reply.
+ * @return true only when @p outcome holds a non-empty output_path a package can be read from.
+ *
+ * The failure rungs are deliberately the ones of HandleJobResult, in the same order, so a client
+ * that already handled /result needs no new error vocabulary for /package.
+ */
+bool PackageSource(const Request& req, Response& res, Ctx& ctx, const std::string& id, SliceOutcome& outcome)
+{
+    const DataFormat fmt = TargetFormat(req, ctx.cfg);
+    if (!ctx.jobs.Outcome(id, outcome))
+    {
+        if (!ctx.jobs.Exists(id))
+        {
+            ReplyError(res, 404, "job not found", id, fmt);
+        }
+        else if (JobStatusView status; ctx.jobs.Status(id, status) && status.state == "cancelled")
+        {
+            ReplyError(res, 409, "job was cancelled", id, fmt);
+        }
+        else
+        {
+            ReplyError(res, 409, "job not finished successfully", id, fmt);
+        }
+        return false;
+    }
+    if (outcome.output_path.empty())
+    {
+        // An inline G-code answer, or no answer at all: there is no archive to open either way.
+        ReplyError(res, 404, "result is not a package", outcome.inline_content.empty() ? id : "inline result", fmt);
+        return false;
+    }
+    return true;
+}
+
+void HandleJobPackage(const Request& req, Response& res, Ctx& ctx, const std::string& id)
+{
+    const DataFormat fmt = TargetFormat(req, ctx.cfg);
+    SliceOutcome outcome;
+    if (!PackageSource(req, res, ctx, id, outcome))
+    {
+        return;
+    }
+    std::vector<PackageEntryInfo> entries;
+    std::string error;
+    if (!ReadPackageEntries(outcome.output_path, entries, error))
+    {
+        // The reason names nothing a client may not already see, and the detail stays the bare file
+        // name: the directory the server slices into is none of the caller's business.
+        ReplyError(res, 404, "package not readable", BaseFileName(outcome.output_path), fmt);
+        return;
+    }
+    PackageListingView view;
+    view.id = id;
+    view.name = BaseFileName(outcome.output_path);
+    view.entry_count = static_cast<int>(entries.size());
+    view.entries.reserve(entries.size());
+    for (const PackageEntryInfo& entry : entries)
+    {
+        view.entries.push_back(
+            PackageEntryView{entry.path, entry.size, entry.uncompressed_size, PackageMediaType(entry.path)});
+    }
+    ReplyValue(res, 200, view, fmt, "Package");
+}
+
+void HandleJobPackageEntry(const Request& req, Response& res, Ctx& ctx, const std::string& id, const std::string& entry)
+{
+    const DataFormat fmt = TargetFormat(req, ctx.cfg);
+    if (!IsSafeEntryName(entry))
+    {
+        // Checked before the job is even looked up: an unusable name must never reach the archive
+        // layer, whatever the rest of the request would have been worth.
+        ReplyError(res, 400, "invalid package entry name", entry, fmt);
+        return;
+    }
+    SliceOutcome outcome;
+    if (!PackageSource(req, res, ctx, id, outcome))
+    {
+        return;
+    }
+    std::string data;
+    std::string error;
+    if (!ReadPackageEntry(outcome.output_path, entry, data, error))
+    {
+        if (error == PACKAGE_ENTRY_NOT_FOUND)
+        {
+            ReplyError(res, 404, std::string(PACKAGE_ENTRY_NOT_FOUND), entry, fmt);
+        }
+        else if (error == PACKAGE_ENTRY_TOO_LARGE)
+        {
+            ReplyError(res, 409, std::string(PACKAGE_ENTRY_TOO_LARGE), entry, fmt);
+        }
+        else
+        {
+            ReplyError(res, 404, "package not readable", BaseFileName(outcome.output_path), fmt);
+        }
+        return;
+    }
+    const std::string media = PackageMediaType(entry);
+    res.status = 200;
+    res.set_content(std::move(data), media);
+    res.set_header("X-Content-Type-Options", "nosniff");
+    if (media == "image/svg+xml")
+    {
+        // A package SVG comes out of an exporter script, so it is about as trusted as any other
+        // result byte. Browsers do not run script inside an <img>, and this header is the backstop
+        // for every context that does.
+        res.set_header("Content-Security-Policy", "default-src 'none'");
+    }
 }
 
 void HandleCancelJob(const Request& req, Response& res, Ctx& ctx, const std::string& id)
@@ -991,10 +1176,20 @@ void RegisterRoutes(httplib::Server& svr, Ctx& ctx)
     // /api/jobs/... pattern below must stay ahead of the catch-all job routes.
     svr.Post(R"(/api/jobs/([^/]+)/cancel)",
              [&ctx](const Request& req, Response& res) { HandleCancelJob(req, res, ctx, req.matches[1].str()); });
+    // "path" is a reserved segment in front of the layer route: only a numeric segment
+    // may reach the single-layer handler below, so this literal route has to be first.
+    svr.Get(R"(/api/jobs/([^/]+)/geometry/path)",
+            [&ctx](const Request& req, Response& res) { HandleJobGeometryPath(req, res, ctx, req.matches[1].str()); });
     svr.Get(R"(/api/jobs/([^/]+)/geometry/([^/]+))", [&ctx](const Request& req, Response& res)
             { HandleJobLayerGeometry(req, res, ctx, req.matches[1].str(), req.matches[2].str()); });
     svr.Get(R"(/api/jobs/([^/]+)/geometry)",
             [&ctx](const Request& req, Response& res) { HandleJobGeometry(req, res, ctx, req.matches[1].str()); });
+    // A package entry name carries slashes ("layers/layer_0.png"), so the tail can only be captured
+    // by a greedy (.+) behind an explicit /package segment; nothing above it may swallow that prefix.
+    svr.Get(R"(/api/jobs/([^/]+)/package)",
+            [&ctx](const Request& req, Response& res) { HandleJobPackage(req, res, ctx, req.matches[1].str()); });
+    svr.Get(R"(/api/jobs/([^/]+)/package/(.+))", [&ctx](const Request& req, Response& res)
+            { HandleJobPackageEntry(req, res, ctx, req.matches[1].str(), req.matches[2].str()); });
     svr.Post(R"(/api/jobs/([^/]+))",
              [&ctx](const Request& req, Response& res) { HandleSubmitJob(req, res, ctx, req.matches[1].str()); });
     svr.Get("/api/jobs", [&ctx](const Request& req, Response& res) { HandleListJobs(req, res, ctx); });

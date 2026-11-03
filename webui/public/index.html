@@ -50,6 +50,7 @@
       <label class="file-label" for="model">Model file</label>
       <input id="model" type="file">
       <label class="check"><input id="geometry-capture" type="checkbox" checked> capture geometry</label>
+      <label class="check"><input id="fdm-thumbnails" type="checkbox"> embed preview images (fdm)</label>
       <button id="submit" type="button" class="primary">Submit job</button>
     </div>
     <textarea id="config" spellcheck="false" placeholder="{}"></textarea>
@@ -60,7 +61,10 @@
       hover the state of a failed job for its error message, and use
       <span class="mono">Preview</span> to read the result itself in the panel below the table.
       <span class="mono">capture geometry</span> adds <span class="mono">?geometry=1</span> to the
-      submission so the <span class="mono">Layer geometry</span> panel below has something to draw.</p>
+      submission so the <span class="mono">Layer geometry</span> panel below has something to draw.
+      <span class="mono">embed preview images</span> sets <span class="mono">gcode_thumbnails</span>
+      in the config of <span class="mono">fdm</span> only, which makes the engine project the model it
+      just sliced into the comments at the head of its G-code.</p>
   </section>
 
   <section class="card">
@@ -97,6 +101,13 @@
       <label class="check"><input id="geometry-outline" type="checkbox" checked> outline</label>
       <label class="check"><input id="geometry-fill" type="checkbox" checked> infill</label>
       <label class="check"><input id="geometry-support" type="checkbox" checked> support</label>
+      <span class="geometry-views">
+        <button id="geometry-view-layer" type="button" class="active">Layer</button>
+        <button id="geometry-view-stack" type="button">Stack</button>
+        <button id="geometry-view-side" type="button">Side</button>
+        <button id="geometry-view-path" type="button">Path</button>
+      </span>
+      <label class="check"><input id="geometry-order" type="checkbox"> order</label>
       <button id="geometry-fit" type="button">Fit</button>
     </div>
     <div id="geometry-stage" class="geometry-stage" hidden>
@@ -107,17 +118,37 @@
       terminal state; <span class="mono">Cancel</span> only asks the pipeline to stop, and it does so
       at its next safe point. The server keeps snapshots for the last few jobs only, so an older row
       can report that its snapshot is gone - the panel states the server's own answer verbatim.
-      Scroll to zoom, drag to pan; contours are drawn with a constant line width at every zoom level.</p>
+      Scroll to zoom, drag to pan; contours are drawn with a constant line width at every zoom level.
+      <span class="mono">Stack</span> and <span class="mono">Side</span> draw at most
+      <span class="mono">12</span> sampled layers, and only <span class="mono">Path</span> shows the
+      real continuous toolpath a spiral run deposited (it needs <span class="mono">spiral_mode</span>
+      in the config of <span class="mono">fdm</span>, <span class="mono">tdp</span> or
+      <span class="mono">waam</span>). In those two stacked views a line between neighbouring rings is
+      the travel a run would take, not measured data.</p>
   </section>
 
   <section class="card">
-    <h2 id="preview-title">Result preview
+    <h2>
+      <span id="preview-title">Result preview</span>
+      <button id="package-browse" type="button">Images</button>
       <button id="preview-clear" type="button" class="ghost">Clear</button>
     </h2>
     <p id="preview-meta" class="muted">no result previewed yet</p>
     <pre id="preview" class="preview" hidden></pre>
+    <div id="gcode-thumbnails" class="thumbnail-stage" hidden></div>
+    <div id="package-stage" class="package-stage" hidden>
+      <img id="package-image" alt="package image">
+      <div class="row">
+        <button id="package-prev" type="button" title="previous image">Prev</button>
+        <button id="package-next" type="button" title="next image">Next</button>
+      </div>
+    </div>
+    <p id="package-meta" class="muted"></p>
     <p class="muted">Only the start of a text result is rendered (G-code from a real model is far
-      larger than this panel); <span class="mono">Result</span> still downloads the whole file.</p>
+      larger than this panel); <span class="mono">Result</span> still downloads the whole file.
+      Preview images embedded in that start are drawn under it, and <span class="mono">Images</span>
+      opens the pictures inside a packed result (<span class="mono">sla</span> and the other
+      package-writing kinds), one layer at a time.</p>
   </section>
 
   <section class="card">

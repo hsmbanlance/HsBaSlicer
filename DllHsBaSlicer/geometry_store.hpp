@@ -44,6 +44,9 @@ struct GeometrySnapshot
     std::vector<PolygonsD> supports;            ///< Support cross sections per layer
     std::vector<double> zs;                     ///< Layer platform heights (mm)
     std::vector<BoundsD> bounds;                ///< Layer bounds, same size as the layer count
+    std::vector<double> path_xyz;               ///< Flattened x,y,z triples of a continuous path (mm).
+                                                ///< A spiral/vase run stores the helix it deposited; empty =
+                                                ///< this run had no continuous path at all.
 };
 
 /**
@@ -53,11 +56,15 @@ struct GeometrySnapshot
  * @param fills Infill or floor rings per layer; pass an empty vector when the process has none.
  * @param supports Support rings per layer; pass an empty vector when the process has none.
  * @param zs Platform height of each layer, normally the pipeline's layer_z_heights.
+ * @param path_xyz Flattened x,y,z triples of the continuous path the same run deposited
+ *        (the spiralized wall of a vase-mode run). The path must belong to the layers
+ *        passed in: it is stored together with them and cannot be changed afterwards.
+ *        Leave empty when the run only emits per-layer rings.
  * @return Snapshot id to store in the result struct, or 0 when there is nothing to show.
  */
 long long CaptureLayerGeometry(HsBaPipelineKind kind, const std::vector<PolygonsD>& outlines,
                                const std::vector<PolygonsD>& fills, const std::vector<PolygonsD>& supports,
-                               const std::vector<double>& zs);
+                               const std::vector<double>& zs, const std::vector<double>& path_xyz = {});
 
 /** @brief Layer count of a live snapshot, 0 when the id is unknown or recycled. */
 int SnapshotLayerCount(long long geometry_id);
@@ -67,6 +74,15 @@ int SnapshotLayerCount(long long geometry_id);
  * @return 1 on success; 0 leaves @p out zeroed for an unknown id or an out-of-range layer.
  */
 int ExportLayerGeometry(long long geometry_id, int layer_index, HsBaLayerGeometry_t* out);
+
+/** @brief Point count of a live snapshot's continuous path, 0 when unknown or it has none. */
+int PathPointCount(long long geometry_id);
+
+/**
+ * @brief Serialise a snapshot's continuous path into a single malloc block and point @p out at it.
+ * @return 1 on success; 0 leaves @p out zeroed for an unknown id or a run without a path.
+ */
+int ExportGeometryPath(long long geometry_id, HsBaGeometryPath_t* out);
 
 /** @brief Add a host reference to a live snapshot; returns the id, or 0 when it is gone. */
 long long RetainSnapshot(long long geometry_id);

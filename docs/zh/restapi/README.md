@@ -84,6 +84,9 @@ ini 未给出对应值时生效（镜像因此可以不含 token）。文件缺�
 | `POST` | `/api/jobs/{id}/cancel` | 请求取消：运行中 → `202` 置位，排队中 → `202` 直接摘除，终态 → `409`，未知 → `404`。 | 作业队列（`cancel_flag`） |
 | `GET` | `/api/jobs/{id}/geometry` | 几何摘要（层数 + 全局包围盒）；`?full=1` 时额外展开逐层 `z_heights` / `layer_bounds`。 | `HsBaGeometryLayerCount` |
 | `GET` | `/api/jobs/{id}/geometry/{layer}` | 单层环数据（轮廓 / 填充 / 支撑，坐标为扁平数值数组）。 | `HsBaGetLayerGeometry` |
+| `GET` | `/api/jobs/{id}/geometry/path` | 螺旋运行那条连续工具路径，坐标为扁平 `x,y,z` 三元组；其他运行一律 `404`。 | `HsBaGetGeometryPath` |
+| `GET` | `/api/jobs/{id}/package` | 结果包（zip）的条目清单：名字、字节数、媒体类型；单文件结果返回 `404`。 | 用 miniz 直读 `output_path` |
+| `GET` | `/api/jobs/{id}/package/{entry}` | 包内单个条目的字节，类型由扩展名推出；`{entry}` 可以带目录。 | 用 miniz 直读 `output_path` |
 | `DELETE` | `/api/jobs/{id}` | 删除排队中或已终态的作业（运行中拒绝），只解除上传关联。 | 作业队列 |
 | `GET` | `/api/uploads?state=&offset=&limit=` | 列出上传池条目（`pending`/`in_use`/`terminal`）。 | 上传池 |
 | `GET` | `/api/uploads/{id}` | 单条上传详情。 | 上传池 |
@@ -131,7 +134,9 @@ cancel` 会得到 `409 job already finished`，但作业记录仍可查。
 
 `POST /api/jobs/{kind}?geometry=1`（也接受 `geometry=true`）在服务端把结构体的
 `capture_geometry` 置 1。该开关**不属于配置字段表**，因此不会出现在 `default-config`、请求体
-校验、proto 消息或参数宽表中；`custom` 与 `filetransfer` 不采集几何，这两个端点永远返回 `404`。
+校验、proto 消息或参数宽表中；`custom` 与 `filetransfer` 不采集几何，这三个端点永远返回 `404`。
+**螺旋运行**（`fdm`、`tdp`、`waam` 配置里的 `spiral_mode = 1`）除了逐层环以外还会存下它挤出
+的那一条不间断直线，由下文的 `/geometry/path` 提供；摘要里的 `has_path` 会告诉你该不该去请求它。
 
 ### `GET /api/jobs/{id}/geometry`
 
@@ -141,14 +146,16 @@ cancel` 会得到 `409 job already finished`，但作业记录仍可查。
   "geometry_id": 12,
   "layer_count": 214,
   "bounds": [0.0, 0.0, 68.4, 51.2],
+  "has_path": 1,
   "z_heights": [0.2, 0.4],
   "layer_bounds": [0.0, 0.0, 68.4, 51.2, 0.0, 0.0, 67.9, 50.8]
 }
 ```
 
-`z_heights` 与 `layer_bounds` **仅在 `?full=1` 时输出**；默认响应只有前四个字段（`layer_count` 可达
+`z_heights` 与 `layer_bounds` **仅在 `?full=1` 时输出**；默认响应只有前五个字段（`layer_count` 可达
 上千，故不全量展开）。`geometry_id` 对原生宿主直接可用（同一进程内可传给 `HsBaGetLayerGeometry`），
-对 HTTP 客户端只是个不透明数字。
+对 HTTP 客户端只是个不透明数字。`has_path` 只在 `GET /api/jobs/{id}/geometry/path` 能成功时为 `1`，
+因此客户端不必对“没有连续路径”的运行去碰运气。
 
 ### `GET /api/jobs/{id}/geometry/{layer}`
 
@@ -172,6 +179,88 @@ cancel` 会得到 `409 job already finished`，但作业记录仍可查。
 `404 layer index out of range`（`detail` 带 `layer_count=N`），非数字层号返回
 `400 layer index must be a non-negative integer`，快照被进程内池上限（环境变量
 `HSBA_GEOMETRY_POOL_MAX`，默认 4）回收后返回 `404 geometry snapshot is no longer available`。
+
+### `GET /api/jobs/{id}/geometry/path`
+
+```json
+{
+  "id": "7f3c1a2b",
+  "geometry_id": 12,
+  "point_count": 5210,
+  "xyz": [34.1, 21.8, 0.2, 34.3, 21.8, 0.2, 34.5, 21.9, 0.4],
+  "bounds": [0.0, 0.0, 68.4, 51.2],
+  "z_range": [0.2, 42.8]
+}
+```
+
+`xyz` 是一个长度 `3 * point_count` 的扁平毫米数组（`x0,y0,z0,x1,y1,z1,...`），按**挤出顺序**存放整条
+折线；`z` 沿数组单调不减，因为每个点带的是它所属那层的高度。这条线是开放的——没有 `closed` 标志
+——由客户端把相邻点直接连成直线，因为这些直线正是喷嘴走过的轨迹（包括逐层环视图无法展示的
+空驶段）。只有螺旋运行有这条线，本服务其他任何运行都不会产生它。
+
+错误阶梯在上面那套之外多一层：`404 job not found`（id 未知）、`detail=submit with ?geometry=1` 的
+`404 job captured no layer geometry`（提交时没要快照）、`404 geometry snapshot is no longer available`
+（已被池回收），以及 `404 job emitted no continuous path` 且 `detail=spiral_mode=1`——快照存在、层也
+有，只是这次运行不是螺旋的，没有折线可给。`path` 是保留段：URL 里字面量 `path` 会被本端点拿走，
+因此它不是一个合法的 `{layer}` 取值。
+
+## 结果包条目
+
+有些流水线最后写出一个压缩包（SLA 总是如此；SLS、SLM、LOM、TDP 通过各自的导出 Lua 做到）。
+`/result` 只能把包当成一个不透明的下载文件递出去，因此这里多两个只读路由：一个列条目，一个递
+单个条目的字节。两者都不引入任何状态——包已在磁盘上、作业已完成，所以每次请求直接打开它。
+
+### `GET /api/jobs/{id}/package`
+
+```json
+{
+  "id": "7f3c1a2b",
+  "name": "result.zip",
+  "entry_count": 6,
+  "entries": [
+    { "path": "config.json", "size": 412, "uncompressed_size": 1180, "media_type": "application/json" },
+    { "path": "layers/layer_0.png", "size": 5033, "uncompressed_size": 18241, "media_type": "image/png" }
+  ]
+}
+```
+
+`path` 是**压缩包内存放的原样名字**，用 `/` 分隔；`name` 是流水线写出的包文件名本身（永远不包含
+目录）。`size` 是压缩后字节数，`uncompressed_size` 是展开后的字节数；`media_type` 由扩展名推得，
+与 `GET /package/{entry}` 发出的 `Content-Type` 同一张表。目录条目会被跳过，所以 `entry_count` 只数文件。
+
+内置 SLA 导出器写入 `config.json`、`layers/layer_N.png|jpg|svg`、`floor/floor_raft.*` 与
+`supports/layer_N.*`——但渲染为空的层**根本不写入** zip，所以层号不一定连续，总数只是下界。SLS、
+SLM、LOM、TDP 的条目名来自调用方提供的导出 Lua，它存什么都有可能：清单对「你问的这一次作业」是准确
+的，但**不是可供代码依赖的稳定契约**。
+
+### `GET /api/jobs/{id}/package/{entry}`
+
+把单个条目以原字节发出，媒体类型由扩展名决定——`image/png`、`image/jpeg`、`image/svg+xml`、
+`application/json`，`.txt`/`.gcode`/`.nc` 为 `text/plain; charset=utf-8`，其余为
+`application/octet-stream`。`{entry}` 是贪婪匹配，因此 `layers/layer_0.png` 这样的存内目录可以直接按
+写法访问；但 URL 的每一段仍需客户端各自做百分号编码。
+
+所有响应都带 `X-Content-Type-Options: nosniff`，误标的条目不会被浏览器重新解读。`image/svg+xml`
+响应额外带 `Content-Security-Policy: default-src 'none'`：包里的 SVG 出自导出脚本，可信度和其他
+结果字节持平，该头是所有会执行其脚本的上下文（`<img>` 引用不会）的兜底。
+
+### 两个包路由的错误阶梯
+
+前几层与 `/result` 完全相同且同序，已经处理过 `/result` 的客户端不需要新的错误词表：
+
+| 状态 | `message` | `detail` | 何时 |
+| --- | --- | --- | --- |
+| `400` | `invalid package entry name` | 条目名 | 仅条目路由，且在查作业**之前**就校验：名字为空、超 512 字节、以 `/` 开头、含反斜杠、含控制字符或任意位置含 `..`。中间的 `/` 合法。 |
+| `401` | `missing credentials` / `invalid credentials` | 发送提示 / 不匹配说明 | `[auth]` 的 pre-routing 关卡，与非公开端点一致；它先于两个包处理函数。 |
+| `404` | `job not found` | 作业 id | id 未知。 |
+| `409` | `job was cancelled` | 作业 id | 已取消的作业没有可用结果。 |
+| `409` | `job not finished successfully` | 作业 id | 仍为 `queued` / `running` / `failed`。 |
+| `404` | `result is not a package` | `inline result`；完全没有结果时为作业 id | 流水线内联回答（FDM G-code）或什么都没写出。 |
+| `404` | `package not readable` | 包文件名本身 | 文件已不在、不是 zip、或打不开。永不报出服务端工作目录。 |
+| `404` | `package entry not found` | 条目名 | 这个包里没这个条目。 |
+| `409` | `package entry too large` | 条目名 | `uncompressed_size` 超过 32 MiB（`PACKAGE_ENTRY_MAX_BYTES`）。该判定在分配任何字节**之前**直接用包内记录完成，所以恶意的占位条目无法让本进程展开出 GB 级内存。 |
+
+`404` 回答从不复述包路径；条目名检查先于一切运行，意味着路径穿越尝试在没碰文件系统之前就被拒掉。
 
 ## 模型文件上传
 
@@ -295,16 +384,19 @@ node server.js --rest-url http://127.0.0.1:8080 --token "$HSBA_REST_AUTH_TOKEN"
 3. 轮询 `GET /api/jobs/{id}` 直到 `state` 为 `success`、`failed` 或 `cancelled`。
 4. 成功后取 `GET /api/jobs/{id}/result`。
 5. （可选）提交时加 `?geometry=1`，终态后用 `GET /api/jobs/{id}/geometry` 拿摘要、
-   `GET /api/jobs/{id}/geometry/{layer}` 拿单层轮廓做预览绘制。
-6. （可选）`POST /api/jobs/{id}/cancel` 中途取消；取消后 `result` 端点返回 `409`。
+   `GET /api/jobs/{id}/geometry/{layer}` 拿单层轮廓做预览绘制；摘要里 `has_path` 为 1 时，
+   再用 `GET /api/jobs/{id}/geometry/path` 取整条连续路径。
+6. （可选）结果是压缩包时（SLA 总是如此），`GET /api/jobs/{id}/package` 列条目，`GET /api/jobs/{id}/package/{entry}`
+   取其中一张层图，不必先下载整个包。
+7. （可选）`POST /api/jobs/{id}/cancel` 中途取消；取消后 `result` 端点返回 `409`。
 
 ## 错误
 
 失败响应统一为 `{code, message, detail}` JSON / `<Error>` XML：`400` kind/body/config 转换非法
-或缺 multipart part（几何层号非非负整数也在此列）、`401` 缺凭据或凭据不匹配（附 `WWW-Authenticate: Bearer realm="HsBaSlicer"`）、
-`404` 作业/上传/key 不存在，或几何未采集 / 快照已回收 / 层号越界、`409` 作业未完成（取结果）、
+或缺 multipart part（几何层号非非负整数、包条目名不合法也在此列）、`401` 缺凭据或凭据不匹配（附 `WWW-Authenticate: Bearer realm="HsBaSlicer"`）、
+`404` 作业/上传/key 不存在，或几何未采集 / 快照已回收 / 层号越界 / 结果不是包 / 包读不了 / 条目不存在、`409` 作业未完成（取结果）、
 已取消（取结果，`job was cancelled`）、仍在运行（删除作业）、已终态（取消请求），或上传仍被作业引用
-（删除上传）、`413` 模型文件超过 `[upload] max_file_mb`、`429` 队列已满、`503` 未配置 ParamStore
+（删除上传）、条目展开后超过 32 MiB（`package entry too large`）、`413` 模型文件超过 `[upload] max_file_mb`、`429` 队列已满、`503` 未配置 ParamStore
 或未启用模型上传 / 上传池已满。`DELETE /api/jobs/{id}` 与 `DELETE /api/uploads/{id}` 成功
 返回 `204`；`POST /api/jobs/{id}/cancel` 成功返回 `202`（取消尚在展开中，不是已完成）。
 

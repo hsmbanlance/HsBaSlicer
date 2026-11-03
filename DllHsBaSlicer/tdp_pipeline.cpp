@@ -18,6 +18,7 @@
 #include "LibHsBaSlicer/Extends/LuaCommonTypes.hpp"
 #include "LibHsBaSlicer/Fill/polygon_fill.hpp"
 #include "LibHsBaSlicer/Path/sls_export.hpp"
+#include "LibHsBaSlicer/Path/spiral_path.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
 #include "base/coroutine.hpp"
@@ -325,7 +326,21 @@ Utils::Task<InternalTdpResult> RunTdpPipelineAsync(const InternalTdpConfig& cfg)
             {
                 geometry_zs[i] = static_cast<double>(layer_z_heights[i]);
             }
-            result.geometry_id = CaptureLayerGeometry(HSBA_PIPELINE_TDP, layer_outlines, {}, {}, geometry_zs);
+            // Spiral runs deposit one continuous rising path, so publish the same helix the
+            // exporter derives from these contours (SpiralizeOuterWall is a pure function).
+            std::vector<double> path_xyz;
+            if (cfg.spiral_mode)
+            {
+                const std::vector<SpiralPoint> helix = SpiralizeOuterWall(layer_outlines, geometry_zs);
+                path_xyz.reserve(helix.size() * 3);
+                for (const SpiralPoint& point : helix)
+                {
+                    path_xyz.push_back(point.x);
+                    path_xyz.push_back(point.y);
+                    path_xyz.push_back(point.z);
+                }
+            }
+            result.geometry_id = CaptureLayerGeometry(HSBA_PIPELINE_TDP, layer_outlines, {}, {}, geometry_zs, path_xyz);
         }
 
         ReportProgress(cfg, 60, "Exporting via Lua script...");

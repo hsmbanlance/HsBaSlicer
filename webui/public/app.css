@@ -209,6 +209,31 @@ td.path.has-value:hover { color: var(--accent); }
 .geometry-fill path { stroke: var(--ok); stroke-width: 0.7; opacity: 0.7; }
 .geometry-support path { stroke: var(--warn); stroke-width: 0.7; stroke-dasharray: 3 2; }
 
+/* The four ways of looking at one snapshot. The pressed button is the page's own state, held as a
+   class rather than :checked, because these are buttons and not radio inputs. */
+.geometry-views { display: inline-flex; gap: 4px; }
+.geometry-views button.active { border-color: var(--accent); color: var(--accent); }
+/* A projected drawing turns under the pointer instead of sliding, so the cursor promises that. */
+.geometry-stage.geometry-3d { cursor: crosshair; }
+
+/* Category colours belong to the drawing only while nothing is coloured by sequence: the page sets
+   stroke as a presentation attribute when order is on, and an unscoped rule would outrank it. */
+svg:not(.geometry-ordered) .geometry-outline path { stroke: var(--accent); }
+svg:not(.geometry-ordered) .geometry-fill path { stroke: var(--ok); }
+svg:not(.geometry-ordered) .geometry-support path { stroke: var(--warn); }
+svg.geometry-ordered path { stroke-width: 0.8; }
+.geometry-arrow path { fill: var(--accent); stroke: none; }
+
+/* A stack is read as a height field, so only the layer the eye is meant to rest on stays opaque. */
+.geometry-layer { opacity: 0.55; }
+.geometry-focus { opacity: 1; }
+.geometry-path path {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke: var(--accent);
+  stroke-width: 1.2;
+}
+
 input[type="range"] { flex: 1 1 220px; accent-color: var(--accent); }
 
 /* Job result text: scrollable like the log, but height-dependent so a short preview stays compact. */
@@ -225,6 +250,27 @@ input[type="range"] { flex: 1 1 220px; accent-color: var(--accent); }
   font-family: inherit;
 }
 #preview-meta { margin-top: 0; }
+
+/* Preview images, from either source: the blocks an FDM run embeds in its own G-code, and the
+   entries of a packed result. They are rasterised at a fixed edge and scaled up here, so pixels are
+   kept hard-edged; the black plate is what a letterboxed image or a transparent SVG rests on. */
+.thumbnail-stage { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+/* An author display rule wins over the stylesheet the browser ships for [hidden], so each of the
+   two strips has to state its own hidden form - as the geometry stage already does. */
+.thumbnail-stage[hidden] { display: none; }
+.thumbnail-stage img, #package-image {
+  image-rendering: pixelated;
+  background: #000;
+  border: 1px solid var(--line);
+  max-width: 260px;
+  max-height: 260px;
+  object-fit: contain;
+}
+.thumbnail-note { color: var(--warn); }
+.thumbnail-label { color: var(--muted); font-size: 12px; align-self: center; }
+#package-stage { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+#package-stage[hidden] { display: none; }
+#package-meta { color: var(--muted); }
 
 #log {
   height: 180px;

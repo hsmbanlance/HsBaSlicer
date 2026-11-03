@@ -75,6 +75,8 @@ void FdmConfigToMsg(const HsBaFdmPipelineConfig_t& config, HsbaProto::msg_fdm_pi
 
     msg->set_fdm_pipe_config_spiral_mode(config.spiral_mode != 0);
     msg->set_fdm_pipe_config_randomize_start_point(config.randomize_start_point != 0);
+    msg->set_fdm_pipe_config_gcode_thumbnails(config.gcode_thumbnails != 0);
+    msg->set_fdm_pipe_config_gcode_thumbnail_size(config.gcode_thumbnail_size);
 }
 
 void FdmResultToMsg(const HsBaFdmPipelineResult_t& result, HsbaProto::msg_fdm_pipe_result* msg)

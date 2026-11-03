@@ -223,9 +223,26 @@ HSBA_SLICER_API int         HsBaGetLayerGeometry(long long geometry_id, int laye
 HSBA_SLICER_API void        HsBaFreeLayerGeometry(HsBaLayerGeometry_t* geom);
 HSBA_SLICER_API long long   HsBaRetainGeometrySnapshot(long long geometry_id);
 HSBA_SLICER_API void        HsBaReleaseGeometrySnapshot(long long geometry_id);
+
+typedef struct HsBaGeometryPath {
+    int point_count;          /* xyz triples held by this snapshot; 0 when none was stored */
+    const double* xyz;        /* x0,y0,z0,x1,y1,z1,...; length 3 * point_count */
+    double bounds_min[2]; double bounds_max[2];   /* min/max over x and y */
+    double z_min; double z_max;                   /* lowest and highest point of the line */
+} HsBaGeometryPath_t;
+
+HSBA_SLICER_API int         HsBaGeometryPathPointCount(long long geometry_id);
+HSBA_SLICER_API int         HsBaGetGeometryPath(long long geometry_id, HsBaGeometryPath_t* path);
+HSBA_SLICER_API void        HsBaFreeGeometryPath(HsBaGeometryPath_t* path);
 ```
 
 Coordinates are in millimetres and `xy` is a flat array of length `2 * point_count` (`x0,y0,x1,y1,...`). `closed == 1` marks a contour that repeats its first vertex, `0` an open polyline (a fill line). `bounds_min/max` span every ring of the layer so a GUI can auto-scale.
+
+### The continuous toolpath
+
+Per-layer rings are a cross-section: they say where a layer is, not in which order the machine visited it, and nothing in them connects one layer to the next. A run that extrudes one uninterrupted line (a spiral / vase run) additionally stores that line as a real 3D polyline, raised per point by its own `z`. Only `spiral_mode = 1` in the config of **FDM, TDP or WAAM** writes it; SLS, SLM, LOM, SLA and every non-spiral run leave the path empty, which `HsBaGeometryPathPointCount()` reports as 0 and `HsBaGetGeometryPath()` answers with a failure return. A polyline has no `closed` flag: it is one sequence of segments, and the caller draws the straight lines between consecutive points because those lines are what the nozzle travelled.
+
+The path is exported with the same single-`malloc` contract as a layer (one `HsBaFreeGeometryPath()` call, no individual frees), and it lives in the same snapshot: retaining or releasing the snapshot keeps the path alive with it, and recycling the snapshot drops both together.
 
 ### Slots per process
 
@@ -273,11 +290,14 @@ if (layers > 0 && HsBaRetainGeometrySnapshot(gid) == gid) {
 
 **Geometry is readable only once the job is final**: capture happens in the pipeline's last stages, so `HsBaJobGeometryId` is 0 while the job is `PENDING` or `RUNNING`.
 
+The snapshot is taken **before** the exporter runs, from the same contours the exporter is about to consume; a spiral pipeline therefore computes the helix twice (once for the snapshot, once for the G-code). That is deliberate: `SpiralizeOuterWall` is a pure function of the layer rings and their heights, so both calls return the identical polyline, and the duplication buys a stable public signature for the exporters.
+
 ## 4. Failure Modes and Boundaries
 
 | Symptom | Cause and handling |
 | --- | --- |
 | `HsBaGeometryLayerCount(id)` returns 0 although the job succeeded | `capture_geometry` was 0 at submission, or the snapshot was recycled by the pool (preview fewer jobs, or `Retain` first) |
+| `HsBaGeometryPathPointCount(id)` returns 0 although the layer count is above 0 | The run was not a spiral one (`spiral_mode = 0`), or the pipeline has no such field (SLS / SLM / LOM / SLA); only layers are stored then |
 | The Cancel button "does not take effect immediately" | Cooperative cancellation only fires at stage/layer checkpoints; the step in progress is mesh loading or one Lua callback |
 | A cancelled job reads an empty result | `HsBaJobCopyResult` was called before waiting; call `HsBaWaitJob` first, or read only inside `on_done` |
 | `error_message` starts with `Cancelled` yet the job is reported as failed | The result structs have no state field, so a synchronous entry can only signal cancellation by prefix; use `HsBaJobGetState` or the REST `state` |
@@ -288,7 +308,7 @@ if (layers > 0 && HsBaRetainGeometrySnapshot(gid) == gid) {
 
 ```
 tests/GuiApi/progress_stage_test.cpp   -> gui_progress_stage_test    Text-to-enum coverage, normalising, out-of-range fallback
-tests/GuiApi/geometry_store_test.cpp   -> gui_geometry_store_test    Slot mapping, LRU limit, reference counting, empty capture
+tests/GuiApi/geometry_store_test.cpp   -> gui_geometry_store_test    Slot mapping, LRU limit, reference counting, empty capture, continuous path round-trip
 tests/GuiApi/job_control_test.cpp      -> gui_job_control_test       Non-blocking submit, cancellation state machine, callback thread, geometry read-back
 ```
 

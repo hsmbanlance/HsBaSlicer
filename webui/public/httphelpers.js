@@ -317,6 +317,496 @@ function layerPaths(layer, mirrorY) {
   return { outlines: drawn.outlines, fills: drawn.fills, supports: drawn.supports, counts: counts };
 }
 
+/* ---------------------------------------------------------------------------
+ * Orthographic projection helpers (stack / side / path views)
+ *
+ * The console has no 3D library and no intent to grow one, so a layer stack is drawn as two
+ * fixed orthographic projections. projectPoint rotates a model point about the printer z axis
+ * by yaw, then tilts the view down by pitch and keeps the horizontal screen axis plus the
+ * raised one. The result stays in model space (v grows upwards); the path builders below flip
+ * v because an SVG page grows downwards.
+ * ------------------------------------------------------------------------- */
+
+/** @brief The four ways the geometry panel can show one and the same snapshot. */
+const GEOMETRY_VIEWS = ["layer", "stack", "side", "path"];
+
+/** @brief Layers the stack and side views sample at most, however many a job has. */
+const GEOMETRY_STACK_LAYERS = 12;
+
+/** @brief Isometric-ish looking angle of the stack view, chosen so a short cylinder reads as one. */
+const GEOMETRY_STACK_ANGLES = { yaw: -0.6155, pitch: 0.5586 };
+
+/** @brief Front and side yaw of the side view; dragging swaps between the two. */
+const GEOMETRY_SIDE_YAWS = [0, Math.PI / 2];
+
+/** @brief Half-length of a direction arrow as a fraction of the visible box width. */
+const GEOMETRY_ARROW_HALF = 0.006;
+
+/**
+ * @brief Project one model point onto a viewing plane.
+ * @param {number} x Model x (mm).
+ * @param {number} y Model y (mm).
+ * @param {number} z Model z (mm).
+ * @param {number} yaw Rotation about the z axis (radians).
+ * @param {number} pitch Tilt of the camera towards the plane (radians, 0 = level, pi/2 = top down).
+ * @returns {{u: number, v: number}} Screen axes in model space: v grows upwards and away.
+ *
+ * With pitch pi/2 the camera looks straight down and the plane is the build plate
+ * ({u: x, v: -y}); with pitch 0 it looks along y and the plane is the XZ elevation ({u: x, v: z}).
+ */
+function projectPoint(x, y, z, yaw, pitch) {
+  const ca = Math.cos(Number(yaw) || 0);
+  const sa = Math.sin(Number(yaw) || 0);
+  const cp = Math.cos(Number(pitch) || 0);
+  const sp = Math.sin(Number(pitch) || 0);
+  const modelX = Number(x) || 0;
+  const modelY = Number(y) || 0;
+  const modelZ = Number(z) || 0;
+  const hx = modelX * ca + modelY * sa;
+  const hy = -modelX * sa + modelY * ca;
+  return { u: roundCoord(hx), v: roundCoord(-hy * sp + modelZ * cp) };
+}
+
+/** @brief How many points of one layer the stack view may draw before it starts dropping. */
+function stackBudget(layerCount) {
+  const layers = Math.max(1, Math.trunc(Number(layerCount)) || 1);
+  return Math.max(1, Math.floor(GEOMETRY_MAX_PATHS / layers));
+}
+
+/**
+ * @brief Bounding box of projected points, as an SVG viewBox.
+ * @param {{u: number, v: number}[]} points Projected points of everything that will be drawn.
+ * @param {number} padRatio Fraction of the longer side to add (defaults to GEOMETRY_VIEW_PAD).
+ * @returns {{d: string, x: number, y: number, w: number, h: number, cx: number, cy: number}}
+ *
+ * The y half of the box is built from negated v, because the paths this box frames are emitted
+ * in SVG space; a degenerate extent falls back to one millimetre so a single-point view still
+ * renders, and no points at all give the same empty view the layer view uses.
+ */
+function projectedViewBox(points, padRatio) {
+  const list = points || [];
+  if (!list.length) {
+    return { d: GEOMETRY_EMPTY_VIEW, x: 0, y: 0, w: 1, h: 1, cx: 0.5, cy: 0.5 };
+  }
+  let minU = Infinity;
+  let maxU = -Infinity;
+  let minV = Infinity;
+  let maxV = -Infinity;
+  for (const point of list) {
+    const u = Number(point && point.u);
+    const v = Number(point && point.v);
+    if (!Number.isFinite(u) || !Number.isFinite(v)) {
+      continue;
+    }
+    minU = Math.min(minU, u);
+    maxU = Math.max(maxU, u);
+    minV = Math.min(minV, v);
+    maxV = Math.max(maxV, v);
+  }
+  if (!Number.isFinite(minU) || !Number.isFinite(minV)) {
+    return { d: GEOMETRY_EMPTY_VIEW, x: 0, y: 0, w: 1, h: 1, cx: 0.5, cy: 0.5 };
+  }
+  const width = Math.max(0, maxU - minU);
+  const height = Math.max(0, maxV - minV);
+  const ratio = Number.isFinite(Number(padRatio)) ? Number(padRatio) : GEOMETRY_VIEW_PAD;
+  const pad = ratio * Math.max(width, height);
+  const w = (width > 0 ? width : 1) + 2 * pad;
+  const h = (height > 0 ? height : 1) + 2 * pad;
+  const cx = (minU + maxU) / 2;
+  const cy = (minV + maxV) / 2;
+  const x = roundView(cx - w / 2);
+  const y = roundView(-cy - h / 2);
+  return { d: x + " " + y + " " + roundView(w) + " " + roundView(h), x: x, y: y, w: roundView(w), h: roundView(h), cx: cx, cy: -cy };
+}
+
+/** @brief Projected vertices of one ring, or [] when it carries fewer than two usable points. */
+function projectedRingPoints(ring, z, angles) {
+  const xy = (ring && ring.xy) || [];
+  const pairs = Math.floor(xy.length / 2);
+  const declared = Number(ring && ring.point_count);
+  const count = Number.isFinite(declared) ? Math.min(Math.max(Math.trunc(declared), 0), pairs) : pairs;
+  if (count < 2) {
+    return [];
+  }
+  const height = Number(z) || 0;
+  const yaw = angles && angles.yaw;
+  const pitch = angles && angles.pitch;
+  const points = [];
+  for (let at = 0; at < count; at += 1) {
+    points.push(projectPoint(xy[2 * at], xy[2 * at + 1], height, yaw, pitch));
+  }
+  return points;
+}
+
+/** @brief "M u v L u v ..." of already projected points, in SVG space, " Z" when closed. */
+function projectedPolyline(points, closed) {
+  if (!points || points.length < 2) {
+    return "";
+  }
+  const parts = [];
+  for (let at = 0; at < points.length; at += 1) {
+    const u = roundCoord(points[at].u);
+    const v = roundCoord(-points[at].v);
+    parts.push((at === 0 ? "M " : " L ") + u + " " + v);
+  }
+  return closed ? parts.join("") + " Z" : parts.join("");
+}
+
+/**
+ * @brief Path data of one layer seen from a fixed camera, cut to a per-layer budget.
+ * @param {object[]} rings Contour/infill/support rings as the API reports them.
+ * @param {number} z Platform height every point of those rings sits on.
+ * @param {{yaw: number, pitch: number}} angles Camera angles.
+ * @param {number} limit How many paths this layer may contribute.
+ * @returns {{paths: string[], points: object[][], used: number, dropped: number}}
+ *
+ * points is aligned with paths so a direction arrow can be drawn per path. Unlike the layer view
+ * nothing is mirrored about the printer y axis: the projection already places the model, and
+ * dropping the mirror is what keeps the stack's layers in the same relative order.
+ */
+function projectedRingPaths(rings, z, angles, limit) {
+  const budget = Math.max(0, Math.trunc(Number(limit)) || 0);
+  const paths = [];
+  const points = [];
+  let used = 0;
+  let dropped = 0;
+  for (const ring of rings || []) {
+    const vertices = projectedRingPoints(ring, z, angles);
+    if (vertices.length < 2) {
+      continue;
+    }
+    used += 1;
+    if (used > budget) {
+      dropped += 1;
+      continue;
+    }
+    paths.push(projectedPolyline(vertices, ring.closed));
+    points.push(vertices);
+  }
+  return { paths: paths, points: points, used: used, dropped: dropped };
+}
+
+/**
+ * @brief Path data of a continuous toolpath (GET .../geometry/path).
+ * @param {number[]} xyz Flat x, y, z triples as the API reports them.
+ * @param {{yaw: number, pitch: number}} angles Camera angles.
+ * @returns {{d: string, points: object[]}} Single polyline plus its projected vertices.
+ *
+ * A trailing remainder of one or two numbers cannot form a point, so it is dropped instead of
+ * drawing half a vertex.
+ */
+function projectedPathPolyline(xyz, angles) {
+  const flat = xyz || [];
+  const total = Math.floor(flat.length / 3);
+  const points = [];
+  for (let at = 0; at < total; at += 1) {
+    points.push(projectPoint(flat[3 * at], flat[3 * at + 1], flat[3 * at + 2], angles && angles.yaw, angles && angles.pitch));
+  }
+  return { d: projectedPolyline(points, false), points: points };
+}
+
+/**
+ * @brief Layer indices to draw when a stack only has room for a handful.
+ * @param {number} count Total layers of the job.
+ * @param {number} want How many layers may be shown.
+ * @returns {{indices: number[], focus: number}} Sampled indices and the one to highlight.
+ *
+ * The first and the last layer are always taken, because a stack that hides the bottom or the
+ * top of a part misrepresents its height; focus is the middle sample, which is where the eye of
+ * a viewer reading bottom-up settles.
+ */
+function sampleLayers(count, want) {
+  const total = Math.max(0, Math.trunc(Number(count)) || 0);
+  const take = Math.max(1, Math.trunc(Number(want)) || 1);
+  if (total === 0) {
+    return { indices: [], focus: -1 };
+  }
+  if (total <= take) {
+    const all = [];
+    for (let at = 0; at < total; at += 1) {
+      all.push(at);
+    }
+    return { indices: all, focus: all[Math.floor((all.length - 1) / 2)] };
+  }
+  const indices = [];
+  for (let at = 0; at < take; at += 1) {
+    const value = at === take - 1 ? total - 1 : Math.round((at * (total - 1)) / (take - 1));
+    if (!indices.length || value > indices[indices.length - 1]) {
+      indices.push(value);
+    }
+  }
+  return { indices: indices, focus: indices[Math.floor((indices.length - 1) / 2)] };
+}
+
+/** @brief Hue range the order ramp walks: cool at the start of the run, warm at its end. */
+const GEOMETRY_HUE_START = 200;
+const GEOMETRY_HUE_END = 340;
+
+/** @brief HSL to #rrggbb, with the saturation and lightness the order ramp uses. */
+function hslToHex(hue, saturation, lightness) {
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const sector = (((hue % 360) + 360) % 360) / 60;
+  const second = chroma * (1 - Math.abs((sector % 2) - 1));
+  const legs =
+    sector < 1
+      ? [chroma, second, 0]
+      : sector < 2
+        ? [second, chroma, 0]
+        : sector < 3
+          ? [0, chroma, second]
+          : sector < 4
+            ? [0, second, chroma]
+            : sector < 5
+              ? [second, 0, chroma]
+              : [chroma, 0, second];
+  const shift = lightness - chroma / 2;
+  return (
+    "#" +
+    legs
+      .map((leg) => Math.round((leg + shift) * 255).toString(16).padStart(2, "0"))
+      .join("")
+  );
+}
+
+/**
+ * @brief Color of one deposited element, so the order of a run is readable without animating it.
+ * @param {number} index Position inside the sequence.
+ * @param {number} total Size of the sequence.
+ * @returns {string} "#rrggbb" between GEOMETRY_HUE_START and GEOMETRY_HUE_END.
+ */
+function sequenceColor(index, total) {
+  const size = Math.trunc(Number(total)) || 0;
+  const at = Math.trunc(Number(index)) || 0;
+  const hue = size <= 1 ? (GEOMETRY_HUE_START + GEOMETRY_HUE_END) / 2 : GEOMETRY_HUE_START + ((GEOMETRY_HUE_END - GEOMETRY_HUE_START) * at) / (size - 1);
+  return hslToHex(hue, 0.75, 0.6);
+}
+
+/**
+ * @brief Small triangle marking where a deposited sequence is heading.
+ * @param {{u: number, v: number}[]} points Projected vertices of one polyline.
+ * @param {{w: number, h: number}} view Visible box, so the mark keeps its size at any zoom fit.
+ * @returns {string[]} One "M ... Z" path, or [] when the polyline has no direction to show.
+ *
+ * The arrow sits on the longest segment of the polyline: a ring's seam is where the run turned
+ * around, and that is the one place a viewer needs the heading spelled out.
+ */
+function arrowMark(points, view) {
+  const list = points || [];
+  if (list.length < 2) {
+    return [];
+  }
+  const span = Math.max(Number(view && view.w), Number(view && view.h));
+  const half = Number.isFinite(span) && span > 0 ? span * GEOMETRY_ARROW_HALF : 0;
+  if (!(half > 0)) {
+    return [];
+  }
+  let best = -1;
+  let length = 0;
+  for (let at = 1; at < list.length; at += 1) {
+    const dx = Number(list[at].u) - Number(list[at - 1].u);
+    const dy = Number(list[at].v) - Number(list[at - 1].v);
+    const segment = Math.hypot(dx, dy);
+    if (segment > length) {
+      length = segment;
+      best = at;
+    }
+  }
+  if (best < 1 || !(length > 0)) {
+    return [];
+  }
+  const ux = (list[best].u - list[best - 1].u) / length;
+  const vy = (list[best].v - list[best - 1].v) / length;
+  const mx = (list[best].u + list[best - 1].u) / 2;
+  const my = (list[best].v + list[best - 1].v) / 2;
+  const tip = { u: mx + ux * half, v: my + vy * half };
+  const left = { u: mx - vy * half, v: my + ux * half };
+  const right = { u: mx + vy * half, v: my - ux * half };
+  return [projectedPolyline([tip, left, right], true)];
+}
+
+/* ---------------------------------------------------------------------------
+ * Result package entries and G-code preview images
+ *
+ * Both features read what the engine already puts in a response: a packed export keeps its layer
+ * images inside the result archive, and an FDM run can embed projections of the model it sliced as
+ * comment blocks at the head of its G-code. Neither needs a decoder here - a picture is handed to an
+ * <img> element and the browser does the rest - so everything below only names, orders and bounds.
+ * ------------------------------------------------------------------------- */
+
+/** @brief Preview blocks one G-code header may contribute, however many it carries. */
+const GCODE_THUMBNAIL_MAX_BLOCKS = 8;
+
+/** @brief Base64 characters one block may contribute before the reader stops collecting. */
+const GCODE_THUMBNAIL_MAX_B64 = 4 * 1024 * 1024;
+
+/** @brief Package media types the console can put into an image element. */
+const PACKAGE_IMAGE_MEDIA_TYPES = { "image/png": 1, "image/jpeg": 1, "image/svg+xml": 1 };
+
+/** @brief Image formats a thumbnail block may declare, and the data URI type each one needs. */
+const THUMBNAIL_FORMAT_TYPES = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", svg: "image/svg+xml" };
+
+/** @brief Space-separated k=v text of a thumbnail header line, as an object of strings. */
+function thumbnailFields(text) {
+  const fields = {};
+  for (const token of String(text || "").trim().split(/\s+/)) {
+    const at = token.indexOf("=");
+    if (at > 0) {
+      fields[token.slice(0, at)] = token.slice(at + 1);
+    }
+  }
+  return fields;
+}
+
+/**
+ * @brief Preview image blocks written into the comments at the head of a G-code result.
+ * @param {string} text Result text (the whole file, or just its head - the blocks are always first).
+ * @returns {Array<{name: string, width: number, height: number, format: string, data: string,
+ *            skipped: boolean, reason: string}>} In file order, empty when the run embedded none.
+ *
+ * Reading stops at the first line that is not a comment, because a block never appears below the
+ * header: that is what keeps this cheap on a several-megabyte file. A block whose end line was never
+ * reached (a truncated preview, say) is dropped rather than shown as a half picture, and a skip
+ * notice is returned as an entry of its own so the panel can state why a view is missing.
+ */
+function parseGcodeThumbnails(text) {
+  const blocks = [];
+  let current = null;
+  for (const raw of String(text || "").split("\n")) {
+    const line = raw.replace(/\r$/, "");
+    if (!line.startsWith(";")) {
+      break;
+    }
+    if (blocks.length >= GCODE_THUMBNAIL_MAX_BLOCKS) {
+      break;
+    }
+    const skipped = /^;\s*thumbnail skipped\s+(.*)$/.exec(line);
+    if (skipped) {
+      const fields = thumbnailFields(skipped[1]);
+      blocks.push({
+        name: fields.name || "",
+        width: 0,
+        height: 0,
+        format: "",
+        data: "",
+        skipped: true,
+        reason: fields.reason || "render_failed",
+      });
+      continue;
+    }
+    const begin = /^;\s*thumbnail begin\s+(.*)$/.exec(line);
+    if (begin) {
+      const fields = thumbnailFields(begin[1]);
+      current = {
+        name: fields.name || "",
+        width: Number(fields.width) || 0,
+        height: Number(fields.height) || 0,
+        format: (fields.format || "png").toLowerCase(),
+        data: "",
+        skipped: false,
+        reason: "",
+      };
+      continue;
+    }
+    if (/^;\s*thumbnail end\b/.test(line)) {
+      if (current) {
+        blocks.push(current);
+      }
+      current = null;
+      continue;
+    }
+    if (current) {
+      const chunk = /^;\s*([A-Za-z0-9+/=]*)$/.exec(line);
+      if (chunk && current.data.length < GCODE_THUMBNAIL_MAX_B64) {
+        current.data += chunk[1];
+      }
+    }
+  }
+  return blocks;
+}
+
+/**
+ * @brief Data URI of one parsed preview block.
+ * @param {object} thumb Entry as @ref parseGcodeThumbnails reports it.
+ * @returns {string} "data:image/...;base64,...", "" when there is nothing to show.
+ *
+ * The console's content security policy already allows `img-src 'self' data:`, so an embedded image
+ * needs no relaxation and no second request; an unknown format is refused rather than guessed at.
+ */
+function thumbnailDataUrl(thumb) {
+  if (!thumb || thumb.skipped || !thumb.data) {
+    return "";
+  }
+  const type = THUMBNAIL_FORMAT_TYPES[String(thumb.format || "").toLowerCase()];
+  return type ? "data:" + type + ";base64," + thumb.data : "";
+}
+
+/**
+ * @brief Same-origin URL of one entry inside a job's result package.
+ * @param {string} id Job id.
+ * @param {string} entry Entry path as the package listing reported it ("layers/layer_0.png").
+ * @returns {string} Path a browser can put straight into an <img> src.
+ *
+ * Every component is encoded on its own, which is what lets a folder inside an archive survive the
+ * route's greedy tail capture without turning a slash into a separator the server would re-read.
+ */
+function packageEntryUrl(id, entry) {
+  const segments = String(entry || "").split("/").map((part) => encodeURIComponent(part)).join("/");
+  return "/api/jobs/" + encodeURIComponent(id) + "/package/" + segments;
+}
+
+/** @brief First run of digits in a name - the layer number an export file is ordered by. */
+function entryNumber(name) {
+  const digits = /(\d+)/.exec(String(name || ""));
+  return digits ? Number(digits[1]) : null;
+}
+
+/**
+ * @brief Images a result package holds, in the order a layer browser should walk them.
+ * @param {Array<{path: string, media_type: string}>} entries Entries of a package listing.
+ * @returns {object[]} The image entries, layer number ascending, unnamed ones kept last in server order.
+ *
+ * "layer_10" sorting after "layer_2" is the whole point: a package that is walked in the archive's own
+ * order would flip between the tenth and the second layer, which reads as a broken viewer.
+ */
+function packageImages(entries) {
+  const listed = (entries || [])
+    .map((entry, at) => ({ entry: entry, at: at, number: entryNumber(entry && entry.path) }))
+    .filter((item) => item.entry && PACKAGE_IMAGE_MEDIA_TYPES[item.entry.media_type]);
+  const numbered = listed
+    .filter((item) => item.number !== null)
+    .sort((a, b) => a.number - b.number || a.at - b.at);
+  const plain = listed.filter((item) => item.number === null);
+  return numbered.concat(plain).map((item) => item.entry);
+}
+
+/**
+ * @brief Patch submission flags into a config the operator is about to send.
+ * @param {string} text Config text exactly as it sits in the editor.
+ * @param {object} flags Keys to set on the configuration (numbers, as the ABI reads them).
+ * @returns {string} Re-serialized JSON, or @p text untouched when it is not a JSON object.
+ *
+ * The console submits whatever the editor holds, and a server may answer a default-config request as
+ * TOML or INI; rewriting such a config would break the submission, so a non-JSON body is passed
+ * through and the caller tells the operator its flags did not land.
+ */
+function applyConfigFlags(text, flags) {
+  const body = text || "";
+  const settings = flags || {};
+  let parsed;
+  try {
+    parsed = JSON.parse(body);
+  } catch (notJson) {
+    return body;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return body;
+  }
+  for (const key of Object.keys(settings)) {
+    parsed[key] = settings[key];
+  }
+  return JSON.stringify(parsed, null, 2);
+}
+
 globalThis.HsBaHttp = {
   PREVIEW_LIMIT_BYTES: PREVIEW_LIMIT_BYTES,
   GEOMETRY_ROUND_DIGITS: GEOMETRY_ROUND_DIGITS,
@@ -325,6 +815,11 @@ globalThis.HsBaHttp = {
   GEOMETRY_MAX_PATHS: GEOMETRY_MAX_PATHS,
   GEOMETRY_MIN_ZOOM: GEOMETRY_MIN_ZOOM,
   GEOMETRY_MAX_ZOOM: GEOMETRY_MAX_ZOOM,
+  GEOMETRY_VIEWS: GEOMETRY_VIEWS,
+  GEOMETRY_STACK_LAYERS: GEOMETRY_STACK_LAYERS,
+  GEOMETRY_STACK_ANGLES: GEOMETRY_STACK_ANGLES,
+  GEOMETRY_SIDE_YAWS: GEOMETRY_SIDE_YAWS,
+  GEOMETRY_ARROW_HALF: GEOMETRY_ARROW_HALF,
   roundCoord: roundCoord,
   mirrorLine: mirrorLine,
   clampZoom: clampZoom,
@@ -332,6 +827,22 @@ globalThis.HsBaHttp = {
   geometryView: geometryView,
   currentViewBox: currentViewBox,
   layerPaths: layerPaths,
+  projectPoint: projectPoint,
+  projectedViewBox: projectedViewBox,
+  projectedRingPaths: projectedRingPaths,
+  projectedPathPolyline: projectedPathPolyline,
+  stackBudget: stackBudget,
+  sampleLayers: sampleLayers,
+  sequenceColor: sequenceColor,
+  arrowMark: arrowMark,
+  GCODE_THUMBNAIL_MAX_BLOCKS: GCODE_THUMBNAIL_MAX_BLOCKS,
+  GCODE_THUMBNAIL_MAX_B64: GCODE_THUMBNAIL_MAX_B64,
+  PACKAGE_IMAGE_MEDIA_TYPES: PACKAGE_IMAGE_MEDIA_TYPES,
+  parseGcodeThumbnails: parseGcodeThumbnails,
+  thumbnailDataUrl: thumbnailDataUrl,
+  packageEntryUrl: packageEntryUrl,
+  packageImages: packageImages,
+  applyConfigFlags: applyConfigFlags,
   RESULT_EXTENSIONS: RESULT_EXTENSIONS,
   filenameFromDisposition: filenameFromDisposition,
   resultFilename: resultFilename,

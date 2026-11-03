@@ -15,6 +15,11 @@
  * it is done copying the data out. The three ring arrays are consecutive sections
  * of that block and outlines is always its first byte, which is why an empty
  * section still hands back a valid (shared) address rather than NULL.
+ *
+ * The continuous path read by HsBaGetGeometryPath follows the same contract: one
+ * malloc block, one matching HsBaFreeGeometryPath call, and the same lifetime as
+ * the layer geometry it belongs to (one snapshot, one reference count, recycled
+ * together by HSBA_GEOMETRY_POOL_MAX or HsBaReleaseGeometrySnapshot).
  * @author HsBa
  */
 #pragma once
@@ -60,6 +65,23 @@ extern "C"
     } HsBaLayerGeometry_t;
 
     /**
+     * @brief The continuous, Z-rising polyline a spiral/vase run deposited (millimetres).
+     *
+     * Unlike the per-layer rings, the polyline is already ordered and carries one
+     * distinct Z per point, so there is no open/closed flag and no layer slot to
+     * index. It is empty for every run that only emits per-layer rings.
+     */
+    typedef struct HsBaGeometryPath
+    {
+        int point_count;      ///< Number of xyz triples; 0 when nothing was stored
+        const double* xyz;    ///< Flattened x0,y0,z0,x1,y1,z1,...; length 3 * point_count
+        double bounds_min[2]; ///< min_x, min_y over the polyline
+        double bounds_max[2]; ///< max_x, max_y over the polyline
+        double z_min;         ///< Lowest point of the polyline (mm)
+        double z_max;         ///< Highest point of the polyline (mm)
+    } HsBaGeometryPath_t;
+
+    /**
      * @brief Layer count held by a snapshot.
      * @param geometry_id Snapshot id from a pipeline result (may be 0).
      * @return Layer count, 0 when the id is unknown or already recycled.
@@ -80,6 +102,28 @@ extern "C"
      * @param geom Layer geometry to free; may be NULL or already freed (then a no-op).
      */
     HSBA_SLICER_API void HsBaFreeLayerGeometry(HsBaLayerGeometry_t* geom);
+
+    /**
+     * @brief Point count of the continuous path a snapshot holds.
+     * @param geometry_id Snapshot id from a pipeline result (may be 0).
+     * @return Number of xyz triples, 0 when the id is unknown, recycled or the run
+     *         deposited no continuous path (every non-spiral run).
+     */
+    HSBA_SLICER_API int HsBaGeometryPathPointCount(long long geometry_id);
+
+    /**
+     * @brief Copy the continuous path of a snapshot into a freshly allocated block.
+     * @param geometry_id Snapshot id from a pipeline result.
+     * @param path Destination struct, overwritten on success and left zeroed on failure.
+     * @return 1 on success, 0 for an unknown snapshot, a run without a path or a NULL argument.
+     */
+    HSBA_SLICER_API int HsBaGetGeometryPath(long long geometry_id, HsBaGeometryPath_t* path);
+
+    /**
+     * @brief Release the block handed out by HsBaGetGeometryPath and zero the struct.
+     * @param path Path to free; may be NULL or already freed (then a no-op).
+     */
+    HSBA_SLICER_API void HsBaFreeGeometryPath(HsBaGeometryPath_t* path);
 
     /**
      * @brief Pin a snapshot so that the pool size limit cannot recycle it.

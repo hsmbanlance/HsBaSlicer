@@ -176,7 +176,7 @@ void EvictOverflow(long long just_captured)
 
 long long CaptureLayerGeometry(HsBaPipelineKind kind, const std::vector<PolygonsD>& outlines,
                                const std::vector<PolygonsD>& fills, const std::vector<PolygonsD>& supports,
-                               const std::vector<double>& zs)
+                               const std::vector<double>& zs, const std::vector<double>& path_xyz)
 {
     GeometrySnapshot snapshot;
     snapshot.kind = kind;
@@ -190,6 +190,9 @@ long long CaptureLayerGeometry(HsBaPipelineKind kind, const std::vector<Polygons
     {
         return 0;  // nothing was produced: the caller reports geometry_id 0 and no memory is held
     }
+    // A path without layers has nothing to belong to, so it is only stored once the
+    // snapshot itself is going to exist.
+    snapshot.path_xyz = path_xyz;
     snapshot.bounds.reserve(layer_count);
     for (std::size_t i = 0; i < layer_count; ++i)
     {
@@ -310,6 +313,94 @@ int ExportLayerGeometry(long long geometry_id, int layer_index, HsBaLayerGeometr
     return 1;
 }
 
+int PathPointCount(long long geometry_id)
+{
+    if (geometry_id <= 0)
+    {
+        return 0;
+    }
+    const std::lock_guard<std::mutex> lock(PoolMutex());
+    const auto it = Pool().find(geometry_id);
+    if (it == Pool().end())
+    {
+        return 0;
+    }
+    return static_cast<int>(it->second.snapshot.path_xyz.size() / 3);
+}
+
+int ExportGeometryPath(long long geometry_id, HsBaGeometryPath_t* out)
+{
+    if (!out)
+    {
+        return 0;
+    }
+    std::memset(out, 0, sizeof(HsBaGeometryPath_t));
+    if (geometry_id <= 0)
+    {
+        return 0;
+    }
+
+    const std::lock_guard<std::mutex> lock(PoolMutex());
+    const auto it = Pool().find(geometry_id);
+    if (it == Pool().end())
+    {
+        return 0;
+    }
+    // A trailing partial triple is not a point: only whole xyz triples are exported.
+    const std::vector<double>& stored = it->second.snapshot.path_xyz;
+    const std::size_t point_total = stored.size() / 3;
+    if (point_total == 0)
+    {
+        return 0;
+    }
+
+    // One block holds every coordinate, so the caller frees it exactly once.
+    const std::size_t xyz_bytes = point_total * 3 * sizeof(double);
+    void* block = std::malloc(xyz_bytes + alignof(double));
+    if (!block)
+    {
+        return 0;
+    }
+    double* xyz = static_cast<double*>(block);
+
+    double bounds_min[2] = {0.0, 0.0};
+    double bounds_max[2] = {0.0, 0.0};
+    double z_min = 0.0;
+    double z_max = 0.0;
+    for (std::size_t i = 0; i < point_total; ++i)
+    {
+        const double x = stored[3 * i];
+        const double y = stored[3 * i + 1];
+        const double z = stored[3 * i + 2];
+        xyz[3 * i] = x;
+        xyz[3 * i + 1] = y;
+        xyz[3 * i + 2] = z;
+        if (i == 0)
+        {
+            bounds_min[0] = bounds_max[0] = x;
+            bounds_min[1] = bounds_max[1] = y;
+            z_min = z_max = z;
+            continue;
+        }
+        bounds_min[0] = std::min(bounds_min[0], x);
+        bounds_min[1] = std::min(bounds_min[1], y);
+        bounds_max[0] = std::max(bounds_max[0], x);
+        bounds_max[1] = std::max(bounds_max[1], y);
+        z_min = std::min(z_min, z);
+        z_max = std::max(z_max, z);
+    }
+
+    out->point_count = static_cast<int>(point_total);
+    out->xyz = xyz;
+    out->bounds_min[0] = bounds_min[0];
+    out->bounds_min[1] = bounds_min[1];
+    out->bounds_max[0] = bounds_max[0];
+    out->bounds_max[1] = bounds_max[1];
+    out->z_min = z_min;
+    out->z_max = z_max;
+    return 1;
+}
+
 long long RetainSnapshot(long long geometry_id)
 {
     if (geometry_id <= 0)
@@ -388,6 +479,43 @@ extern "C"
         // The block starts at outlines, so freeing it releases the ring arrays and all coordinates.
         std::free(const_cast<HsBaRing_t*>(geom->outlines));
         std::memset(geom, 0, sizeof(HsBaLayerGeometry_t));
+    }
+
+    HSBA_SLICER_API int HsBaGeometryPathPointCount(long long geometry_id)
+    {
+        try
+        {
+            return HsBa::Slicer::Pipeline::PathPointCount(geometry_id);
+        }
+        catch (const HsBa::Slicer::RuntimeError&)
+        {
+            // NOLINTNEXTLINE(bugprone-empty-catch) C ABI: swallow, do not propagate across C boundary
+            return 0;
+        }
+    }
+
+    HSBA_SLICER_API int HsBaGetGeometryPath(long long geometry_id, HsBaGeometryPath_t* path)
+    {
+        try
+        {
+            return HsBa::Slicer::Pipeline::ExportGeometryPath(geometry_id, path);
+        }
+        catch (const HsBa::Slicer::RuntimeError&)
+        {
+            // NOLINTNEXTLINE(bugprone-empty-catch) C ABI: swallow, do not propagate across C boundary
+            return 0;
+        }
+    }
+
+    HSBA_SLICER_API void HsBaFreeGeometryPath(HsBaGeometryPath_t* path)
+    {
+        if (!path || !path->xyz)
+        {
+            return;
+        }
+        // xyz is the first and only section of the block handed out by HsBaGetGeometryPath.
+        std::free(const_cast<double*>(path->xyz));
+        std::memset(path, 0, sizeof(HsBaGeometryPath_t));
     }
 
     HSBA_SLICER_API long long HsBaRetainGeometrySnapshot(long long geometry_id)

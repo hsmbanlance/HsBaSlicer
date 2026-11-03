@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "LibHsBaSlicer/Fill/polygon_fill.hpp"
+#include "LibHsBaSlicer/Path/spiral_path.hpp"
 #include "LibHsBaSlicer/Path/waam_export.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
@@ -289,7 +290,22 @@ Utils::Task<InternalWaamResult> RunWaamPipelineAsync(const InternalWaamConfig& c
             {
                 geometry_zs[i] = static_cast<double>(layer_z_heights[i]);
             }
-            result.geometry_id = CaptureLayerGeometry(HSBA_PIPELINE_WAAM, layer_outlines, {}, {}, geometry_zs);
+            // Spiral runs deposit one continuous rising weld bead, so publish the same helix
+            // the exporter derives from these contours (SpiralizeOuterWall is a pure function).
+            std::vector<double> path_xyz;
+            if (cfg.spiral_mode)
+            {
+                const std::vector<SpiralPoint> helix = SpiralizeOuterWall(layer_outlines, geometry_zs);
+                path_xyz.reserve(helix.size() * 3);
+                for (const SpiralPoint& point : helix)
+                {
+                    path_xyz.push_back(point.x);
+                    path_xyz.push_back(point.y);
+                    path_xyz.push_back(point.z);
+                }
+            }
+            result.geometry_id =
+                CaptureLayerGeometry(HSBA_PIPELINE_WAAM, layer_outlines, {}, {}, geometry_zs, path_xyz);
         }
 
         std::string output_path = cfg.output_path;

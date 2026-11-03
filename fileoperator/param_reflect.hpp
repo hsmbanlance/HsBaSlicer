@@ -102,6 +102,10 @@ inline TypeInfo* GetTypeInfo<HsBaFdmPipelineConfig_t>()
     HSBA_PARAM_FIELD(info, HsBaFdmPipelineConfig_t, infill_lua_script);
     HSBA_PARAM_FIELD(info, HsBaFdmPipelineConfig_t, infill_lua_func);
     HSBA_PARAM_FIELD(info, HsBaFdmPipelineConfig_t, output_path);
+    // The two preview-image switches sit at the struct tail; capture_geometry and cancel_flag stay
+    // unregistered on purpose, being a submission-time request and a live pointer respectively.
+    HSBA_PARAM_FIELD(info, HsBaFdmPipelineConfig_t, gcode_thumbnails);
+    HSBA_PARAM_FIELD(info, HsBaFdmPipelineConfig_t, gcode_thumbnail_size);
     return &info;
 }
 

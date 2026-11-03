@@ -223,9 +223,26 @@ HSBA_SLICER_API int         HsBaGetLayerGeometry(long long geometry_id, int laye
 HSBA_SLICER_API void        HsBaFreeLayerGeometry(HsBaLayerGeometry_t* geom);
 HSBA_SLICER_API long long   HsBaRetainGeometrySnapshot(long long geometry_id);
 HSBA_SLICER_API void        HsBaReleaseGeometrySnapshot(long long geometry_id);
+
+typedef struct HsBaGeometryPath {
+    int point_count;          /* 本快照持有的三元组个数，未写入时为 0 */
+    const double* xyz;        /* x0,y0,z0,x1,y1,z1,...；长度 3 * point_count */
+    double bounds_min[2]; double bounds_max[2];   /* 对 x 与 y 取 min/max */
+    double z_min; double z_max;                   /* 折线最低点与最高点 */
+} HsBaGeometryPath_t;
+
+HSBA_SLICER_API int         HsBaGeometryPathPointCount(long long geometry_id);
+HSBA_SLICER_API int         HsBaGetGeometryPath(long long geometry_id, HsBaGeometryPath_t* path);
+HSBA_SLICER_API void        HsBaFreeGeometryPath(HsBaGeometryPath_t* path);
 ```
 
 坐标单位毫米，`xy` 是长度 `2 * point_count` 的扁平数组（`x0,y0,x1,y1,...`）。`closed == 1` 表示首尾顶点重复的闭合轮廓，`0` 表示开放折线（填充线）。`bounds_min/max` 覆盖该层所有环，供 GUI 做自适应缩放。
+
+### 连续工具路径
+
+按层给出的环只是横截面：它们说明某一层在哪里，却不说明机器按什么顺序走过它，也没有任何东西把相邻两层连起来。对于一次连续挤出（螺旋 / 花瓶模式）的作业，额外把那条线本身存成真正的三维折线，每个点带上它自己的 `z`。只有 **FDM、TDP、WAAM** 配置里的 `spiral_mode = 1` 会写入；SLS、SLM、LOM、SLA 以及所有非螺旋作业的路径为空——`HsBaGeometryPathPointCount()` 返回 0，`HsBaGetGeometryPath()` 返回失败。折线没有 `closed` 标志：它就是一串线段，调用方直接把相邻点连成直线，因为那些直线正是喷嘴走过的轨迹。
+
+路径导出与单层快照遵守同样的**一次 `malloc`** 契约（只调用一次 `HsBaFreeGeometryPath()`，不单独 free 任何数组），并且住在同一个快照里：`Retain` / `Release` 快照时路径随之存活或回收，不会各自计数。
 
 ### 各工艺的槽位
 
@@ -273,11 +290,14 @@ if (layers > 0 && HsBaRetainGeometrySnapshot(gid) == gid) {
 
 **几何只在作业终态后可读**：采集发生在流水线末尾，`PENDING` / `RUNNING` 阶段 `HsBaJobGeometryId` 恒为 0。
 
+快照在**导出器运行之前**采集，取自导出器即将消费的同一批轮廓；因此螺旋流水线会把 helix 算两遍（一遍进快照，一遍进 G-code）。这是有意取舍：`SpiralizeOuterWall` 是只依赖层环与层高的纯函数，两次调用返回完全相同的折线，重复计算换来的是导出器公共签名保持不变。
+
 ## 四、常见错误与边界
 
 | 现象 | 原因与处理 |
 | --- | --- |
 | `HsBaGeometryLayerCount(id)` 返回 0，但作业确实成功 | 提交时 `capture_geometry` 是 0，或快照已被池淘汰（调低并发预览数、或先 `Retain`） |
+| `HsBaGeometryPathPointCount(id)` 返回 0，但层数大于 0 | 这次作业不是螺旋运行（`spiral_mode = 0`），或该流水线根本没有这个字段（SLS / SLM / LOM / SLA）——此时只存层快照 |
 | 取消按钮"没有立即生效" | 协作式取消只在阶段/层边界起作用；正在进行的是网格加载或一次 Lua 回调，等它结束 |
 | 取消后读到空结果 | 已终态但 `HsBaJobCopyResult` 在等待前被调用；先 `HsBaWaitJob`，或只在 `on_done` 里取 |
 | `error_message` 以 `Cancelled` 开头却判定为失败 | 结果结构体没有状态字段，同步入口只能靠前缀识别取消；用 `HsBaJobGetState` 或 REST 的 `state` |
@@ -288,7 +308,7 @@ if (layers > 0 && HsBaRetainGeometrySnapshot(gid) == gid) {
 
 ```
 tests/GuiApi/progress_stage_test.cpp   -> gui_progress_stage_test    文本→枚举全覆盖、归一化、越界回落
-tests/GuiApi/geometry_store_test.cpp   -> gui_geometry_store_test    槽位映射、LRU 上限、引用计数、空采集
+tests/GuiApi/geometry_store_test.cpp   -> gui_geometry_store_test    槽位映射、LRU 上限、引用计数、空采集、连续路径往返
 tests/GuiApi/job_control_test.cpp      -> gui_job_control_test       提交不阻塞、取消状态机、回调线程、几何读回
 ```
 

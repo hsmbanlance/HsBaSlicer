@@ -155,6 +155,9 @@ extern "C"
         int capture_geometry;  ///< Store per-layer geometry for preview (0=false, 1=true), default 0
         const void* cancel_flag;  ///< Pointer to a std::atomic<bool> cancellation request (NULL = not
                                   ///< cancellable). The flag owner must outlive the pipeline run.
+        int gcode_thumbnails;     ///< Embed model projection previews as G-code header comments (0=false, 1=true),
+                                  ///< default 0. The blocks are written at the very top of the file.
+        int gcode_thumbnail_size;  ///< Long edge of each preview in pixels, 0 = default 256, clamped to [32, 512]
     } HsBaFdmPipelineConfig_t;
 
     /**
@@ -876,6 +879,8 @@ extern "C"
         cfg.output_path = 0;
         cfg.capture_geometry = 0;
         cfg.cancel_flag = 0;
+        cfg.gcode_thumbnails = 0;
+        cfg.gcode_thumbnail_size = 0;
         return cfg;
     }
 

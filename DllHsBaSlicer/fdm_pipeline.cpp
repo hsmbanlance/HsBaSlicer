@@ -4,6 +4,7 @@
  */
 #include "fdm_pipeline.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -18,13 +19,16 @@
 
 #include "LibHsBaSlicer/Extends/LuaCommonTypes.hpp"
 #include "LibHsBaSlicer/Fill/polygon_fill.hpp"
+#include "LibHsBaSlicer/Floor/sla_floor.hpp"
 #include "LibHsBaSlicer/Path/path_generator.hpp"
+#include "LibHsBaSlicer/Path/spiral_path.hpp"
 #include "LibHsBaSlicer/Preprocess/model_preprocess.hpp"
 #include "LibHsBaSlicer/Slice/mesh_slice.hpp"
 #include "LibHsBaSlicer/Support/fdm_support.hpp"
 #include "base/coroutine.hpp"
 #include "base/encoding_convert.hpp"
 #include "base/error.hpp"
+#include "cipher/encoder.hpp"
 #include "geometry_store.hpp"
 #include "job_control.h"
 #include "paths/gcodepath.hpp"
@@ -77,6 +81,8 @@ struct InternalConfig
     void* progress_user_data = nullptr;
     bool capture_geometry = false;
     const void* cancel_flag = nullptr;  ///< std::atomic<bool>* set by the host or by its job handle
+    bool gcode_thumbnails = false;      ///< Project the model into the G-code header as preview images
+    int gcode_thumbnail_size = 0;       ///< Long edge of each preview in pixels (0 = default, clamped)
 
     // Cancellation is cooperative: the flag is only polled at stage boundaries and inside
     // serial loops, because an exception escaping the throttled progress callback of a
@@ -195,6 +201,188 @@ bool SaveGCode(const std::string& gcode, const std::string& output_path)
     return out.good();
 }
 
+// ============================================================
+// G-code preview images
+// ============================================================
+
+// Each view is made by projecting every triangle of the mesh and letting Clipper merge the
+// overlapping soup into one silhouette. A very large mesh would turn that into a pause longer
+// than the slice itself, so past this budget the previews are skipped with a reason instead.
+constexpr Eigen::Index kPreviewTriangleBudget = 200000;
+constexpr int kPreviewDefaultEdge = 256;
+constexpr int kPreviewMinEdge = 32;
+constexpr int kPreviewMaxEdge = 512;
+// The header comment blocks are read back through a preview that only shows the head of the file, so
+// one oversized image would push the blocks that follow it out of what any client can see.
+constexpr std::size_t kPreviewBase64Budget = 48U * 1024U;
+
+/**
+ * @brief Long edge in pixels of a preview image: 0 takes the default, anything else is clamped.
+ */
+int PreviewEdge(int requested)
+{
+    if (requested <= 0)
+    {
+        return kPreviewDefaultEdge;
+    }
+    return std::clamp(requested, kPreviewMinEdge, kPreviewMaxEdge);
+}
+
+/**
+ * @brief Orthographic projection of a triangle mesh onto one coordinate plane.
+ *
+ * @param vertices Mesh vertices, one XYZ row per vertex.
+ * @param faces Mesh triangles, one index row per face.
+ * @param plane Look direction: 0 looks down the Z axis onto XY (a top view), 1 along Y onto XZ,
+ *               2 along X onto YZ.
+ * @return The filled silhouette as closed polygons, empty when the mesh has no area there.
+ */
+PolygonsD ProjectMeshSilhouette(const Eigen::MatrixXf& vertices, const Eigen::MatrixXi& faces, int plane)
+{
+    // Which two axes survive the look: from above the model reads (x, y) and from the side (x, z).
+    // Nothing is rotated, so a view always agrees with the build plate.
+    const int axis_u = (plane == 2) ? 1 : 0;
+    const int axis_v = (plane == 0) ? 1 : 2;
+
+    PolygonsD triangles;
+    triangles.reserve(static_cast<std::size_t>(faces.rows()));
+    for (Eigen::Index f = 0; f < faces.rows(); ++f)
+    {
+        double const u0 = vertices(faces(f, 0), axis_u);
+        double const v0 = vertices(faces(f, 0), axis_v);
+        double const u1 = vertices(faces(f, 1), axis_u);
+        double const v1 = vertices(faces(f, 1), axis_v);
+        double const u2 = vertices(faces(f, 2), axis_u);
+        double const v2 = vertices(faces(f, 2), axis_v);
+        // Twice the signed projected area. A face seen edge-on collapses to a line and carries no
+        // silhouette at all, so keeping it out of the union only saves work.
+        double const twice_area = (u1 - u0) * (v2 - v0) - (u2 - u0) * (v1 - v0);
+        if (std::fabs(twice_area) < 1e-12)
+        {
+            continue;
+        }
+        PolygonD tri;
+        tri.reserve(3);
+        tri.push_back(Point2D{u0, v0});
+        tri.push_back(Point2D{u1, v1});
+        tri.push_back(Point2D{u2, v2});
+        // A closed mesh has a front and a back face over every point of the silhouette, and the two
+        // wind opposite ways. A non-zero union would add their winding numbers and cut a hole exactly
+        // where the model is thickest, so each triangle is turned the same way before merging.
+        if (twice_area < 0.0)
+        {
+            std::reverse(tri.begin(), tri.end());
+        }
+        triangles.push_back(std::move(tri));
+    }
+    // Overlapping faces would otherwise leave holes where an odd number of them cancel out, so the
+    // triangle soup is merged into its outer boundary before anything is drawn. The wrapper is named
+    // explicitly because argument-dependent lookup would also see the identical Clipper2 free function.
+    return HsBa::Slicer::Union(triangles, PolygonsD{}, Clipper2Lib::FillRule::NonZero);
+}
+
+/**
+ * @brief Renders one silhouette into a Base64 PNG entry, or into a skip notice that says why not.
+ *
+ * A skip notice keeps its name and edge so a reader can still tell which view was asked for; only
+ * the picture is replaced by the reason, and the reason distinguishes an empty projection from a
+ * renderer that failed and from an image too big to hand out.
+ */
+GCodeThumbnail MakePreviewThumbnail(const std::string& name, const PolygonsD& silhouette, int edge,
+                                    const std::string& failure_reason)
+{
+    GCodeThumbnail thumb;
+    thumb.name = name;
+    thumb.width = edge;
+    thumb.height = edge;
+    thumb.format = "png";
+    std::string bytes;
+    if (!failure_reason.empty())
+    {
+        thumb.reason = failure_reason;  // a view that never reached the renderer
+    }
+    else if (silhouette.empty())
+    {
+        thumb.reason = "empty_silhouette";
+    }
+    else if (!RenderPolygonsToImageBuffer(silhouette, edge, edge, ".png", bytes))
+    {
+        thumb.reason = "render_failed";
+    }
+    else
+    {
+        thumb.base64 = Cipher::Encoder::base64_encode(bytes);
+        if (thumb.base64.size() > kPreviewBase64Budget)
+        {
+            thumb.base64.clear();
+            thumb.reason = "image_too_large";
+        }
+    }
+    return thumb;
+}
+
+/**
+ * @brief The model previews a G-code header can carry, top view first.
+ *
+ * Previews are derived from the very mesh the slicer cut, so a picture can never disagree with the
+ * part being printed. The function never throws: a model that cannot give up a triangle mesh, or a
+ * projection that runs out of budget, comes back as skip notices, because a missing preview must not
+ * turn a good slice into a failed job.
+ */
+std::vector<GCodeThumbnail> BuildModelThumbnails(const IModel& model, int requested_edge)
+{
+    const int edge = PreviewEdge(requested_edge);
+    std::vector<GCodeThumbnail> thumbs;
+    thumbs.reserve(2);
+
+    std::pair<Eigen::MatrixXf, Eigen::MatrixXi> mesh;
+    try
+    {
+        mesh = model.TriangleMesh();
+    }
+    catch (const std::exception&)
+    {
+        // Model kinds without a triangulation (a custom or parametric model) are still sliceable,
+        // so both views say plainly that nothing could be rendered out of them.
+        for (const char* name : {"model_top", "model_side"})
+        {
+            thumbs.push_back(MakePreviewThumbnail(name, {}, edge, "render_failed"));
+        }
+        return thumbs;
+    }
+
+    const Eigen::MatrixXf& vertices = mesh.first;
+    const Eigen::MatrixXi& faces = mesh.second;
+    if (faces.rows() > kPreviewTriangleBudget)
+    {
+        for (const char* name : {"model_top", "model_side"})
+        {
+            thumbs.push_back(MakePreviewThumbnail(name, {}, edge, "mesh_too_large"));
+        }
+        return thumbs;
+    }
+
+    // Plane 0 is the look straight down onto the bed, which is the one view a single-slot preview
+    // panel would pick, so it comes first; the side view is the only other one that reads a shape.
+    static constexpr std::pair<int, const char*> kViews[] = {{0, "model_top"}, {1, "model_side"}};
+    for (const auto& [plane, name] : kViews)
+    {
+        PolygonsD silhouette;
+        std::string projection_failure;
+        try
+        {
+            silhouette = ProjectMeshSilhouette(vertices, faces, plane);
+        }
+        catch (const std::exception&)
+        {
+            // A boolean over a pathological mesh must stay a preview problem, never a slice failure.
+            projection_failure = "render_failed";
+        }
+        thumbs.push_back(MakePreviewThumbnail(name, silhouette, edge, projection_failure));
+    }
+    return thumbs;
+}
+
 InternalConfig BuildConfig(const HsBaFdmPipelineConfig_t* cfg, HsBaProgressCallback cb, void* ud)
 {
     InternalConfig ic;
@@ -252,6 +440,8 @@ InternalConfig BuildConfig(const HsBaFdmPipelineConfig_t* cfg, HsBaProgressCallb
     ic.progress_user_data = ud;
     ic.capture_geometry = cfg->capture_geometry != 0;
     ic.cancel_flag = cfg->cancel_flag;
+    ic.gcode_thumbnails = cfg->gcode_thumbnails != 0;
+    ic.gcode_thumbnail_size = cfg->gcode_thumbnail_size;
     return ic;
 }
 
@@ -475,8 +665,32 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             {
                 geometry_zs[i] = static_cast<double>(GetLayerZ(i, cfg.first_layer_height, cfg.layer_height));
             }
-            result.geometry_id =
-                CaptureLayerGeometry(HSBA_PIPELINE_FDM, layer_outlines, layer_fills, layer_supports, geometry_zs);
+            // A vase-mode run deposits one continuous helix, so the snapshot keeps the very
+            // polyline it will print: SpiralizeOuterWall is a pure function of the same
+            // inputs the exporter uses, which makes the stored path identical to the G-code.
+            std::vector<double> path_xyz;
+            if (cfg.spiral_mode)
+            {
+                const std::vector<SpiralPoint> helix = SpiralizeOuterWall(layer_outlines, geometry_zs);
+                path_xyz.reserve(helix.size() * 3);
+                for (const SpiralPoint& point : helix)
+                {
+                    path_xyz.push_back(point.x);
+                    path_xyz.push_back(point.y);
+                    path_xyz.push_back(point.z);
+                }
+            }
+            result.geometry_id = CaptureLayerGeometry(HSBA_PIPELINE_FDM, layer_outlines, layer_fills, layer_supports,
+                                                      geometry_zs, path_xyz);
+        }
+
+        // The previews are projected once from the mesh that was just cut, before the branch, because
+        // both the spiral and the ordinary export write the same header and neither may run twice.
+        std::vector<GCodeThumbnail> thumbnails;
+        if (cfg.gcode_thumbnails)
+        {
+            ReportProgress(cfg, 92, "Rendering preview images...");
+            thumbnails = BuildModelThumbnails(*model, cfg.gcode_thumbnail_size);
         }
 
         if (cfg.spiral_mode)
@@ -492,6 +706,10 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             auto gcode_path = GenerateGCodePathSpiral(layer_outlines, layer_zs, cfg.printer_config);
             if (gcode_path)
             {
+                if (!thumbnails.empty())
+                {
+                    gcode_path->SetThumbnails(thumbnails);
+                }
                 result.gcode_content = gcode_path->ToGCode(cfg.firmware);
                 result.success = true;
             }
@@ -516,6 +734,10 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
 
             if (gcode_path)
             {
+                if (!thumbnails.empty())
+                {
+                    gcode_path->SetThumbnails(thumbnails);
+                }
                 result.gcode_content = gcode_path->ToGCode(cfg.firmware);
                 result.success = true;
             }

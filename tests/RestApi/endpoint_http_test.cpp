@@ -24,12 +24,15 @@
 // (Boost.Test does on Windows); winsock2.h and winsock.h cannot coexist in one TU.
 #include <httplib.h>
 
+#include <miniz.h>
+
 #define BOOST_TEST_MODULE RestApiEndpointHttpTest
 #include <boost/test/included/unit_test.hpp>
 
 #include "pipelinetypes/pipeline_types.h"
 
 #include "../../restapi/job_manager.hpp"
+#include "../../restapi/package_reader.hpp"
 #include "../../restapi/pipeline_executor.hpp"
 #include "../../restapi/routes.hpp"
 #include "../../restapi/server_config.hpp"
@@ -323,6 +326,99 @@ JobManager::Runner SwitchEchoPipeline()
     };
 }
 
+/** @brief Configuration file inside the fixture package, kept for byte-for-byte compares. */
+constexpr const char* kPackageConfigJson = R"({"kind":"fdm","layers":3})";
+
+/**
+ * @brief Layer image inside the fixture package.
+ *
+ * The bytes only have to start like a PNG: this server never decodes an entry, it types the entry by
+ * its name and moves the bytes, so the test compares what went into the archive with what came out.
+ */
+constexpr const char* kPackageLayerPng = "\x89PNG\r\n\x1a\n"
+                                         "layer-0-pixels";
+
+/** @brief Preview vector inside the fixture package, the one entry type that needs a CSP header. */
+constexpr const char* kPackagePreviewSvg =
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"4\"></svg>\n";
+
+/** @brief Entry name of the fixture file that is bigger than the cap this server will hand out. */
+constexpr const char* kPackageHugeEntry = "volumes/huge.bin";
+
+/**
+ * @brief Writes a result package to @p file the way an exporter leaves one behind.
+ *
+ * The archive is built with miniz, the same library the endpoints read with, so every entry a client
+ * can list is an entry the server can extract. @p with_oversized_entry adds a file past the size cap -
+ * stored as nothing but zeros, so it costs a fraction of its expanded length on disk.
+ */
+void WritePackageArchive(const std::filesystem::path& file, bool with_oversized_entry)
+{
+    mz_zip_archive zip{};
+    BOOST_REQUIRE(mz_zip_writer_init_file(&zip, file.string().c_str(), 0) != MZ_FALSE);
+    const auto add = [&zip](const char* name, const std::string& bytes, mz_uint level)
+    { BOOST_REQUIRE(mz_zip_writer_add_mem(&zip, name, bytes.data(), bytes.size(), level) != MZ_FALSE); };
+    add("config.json", kPackageConfigJson, MZ_DEFAULT_COMPRESSION);
+    add("layers/layer_0.png", kPackageLayerPng, MZ_BEST_SPEED);
+    add("preview.svg", kPackagePreviewSvg, MZ_BEST_SPEED);
+    add("model.gcode", kInlineGCode, MZ_BEST_SPEED);
+    if (with_oversized_entry)
+    {
+        add(kPackageHugeEntry, std::string(static_cast<std::size_t>(PACKAGE_ENTRY_MAX_BYTES) + 1U, '\0'),
+            MZ_BEST_SPEED);
+    }
+    BOOST_REQUIRE(mz_zip_writer_finalize_archive(&zip) != MZ_FALSE);
+    BOOST_REQUIRE(mz_zip_writer_end(&zip) != MZ_FALSE);
+}
+
+/**
+ * @brief Pipeline stand-in that leaves a package on disk for the two package routes to read.
+ *
+ * The requested output name selects the shape, so one listener can cover the whole error ladder: a
+ * name holding "corrupt" gets plain bytes instead of an archive, a name holding "huge" gains the
+ * oversized entry, and an absent output path answers inline only, the way a G-code run does.
+ */
+JobManager::Runner PackagePipeline()
+{
+    return [](HsBaPipelineKind, const void* config, HsBaProgressCallback cb, void* ud)
+    {
+        SliceOutcome outcome;
+        outcome.success = 1;
+        outcome.total_layers = 3;
+        outcome.elapsed_seconds = 0.01;
+
+        const auto* fdm = static_cast<const HsBaFdmPipelineConfig_t*>(config);
+        const std::string target = fdm->output_path ? fdm->output_path : std::string();
+        if (target.empty())
+        {
+            outcome.inline_content = kInlineGCode;
+            if (cb)
+            {
+                cb(100, "inline only", ud);
+            }
+            return outcome;
+        }
+        const std::filesystem::path file = std::filesystem::u8path(target);
+        std::error_code ec;
+        std::filesystem::create_directories(file.parent_path(), ec);
+        if (target.find("corrupt") != std::string::npos)
+        {
+            std::ofstream out(file, std::ios::binary | std::ios::trunc);
+            out << kArtifactBytes;
+        }
+        else
+        {
+            WritePackageArchive(file, target.find("huge") != std::string::npos);
+        }
+        outcome.output_path = target;
+        if (cb)
+        {
+            cb(100, "package written", ud);
+        }
+        return outcome;
+    };
+}
+
 /** @brief Knobs an EndpointServer instance needs before its members are built. */
 struct ServerOptions
 {
@@ -408,15 +504,18 @@ public:
     /**
      * @brief Poll GET /api/jobs/{id} until the state reads @p wanted.
      * @return The state actually observed, so a timeout fails with a useful message.
+     *
+     * The headers go with every poll because a token-gated server answers an anonymous status
+     * read with 401, which this helper would otherwise report as a job that never finished.
      */
-    std::string WaitJobState(const std::string& id, const std::string& wanted,
-                             std::chrono::milliseconds timeout = 20s) const
+    std::string WaitJobState(const std::string& id, const std::string& wanted, std::chrono::milliseconds timeout = 20s,
+                             const httplib::Headers& headers = {}) const
     {
         std::string state;
         const auto deadline = std::chrono::steady_clock::now() + timeout;
         do
         {
-            const httplib::Result res = Get("/api/jobs/" + id);
+            const httplib::Result res = Get("/api/jobs/" + id, headers);
             state = (Responded(res) && res->status == 200) ? JsonMember(res->body, "state") : std::string();
             if (state == wanted)
             {
@@ -427,12 +526,13 @@ public:
         return state;
     }
 
-    /** @brief Submit an fdm job writing to @p output_path inside the scratch directory. */
-    std::string SubmitArtifactJob(const TempDir& scratch, const std::string& output_name) const
+    /** @brief Submit an fdm job writing to @p output_name inside the scratch directory. */
+    std::string SubmitArtifactJob(const TempDir& scratch, const std::string& output_name,
+                                  const httplib::Headers& headers = {}) const
     {
         const std::string body =
             R"({"layer_height": 2, "enable_support": 0, "output_path": ")" + scratch.jsonPath(output_name) + R"("})";
-        return AcceptedJobId(Post("/api/jobs/fdm", body, "application/json"));
+        return AcceptedJobId(Post("/api/jobs/fdm", body, "application/json", headers));
     }
 
     const std::string& uploadRoot() const { return cfg_.upload_dir; }
@@ -788,8 +888,10 @@ BOOST_AUTO_TEST_CASE(token_gate_protects_a_non_loopback_binding)
     // credentials are there, the requests reach the handlers instead of being refused.
     BOOST_CHECK_EQUAL(srv.Get("/api/jobs/job-1/geometry")->status, 401);
     BOOST_CHECK_EQUAL(srv.Get("/api/jobs/job-1/geometry/0")->status, 401);
+    BOOST_CHECK_EQUAL(srv.Get("/api/jobs/job-1/geometry/path")->status, 401);
     BOOST_CHECK_EQUAL(srv.Post("/api/jobs/job-1/cancel", "", "application/json")->status, 401);
     BOOST_CHECK_EQUAL(srv.Get("/api/jobs/job-1/geometry", {{"X-API-Key", "s3cret-token"}})->status, 404);
+    BOOST_CHECK_EQUAL(srv.Get("/api/jobs/job-1/geometry/path", {{"X-API-Key", "s3cret-token"}})->status, 404);
     BOOST_CHECK_EQUAL(
         srv.Post("/api/jobs/job-1/cancel", "", "application/json", {{"X-API-Key", "s3cret-token"}})->status, 404);
 }
@@ -829,17 +931,41 @@ BOOST_AUTO_TEST_CASE(geometry_switch_reaches_the_config_and_the_endpoints_stay_h
     BOOST_CHECK_EQUAL(JsonMember(summary->body, "detail"), "submit with ?geometry=1");
     BOOST_CHECK_EQUAL(srv.Get("/api/jobs/" + captured + "/geometry/0")->status, 404);
 
+    // The mock ran no kernel, so it never reached the point where a snapshot (and with it
+    // a path) would exist: the path endpoint walks the same first rung as its siblings
+    // rather than inventing a polyline. "job emitted no continuous path" is only reachable
+    // for a captured run without spiral_mode, which a fake pipeline cannot produce.
+    const httplib::Result no_path = srv.Get("/api/jobs/" + captured + "/geometry/path");
+    BOOST_REQUIRE(Responded(no_path));
+    BOOST_CHECK_EQUAL(no_path->status, 404);
+    BOOST_CHECK_EQUAL(JsonMember(no_path->body, "message"), "job captured no layer geometry");
+    BOOST_CHECK_EQUAL(JsonMember(no_path->body, "detail"), "submit with ?geometry=1");
+
     // A layer segment has to be a plain number, otherwise a typo would silently serve layer 0.
     const httplib::Result bad = srv.Get("/api/jobs/" + captured + "/geometry/0x1");
     BOOST_REQUIRE(Responded(bad));
     BOOST_CHECK_EQUAL(bad->status, 400);
     BOOST_CHECK_EQUAL(JsonMember(bad->body, "message"), "layer index must be a non-negative integer");
 
+    // "path" is reserved: had the layer route matched first, the request would have been
+    // answered with the 400 above instead of climbing the geometry ladder.
+    BOOST_CHECK(JsonMember(no_path->body, "message") != "layer index must be a non-negative integer");
+    const httplib::Result xml_path = srv.Get("/api/jobs/" + captured + "/geometry/path?format=xml");
+    BOOST_REQUIRE(Responded(xml_path));
+    BOOST_CHECK_EQUAL(xml_path->status, 404);
+    BOOST_CHECK(xml_path->body.find("<Error") != std::string::npos);
+
     // Unknown jobs miss on the geometry routes exactly as they do on the status route.
     const httplib::Result ghost = srv.Get("/api/jobs/job-does-not-exist/geometry");
     BOOST_REQUIRE(Responded(ghost));
     BOOST_CHECK_EQUAL(ghost->status, 404);
     BOOST_CHECK_EQUAL(JsonMember(ghost->body, "message"), "job not found");
+
+    const httplib::Result ghost_path = srv.Get("/api/jobs/job-does-not-exist/geometry/path");
+    BOOST_REQUIRE(Responded(ghost_path));
+    BOOST_CHECK_EQUAL(ghost_path->status, 404);
+    BOOST_CHECK_EQUAL(JsonMember(ghost_path->body, "message"), "job not found");
+    BOOST_CHECK_EQUAL(JsonMember(ghost_path->body, "detail"), "job-does-not-exist");
 
     const httplib::Result xml = srv.Get("/api/jobs/" + captured + "/geometry?format=xml");
     BOOST_REQUIRE(Responded(xml));
@@ -940,6 +1066,163 @@ BOOST_AUTO_TEST_CASE(proto_conversion_round_trips_over_http)
     const httplib::Result bad_kind = srv.Post("/api/config/convert?kind=nonsense", "{}", "application/json");
     BOOST_REQUIRE(Responded(bad_kind));
     BOOST_CHECK_EQUAL(bad_kind->status, 400);
+}
+
+BOOST_AUTO_TEST_CASE(package_listing_and_entry_bytes_come_from_the_archive)
+{
+    TempDir scratch{"package"};
+    EndpointServer srv{PackagePipeline()};
+
+    const std::string id = srv.SubmitArtifactJob(scratch, "run/result.zip");
+    BOOST_REQUIRE_EQUAL(srv.WaitJobState(id, "success"), "success");
+
+    // The listing names the archive by its bare file name and reports every file stored in it.
+    const httplib::Result listing = srv.Get("/api/jobs/" + id + "/package");
+    BOOST_REQUIRE(Responded(listing));
+    BOOST_CHECK_EQUAL(listing->status, 200);
+    BOOST_CHECK(HeaderIs(listing, "Content-Type", "application/json"));
+    BOOST_CHECK_EQUAL(JsonMember(listing->body, "name"), "result.zip");
+    BOOST_CHECK_EQUAL(JsonMember(listing->body, "id"), id);
+    bool counted = false;
+    BOOST_CHECK_EQUAL(JsonNumber(listing->body, "entry_count", counted), 4);
+    BOOST_CHECK(counted);
+    for (const char* name : {"config.json", "layers/layer_0.png", "preview.svg", "model.gcode"})
+    {
+        BOOST_CHECK(listing->body.find(name) != std::string::npos);
+    }
+    // A client picks the image it wants to draw by the type the byte route will actually answer with.
+    BOOST_CHECK(listing->body.find("\"image/png\"") != std::string::npos);
+    BOOST_CHECK(listing->body.find("\"image/svg+xml\"") != std::string::npos);
+    BOOST_CHECK(listing->body.find("\"application/json\"") != std::string::npos);
+
+    const httplib::Result xml = srv.Get("/api/jobs/" + id + "/package?format=xml");
+    BOOST_REQUIRE(Responded(xml));
+    BOOST_CHECK_EQUAL(xml->status, 200);
+    BOOST_CHECK(xml->body.find("<Package") != std::string::npos);
+
+    // An entry comes back as exactly the bytes the archive holds, under the type its name suggests.
+    const httplib::Result config = srv.Get("/api/jobs/" + id + "/package/config.json");
+    BOOST_REQUIRE(Responded(config));
+    BOOST_CHECK_EQUAL(config->status, 200);
+    BOOST_CHECK(HeaderIs(config, "Content-Type", "application/json"));
+    BOOST_CHECK_EQUAL(config->get_header_value("X-Content-Type-Options"), "nosniff");
+    BOOST_CHECK_EQUAL(config->body, kPackageConfigJson);
+
+    // A name with a folder in it is what the route pattern was built for: the whole tail is the entry.
+    const httplib::Result image = srv.Get("/api/jobs/" + id + "/package/layers/layer_0.png");
+    BOOST_REQUIRE(Responded(image));
+    BOOST_CHECK_EQUAL(image->status, 200);
+    BOOST_CHECK(HeaderIs(image, "Content-Type", "image/png"));
+    BOOST_CHECK_EQUAL(image->body, kPackageLayerPng);
+
+    // A package SVG comes out of an exporter script, so it is served locked down rather than trusted.
+    const httplib::Result vector = srv.Get("/api/jobs/" + id + "/package/preview.svg");
+    BOOST_REQUIRE(Responded(vector));
+    BOOST_CHECK_EQUAL(vector->status, 200);
+    BOOST_CHECK(HeaderIs(vector, "Content-Type", "image/svg+xml"));
+    BOOST_CHECK_EQUAL(vector->get_header_value("Content-Security-Policy"), "default-src 'none'");
+    BOOST_CHECK_EQUAL(vector->body, kPackagePreviewSvg);
+
+    const httplib::Result gcode = srv.Get("/api/jobs/" + id + "/package/model.gcode");
+    BOOST_REQUIRE(Responded(gcode));
+    BOOST_CHECK_EQUAL(gcode->status, 200);
+    BOOST_CHECK(HeaderIs(gcode, "Content-Type", "text/plain"));
+    BOOST_CHECK_EQUAL(gcode->body, kInlineGCode);
+
+    // A name the archive does not have is a 404 that quotes the entry, never the archive path.
+    const httplib::Result missing = srv.Get("/api/jobs/" + id + "/package/nope.png");
+    BOOST_REQUIRE(Responded(missing));
+    BOOST_CHECK_EQUAL(missing->status, 404);
+    BOOST_CHECK_EQUAL(JsonMember(missing->body, "message"), "package entry not found");
+    BOOST_CHECK_EQUAL(JsonMember(missing->body, "detail"), "nope.png");
+
+    // Names that could walk outside the archive are refused before the job is even looked up, so an
+    // unknown job cannot be used to tell a rejected name from a merely missing one.
+    const httplib::Result traversal = srv.Get("/api/jobs/" + id + "/package/%2e%2e/secret.json");
+    BOOST_REQUIRE(Responded(traversal));
+    BOOST_CHECK_EQUAL(traversal->status, 400);
+    BOOST_CHECK_EQUAL(JsonMember(traversal->body, "message"), "invalid package entry name");
+    const httplib::Result backslash = srv.Get("/api/jobs/" + id + "/package/sub%5cconfig.json");
+    BOOST_REQUIRE(Responded(backslash));
+    BOOST_CHECK_EQUAL(backslash->status, 400);
+    BOOST_CHECK_EQUAL(srv.Get("/api/jobs/job-ghost/package/%2e%2e/secret.json")->status, 400);
+
+    // The size cap is read off the archive record, so an entry too big to hand out is refused before
+    // a single byte of it is expanded into this process.
+    const std::string huge_id = srv.SubmitArtifactJob(scratch, "huge/result.zip");
+    BOOST_REQUIRE_EQUAL(srv.WaitJobState(huge_id, "success"), "success");
+    const httplib::Result huge_listing = srv.Get("/api/jobs/" + huge_id + "/package");
+    BOOST_REQUIRE(Responded(huge_listing));
+    BOOST_CHECK_EQUAL(JsonNumber(huge_listing->body, "entry_count", counted), 5);
+    BOOST_CHECK(huge_listing->body.find(kPackageHugeEntry) != std::string::npos);
+    const httplib::Result huge_entry = srv.Get("/api/jobs/" + huge_id + "/package/" + kPackageHugeEntry);
+    BOOST_REQUIRE(Responded(huge_entry));
+    BOOST_CHECK_EQUAL(huge_entry->status, 409);
+    BOOST_CHECK_EQUAL(JsonMember(huge_entry->body, "message"), "package entry too large");
+    BOOST_CHECK_EQUAL(JsonMember(huge_entry->body, "detail"), kPackageHugeEntry);
+}
+
+BOOST_AUTO_TEST_CASE(package_routes_answer_for_the_job_and_not_for_the_filesystem)
+{
+    ServerOptions opts;
+    opts.token = "pkg-token";
+    opts.remote_bind = true;
+    TempDir scratch{"package-gate"};
+    EndpointServer srv{PackagePipeline(), opts};
+    const httplib::Headers auth{{"X-API-Key", "pkg-token"}};
+
+    // Both package routes sit behind the same pre-routing gate as their geometry siblings.
+    BOOST_CHECK_EQUAL(srv.Get("/api/jobs/job-1/package")->status, 401);
+    BOOST_CHECK_EQUAL(srv.Get("/api/jobs/job-1/package/config.json")->status, 401);
+
+    // A job that was never submitted misses on both, quoting the id it was asked about.
+    const httplib::Result ghost = srv.Get("/api/jobs/job-ghost/package", auth);
+    BOOST_REQUIRE(Responded(ghost));
+    BOOST_CHECK_EQUAL(ghost->status, 404);
+    BOOST_CHECK_EQUAL(JsonMember(ghost->body, "message"), "job not found");
+    BOOST_CHECK_EQUAL(JsonMember(ghost->body, "detail"), "job-ghost");
+    BOOST_CHECK_EQUAL(srv.Get("/api/jobs/job-ghost/package/config.json", auth)->status, 404);
+
+    // A run whose answer is inline text has no archive to open, and says so instead of failing.
+    const std::string inline_id =
+        srv.AcceptedJobId(srv.Post("/api/jobs/fdm", R"({"layer_height": 2})", "application/json", auth));
+    BOOST_REQUIRE_EQUAL(srv.WaitJobState(inline_id, "success", 20s, auth), "success");
+    const httplib::Result no_package = srv.Get("/api/jobs/" + inline_id + "/package", auth);
+    BOOST_REQUIRE(Responded(no_package));
+    BOOST_CHECK_EQUAL(no_package->status, 404);
+    BOOST_CHECK_EQUAL(JsonMember(no_package->body, "message"), "result is not a package");
+    BOOST_CHECK_EQUAL(JsonMember(no_package->body, "detail"), "inline result");
+
+    // A result file that is not an archive is the same 404 with a different sentence, and its detail
+    // stays the bare file name: the directory the server slices into is nobody else's business.
+    const std::string corrupt_id = srv.SubmitArtifactJob(scratch, "corrupt/result.zip", auth);
+    BOOST_REQUIRE_EQUAL(srv.WaitJobState(corrupt_id, "success", 20s, auth), "success");
+    const httplib::Result unreadable = srv.Get("/api/jobs/" + corrupt_id + "/package", auth);
+    BOOST_REQUIRE(Responded(unreadable));
+    BOOST_CHECK_EQUAL(unreadable->status, 404);
+    BOOST_CHECK_EQUAL(JsonMember(unreadable->body, "message"), "package not readable");
+    BOOST_CHECK_EQUAL(JsonMember(unreadable->body, "detail"), "result.zip");
+    BOOST_CHECK(unreadable->body.find(scratch.jsonPath("corrupt")) == std::string::npos);
+    const httplib::Result unreadable_entry = srv.Get("/api/jobs/" + corrupt_id + "/package/config.json", auth);
+    BOOST_REQUIRE(Responded(unreadable_entry));
+    BOOST_CHECK_EQUAL(unreadable_entry->status, 404);
+    BOOST_CHECK_EQUAL(JsonMember(unreadable_entry->body, "message"), "package not readable");
+
+    // A job that is still running has no outcome to read yet: 409, not a 404 that would suggest the
+    // client asked for the wrong job.
+    BlockingPipeline gate;
+    EndpointServer busy{gate.AsRunner()};
+    TempDir running_scratch{"package-running"};
+    const std::string running_id = busy.SubmitArtifactJob(running_scratch, "running.zip");
+    BOOST_CHECK(gate.WaitUntilRunning());
+    const httplib::Result not_yet = busy.Get("/api/jobs/" + running_id + "/package");
+    BOOST_REQUIRE(Responded(not_yet));
+    BOOST_CHECK_EQUAL(not_yet->status, 409);
+    BOOST_CHECK_EQUAL(JsonMember(not_yet->body, "message"), "job not finished successfully");
+    BOOST_CHECK_EQUAL(busy.Get("/api/jobs/" + running_id + "/package/config.json")->status, 409);
+    gate.Release();
+    BOOST_CHECK_EQUAL(busy.WaitJobState(running_id, "success"), "success");
+    BOOST_CHECK_EQUAL(busy.Get("/api/jobs/" + running_id + "/package")->status, 404);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

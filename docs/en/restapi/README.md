@@ -96,6 +96,9 @@ are bridged through `param_reflect` reflection field-by-field (`config_bridge`).
 | `POST` | `/api/jobs/{id}/cancel` | Request cancellation: running → `202` flag set, queued → `202` dropped outright, terminal → `409`, unknown → `404`. | job queue (`cancel_flag`) |
 | `GET` | `/api/jobs/{id}/geometry` | Geometry summary (layer count + global bounds); `?full=1` additionally expands `z_heights` / `layer_bounds`. | `HsBaGeometryLayerCount` |
 | `GET` | `/api/jobs/{id}/geometry/{layer}` | One layer of rings (outlines / fills / supports, coordinates as flat numeric arrays). | `HsBaGetLayerGeometry` |
+| `GET` | `/api/jobs/{id}/geometry/path` | The continuous toolpath of a spiral run as flat `x,y,z` triples; `404` for any other run. | `HsBaGetGeometryPath` |
+| `GET` | `/api/jobs/{id}/package` | Entry listing of a result package (zip): names, sizes and media types. `404` for a single-file result. | reads `output_path` with miniz |
+| `GET` | `/api/jobs/{id}/package/{entry}` | One entry's bytes, typed by its extension; `{entry}` may contain folders. | reads `output_path` with miniz |
 | `DELETE` | `/api/jobs/{id}` | Delete a queued or finished job (running jobs are refused); only unlinks its upload. | job queue |
 | `GET` | `/api/uploads?state=&offset=&limit=` | List pooled uploads (`pending` / `in_use` / `terminal`). | upload pool |
 | `GET` | `/api/uploads/{id}` | Details of a single upload. | upload pool |
@@ -147,7 +150,10 @@ one Lua callback, a zip run) has to finish. Cancelling a terminal job yields
 `POST /api/jobs/{kind}?geometry=1` (also accepts `geometry=true`) sets the struct's
 `capture_geometry` to 1 on the server. The switch is **not part of the config field table**, so it
 never appears in `default-config`, body validation, proto messages or the parameter wide table;
-`custom` and `filetransfer` capture nothing, so both geometry endpoints always answer `404` there.
+`custom` and `filetransfer` capture nothing, so all three geometry endpoints always answer `404` there.
+A **spiral run** — `spiral_mode = 1` in the config of `fdm`, `tdp` or `waam` — additionally stores the
+one uninterrupted line it deposited, which `/geometry/path` below serves; the overview tells you
+whether to ask for it via `has_path`.
 
 ### `GET /api/jobs/{id}/geometry`
 
@@ -157,15 +163,17 @@ never appears in `default-config`, body validation, proto messages or the parame
   "geometry_id": 12,
   "layer_count": 214,
   "bounds": [0.0, 0.0, 68.4, 51.2],
+  "has_path": 1,
   "z_heights": [0.2, 0.4],
   "layer_bounds": [0.0, 0.0, 68.4, 51.2, 0.0, 0.0, 67.9, 50.8]
 }
 ```
 
 `z_heights` and `layer_bounds` are emitted **only with `?full=1`**; the default response carries the
-first four fields (a `layer_count` in the thousands is not expanded blindly). `geometry_id` is
+first five fields (a `layer_count` in the thousands is not expanded blindly). `geometry_id` is
 directly usable by a native host in the same process (pass it to `HsBaGetLayerGeometry`); to an HTTP
-client it is just an opaque number.
+client it is just an opaque number. `has_path` is `1` only when `GET /api/jobs/{id}/geometry/path`
+will succeed, so a client never has to probe a run that deposited no continuous line.
 
 ### `GET /api/jobs/{id}/geometry/{layer}`
 
@@ -191,6 +199,100 @@ the pipeline). An out-of-range `{layer}` yields `404 layer index out of range` (
 `detail` = `layer_count=N`), a non-numeric index yields `400 layer index must be a non-negative
 integer`, and a snapshot already reclaimed by the in-process cap (environment variable
 `HSBA_GEOMETRY_POOL_MAX`, default 4) yields `404 geometry snapshot is no longer available`.
+
+### `GET /api/jobs/{id}/geometry/path`
+
+```json
+{
+  "id": "7f3c1a2b",
+  "geometry_id": 12,
+  "point_count": 5210,
+  "xyz": [34.1, 21.8, 0.2, 34.3, 21.8, 0.2, 34.5, 21.9, 0.4],
+  "bounds": [0.0, 0.0, 68.4, 51.2],
+  "z_range": [0.2, 42.8]
+}
+```
+
+`xyz` is one flat array of `3 * point_count` millimetre values (`x0,y0,z0,x1,y1,z1,...`) holding the
+polyline in **deposition order**; `z` never decreases along it, because each point carries the height
+of the layer it was extruded on. The line is open — there is no `closed` flag — and the client draws
+straight segments between consecutive points, since those segments are exactly what the nozzle moved
+along (including the travel that a per-layer ring view cannot show). Only a spiral run has such a
+line; nothing else in this server produces one.
+
+The error ladder is the one above plus one rung of its own: `404 job not found` (unknown id), `404
+job captured no layer geometry` with `detail=submit with ?geometry=1` (the job never asked for a
+snapshot), `404 geometry snapshot is no longer available` (reclaimed by the pool), and `404 job
+emitted no continuous path` with `detail=spiral_mode=1` — the snapshot exists and has layers, but the
+run was not a spiral one, so there is no polyline to hand out. `path` is a reserved segment: a literal
+`path` in the URL is matched by this endpoint, so it is not a valid `{layer}` value.
+
+## Result package entries
+
+Some pipelines finish by writing an archive (SLA always does; SLS, SLM, LOM and TDP do it through
+their export Lua). `/result` can only hand that archive over as one opaque download, so two read-only
+routes open it instead: one lists its entries, the other serves one entry's bytes. Neither adds any
+state - the archive is already on disk and already finished, so it is opened per request.
+
+### `GET /api/jobs/{id}/package`
+
+```json
+{
+  "id": "7f3c1a2b",
+  "name": "result.zip",
+  "entry_count": 6,
+  "entries": [
+    { "path": "config.json", "size": 412, "uncompressed_size": 1180, "media_type": "application/json" },
+    { "path": "layers/layer_0.png", "size": 5033, "uncompressed_size": 18241, "media_type": "image/png" }
+  ]
+}
+```
+
+`path` is the name **exactly as stored in the archive**, `/` separated, and `name` is the bare file
+name of the archive the pipeline wrote (never its directory). `size` is the compressed size and
+`uncompressed_size` the expanded one, both in bytes; `media_type` is derived from the extension by
+the same table `GET /package/{entry}` sends as `Content-Type`. Directory entries are skipped, so
+`entry_count` counts files only.
+
+The built-in SLA exporter stores `config.json`, `layers/layer_N.png|jpg|svg`, `floor/floor_raft.*`
+and `supports/layer_N.*` - but a layer whose render is empty is **not written at all**, so layer
+numbers are not necessarily contiguous and the count is a lower bound. For SLS, SLM, LOM and TDP the
+entry names come from the export Lua the caller supplied, which may store anything: the listing is
+therefore accurate for the job you asked about, but it is **not a stable contract** to code against.
+
+### `GET /api/jobs/{id}/package/{entry}`
+
+Serves one entry as raw bytes with the media type its extension suggests - `image/png`,
+`image/jpeg`, `image/svg+xml`, `application/json`, `text/plain; charset=utf-8` for `.txt`/`.gcode`/`.nc`,
+and `application/octet-stream` for anything else. `{entry}` is matched greedily, so a stored folder
+name like `layers/layer_0.png` is addressed as written; each URL segment still has to be percent-encoded
+by the client.
+
+Every response carries `X-Content-Type-Options: nosniff`, so a mislabeled entry is never reinterpreted
+by the browser. An `image/svg+xml` response additionally carries `Content-Security-Policy: default-src
+'none'`: an SVG inside a package came out of an exporter script and is about as trusted as any other
+result byte, so this is the backstop for the contexts where a browser would run its script (an `<img>`
+reference does not).
+
+### Error ladder of both package routes
+
+The front rungs are exactly the ones of `/result`, in the same order, so a client that already handles
+`/result` needs no new error vocabulary:
+
+| Status | `message` | `detail` | When |
+| --- | --- | --- | --- |
+| `400` | `invalid package entry name` | the entry name | Entry route only, and checked **before** the job is looked up: empty, longer than 512 bytes, leading `/`, a backslash, a control character, or a `..` anywhere. An inner `/` is legal. |
+| `401` | `missing credentials` / `invalid credentials` | the send-hint / a mismatch note | The `[auth]` pre-routing check, as on every non-public endpoint; it runs before either package handler. |
+| `404` | `job not found` | the job id | Unknown id. |
+| `409` | `job was cancelled` | the job id | Cancelled jobs have no usable result. |
+| `409` | `job not finished successfully` | the job id | Still `queued` / `running` / `failed`. |
+| `404` | `result is not a package` | `inline result`, or the job id when there is no result at all | The pipeline answered inline (FDM G-code) or wrote nothing. |
+| `404` | `package not readable` | the bare archive file name | The file is gone, is not a zip, or cannot be opened. The server's working directory is never named. |
+| `404` | `package entry not found` | the entry name | No such entry in this archive. |
+| `409` | `package entry too large` | the entry name | `uncompressed_size` exceeds 32 MiB (`PACKAGE_ENTRY_MAX_BYTES`). Refused from the archive record **before** any bytes are allocated, so a stub entry cannot make this process expand gigabytes. |
+
+`404` answers never echo the archive path, and the entry-name check running first means a traversal
+attempt is rejected without the file system being touched at all.
 
 ## Model file upload
 
@@ -335,19 +437,24 @@ above — nothing here changes the endpoint, format, upload or authorization con
 3. Poll `GET /api/jobs/{id}` until `state` is `success`, `failed` or `cancelled`.
 4. On success fetch `GET /api/jobs/{id}/result`.
 5. (Optional) Submit with `?geometry=1`, then read `GET /api/jobs/{id}/geometry` for the summary and
-   `GET /api/jobs/{id}/geometry/{layer}` for single-layer outlines to draw a preview.
-6. (Optional) `POST /api/jobs/{id}/cancel` to stop a running job; after cancellation the result
+   `GET /api/jobs/{id}/geometry/{layer}` for single-layer outlines to draw a preview; when the summary
+   says `has_path: 1`, `GET /api/jobs/{id}/geometry/path` adds the whole continuous line.
+6. (Optional) When the result is an archive (SLA always is), `GET /api/jobs/{id}/package` lists its
+   entries and `GET /api/jobs/{id}/package/{entry}` serves one layer image without downloading the
+   whole package first.
+7. (Optional) `POST /api/jobs/{id}/cancel` to stop a running job; after cancellation the result
    endpoint answers `409`.
 
 ## Errors
 
 Failures are uniform `{code, message, detail}` JSON / `<Error>` XML:
-`400` invalid kind/body/config conversion, a missing multipart part, or a geometry layer index that
-is not a non-negative integer; `401` missing or
+`400` invalid kind/body/config conversion, a missing multipart part, a geometry layer index that
+is not a non-negative integer, or an unusable package entry name; `401` missing or
 wrong credentials (`WWW-Authenticate: Bearer realm="HsBaSlicer"`), `404` unknown
 job/upload/key, or geometry that was never captured / was reclaimed / a layer index out of range,
+or a result that is not a package / a package that cannot be opened / a missing package entry,
 `409` job not finished (result), cancelled (result: `job was cancelled`), still running (job delete),
-already terminal (cancel request), or upload still
+already terminal (cancel request), a package entry over 32 MiB (`package entry too large`), or upload still
 referenced by a job (upload delete), `413` model larger than `[upload] max_file_mb`, `429`
 queue full, `503` ParamStore not configured / model upload disabled / upload pool full.
 `DELETE /api/jobs/{id}` and `DELETE /api/uploads/{id}` return `204` on success; `POST

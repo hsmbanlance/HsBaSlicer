@@ -139,6 +139,9 @@ const SAMPLE_MODEL_PATH = path.join(REPO_ROOT, "samples", "FDM", "models", "stan
 /** @brief Layer count the runs are sized to, so a real part still slices quickly. */
 const LAYERS = 5;
 
+/** @brief The eight bytes every PNG file starts with, from the layer image to the embedded preview. */
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
 /**
  * @brief Triangle count and z extent of an STL, binary or ASCII.
  *
@@ -336,6 +339,17 @@ async function loadHelpers(base) {
   return sandbox.HsBaHttp;
 }
 
+/**
+ * @brief Bring a value the helpers built inside their own realm back here, ready for a strict compare.
+ *
+ * `node:assert/strict` deep-equality also checks the prototype, and an array or object made in a
+ * `node:vm` context carries that context's `Array` or `Object` - including anything `filter` or `map`
+ * returns from it - so such a value is never reference-equal to a literal written in this file.
+ */
+function local(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 describe("end to end with a real HsBaSlicerRestServer", () => {
   if (!serverPath) {
     it("is skipped without a restapi build", { skip: "no HsBaSlicerRestServer binary (build with HSBA_BUILD_REST_API=ON or set HSBA_REST_SERVER)" }, () => {});
@@ -479,6 +493,14 @@ describe("end to end with a real HsBaSlicerRestServer", () => {
     assert.equal(payload.code, 404);
     assert.match(payload.message, /not found/);
     assert.equal(payload.detail, "hsba-no-such-job");
+
+    // The reserved "path" segment has to survive the proxy too, and must not be swallowed by the
+    // layer-number route, which would answer 400 about a layer index instead of 404 about a job.
+    const pathProbe = await fetch(`${consoleUrlOf()}/api/jobs/hsba-no-such-job/geometry/path`);
+    assert.equal(pathProbe.status, 404);
+    const pathBody = await pathProbe.json();
+    assert.match(pathBody.message, /not found/);
+    assert.equal(pathBody.detail, "hsba-no-such-job");
   });
 
   it("rejects a model part for a pipeline kind that accepts none", async () => {
@@ -576,6 +598,226 @@ describe("end to end with a real HsBaSlicerRestServer", () => {
       assert.ok(existsSync(uploads.uploads[0].path), uploads.uploads[0].path);
       const stored = await readFile(uploads.uploads[0].path);
       assert.ok(stored.equals(sample.buffer), `the pool holds ${stored.length} bytes, the sample has ${sample.buffer.length}`);
+    });
+
+    it("captures and serves the real spiral path", async () => {
+      // A spiral run is the only thing that produces a continuous polyline, so this is the case that
+      // proves the whole chain: the engine stores the helix it extruded, the snapshot keeps it, the
+      // endpoint serves it, and the page's own projection math runs on genuine millimetre data.
+      const outputPath = toPosix(path.join(tempDir, "out", "bunny-spiral.gcode"));
+      // The default config carries an empty model path of its own, so the model has to win the merge.
+      const config = {
+        ...(await fdmConfig(outputPath)),
+        model_name: "stanford_bunny",
+        model_path: sample.path,
+        spiral_mode: 1,
+      };
+      const submit = await fetch(`${consoleUrlOf()}/api/jobs/fdm?geometry=1`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(config),
+      });
+      const submitBody = await submit.text();
+      assert.equal(submit.status, 202, submitBody);
+      const accepted = JSON.parse(submitBody);
+
+      const job = await waitForTerminalJob(consoleUrlOf(), accepted.id);
+      assert.equal(job.state, "success", job.error_message);
+      assert.equal(job.geometry_available, 1, JSON.stringify(job));
+
+      const summary = await (await fetch(`${consoleUrlOf()}/api/jobs/${accepted.id}/geometry?format=json`)).json();
+      assert.equal(summary.layer_count, LAYERS, JSON.stringify(summary));
+      // The overview is what gates the Path button, so it has to tell the truth about this run.
+      assert.equal(summary.has_path, 1, JSON.stringify(summary));
+
+      const body = await (await fetch(`${consoleUrlOf()}/api/jobs/${accepted.id}/geometry/path?format=json`)).json();
+      assert.equal(body.id, accepted.id);
+      const points = Number(body.point_count);
+      // Every layer contributes the ring it wound around, so a polyline shorter than two points per
+      // layer could not have come from this job's own layers.
+      assert.ok(points >= 2 * LAYERS, `only ${points} path points for ${LAYERS} layers`);
+      assert.equal(body.xyz.length, 3 * points, "xyz is not a flat triple per point");
+      for (let at = 1; at < points; at += 1) {
+        assert.ok(
+          body.xyz[at * 3 + 2] >= body.xyz[(at - 1) * 3 + 2] - 1e-9,
+          `the path sank at point ${at}: ${body.xyz[(at - 1) * 3 + 2]} -> ${body.xyz[at * 3 + 2]}`,
+        );
+      }
+      assert.ok(Number(body.z_range[1]) > Number(body.z_range[0]), JSON.stringify(body.z_range));
+
+      // The page draws what the served numbers project to - the same helpers the browser loaded.
+      const helpers = await loadHelpers(consoleUrlOf());
+      const drawn = helpers.projectedPathPolyline(body.xyz, helpers.GEOMETRY_STACK_ANGLES);
+      assert.equal(drawn.points.length, points);
+      assert.ok(drawn.d.startsWith("M "), drawn.d.slice(0, 40));
+      assert.ok(!drawn.d.includes("NaN") && !drawn.d.includes("-0 "), "a projected coordinate is junk");
+      const box = helpers.projectedViewBox(drawn.points);
+      assert.ok(box.w > 0 && box.h > 0, JSON.stringify(box));
+
+      // And the layer route still counts "path" as a reserved word rather than as a layer index.
+      const beyond = await fetch(`${consoleUrlOf()}/api/jobs/${accepted.id}/geometry/${summary.layer_count}`);
+      assert.equal(beyond.status, 404);
+      const beyondBody = await beyond.json();
+      assert.match(beyondBody.message, /layer index out of range/);
+      assert.equal(beyondBody.detail, `layer_count=${LAYERS}`);
+    });
+
+    it("lists and serves the images inside a real result package", async () => {
+      // The package endpoints have one job: hand a browser the file that is inside the archive the
+      // pipeline wrote. Only the genuine exporter can prove the entry names, the types derived from
+      // them and the bytes behind them, so this slices an SLA run rather than inventing a zip.
+      const outputPath = toPosix(path.join(tempDir, "out", "bunny-package.zip"));
+      await mkdir(path.dirname(outputPath), { recursive: true });
+      const config = {
+        model_name: "stanford_bunny",
+        model_path: sample.path,
+        output_path: outputPath,
+        layer_height: sample.layer,
+        first_layer_height: sample.layer,
+        enable_support: 0,
+        image_width: 128,
+        image_height: 128,
+      };
+      const submit = await fetch(`${consoleUrlOf()}/api/jobs/sla`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(config),
+      });
+      const submitBody = await submit.text();
+      assert.equal(submit.status, 202, submitBody);
+      const accepted = JSON.parse(submitBody);
+      const job = await waitForTerminalJob(consoleUrlOf(), accepted.id);
+      assert.equal(job.state, "success", job.error_message);
+
+      const listing = await (await fetch(`${consoleUrlOf()}/api/jobs/${accepted.id}/package?format=json`)).json();
+      assert.equal(listing.id, accepted.id);
+      // The archive is named as one file, never as the directory the server slices into.
+      assert.equal(listing.name, "bunny-package.zip");
+      assert.equal(Number(listing.entry_count), listing.entries.length, JSON.stringify(listing.entry_count));
+
+      const helpers = await loadHelpers(consoleUrlOf());
+      // The exporter writes layers/layer_N.png, floor/floor_raft.png and a config.json; the console
+      // has to find the pictures by the type it derives from those names, in layer order.
+      const images = helpers.packageImages(listing.entries);
+      const layerImages = images.filter((entry) => /^layers\/layer_\d+\.png$/.test(entry.path));
+      // A layer whose render came out empty never reaches the archive, so the count is a bound, not a
+      // promise; what the browser depends on is the order the images are handed to it.
+      assert.ok(layerImages.length >= 2, `only ${layerImages.length} layer images of ${LAYERS}`);
+      assert.ok(layerImages.length <= LAYERS, JSON.stringify(images.map((entry) => entry.path)));
+      const numbers = layerImages.map((entry) => Number(/layer_(\d+)\./.exec(entry.path)[1]));
+      assert.deepEqual(
+        local(numbers),
+        local([...numbers].sort((a, b) => a - b)),
+        "the images reached the layer browser out of order",
+      );
+      assert.equal(numbers[0], 0, `the lowest layer is ${numbers[0]}`);
+      // An image whose name carries no layer number is kept behind every numbered one.
+      assert.match(images[images.length - 1].path, /^floor\//, JSON.stringify(images.map((entry) => entry.path)));
+      assert.equal(
+        listing.entries.find((entry) => entry.path === "config.json").media_type,
+        "application/json",
+        JSON.stringify(listing.entries),
+      );
+
+      const first = layerImages[0];
+      assert.equal(first.path, "layers/layer_0.png");
+      const response = await fetch(`${consoleUrlOf()}${helpers.packageEntryUrl(accepted.id, first.path)}`);
+      assert.equal(response.status, 200, first.path);
+      assert.equal(response.headers.get("content-type"), "image/png");
+      // A picture the console hands to an <img> keeps the header that stops it being reinterpreted.
+      assert.equal(response.headers.get("X-Content-Type-Options"), "nosniff");
+      const bytes = Buffer.from(await response.arrayBuffer());
+      assert.deepEqual([...bytes.subarray(0, 8)], PNG_SIGNATURE, `${first.path} is not a PNG`);
+      // IHDR width and height, read from the real file the exporter rendered at the requested size.
+      assert.equal(bytes.readUInt32BE(16), 128);
+      assert.equal(bytes.readUInt32BE(20), 128);
+      assert.equal(Number(first.uncompressed_size), bytes.length, `${first.path} is not the size it listed`);
+
+      // One entry the archive does not hold is a 404 about that entry, not a broken image.
+      const missing = await fetch(`${consoleUrlOf()}/api/jobs/${accepted.id}/package/layers/no_such_layer.png`);
+      assert.equal(missing.status, 404);
+      const missingBody = await missing.json();
+      assert.match(missingBody.message, /package entry not found/);
+      assert.equal(missingBody.detail, "layers/no_such_layer.png");
+
+      // A job that never produced an archive is answered about the job, not about the entry.
+      const ghost = await fetch(`${consoleUrlOf()}/api/jobs/hsba-no-such-job/package?format=json`);
+      assert.equal(ghost.status, 404);
+      assert.match((await ghost.json()).message, /not found/);
+    });
+
+    it("embeds the model previews an FDM run asked for into its own G-code", async () => {
+      // This is the whole stage-2 chain on real data: the engine projects the sliced model, encodes a
+      // PNG, writes it into the comment header, and the console's own parser reads it back out of the
+      // served result - the same bytes the browser would put in an <img>.
+      const outputPath = toPosix(path.join(tempDir, "out", "bunny-thumbs.gcode"));
+      const config = {
+        ...(await fdmConfig(outputPath)),
+        model_name: "stanford_bunny",
+        model_path: sample.path,
+        gcode_thumbnails: 1,
+        gcode_thumbnail_size: 64,
+      };
+      const submit = await fetch(`${consoleUrlOf()}/api/jobs/fdm`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(config),
+      });
+      const submitBody = await submit.text();
+      assert.equal(submit.status, 202, submitBody);
+      const accepted = JSON.parse(submitBody);
+      const job = await waitForTerminalJob(consoleUrlOf(), accepted.id);
+      assert.equal(job.state, "success", job.error_message);
+
+      const text = await (await fetch(`${consoleUrlOf()}/api/jobs/${accepted.id}/result`)).text();
+      // The blocks head the file, which is what lets a truncated preview still carry the pictures.
+      assert.match(text, /^; thumbnail begin name=model_top /m);
+      assert.ok(text.startsWith("; thumbnail begin"), "the previews are not at the head of the file");
+      assert.match(text, /; Generated by HsBaSlicer/);
+      assert.match(text, /G1 X/, "the run wrote no extrusion moves");
+
+      const helpers = await loadHelpers(consoleUrlOf());
+      const blocks = helpers.parseGcodeThumbnails(text);
+      const drawn = blocks.filter((block) => !block.skipped);
+      // A 112k-triangle part is under the projection budget, so both views have to be pictures.
+      assert.deepEqual(
+        local(drawn.map((block) => block.name)),
+        ["model_top", "model_side"],
+        JSON.stringify(blocks.map((block) => ({ name: block.name, reason: block.reason }))),
+      );
+      for (const block of drawn) {
+        const bytes = Buffer.from(block.data, "base64");
+        assert.deepEqual([...bytes.subarray(0, 8)], PNG_SIGNATURE, `${block.name} is not a PNG`);
+        assert.equal(block.width, 64, block.name);
+        assert.equal(block.height, 64, block.name);
+        assert.equal(bytes.readUInt32BE(16), block.width, `${block.name} is not the width its header claims`);
+        assert.equal(bytes.readUInt32BE(20), block.height, `${block.name} is not the height its header claims`);
+        // The length the begin line states is the length the reader rejoined, chunk line or no chunk line.
+        const declared = new RegExp(`; thumbnail begin name=${block.name} [^\n]*b64len=(\\d+)`).exec(text);
+        assert.ok(declared, `no begin line for ${block.name}`);
+        assert.equal(Number(declared[1]), block.data.length, `${block.name} misreported its Base64 length`);
+        // A silhouette of a solid part is never empty, and a picture of it is never one blank plate.
+        assert.ok(bytes.length > 100, `${block.name} is ${bytes.length} bytes of nothing`);
+        assert.ok(helpers.thumbnailDataUrl(block).startsWith("data:image/png;base64,"), block.name);
+      }
+
+      // The same pipeline without the option writes a file whose head is untouched, so the flag adds
+      // comments and changes nothing else about the machine code.
+      const plainPath = toPosix(path.join(tempDir, "out", "bunny-nothumbs.gcode"));
+      const plain = await fetch(`${consoleUrlOf()}/api/jobs/fdm`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...config, gcode_thumbnails: 0, output_path: plainPath }),
+      });
+      const plainBody = await plain.text();
+      assert.equal(plain.status, 202, plainBody);
+      const plainJob = await waitForTerminalJob(consoleUrlOf(), JSON.parse(plainBody).id);
+      assert.equal(plainJob.state, "success", plainJob.error_message);
+      const plainText = await readFile(plainPath, "utf8");
+      assert.doesNotMatch(plainText, /^; thumbnail/m);
+      assert.equal(helpers.parseGcodeThumbnails(plainText).length, 0);
+      // The banner is still the first line, byte for byte as the run without the option writes it.
+      assert.ok(plainText.startsWith("; Generated by HsBaSlicer\n"), "the header moved with the flag off");
     });
 
     for (const pipeline of OUTPUT_PIPELINES) {

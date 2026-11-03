@@ -74,7 +74,9 @@ const DEFAULT_JOBS = [
 ];
 
 /** The geometry of job-1, shaped exactly like GeometrySummaryView/LayerGeometryView. */
-const GEOMETRY_SUMMARY = { id: "job-1", geometry_id: 7, layer_count: 2, bounds: [0, 0, 20, 10] };
+const GEOMETRY_SUMMARY = { id: "job-1", geometry_id: 7, layer_count: 2, bounds: [0, 0, 20, 10], has_path: 1 };
+// The same panel for a run that only emitted per-layer rings: has_path is what gates the Path button.
+const GEOMETRY_NO_PATH = { id: "job-2", geometry_id: 8, layer_count: 2, bounds: [0, 0, 20, 10], has_path: 0 };
 const GEOMETRY_LAYERS = [
   {
     id: "job-1", layer_index: 0, z_height: 0.3, bounds: [0, 0, 20, 10],
@@ -90,6 +92,52 @@ const GEOMETRY_LAYERS = [
   },
 ];
 
+/**
+ * GeometryPathView of a spiral run: one uninterrupted polyline whose z rises as it winds around.
+ * xyz is flat, so the body is read three numbers at a time exactly like routes.cpp writes it.
+ */
+const GEOMETRY_PATH_BODY = {
+  id: "job-1",
+  geometry_id: 7,
+  point_count: 6,
+  xyz: [0, 0, 0.3, 20, 0, 0.7, 20, 10, 1.1, 0, 10, 1.5, 0, 0, 1.9, 10, 5, 2.4],
+  bounds: [0, 0, 20, 10],
+  z_range: [0.3, 2.4],
+};
+
+/**
+ * G-code of an FDM run that was asked to embed its previews.
+ *
+ * The blocks are exactly what paths/gcodepath.cpp writes: a begin line of metadata, the Base64
+ * chunks, an end line, and one skip notice for the view the engine could not render. They sit at the
+ * head of the file, which is what lets a truncated preview still show the pictures.
+ */
+const THUMBNAIL_BLOCKS = [
+  "; thumbnail begin name=model_top width=8 height=8 format=png b64len=8",
+  "; aGVsbG8=",
+  "; thumbnail end name=model_top",
+  "; thumbnail skipped name=model_side reason=mesh_too_large",
+].join("\n");
+const INLINE_GCODE = THUMBNAIL_BLOCKS + "\nG21\nG90\nG1 X1.0 Y2.0 E3.0 F1200\n";
+
+/**
+ * Result package of job-1, listed the way restapi/package_reader.cpp reports an archive: two layer
+ * images and a config, sizes present, media types derived from the entry names.
+ */
+const PACKAGE_LISTING = {
+  id: "job-1",
+  name: "result.zip",
+  entry_count: 3,
+  entries: [
+    { path: "config.json", size: 20, uncompressed_size: 26, media_type: "application/json" },
+    { path: "layers/layer_0.png", size: 13, uncompressed_size: 13, media_type: "image/png" },
+    { path: "layers/layer_1.png", size: 13, uncompressed_size: 13, media_type: "image/png" },
+  ],
+};
+
+/** @brief Bytes of a package image; the console never decodes one, it only hands them to an <img>. */
+const PACKAGE_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x6c, 0x61, 0x79, 0x65, 0x72]);
+
 /** @brief Minimal stand-in for HsBaSlicerRestServer that also records every request. */
 function createFakeRestApi() {
   const server = http.createServer((req, res) => {
@@ -103,8 +151,9 @@ function createFakeRestApi() {
   });
   server.calls = [];
   // Listings a page test can rewrite before triggering a refresh; `uploads: null` keeps the
-  // upload pool switched off, which is how a server without [upload] dir answers.
-  server.state = { jobs: DEFAULT_JOBS, uploads: null };
+  // upload pool switched off, which is how a server without [upload] dir answers. The inline body is
+  // writable too, so a test can show the page a run that embedded nothing.
+  server.state = { jobs: DEFAULT_JOBS, uploads: null, inlineResult: INLINE_GCODE };
   return server;
 }
 
@@ -163,12 +212,46 @@ function respond(req, res, body, state) {
       res.end("G1 X0 Y0\n");
       return;
     case "/api/jobs/job-2/result":
-      // The FDM inline branch: text without a download header.
+      // The FDM inline branch: text without a download header, with its previews embedded.
       res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
-      res.end("G21\nG90\nG1 X1.0 Y2.0 E3.0 F1200\n");
+      res.end(state.inlineResult);
+      return;
+    case "/api/jobs/fdm":
+      // What routes.cpp answers for an accepted submission; the body of the call is what the page
+      // tests read back out of `upstream.calls`.
+      sendJson(res, 202, { id: "job-9", state: "queued", detail: "accepted" });
+      return;
+    case "/api/jobs/job-1/package":
+      sendJson(res, 200, PACKAGE_LISTING);
+      return;
+    case "/api/jobs/job-1/package/config.json":
+      res.writeHead(200, { "Content-Type": "application/json", "X-Content-Type-Options": "nosniff" });
+      res.end('{"kind":"fdm","layers":3}');
+      return;
+    case "/api/jobs/job-1/package/layers/layer_0.png":
+    case "/api/jobs/job-1/package/layers/layer_1.png":
+      res.writeHead(200, { "Content-Type": "image/png", "X-Content-Type-Options": "nosniff" });
+      res.end(PACKAGE_PNG);
+      return;
+    case "/api/jobs/job-2/package":
+      // A G-code answer is one file, not an archive, and the server says which of the two it is.
+      sendJson(res, 404, { code: 404, message: "result is not a package", detail: "inline result" });
       return;
     case "/api/jobs/job-1/geometry":
       sendJson(res, 200, GEOMETRY_SUMMARY);
+      return;
+    case "/api/jobs/job-1/geometry/path":
+      sendJson(res, 200, GEOMETRY_PATH_BODY);
+      return;
+    case "/api/jobs/job-2/geometry":
+      sendJson(res, 200, GEOMETRY_NO_PATH);
+      return;
+    case "/api/jobs/job-2/geometry/0":
+      sendJson(res, 200, GEOMETRY_LAYERS[0]);
+      return;
+    case "/api/jobs/job-2/geometry/path":
+      // The answer a non-spiral run gets: the endpoint exists, the snapshot holds nothing to send.
+      sendJson(res, 404, { code: 404, message: "job emitted no continuous path", detail: "spiral_mode=1" });
       return;
     case "/api/jobs/job-1/geometry/0":
       sendJson(res, 200, GEOMETRY_LAYERS[0]);
@@ -356,8 +439,8 @@ describe("api proxy", () => {
       form.append("config", new Blob(['{"kind":"fdm"}'], { type: "application/json" }), "config.json");
       form.append("model", new Blob(["solid cube\n"], { type: "model/stl" }), "cube.stl");
 
-      const response = await fetch(`${base}/api/jobs/fdm`, { method: "POST", body: form });
-      assert.equal(response.status, 404); // the fake API has no /api/jobs/fdm route
+      const response = await fetch(`${base}/api/jobs/sla`, { method: "POST", body: form });
+      assert.equal(response.status, 404); // the fake API has no /api/jobs/sla route
       const forwarded = upstream.calls[0];
       assert.match(forwarded.headers["content-type"], /^multipart\/form-data; boundary=/);
       assert.match(forwarded.body, /name="config"/);
@@ -542,6 +625,17 @@ async function loadHelpers(base) {
   vm.runInContext(source, sandbox, { filename: "httphelpers.js" });
   assert.ok(sandbox.HsBaHttp, "httphelpers.js did not publish globalThis.HsBaHttp");
   return sandbox.HsBaHttp;
+}
+
+/**
+ * @brief Bring a value the helpers built inside their own realm back here, ready for a strict compare.
+ *
+ * `node:assert/strict` deep-equality also checks the prototype, and an object made in a `node:vm`
+ * context carries that context's `Object` or `Array`, so it is never reference-equal to a literal
+ * written in this file even when every field matches. Serializing once is how the two are compared.
+ */
+function local(value) {
+  return JSON.parse(JSON.stringify(value));
 }
 
 describe("result download names", () => {
@@ -766,6 +860,342 @@ describe("layer geometry helpers", () => {
       assert.equal(empty.fills.length, 0);
     });
   });
+
+  it("projects a model point the way the two documented camera poses say it should land", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      const readPoint = (point) => [point.u, point.v];
+      // pitch pi/2 looks straight down: the plane is the build plate and model y runs downwards.
+      assert.deepEqual(readPoint(http_.projectPoint(3, 5, 7, 0, Math.PI / 2)), [3, -5]);
+      // pitch 0 looks along y: the plane is the XZ elevation, so height becomes the vertical axis.
+      assert.deepEqual(readPoint(http_.projectPoint(3, 5, 7, 0, 0)), [3, 7]);
+      // yaw pi/2 swaps the model axes before either of those happens.
+      assert.deepEqual(readPoint(http_.projectPoint(3, 5, 7, Math.PI / 2, Math.PI / 2)), [5, 3]);
+      assert.deepEqual(readPoint(http_.projectPoint(3, 5, 7, Math.PI / 2, 0)), [5, 7]);
+      // Junk in, zero out: a half-parsed body must not paint NaN coordinates.
+      assert.deepEqual(readPoint(http_.projectPoint("a", "b", undefined, Number.NaN, Number.NaN)), [0, 0]);
+    });
+  });
+
+  it("frames projected points in the same padded box the layer view fits", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      const box = http_.projectedViewBox([
+        { u: 0, v: 0 },
+        { u: 20, v: 10 },
+        { u: 10, v: 5 },
+      ]);
+      // SVG grows downwards, so a v of 0..10 is framed as the y range -10..0.
+      assert.equal(box.d, "-0.4 -10.4 20.8 10.8");
+      assert.equal(box.cx, 10);
+      assert.equal(box.cy, -5);
+
+      // A single point has no extent, and a zero-size viewBox renders nowhere at all.
+      const point = http_.projectedViewBox([{ u: 5, v: 7 }]);
+      assert.equal(point.w, 1);
+      assert.equal(point.h, 1);
+      assert.equal(point.cx, 5);
+      assert.equal(point.cy, -7);
+      assert.equal(http_.projectedViewBox([]).d, http_.GEOMETRY_EMPTY_VIEW);
+      assert.equal(http_.projectedViewBox(undefined).d, http_.GEOMETRY_EMPTY_VIEW);
+      // A vertex the server sent as junk is skipped rather than dragging the box to NaN.
+      assert.equal(http_.projectedViewBox([{ u: 0, v: 0 }, { u: Number.NaN, v: 1 }]).d, "-0.5 -0.5 1 1");
+    });
+  });
+
+  it("projects every ring of a layer and reports what the budget left out", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      const square = { point_count: 4, closed: 1, xy: [0, 0, 20, 0, 20, 10, 0, 10] };
+      const angles = http_.GEOMETRY_STACK_ANGLES;
+      const drawn = http_.projectedRingPaths([square], 0.3, angles, 100);
+      assert.equal(drawn.paths.length, 1);
+      assert.equal(drawn.used, 1);
+      assert.equal(drawn.dropped, 0);
+      assert.equal(drawn.points[0].length, 4);
+      // The documented format: one M, explicit L for every vertex, and Z only for a closed ring.
+      assert.equal((drawn.paths[0].match(/M/g) || []).length, 1);
+      assert.doesNotMatch(drawn.paths[0], /[HVCSQTA]/);
+      assert.match(drawn.paths[0], / Z$/);
+
+      // Height is what separates the layers of a stack: the same ring at another z must move.
+      const higher = http_.projectedRingPaths([square], 0.6, angles, 100);
+      assert.notEqual(higher.paths[0], drawn.paths[0]);
+
+      const open = { point_count: 2, closed: 0, xy: [2, 2, 18, 2] };
+      const mixed = http_.projectedRingPaths([square, open], 0.3, angles, 100);
+      assert.equal(mixed.paths.length, 2);
+      assert.doesNotMatch(mixed.paths[1], /Z$/);
+
+      // Over budget the extras are counted and not drawn, so the panel can name what is missing.
+      const tight = http_.projectedRingPaths([square, open], 0.3, angles, 1);
+      assert.equal(tight.paths.length, 1);
+      assert.equal(tight.used, 2);
+      assert.equal(tight.dropped, 1);
+      // Two vertices is the smallest thing that can be drawn; anything less is not a ring.
+      const nothing = http_.projectedRingPaths([{ point_count: 1, closed: 1, xy: [0, 0] }], 0, angles, 10);
+      assert.equal(nothing.paths.length, 0);
+      assert.equal(nothing.points.length, 0);
+      assert.equal(nothing.used, 0);
+      assert.equal(nothing.dropped, 0);
+    });
+  });
+
+  it("draws a continuous toolpath as one polyline and drops an incomplete tail", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      const angles = http_.GEOMETRY_STACK_ANGLES;
+      const drawn = http_.projectedPathPolyline(GEOMETRY_PATH_BODY.xyz, angles);
+      assert.equal(drawn.points.length, GEOMETRY_PATH_BODY.point_count);
+      assert.equal((drawn.d.match(/M/g) || []).length, 1, "a toolpath must never be split into subpaths");
+      assert.doesNotMatch(drawn.d, /Z$/, "an uninterrupted line has no closing segment to invent");
+      assert.ok(!drawn.d.includes("NaN") && !drawn.d.includes("-0 "), drawn.d);
+
+      // One or two trailing numbers cannot form a vertex: read them as noise, not as half a point.
+      assert.equal(http_.projectedPathPolyline([0, 0, 0.3, 1, 1, 0.6, 2], angles).points.length, 2);
+      assert.equal(http_.projectedPathPolyline([], angles).d, "");
+      assert.equal(http_.projectedPathPolyline(undefined, angles).d, "");
+    });
+  });
+
+  it("shares the node budget across the layers a stack actually samples", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      assert.equal(http_.stackBudget(12), 250);
+      // An empty sample still gets the whole budget rather than dividing it by zero.
+      assert.equal(http_.stackBudget(0), http_.GEOMETRY_MAX_PATHS);
+      assert.equal(http_.stackBudget(1), http_.GEOMETRY_MAX_PATHS);
+      // A taller stack than the budget could ever serve still gets at least one path per layer.
+      assert.equal(http_.stackBudget(http_.GEOMETRY_MAX_PATHS * 2), 1);
+    });
+  });
+
+  it("samples the first and the last layer whatever the job is tall", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      const short = http_.sampleLayers(5, http_.GEOMETRY_STACK_LAYERS);
+      assert.deepEqual(Array.from(short.indices), [0, 1, 2, 3, 4]);
+      assert.equal(short.focus, 2);
+      assert.equal(http_.sampleLayers(0, 12).indices.length, 0);
+
+      const tall = http_.sampleLayers(214, http_.GEOMETRY_STACK_LAYERS);
+      assert.equal(tall.indices.length, http_.GEOMETRY_STACK_LAYERS);
+      assert.equal(tall.indices[0], 0, "a stack that hides the bottom layer misrepresents the part");
+      assert.equal(tall.indices[tall.indices.length - 1], 213, "the top layer was hidden");
+      for (let at = 1; at < tall.indices.length; at += 1) {
+        assert.ok(tall.indices[at] > tall.indices[at - 1], JSON.stringify(tall.indices));
+      }
+      assert.equal(tall.focus, tall.indices[Math.floor((tall.indices.length - 1) / 2)]);
+    });
+  });
+
+  it("walks the colour ramp from cool to warm without leaving six hex digits", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      for (const at of [0, 1, 5, 6]) {
+        assert.match(http_.sequenceColor(at, 6), /^#[0-9a-f]{6}$/);
+      }
+      // The ramp is the only thing that tells the first wall from the last one, so it has to differ.
+      assert.notEqual(http_.sequenceColor(0, 6), http_.sequenceColor(5, 6));
+      const colours = [];
+      for (let at = 0; at < 6; at += 1) {
+        colours.push(http_.sequenceColor(at, 6));
+      }
+      assert.equal(new Set(colours).size, 6, colours.join(","));
+      // A single element has no position in a ramp to be coloured by: it gets the middle of it.
+      assert.equal(http_.sequenceColor(0, 1), http_.sequenceColor(0, 1));
+      assert.equal(http_.sequenceColor(0, 0), http_.sequenceColor(0, 1));
+    });
+  });
+
+  it("marks the heading of a polyline on its longest segment", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      const view = { w: 20, h: 10 };
+      const straight = [
+        { u: 0, v: 0 },
+        { u: 10, v: 0 },
+        { u: 10, v: 1 },
+      ];
+      const marks = http_.arrowMark(straight, view);
+      assert.equal(marks.length, 1);
+      // A closed three-vertex triangle, centred on the longest segment of the polyline.
+      assert.match(marks[0], /^M .+ L .+ L .+ Z$/);
+      assert.match(marks[0], /^M 5\.12 /, "the mark belongs to the long segment, not the short one");
+      assert.equal(http_.arrowMark([], view).length, 0);
+      assert.equal(http_.arrowMark([{ u: 1, v: 1 }], view).length, 0);
+      // Coincident vertices have no direction to report.
+      assert.equal(http_.arrowMark([{ u: 1, v: 1 }, { u: 1, v: 1 }], view).length, 0);
+      // Without a known box there is no sensible size for the mark either.
+      assert.equal(http_.arrowMark(straight, { w: 0, h: 0 }).length, 0);
+      assert.equal(http_.arrowMark(straight, undefined).length, 0);
+    });
+  });
+});
+
+// ---------------------------- package entries and preview images ----------------------------
+
+describe("package entries and embedded previews", () => {
+  it("reads the preview blocks a G-code header carries", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      const blocks = http_.parseGcodeThumbnails(INLINE_GCODE);
+      assert.equal(blocks.length, 2);
+      assert.deepEqual(local(blocks[0]), {
+        name: "model_top",
+        width: 8,
+        height: 8,
+        format: "png",
+        data: "aGVsbG8=",
+        skipped: false,
+        reason: "",
+      });
+      // A skip notice is a statement about a missing picture, so it has to survive as one.
+      assert.equal(blocks[1].skipped, true);
+      assert.equal(blocks[1].name, "model_side");
+      assert.equal(blocks[1].reason, "mesh_too_large");
+      assert.equal(blocks[1].data, "");
+
+      // A chunked image is rejoined without the comment prefixes or the line breaks.
+      const wrapped = [
+        "; thumbnail begin name=long width=2 height=2 format=png b64len=12",
+        "; aGVsbG8",
+        "; wK3Rtd",
+        "; thumbnail end name=long",
+      ].join("\n");
+      assert.equal(http_.parseGcodeThumbnails(wrapped)[0].data, "aGVsbG8wK3Rtd");
+
+      // Nothing below the first command line belongs to the header, so the scan stops there: a run
+      // whose blocks are cut off by the preview budget must not be guessed at.
+      const below = ["G21", "; thumbnail begin name=late width=2 height=2 format=png b64len=2", "; aG"].join("\n");
+      assert.deepEqual(local(http_.parseGcodeThumbnails(below)), []);
+      const unclosed = ["; thumbnail begin name=cut width=2 height=2 format=png b64len=2", "; aG", "G21"].join("\n");
+      assert.deepEqual(local(http_.parseGcodeThumbnails(unclosed)), []);
+
+      // A file the engine never wrote previews for stays an empty list rather than an error.
+      for (const empty of ["", undefined, null, "G21\nG90\n"]) {
+        assert.deepEqual(local(http_.parseGcodeThumbnails(empty)), []);
+      }
+
+      // However many blocks a header carries, the reader stops at the documented bound.
+      const many = [];
+      for (let at = 0; at < http_.GCODE_THUMBNAIL_MAX_BLOCKS + 3; at += 1) {
+        many.push(
+          `; thumbnail begin name=m${at} width=1 height=1 format=png b64len=2`,
+          "; aG",
+          `; thumbnail end name=m${at}`,
+        );
+      }
+      assert.equal(http_.parseGcodeThumbnails(many.join("\n")).length, http_.GCODE_THUMBNAIL_MAX_BLOCKS);
+
+      // And one oversized block is bounded too, so a hostile file cannot grow the page without end.
+      const chunk = "; " + "A".repeat(72);
+      const lines = ["; thumbnail begin name=big width=1 height=1 format=png b64len=999999999"];
+      for (let at = 0; at < 60000; at += 1) {
+        lines.push(chunk);
+      }
+      lines.push("; thumbnail end name=big");
+      const huge = http_.parseGcodeThumbnails(lines.join("\n"));
+      assert.equal(huge.length, 1);
+      assert.ok(
+        huge[0].data.length <= http_.GCODE_THUMBNAIL_MAX_B64 + 72,
+        `collected ${huge[0].data.length} characters over a ${http_.GCODE_THUMBNAIL_MAX_B64} budget`,
+      );
+    });
+  });
+
+  it("hands a preview to the browser as a data URI, or as nothing at all", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      const block = { name: "model_top", width: 8, height: 8, format: "png", data: "aGVsbG8=", skipped: false, reason: "" };
+      assert.equal(http_.thumbnailDataUrl(block), "data:image/png;base64,aGVsbG8=");
+      assert.equal(http_.thumbnailDataUrl({ ...block, format: "jpeg" }), "data:image/jpeg;base64,aGVsbG8=");
+      assert.equal(http_.thumbnailDataUrl({ ...block, format: "svg" }), "data:image/svg+xml;base64,aGVsbG8=");
+      // An unknown format is not a picture, and a skip notice has no bytes to show.
+      assert.equal(http_.thumbnailDataUrl({ ...block, format: "tiff" }), "");
+      assert.equal(http_.thumbnailDataUrl({ ...block, format: "" }), "");
+      assert.equal(http_.thumbnailDataUrl({ ...block, skipped: true }), "");
+      assert.equal(http_.thumbnailDataUrl({ ...block, data: "" }), "");
+      assert.equal(http_.thumbnailDataUrl(undefined), "");
+    });
+  });
+
+  it("addresses one entry of a result package without walking the route", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      // A folder inside an archive is the reason the route captures a greedy tail; each component still
+      // has to be encoded on its own, or a name with a slash would address a different entry.
+      assert.equal(http_.packageEntryUrl("job-1", "layers/layer_0.png"), "/api/jobs/job-1/package/layers/layer_0.png");
+      assert.equal(http_.packageEntryUrl("a/b", "c d.png"), "/api/jobs/a%2Fb/package/c%20d.png");
+      assert.equal(http_.packageEntryUrl("job-1", "..\\config.json"), "/api/jobs/job-1/package/..%5Cconfig.json");
+      assert.equal(http_.packageEntryUrl("job-1", ""), "/api/jobs/job-1/package/");
+    });
+  });
+
+  it("proxies a package image with the type and protection the server chose", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      // The URL the page writes into <img src> is the one a browser then requests, so the console has
+      // to answer it byte for byte - and keep the header that stops a mislabeled entry being sniffed.
+      const response = await fetch(base + http_.packageEntryUrl("job-1", "layers/layer_0.png"));
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("Content-Type"), "image/png");
+      assert.equal(response.headers.get("X-Content-Type-Options"), "nosniff");
+      assert.deepEqual(Buffer.from(await response.arrayBuffer()), PACKAGE_PNG);
+
+      // A single-file result keeps the server's own sentence, which is what the strip quotes back.
+      const missing = await fetch(`${base}/api/jobs/job-2/package`);
+      assert.equal(missing.status, 404);
+      assert.match((await missing.json()).message, /result is not a package/);
+    });
+  });
+
+  it("orders the images of a package by the layer number in their names", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      const entries = [
+        { path: "layers/layer_10.png", media_type: "image/png" },
+        { path: "config.json", media_type: "application/json" },
+        { path: "layers/layer_2.png", media_type: "image/png" },
+        { path: "preview.svg", media_type: "image/svg+xml" },
+        { path: "supports/layer_1.jpg", media_type: "image/jpeg" },
+        { path: "model.gcode", media_type: "text/plain" },
+        { path: "floor.bin" },
+      ];
+      assert.deepEqual(http_.packageImages(entries).map((entry) => entry.path), [
+        "supports/layer_1.jpg",
+        "layers/layer_2.png",
+        "layers/layer_10.png",
+        "preview.svg",
+      ]);
+      // An entry the listing never typed is not an image either.
+      assert.deepEqual(local(http_.packageImages([{ path: "a.png" }])), []);
+      for (const nothing of [[], undefined, null]) {
+        assert.deepEqual(local(http_.packageImages(nothing)), []);
+      }
+      // The media types the console will draw are the ones the server will hand out.
+      assert.deepEqual(Object.keys(http_.PACKAGE_IMAGE_MEDIA_TYPES).sort(), ["image/jpeg", "image/png", "image/svg+xml"]);
+    });
+  });
+
+  it("patches submission flags into a JSON config and leaves any other format alone", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      const patched = http_.applyConfigFlags('{"layer_height":0.2,"output_path":""}', { gcode_thumbnails: 1 });
+      assert.equal(JSON.parse(patched).gcode_thumbnails, 1);
+      assert.equal(JSON.parse(patched).layer_height, 0.2);
+      assert.match(patched, /\n {2}"gcode_thumbnails": 1/, "the patch lost the editor's formatting");
+
+      // A config the server answered as TOML or INI is still a config the console must submit verbatim.
+      for (const text of ["layer_height = 0.2\n", "[fdm]\nlayer_height=0.2\n", "", "  ", "[1,2]", "5", "null"]) {
+        assert.equal(http_.applyConfigFlags(text, { gcode_thumbnails: 1 }), text, text);
+      }
+      assert.equal(http_.applyConfigFlags(undefined, { gcode_thumbnails: 1 }), "");
+      // An empty patch still normalizes JSON, which is what makes the caller's "unchanged" test mean
+      // "this is not a JSON config" rather than "nothing happened".
+      assert.equal(http_.applyConfigFlags('{"a":1}', {}), JSON.stringify({ a: 1 }, null, 2));
+    });
+  });
 });
 
 // ---------------------------- page contract ----------------------------
@@ -880,6 +1310,125 @@ describe("page contract", () => {
       assert.match(contourRule[0], /fill: none/);
 
       // A preview is still a button, not a column: the table shape must not have drifted.
+      assert.equal(headerCount(html, "jobs-body"), columnConstant(script, "JOB_COLUMNS"));
+      assert.equal(columnConstant(script, "JOB_COLUMNS"), 8);
+    });
+  });
+
+  it("offers more than one way to look at the same geometry", async () => {
+    await withConsole({}, async ({ base }) => {
+      const { html, script } = await pageBundle(base);
+      const css = await (await fetch(`${base}/app.css`)).text();
+
+      // Four buttons, one checkbox: the views are driven by the same panel, not by a second card.
+      for (const view of ["layer", "stack", "side", "path"]) {
+        assert.match(html, new RegExp(`id="geometry-view-${view}" type="button"`), view);
+      }
+      assert.match(html, /id="geometry-order" type="checkbox"/);
+
+      // Every view is dispatched by name, and the two projected ones share one sampled stack.
+      assert.match(script, /case "stack":/);
+      assert.match(script, /loadGeometryStack\(/);
+      assert.match(script, /loadGeometryPath\(/);
+      assert.match(script, /geometryPath\(geometry\.id, "\/geometry\/path"\)/);
+      assert.match(script, /HsBaHttp\.GEOMETRY_VIEWS/);
+      // The Path button is gated on the server's own flag, not on a guess about the pipeline kind.
+      assert.match(script, /has_path === 1/);
+
+      // The category colours are scoped to the unordered drawing, so the sequence can override them.
+      assert.match(css, /svg:not\(\.geometry-ordered\) \.geometry-outline path \{/);
+      const arrowRule = css.match(/\.geometry-arrow path \{[^}]*\}/);
+      assert.ok(arrowRule, "the stylesheet no longer styles the direction marks");
+      assert.match(arrowRule[0], /fill: var\(--accent\)/);
+      assert.match(css, /\.geometry-layer \{ opacity: 0\.55; \}/);
+      assert.match(css, /\.geometry-focus \{ opacity: 1; \}/);
+
+      // Four more views added no column and no table: the shape of the console has not drifted.
+      assert.equal(headerCount(html, "jobs-body"), columnConstant(script, "JOB_COLUMNS"));
+      assert.equal(columnConstant(script, "JOB_COLUMNS"), 8);
+    });
+  });
+
+  it("shows the pictures a result carries, from its header or from its package", async () => {
+    await withConsole({}, async ({ base }) => {
+      const { html, script } = await pageBundle(base);
+      const css = await (await fetch(`${base}/app.css`)).text();
+
+      // The submission option exists and is off until the operator asks for it, and it is the only
+      // kind that can honour it: nothing but FDM writes the G-code a preview can live inside.
+      assert.match(html, /<input id="fdm-thumbnails" type="checkbox">/);
+      assert.match(script, /byId\("fdm-thumbnails"\)\.disabled = byId\("kind"\)\.value !== "fdm"/);
+      assert.match(script, /async function loadKinds\(\)[\s\S]{0,900}syncThumbnailOption\(\);/);
+      // The flag is patched into the config the editor holds, and only for the kind that reads it.
+      assert.match(script, /if \(kind === "fdm"\) \{\s*body = HsBaHttp\.applyConfigFlags\(config, \{ gcode_thumbnails:/);
+
+      // Both strips live under the text panel, and each starts out hidden.
+      assert.match(html, /<div id="gcode-thumbnails" class="thumbnail-stage" hidden><\/div>/);
+      assert.match(html, /<div id="package-stage" class="package-stage" hidden>/);
+      assert.match(html, /<button id="package-browse" type="button">Images<\/button>/);
+      assert.match(html, /<img id="package-image" alt=/);
+      for (const control of ["package-prev", "package-next", "package-meta"]) {
+        assert.match(html, new RegExp(`id="${control}"`), control);
+      }
+      // The caption is the only feedback a package without pictures gives, so it must not sit inside
+      // the strip that stays hidden in that case - the message would be written and never seen.
+      const stageBlock = html.match(/<div id="package-stage"[\s\S]*?<\/div>\s*<\/div>/);
+      assert.ok(stageBlock, "the package strip no longer closes before the caption");
+      assert.doesNotMatch(stageBlock[0], /package-meta/, "the caption is hidden together with the strip");
+
+      // Assigning textContent replaces every child node, so an id the script fills in can never be an
+      // element the page also builds controls into. No fake element can catch this: the harness hands
+      // out each id as its own detached node, so a nested button simply is not there to lose. That is
+      // how Images and Clear vanished from the preview heading while every page test stayed green.
+      for (const filled of new Set(
+        [...script.matchAll(/byId\("([^"]+)"\)\.textContent =/g)].map((match) => match[1]),
+      )) {
+        const at = html.indexOf(`id="${filled}"`);
+        assert.ok(at >= 0, `${filled} is filled in by the script but is not in the page`);
+        const open = html.lastIndexOf("<", at);
+        const tag = html.slice(open + 1, at).trim().split(/[\s>]/)[0];
+        const contentStart = html.indexOf(">", at);
+        assert.match(
+          html.slice(contentStart + 1),
+          new RegExp(`^[^<]*</${tag}>`),
+          `<${tag}>#${filled} holds child elements the script would destroy`,
+        );
+      }
+      assert.match(html, /<span id="preview-title">Result preview<\/span>/);
+
+      // One fetch feeds the text and the images, so the header is never downloaded twice.
+      assert.match(script, /const body = await blob\.text\(\);[\s\S]{0,400}renderGcodeThumbnails\(body\)/);
+      assert.match(script, /HsBaHttp\.parseGcodeThumbnails\(/);
+      assert.match(script, /HsBaHttp\.thumbnailDataUrl\(/);
+      assert.match(script, /HsBaHttp\.packageImages\(/);
+      assert.match(script, /HsBaHttp\.packageEntryUrl\(/);
+      // Images reads the package of the job on screen, and nothing else.
+      assert.match(script, /callJson\("\/api\/jobs\/" \+ encodeURIComponent\(id\) \+ "\/package"\)/);
+      assert.match(script, /browsePackage\(previewedJob\.id\)/);
+
+      // A displayed block is an <img>, a skipped one is a sentence about why it is missing.
+      assert.match(script, /image\.setAttribute\("src", url\)/);
+      assert.match(script, /note\.className = "thumbnail-note"/);
+
+      // Both strips are laid out, so each needs its own hidden rule: an author display value beats
+      // the browser's default for [hidden] and would leave an empty box on screen.
+      const stageRule = css.match(/\.thumbnail-stage \{[^}]*\}/);
+      assert.ok(stageRule, "the stylesheet no longer lays out the preview strip");
+      assert.match(stageRule[0], /display: flex/);
+      assert.match(css, /\.thumbnail-stage\[hidden\] \{ display: none; \}/);
+      assert.match(css, /#package-stage\[hidden\] \{ display: none; \}/);
+      // A raster preview is upscaled, so it has to keep hard pixels, and sit on the black plate a
+      // letterboxed image needs.
+      const imageRule = css.match(/\.thumbnail-stage img, #package-image \{[^}]*\}/);
+      assert.ok(imageRule, "the stylesheet no longer styles the preview images");
+      assert.match(imageRule[0], /image-rendering: pixelated/);
+      assert.match(imageRule[0], /object-fit: contain/);
+
+      // An embedded image is a data URI, which the page's own policy has to keep allowing.
+      const csp = (await fetch(`${base}/`)).headers.get("Content-Security-Policy");
+      assert.match(csp, /img-src 'self' data:/);
+
+      // Two more panels, still no column: the shape of the console has not drifted.
       assert.equal(headerCount(html, "jobs-body"), columnConstant(script, "JOB_COLUMNS"));
       assert.equal(columnConstant(script, "JOB_COLUMNS"), 8);
     });
@@ -1199,12 +1748,49 @@ function svgGroups(harness) {
   }));
 }
 
+/**
+ * @brief Every descendant node of one element, depth first.
+ *
+ * A stack drawing nests three levels (<g> per layer, <g> per category, <path>), so an assertion on
+ * the direct children alone cannot see a direction mark at all. `children` stays a live collection.
+ */
+function descendants(node) {
+  const found = [];
+  for (const child of cells(node)) {
+    found.push(child);
+    found.push.apply(found, descendants(child));
+  }
+  return found;
+}
+
+/** @brief The single-layer geometry requests the fake server has seen, in order. */
+function layerCalls(upstream) {
+  return upstream.calls.filter((call) => /\/geometry\/\d+$/.test(call.url)).map((call) => call.url);
+}
+
 /** Flip a checkbox the way a real click would, then let the page's own handler run. */
 function toggleCheckbox(harness, id) {
   const box = harness.byId(id);
   box.checked = !box.checked;
   box.click();
   return box;
+}
+
+/**
+ * @brief Run the handlers the page registered for an event `click()` does not cover.
+ *
+ * A fake element only presses its click listeners, so a `change` handler (the pipeline selector is
+ * the one the preview-image option hangs on) would never run without this.
+ */
+function fire(node, type) {
+  for (const handler of node.listeners.get(type) || []) {
+    handler({});
+  }
+}
+
+/** @brief Every line the page's own log panel holds, oldest first. */
+function logLines(harness) {
+  return cells(harness.byId("log")).map((line) => line.textContent);
 }
 
 describe("page behaviour", () => {
@@ -1352,24 +1938,218 @@ describe("page behaviour", () => {
   it("previews an inline text result and names it after the job", async () => {
     await withConsole({}, async ({ base }) => {
       const harness = await bootPage(base);
-      const gcode = "G21\nG90\nG1 X1.0 Y2.0 E3.0 F1200\n";
 
       jobButton(harness, 1, "Preview").click();
       assert.ok(
         await harness.settle(() => harness.byId("preview").hidden === false),
         `the text result stayed hidden (${harness.byId("preview-meta").textContent})`,
       );
-      assert.equal(harness.byId("preview").textContent, gcode);
+      assert.equal(harness.byId("preview").textContent, INLINE_GCODE);
       // No Content-Disposition on the inline branch, so the panel titles it job id + .gcode.
       assert.match(harness.byId("preview-title").textContent, /job-2\.gcode/);
-      assert.match(harness.byId("preview-meta").textContent, new RegExp(`${Buffer.byteLength(gcode, "utf8")} B, 4 lines`));
+      // The comment header is part of the file, so it counts toward the reported size and lines.
+      assert.match(
+        harness.byId("preview-meta").textContent,
+        new RegExp(`${Buffer.byteLength(INLINE_GCODE, "utf8")} B, ${INLINE_GCODE.split("\n").length} lines`),
+      );
       assert.doesNotMatch(harness.byId("preview-meta").textContent, /first/);
+      assert.doesNotMatch(harness.byId("preview-meta").textContent, /no embedded previews/);
       assert.deepEqual(harness.logErrors(), []);
 
       harness.byId("preview-clear").click();
       assert.ok(await harness.settle(() => harness.byId("preview").hidden === true));
       assert.equal(harness.byId("preview-title").textContent, "Result preview");
       assert.equal(harness.byId("preview-meta").textContent, "no result previewed yet");
+      // Clearing is a clean slate for everything the panel showed, pictures included.
+      assert.equal(harness.byId("gcode-thumbnails").hidden, true);
+      assert.deepEqual(cells(harness.byId("gcode-thumbnails")), []);
+      assert.equal(harness.byId("package-stage").hidden, true);
+      assert.equal(harness.byId("package-image").getAttribute("src"), null);
+    });
+  });
+
+  it("draws the preview images a G-code result embedded in its own header", async () => {
+    await withConsole({}, async ({ upstream, base }) => {
+      const harness = await bootPage(base);
+
+      jobButton(harness, 1, "Preview").click();
+      const stage = harness.byId("gcode-thumbnails");
+      assert.ok(
+        await harness.settle(() => stage.hidden === false),
+        `the embedded previews never reached the panel (${harness.byId("preview-meta").textContent})`,
+      );
+      const image = cells(stage).find((node) => node.tagName === "IMG");
+      assert.ok(image, "a Base64 block was not turned into a picture");
+      // The bytes go to the browser as a data URI, so the picture costs no second request.
+      assert.equal(image.getAttribute("src"), "data:image/png;base64,aGVsbG8=");
+      assert.equal(image.getAttribute("alt"), "model_top");
+      assert.equal(
+        upstream.calls.filter((call) => /\/result$/.test(call.url)).length,
+        1,
+        "the preview images were fetched a second time",
+      );
+      const label = cells(stage).find((node) => node.className === "thumbnail-label");
+      assert.equal(label.textContent, "model_top (8x8)", "the picture is not attributed to a view and size");
+      assert.deepEqual(harness.logErrors(), []);
+    });
+  });
+
+  it("quotes the engine's reason for a view that never became a picture", async () => {
+    await withConsole({}, async ({ base }) => {
+      const harness = await bootPage(base);
+
+      jobButton(harness, 1, "Preview").click();
+      assert.ok(
+        await harness.settle(() => harness.byId("gcode-thumbnails").hidden === false),
+        "the preview strip stayed hidden",
+      );
+      const notes = cells(harness.byId("gcode-thumbnails")).filter((node) => node.className === "thumbnail-note");
+      assert.equal(notes.length, 1, notes.map((node) => node.textContent).join(" | "));
+      // The skip notice states which view is missing and why, in the engine's own word for it.
+      assert.equal(notes[0].textContent, "model_side was not embedded: mesh_too_large");
+      assert.deepEqual(harness.logErrors(), []);
+    });
+  });
+
+  it("tells the operator how to get previews when a result embedded none", async () => {
+    await withConsole({}, async ({ upstream, base }) => {
+      // The same job, run without the option: a plain file with no comment header at all.
+      upstream.state.inlineResult = "G21\nG90\nG1 X1.0 Y2.0 E3.0 F1200\n";
+      const harness = await bootPage(base);
+
+      jobButton(harness, 1, "Preview").click();
+      assert.ok(
+        await harness.settle(() => /gcode_thumbnails/.test(harness.byId("preview-meta").textContent)),
+        `a preview-less run said nothing about the option (${harness.byId("preview-meta").textContent})`,
+      );
+      // An empty strip is an empty strip: no box, no leftover picture from an earlier result.
+      assert.equal(harness.byId("gcode-thumbnails").hidden, true);
+      assert.deepEqual(cells(harness.byId("gcode-thumbnails")), []);
+      assert.deepEqual(harness.logErrors(), []);
+    });
+  });
+
+  it("opens the images of a packed result and steps through them without re-listing", async () => {
+    await withConsole({}, async ({ upstream, base }) => {
+      const harness = await bootPage(base);
+      // job-1's result is a binary download, which is exactly the case Images exists for.
+      jobButton(harness, 0, "Preview").click();
+      assert.ok(
+        await harness.settle(() => /not text/.test(harness.byId("preview-meta").textContent)),
+        "the binary result never landed",
+      );
+
+      harness.byId("package-browse").click();
+      assert.ok(
+        await harness.settle(() => harness.byId("package-stage").hidden === false),
+        `the package strip stayed shut (${harness.byId("package-meta").textContent})`,
+      );
+      const listings = () => upstream.calls.filter((call) => call.url === "/api/jobs/job-1/package").length;
+      assert.equal(listings(), 1, "opening the package listed it more than once");
+      // The first image is the lowest layer, addressed by the entry URL the tested helper builds.
+      assert.equal(harness.byId("package-image").getAttribute("src"), "/api/jobs/job-1/package/layers/layer_0.png");
+      assert.equal(harness.byId("package-meta").textContent, "layers/layer_0.png (1/2)");
+
+      harness.byId("package-next").click();
+      assert.ok(
+        await harness.settle(() => /layer_1\.png/.test(harness.byId("package-image").getAttribute("src") || "")),
+        `Next never moved the strip (${harness.byId("package-meta").textContent})`,
+      );
+      assert.equal(harness.byId("package-meta").textContent, "layers/layer_1.png (2/2)");
+
+      // Both ends stop instead of wrapping, and none of the stepping costs the server a listing.
+      harness.byId("package-next").click();
+      await harness.settle(() => true);
+      assert.match(harness.byId("package-image").getAttribute("src"), /layer_1\.png$/);
+      harness.byId("package-prev").click();
+      assert.ok(
+        await harness.settle(() => /layer_0\.png/.test(harness.byId("package-image").getAttribute("src") || "")),
+        "Prev never went back",
+      );
+      assert.equal(listings(), 1, "stepping through the package relisted it");
+
+      // The strip belongs to the job it was opened for. Previewing another result has to put its
+      // pictures away, or the operator reads job-1's layer under job-2's heading - the fake DOM
+      // keeps every id detached, so only this behavioural assertion can catch a missed reset.
+      jobButton(harness, 1, "Preview").click();
+      assert.ok(
+        await harness.settle(() => /job-2/.test(harness.byId("preview-title").textContent)),
+        `the second preview never reached the heading (${harness.byId("preview-title").textContent})`,
+      );
+      assert.equal(harness.byId("package-stage").hidden, true, "the previous job's layer stayed on screen");
+      assert.equal(harness.byId("package-image").getAttribute("src"), null, "the strip still points at the old entry");
+      assert.equal(harness.byId("package-meta").textContent, "", "the old caption survived the switch");
+      assert.deepEqual(harness.logErrors(), []);
+    });
+  });
+
+  it("says plainly when there is no package to open", async () => {
+    await withConsole({}, async ({ base }) => {
+      const harness = await bootPage(base);
+
+      // Nothing previewed yet: the strip has no job to ask about, and must not guess one.
+      harness.byId("package-browse").click();
+      assert.ok(
+        await harness.settle(() => /preview a result first/.test(logLines(harness).join(" | "))),
+        "Images with no result on screen said nothing",
+      );
+      assert.deepEqual(harness.logErrors(), []);
+
+      // A single-file result: the server's own sentence is what the strip shows, and the failure is
+      // still logged because an operator reading the screen cannot see the response body.
+      jobButton(harness, 1, "Preview").click();
+      assert.ok(await harness.settle(() => harness.byId("preview").hidden === false), "the preview never came up");
+      harness.byId("package-browse").click();
+      assert.ok(
+        await harness.settle(() => /not a package/.test(harness.byId("package-meta").textContent)),
+        `a single-file result was not explained (${harness.byId("package-meta").textContent})`,
+      );
+      assert.equal(harness.byId("package-meta").textContent, "this result is a single file, not a package");
+      assert.equal(harness.byId("package-stage").hidden, true);
+      assert.equal(harness.logErrors().length, 1, harness.logErrors().join(" | "));
+      assert.match(harness.logErrors()[0], /result is not a package/);
+    });
+  });
+
+  it("sends the preview-image flag only to the pipeline that embeds previews", async () => {
+    await withConsole({}, async ({ upstream, base }) => {
+      const harness = await bootPage(base);
+      assert.ok(
+        await harness.settle(() => harness.byId("kind").value === "fdm" && harness.byId("config").value.length > 0),
+        "the pipeline list or its default config never arrived",
+      );
+      assert.equal(harness.byId("fdm-thumbnails").disabled, false, "fdm is selected and the option is greyed out");
+      const posted = () =>
+        upstream.calls.filter((call) => call.method === "POST" && (call.url || "").startsWith("/api/jobs/fdm"));
+
+      toggleCheckbox(harness, "fdm-thumbnails");
+      harness.byId("submit").click();
+      assert.ok(await harness.settle(() => posted().length === 1), "no submission reached the server");
+      assert.equal(JSON.parse(posted()[0].body).gcode_thumbnails, 1);
+      // The patch adds a key, it does not replace the config the operator loaded.
+      assert.equal(JSON.parse(posted()[0].body).layer_height, 0.2);
+
+      toggleCheckbox(harness, "fdm-thumbnails");
+      harness.byId("submit").click();
+      assert.ok(await harness.settle(() => posted().length === 2), "the second submission never arrived");
+      assert.equal(JSON.parse(posted()[1].body).gcode_thumbnails, 0, "an unticked box must still say so");
+
+      // A config the console cannot parse is submitted exactly as it stands, with a line in the log.
+      harness.byId("config").value = "layer_height = 0.2\n";
+      harness.byId("submit").click();
+      assert.ok(await harness.settle(() => posted().length === 3), "the verbatim submission never arrived");
+      assert.equal(posted()[2].body, "layer_height = 0.2");
+      assert.match(logLines(harness).join(" | "), /gcode_thumbnails not applied/);
+
+      // Another pipeline has no G-code to embed, so its option is off and its config is untouched.
+      const kind = harness.byId("kind");
+      kind.value = "sla";
+      fire(kind, "change");
+      assert.ok(
+        await harness.settle(() => harness.byId("fdm-thumbnails").disabled === true),
+        "a package-writing kind kept the preview option enabled",
+      );
+      assert.deepEqual(harness.logErrors(), []);
     });
   });
 
@@ -1511,6 +2291,199 @@ describe("page behaviour", () => {
       const harness = await bootPage(base);
       assert.equal(jobButton(harness, 0, "Geometry").disabled, false, "a captured job lost its button");
       assert.equal(jobButton(harness, 1, "Geometry").disabled, true, "a job with no geometry is offered a preview");
+    });
+  });
+
+  it("stacks the sampled layers of the same snapshot without a second server", async () => {
+    await withConsole({}, async ({ upstream, base }) => {
+      const harness = await bootPage(base);
+      jobButton(harness, 0, "Geometry").click();
+      assert.ok(
+        await harness.settle(() => harness.byId("geometry-stage").hidden === false),
+        "the layer view never came up",
+      );
+      const before = layerCalls(upstream).length;
+
+      harness.byId("geometry-view-stack").click();
+      assert.ok(
+        await harness.settle(() => /stack 2 layers/.test(harness.byId("geometry-meta").textContent)),
+        `the stack never reached the panel (${harness.byId("geometry-meta").textContent})`,
+      );
+      // Each sampled layer is its own group, so a ring can still be attributed to a height.
+      const planes = descendants(harness.byId("geometry-svg")).filter((node) => node.getAttribute("data-layer") !== null);
+      assert.deepEqual(planes.map((node) => node.getAttribute("data-layer")), ["0", "1"]);
+      assert.match(planes[0].getAttribute("class"), /geometry-focus/, "the sample highlights no layer");
+      // The sample is what a two-layer job has: both layers, asked for one at a time.
+      assert.deepEqual(layerCalls(upstream).slice(before), [
+        "/api/jobs/job-1/geometry/0",
+        "/api/jobs/job-1/geometry/1",
+      ]);
+      // A stacked drawing has no single layer to step through, so the stepper stands down.
+      assert.equal(harness.byId("geometry-layer").disabled, true);
+      assert.deepEqual(harness.logErrors(), []);
+    });
+  });
+
+  it("keeps a sampled stack in memory when the operator switches back and forth", async () => {
+    await withConsole({}, async ({ upstream, base }) => {
+      const harness = await bootPage(base);
+      jobButton(harness, 0, "Geometry").click();
+      assert.ok(
+        await harness.settle(() => harness.byId("geometry-stage").hidden === false),
+        "the layer view never came up",
+      );
+      harness.byId("geometry-view-stack").click();
+      assert.ok(
+        await harness.settle(() => /stack 2 layers/.test(harness.byId("geometry-meta").textContent)),
+        "the stack never reached the panel",
+      );
+      const stacked = layerCalls(upstream).length;
+
+      // Spinning the view must re-project from what is already fetched: asking the server for the
+      // same two layers again would put a hundred requests behind the slice the page is watching.
+      harness.byId("geometry-view-layer").click();
+      assert.ok(
+        await harness.settle(() => /layer 1 \/ 2/.test(harness.byId("geometry-meta").textContent)),
+        "the single layer never came back",
+      );
+      const afterLayer = layerCalls(upstream).length;
+      assert.equal(afterLayer, stacked + 1, "returning to the layer view fetched more than its own layer");
+
+      harness.byId("geometry-view-stack").click();
+      assert.ok(
+        await harness.settle(() => /stack 2 layers/.test(harness.byId("geometry-meta").textContent)),
+        "the stack never came back",
+      );
+      assert.equal(layerCalls(upstream).length, afterLayer, "the second stack refetched its layers");
+      assert.deepEqual(harness.logErrors(), []);
+    });
+  });
+
+  it("draws the continuous toolpath from the path endpoint alone", async () => {
+    await withConsole({}, async ({ upstream, base }) => {
+      const harness = await bootPage(base);
+      jobButton(harness, 0, "Geometry").click();
+      assert.ok(
+        await harness.settle(() => harness.byId("geometry-stage").hidden === false),
+        "the layer view never came up",
+      );
+
+      harness.byId("geometry-view-path").click();
+      assert.ok(
+        await harness.settle(() => /path 6 points/.test(harness.byId("geometry-meta").textContent)),
+        `the path never reached the panel (${harness.byId("geometry-meta").textContent})`,
+      );
+      const asked = upstream.calls.filter((call) => /\/geometry\/path$/.test(call.url));
+      assert.equal(asked.length, 1);
+      // The polyline is its own data: getting it must not drag the per-layer endpoint along.
+      assert.deepEqual(layerCalls(upstream), ["/api/jobs/job-1/geometry/0"]);
+
+      // What the page drew has to be what the helpers say the served body projects to.
+      const http_ = await loadHelpers(base);
+      const expected = http_.projectedPathPolyline(
+        GEOMETRY_PATH_BODY.xyz,
+        http_.GEOMETRY_STACK_ANGLES,
+      );
+      const groups = descendants(harness.byId("geometry-svg")).filter((node) => node.getAttribute("class") === "geometry-path");
+      assert.equal(groups.length, 1);
+      assert.equal(cells(groups[0])[0].getAttribute("d"), expected.d);
+      assert.match(harness.byId("geometry-meta").textContent, /z 0\.3 - 2\.4 mm/);
+
+      // A second press is a redraw, not a second download of the same polyline.
+      harness.byId("geometry-view-path").click();
+      harness.byId("geometry-view-path").click();
+      await harness.settle(() => true);
+      assert.equal(
+        upstream.calls.filter((call) => /\/geometry\/path$/.test(call.url)).length,
+        1,
+        "re-entering the path view refetched the toolpath",
+      );
+      assert.deepEqual(harness.logErrors(), []);
+    });
+  });
+
+  it("refuses the path view for a run that deposited no continuous line", async () => {
+    await withConsole({}, async ({ upstream, base }) => {
+      const harness = await bootPage(base);
+      // The listing stands in for a run that captured its layers but never deposited a helix: the
+      // overview says has_path 0, and that is the only thing the panel has to go on.
+      upstream.state.jobs = [
+        DEFAULT_JOBS[0],
+        Object.assign({}, DEFAULT_JOBS[1], { geometry_available: 1, geometry_layers: 2 }),
+      ];
+      harness.byId("jobs-refresh").click();
+      const body = harness.byId("jobs-body");
+      assert.ok(
+        await harness.settle(() => body.children.length === 2 && body.children[1].children[0].textContent === "job-2"),
+        "the run without a path never reached the table",
+      );
+      jobButton(harness, 1, "Geometry").click();
+      assert.ok(
+        await harness.settle(() => harness.byId("geometry-stage").hidden === false),
+        "the layers of a non-spiral run were not drawn",
+      );
+      assert.equal(harness.byId("geometry-view-path").disabled, true, "a run with no path is offered the Path view");
+
+      // A forced click (the DOM still routes a disabled button's handler to nobody in a browser,
+      // but the page's own gate has to hold) says so without spending a request that can only 404.
+      const before = upstream.calls.length;
+      harness.byId("geometry-view-path").click();
+      assert.ok(
+        await harness.settle(() => /spiral_mode=1/.test(harness.byId("geometry-meta").textContent)),
+        `the refusal never reached the panel (${harness.byId("geometry-meta").textContent})`,
+      );
+      assert.equal(harness.byId("geometry-stage").hidden, true, "a refused view kept the stale drawing");
+      assert.equal(upstream.calls.length, before, "the refusal still asked the server for a path");
+      assert.equal(harness.logErrors().length, 1, harness.logErrors().join(" | "));
+      assert.match(harness.logErrors()[0], /spiral_mode=1/);
+    });
+  });
+
+  it("colours the drawing by deposition order without asking the server again", async () => {
+    await withConsole({}, async ({ upstream, base }) => {
+      const harness = await bootPage(base);
+      jobButton(harness, 0, "Geometry").click();
+      assert.ok(
+        await harness.settle(() => harness.byId("geometry-stage").hidden === false),
+        "the layer view never came up",
+      );
+      harness.byId("geometry-view-stack").click();
+      assert.ok(
+        await harness.settle(() => /stack 2 layers/.test(harness.byId("geometry-meta").textContent)),
+        "the stack never reached the panel",
+      );
+      const before = upstream.calls.length;
+
+      toggleCheckbox(harness, "geometry-order");
+      assert.ok(
+        await harness.settle(() => harness.byId("geometry-svg").getAttribute("class") === "geometry-ordered"),
+        "the ordered class never reached the drawing",
+      );
+      const strokes = descendants(harness.byId("geometry-svg"))
+        .filter((node) => node.getAttribute("d") !== null && node.getAttribute("stroke") !== null)
+        .map((node) => node.getAttribute("stroke"));
+      assert.ok(strokes.length >= 4, `only ${strokes.length} paths were coloured`);
+      assert.equal(new Set(strokes).size, strokes.length, "two elements of the sequence shared a colour");
+      for (const stroke of strokes) {
+        assert.match(stroke, /^#[0-9a-f]{6}$/);
+      }
+      assert.ok(
+        descendants(harness.byId("geometry-svg")).some((node) => node.getAttribute("class") === "geometry-arrow"),
+        "the coloured drawing carries no direction mark",
+      );
+
+      // Unchecking hands the colours back to the stylesheet, attributes and all.
+      toggleCheckbox(harness, "geometry-order");
+      assert.ok(
+        await harness.settle(() => harness.byId("geometry-svg").getAttribute("class") === null),
+        "the ordered class outlived the checkbox",
+      );
+      assert.ok(
+        descendants(harness.byId("geometry-svg")).every((node) => node.getAttribute("stroke") === null),
+        "a path kept its sequence colour after the switch went off",
+      );
+      assert.equal(upstream.calls.length, before, "toggling the colouring refetched the geometry");
+      assert.deepEqual(harness.logErrors(), []);
     });
   });
 

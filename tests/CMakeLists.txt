@@ -1580,6 +1580,8 @@ if(TARGET DllHsBaSlicer)
       PRIVATE
       DllHsBaSlicer
       HsBaPipelineTypes
+      # The preview case decodes the Base64 a job wrote into its G-code back into image bytes.
+      HsBaCipher
       Boost::unit_test_framework
   )
 

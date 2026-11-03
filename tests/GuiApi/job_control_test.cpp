@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 
 #define BOOST_TEST_MODULE GuiApiJobControlTest
@@ -22,6 +23,7 @@
 #include "DllHsBaSlicer/geometry_export.h"
 #include "DllHsBaSlicer/job_control.h"
 #include "DllHsBaSlicer/progress_stage.h"
+#include "cipher/encoder.hpp"
 #include "pipelinetypes/pipeline_types.h"
 
 namespace
@@ -36,6 +38,25 @@ HsBaFdmPipelineConfig_t MissingModelConfig()
     cfg.model_name = "gui-job-control-missing";
     cfg.model_path = "hsba-gui-job-control-missing-model.stl";
     return cfg;
+}
+
+/**
+ * @brief Mesh a full slice can be run on, or an empty string when the caller did not
+ *        provide one (HSBA_SAMPLE_MODEL), which is how the real-geometry cases opt out.
+ */
+std::string SampleModelPath()
+{
+#ifdef _WIN32
+    char* buffer = nullptr;
+    std::size_t buffer_size = 0;
+    _dupenv_s(&buffer, &buffer_size, "HSBA_SAMPLE_MODEL");
+    const std::string model_path = buffer ? std::string(buffer) : std::string();
+    std::free(buffer);
+#else
+    const char* raw_model = std::getenv("HSBA_SAMPLE_MODEL");
+    const std::string model_path = raw_model ? std::string(raw_model) : std::string();
+#endif
+    return model_path;
 }
 
 /**
@@ -99,6 +120,43 @@ void OnJobDone(HsBaJobHandle job, void* user_data)
 bool CancelledText(const char* message)
 {
     return message && std::string(message).rfind("Cancelled", 0) == 0;
+}
+
+/**
+ * @brief Base64 text of one thumbnail block with its comment lines rejoined, empty when the
+ *        model view was never written or came out as a skip notice.
+ *
+ * This is the reading a G-code consumer has to do: gather the lines between the begin and end
+ * markers of a named image and drop the comment prefix from each of them.
+ */
+std::string ThumbnailBase64(const std::string& gcode, const std::string& name)
+{
+    const std::size_t start = gcode.find("; thumbnail begin name=" + name);
+    if (start == std::string::npos)
+    {
+        return {};
+    }
+    const std::size_t block_end = gcode.find("; thumbnail end name=" + name, start);
+    if (block_end == std::string::npos)
+    {
+        BOOST_ERROR("thumbnail block of " + name + " is never closed");
+        return {};
+    }
+    std::string joined;
+    std::size_t pos = gcode.find('\n', start) + 1;  // behind the metadata line
+    while (pos < block_end)
+    {
+        const std::size_t line_end = gcode.find('\n', pos);
+        if (line_end == std::string::npos || line_end > block_end)
+        {
+            break;
+        }
+        const std::string_view line(gcode.data() + pos, line_end - pos);
+        BOOST_CHECK_EQUAL(line.substr(0, 2), "; ");  // every payload line stays a comment
+        joined.append(line.substr(2));
+        pos = line_end + 1;
+    }
+    return joined;
 }
 }  // namespace
 
@@ -244,16 +302,7 @@ BOOST_AUTO_TEST_CASE(cancel_flag_of_a_synchronous_run_is_reported_as_cancelled)
 BOOST_AUTO_TEST_CASE(captured_geometry_is_readable_after_the_job_ended)
 {
     // Needs a real mesh, so it only runs when the caller points at one.
-#ifdef _WIN32
-    char* buffer = nullptr;
-    std::size_t buffer_size = 0;
-    _dupenv_s(&buffer, &buffer_size, "HSBA_SAMPLE_MODEL");
-    const std::string model_path = buffer ? std::string(buffer) : std::string();
-    std::free(buffer);
-#else
-    const char* raw_model = std::getenv("HSBA_SAMPLE_MODEL");
-    const std::string model_path = raw_model ? std::string(raw_model) : std::string();
-#endif
+    const std::string model_path = SampleModelPath();
     if (model_path.empty())
     {
         BOOST_TEST_MESSAGE("skip: set HSBA_SAMPLE_MODEL to a sliceable mesh to cover geometry capture");
@@ -278,6 +327,11 @@ BOOST_AUTO_TEST_CASE(captured_geometry_is_readable_after_the_job_ended)
     BOOST_CHECK_EQUAL(view.success, 1);
     BOOST_CHECK_GT(view.total_layers, 0);
 
+    // The previews are strictly opt-in, and the default stays off: a run that never asked for a
+    // picture must not grow a comment block the caller would then have to explain away.
+    BOOST_REQUIRE(view.inline_content != nullptr);
+    BOOST_CHECK_EQUAL(std::string(view.inline_content).find("; thumbnail"), std::string::npos);
+
     const long long geometry_id = HsBaJobGeometryId(job);
     BOOST_CHECK_GT(geometry_id, 0);
     BOOST_CHECK_EQUAL(view.geometry_id, geometry_id);
@@ -298,6 +352,130 @@ BOOST_AUTO_TEST_CASE(captured_geometry_is_readable_after_the_job_ended)
     BOOST_CHECK_GT(HsBaGeometryLayerCount(geometry_id), 0);
     HsBaReleaseGeometrySnapshot(geometry_id);  // the reference the capture itself owns
     BOOST_CHECK_EQUAL(HsBaGeometryLayerCount(geometry_id), 0);
+
+    HsBaFreeJobResultView(&view);
+    HsBaReleaseJob(job);
+}
+
+BOOST_AUTO_TEST_CASE(spiral_run_captures_a_rising_path)
+{
+    // Same mesh requirement as the layer-capture case above.
+    const std::string model_path = SampleModelPath();
+    if (model_path.empty())
+    {
+        BOOST_TEST_MESSAGE("skip: set HSBA_SAMPLE_MODEL to a sliceable mesh to cover path capture");
+        return;
+    }
+
+    HsBaFdmPipelineConfig_t cfg = MissingModelConfig();
+    cfg.model_path = model_path.c_str();
+    cfg.enable_support = 0;
+    cfg.capture_geometry = 1;
+    cfg.spiral_mode = 1;
+    HsBaJobHandle job = HsBaSubmitJob(HSBA_PIPELINE_FDM, &cfg, nullptr, nullptr, nullptr, nullptr);
+    BOOST_REQUIRE(job != nullptr);
+    BOOST_CHECK_EQUAL(HsBaWaitJob(job, kJobTimeoutMs), 1);
+
+    if (HsBaJobGetState(job) != HSBA_JOB_SUCCEEDED)
+    {
+        BOOST_FAIL(std::string("spiral run did not slice, job state ") +
+                   std::to_string(static_cast<int>(HsBaJobGetState(job))));
+    }
+    HsBaJobResultView_t view{};
+    BOOST_REQUIRE_EQUAL(HsBaJobCopyResult(job, &view), 1);
+    BOOST_CHECK_EQUAL(view.success, 1);
+
+    const long long geometry_id = HsBaJobGeometryId(job);
+    BOOST_REQUIRE_GT(geometry_id, 0);
+    const int layers = HsBaGeometryLayerCount(geometry_id);
+    BOOST_REQUIRE_GT(layers, 0);
+    // A helix visits every layer at least twice (the seam is shared with the next one),
+    // so a stored path shorter than that means the capture branch never ran.
+    BOOST_REQUIRE_GE(HsBaGeometryPathPointCount(geometry_id), 2 * layers);
+
+    BOOST_CHECK_EQUAL(HsBaRetainGeometrySnapshot(geometry_id), geometry_id);
+    HsBaGeometryPath_t path{};
+    BOOST_REQUIRE_EQUAL(HsBaGetGeometryPath(geometry_id, &path), 1);
+    BOOST_REQUIRE(path.xyz);
+    BOOST_CHECK_GT(path.point_count, 0);
+    // The polyline is Z-monotone by construction: it only ever climbs.
+    for (int i = 1; i < path.point_count; ++i)
+    {
+        const double previous = path.xyz[3 * (i - 1) + 2];
+        const double current = path.xyz[3 * i + 2];
+        BOOST_CHECK_GE(current, previous - 1e-9);
+    }
+    BOOST_CHECK_GT(path.z_max, path.z_min);
+    HsBaFreeGeometryPath(&path);
+    BOOST_CHECK_EQUAL(path.xyz, nullptr);
+
+    HsBaReleaseGeometrySnapshot(geometry_id);  // the host reference
+    BOOST_CHECK_GT(HsBaGeometryLayerCount(geometry_id), 0);
+    HsBaReleaseGeometrySnapshot(geometry_id);  // the reference the capture itself owns
+    BOOST_CHECK_EQUAL(HsBaGeometryLayerCount(geometry_id), 0);
+
+    HsBaFreeJobResultView(&view);
+    HsBaReleaseJob(job);
+}
+
+BOOST_AUTO_TEST_CASE(thumbnail_switch_embeds_a_png_in_the_gcode_comments)
+{
+    // The previews come from a real mesh, so this case needs the same sample model as the two above.
+    const std::string model_path = SampleModelPath();
+    if (model_path.empty())
+    {
+        BOOST_TEST_MESSAGE("skip: set HSBA_SAMPLE_MODEL to a sliceable mesh to cover g-code previews");
+        return;
+    }
+
+    HsBaFdmPipelineConfig_t cfg = MissingModelConfig();
+    cfg.model_path = model_path.c_str();
+    cfg.enable_support = 0;
+    cfg.gcode_thumbnails = 1;
+    cfg.gcode_thumbnail_size = 64;  // a preview, not a render
+    HsBaJobHandle job = HsBaSubmitJob(HSBA_PIPELINE_FDM, &cfg, nullptr, nullptr, nullptr, nullptr);
+    BOOST_REQUIRE(job != nullptr);
+    BOOST_CHECK_EQUAL(HsBaWaitJob(job, kJobTimeoutMs), 1);
+
+    if (HsBaJobGetState(job) != HSBA_JOB_SUCCEEDED)
+    {
+        BOOST_FAIL(std::string("preview run did not slice, job state ") +
+                   std::to_string(static_cast<int>(HsBaJobGetState(job))));
+    }
+    HsBaJobResultView_t view{};
+    BOOST_REQUIRE_EQUAL(HsBaJobCopyResult(job, &view), 1);
+    BOOST_REQUIRE_EQUAL(view.success, 1);
+    BOOST_REQUIRE(view.inline_content != nullptr);
+    const std::string gcode(view.inline_content);
+
+    // Both views belong to the head of the file, ahead of the banner and of the first move.
+    BOOST_CHECK_LT(gcode.find("; thumbnail begin"), gcode.find("; Generated by HsBaSlicer"));
+    BOOST_CHECK_LT(gcode.find("; thumbnail end"), gcode.find("G1 "));
+
+    // The requested edge reaches the image, and a sample mesh projects into every view: a skip
+    // notice here would mean the pipeline handed over polygons it could not draw.
+    BOOST_CHECK_EQUAL(gcode.find("; thumbnail skipped"), std::string::npos);
+    for (const std::string& name : {"model_top", "model_side"})
+    {
+        BOOST_CHECK(gcode.find("; thumbnail begin name=" + name + " width=64 height=64 format=png b64len=") !=
+                    std::string::npos);
+        BOOST_CHECK(gcode.find("; thumbnail end name=" + name) != std::string::npos);
+    }
+
+    // Decoding is what makes the block worth having: the rejoined chunks must be a PNG of the size
+    // the caller asked for, not some placeholder bytes.
+    const std::string encoded = ThumbnailBase64(gcode, "model_top");
+    BOOST_CHECK_GT(encoded.size(), 100U);
+    const std::string png = HsBa::Slicer::Cipher::Encoder::base64_decode_to_string(encoded);
+    BOOST_REQUIRE_GE(png.size(), 24U);
+    BOOST_CHECK_EQUAL(png.substr(0, 8), std::string("\x89PNG\r\n\x1a\n", 8));
+    // IHDR stores width and height as big-endian 32-bit values, both below 256 here.
+    BOOST_CHECK_EQUAL(png[16], '\0');
+    BOOST_CHECK_EQUAL(png[17], '\0');
+    BOOST_CHECK_EQUAL(png[18], '\0');
+    BOOST_CHECK_EQUAL(png[19], '\x40');  // 64
+    BOOST_CHECK_EQUAL(png[22], '\0');
+    BOOST_CHECK_EQUAL(png[23], '\x40');  // 64
 
     HsBaFreeJobResultView(&view);
     HsBaReleaseJob(job);

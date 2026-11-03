@@ -36,6 +36,8 @@ add_library(HsBaSlicerRestApi STATIC
     upload_bridge.cpp
     upload_store.hpp
     upload_store.cpp
+    package_reader.hpp
+    package_reader.cpp
     routes.hpp
     routes.cpp)
 
