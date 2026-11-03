@@ -90,9 +90,19 @@ extern "C"
 
     /**
      * @brief FDM pipeline configuration (C-compatible struct).
+     *
+     * ABI guard: every Config starts with @c struct_size. Callers must either use
+     * the matching HsBa*ConfigDefault() factory (which fills it with @c sizeof(cfg))
+     * or set it explicitly. The library clones only @c min(struct_size, sizeof(new))
+     * bytes and zero-fills the tail, so fields added later on the library side are
+     * never read from a host compiled against an older header. A caller that leaves
+     * @c struct_size at 0 (aggregate @c {0} initialization) is treated as
+     * "size unknown" and receives the previous full-struct copy.
      */
     typedef struct HsBaFdmPipelineConfig
     {
+        unsigned struct_size;  ///< Set to sizeof(HsBaFdmPipelineConfig_t); 0 = legacy full-size copy.
+
         /* Model Configuration */
         const char* model_name;  ///< Model name
         const char* model_path;  ///< Model file path
@@ -219,6 +229,8 @@ extern "C"
      */
     typedef struct HsBaSlaPipelineConfig
     {
+        unsigned struct_size;  ///< See HsBaFdmPipelineConfig#struct_size.
+
         /* Model Configuration */
         const char* model_name;  ///< Model name
         const char* model_path;  ///< Model file path
@@ -313,6 +325,8 @@ extern "C"
      */
     typedef struct HsBaSlsPipelineConfig
     {
+        unsigned struct_size;  ///< See HsBaFdmPipelineConfig#struct_size.
+
         /* Model Configuration */
         const char* model_name;  ///< Model name
         const char* model_path;  ///< Model file path
@@ -418,6 +432,8 @@ extern "C"
      */
     typedef struct HsBaSlmPipelineConfig
     {
+        unsigned struct_size;  ///< See HsBaFdmPipelineConfig#struct_size.
+
         const char* model_name;             ///< Model name
         const char* model_path;             ///< Model file path
         float layer_height;                 ///< Layer height (mm)
@@ -484,6 +500,8 @@ extern "C"
      */
     typedef struct HsBaLomPipelineConfig
     {
+        unsigned struct_size;  ///< See HsBaFdmPipelineConfig#struct_size.
+
         const char* model_name;         ///< Model name
         const char* model_path;         ///< Model file path
         float layer_height;             ///< Sheet thickness (mm)
@@ -551,6 +569,8 @@ extern "C"
      */
     typedef struct HsBaTdpPipelineConfig
     {
+        unsigned struct_size;  ///< See HsBaFdmPipelineConfig#struct_size.
+
         const char* model_name;           ///< Model name
         const char* model_path;           ///< Model file path
         float layer_height;               ///< Layer height (mm)
@@ -657,6 +677,8 @@ extern "C"
      */
     typedef struct HsBaWaamPipelineConfig
     {
+        unsigned struct_size;  ///< See HsBaFdmPipelineConfig#struct_size.
+
         const char* model_name;                 ///< Model name
         const char* model_path;                 ///< Model file path
         float layer_height;                     ///< Bead/layer height (mm)
@@ -723,6 +745,8 @@ extern "C"
      */
     typedef struct HsBaFileTransferPipelineConfig
     {
+        unsigned struct_size;  ///< See HsBaFdmPipelineConfig#struct_size.
+
         /* Connection Configuration */
         const char* host;  ///< Remote host address (must not be NULL)
         const char* port;  ///< Remote service port (must not be NULL)
@@ -780,6 +804,8 @@ extern "C"
      */
     typedef struct HsBaCustomPipelineConfig
     {
+        unsigned struct_size;  ///< See HsBaFdmPipelineConfig#struct_size.
+
         /* Lua Pipeline Definition */
         const char* pipeline_lua_script;  ///< Path to the pipeline Lua script (must not be NULL unless source is set)
         const char* pipeline_lua_source;  ///< Inline Lua source executed before the script file (can be NULL)
@@ -839,6 +865,7 @@ extern "C"
     static inline HsBaFdmPipelineConfig_t HsBaFdmConfigDefault(void)
     {
         HsBaFdmPipelineConfig_t cfg;
+        cfg.struct_size = sizeof(cfg);
         cfg.model_name = 0;
         cfg.model_path = 0;
         cfg.layer_height = 0.2f;
@@ -891,6 +918,7 @@ extern "C"
     static inline HsBaSlaPipelineConfig_t HsBaSlaConfigDefault(void)
     {
         HsBaSlaPipelineConfig_t cfg;
+        cfg.struct_size = sizeof(cfg);
         cfg.model_name = 0;
         cfg.model_path = 0;
         cfg.layer_height = 0.05f;
@@ -935,6 +963,7 @@ extern "C"
     static inline HsBaSlsPipelineConfig_t HsBaSlsConfigDefault(void)
     {
         HsBaSlsPipelineConfig_t cfg;
+        cfg.struct_size = sizeof(cfg);
         cfg.model_name = 0;
         cfg.model_path = 0;
         cfg.layer_height = 0.1f;
@@ -959,6 +988,7 @@ extern "C"
     static inline HsBaSlmPipelineConfig_t HsBaSlmConfigDefault(void)
     {
         HsBaSlmPipelineConfig_t cfg;
+        cfg.struct_size = sizeof(cfg);
         cfg.model_name = 0;
         cfg.model_path = 0;
         cfg.layer_height = 0.06f;
@@ -986,6 +1016,7 @@ extern "C"
     static inline HsBaLomPipelineConfig_t HsBaLomConfigDefault(void)
     {
         HsBaLomPipelineConfig_t cfg;
+        cfg.struct_size = sizeof(cfg);
         cfg.model_name = 0;
         cfg.model_path = 0;
         cfg.layer_height = 0.2f;
@@ -1013,6 +1044,7 @@ extern "C"
     static inline HsBaTdpPipelineConfig_t HsBaTdpConfigDefault(void)
     {
         HsBaTdpPipelineConfig_t cfg;
+        cfg.struct_size = sizeof(cfg);
         cfg.model_name = 0;
         cfg.model_path = 0;
         cfg.layer_height = 0.1f;
@@ -1040,6 +1072,7 @@ extern "C"
     static inline HsBaWaamPipelineConfig_t HsBaWaamConfigDefault(void)
     {
         HsBaWaamPipelineConfig_t cfg;
+        cfg.struct_size = sizeof(cfg);
         cfg.model_name = 0;
         cfg.model_path = 0;
         cfg.layer_height = 0.8f;
@@ -1073,6 +1106,7 @@ extern "C"
     static inline HsBaFileTransferPipelineConfig_t HsBaFileTransferConfigDefault(void)
     {
         HsBaFileTransferPipelineConfig_t cfg;
+        cfg.struct_size = sizeof(cfg);
         cfg.host = 0;
         cfg.port = 0;
         cfg.pool_size = 4;
@@ -1090,6 +1124,7 @@ extern "C"
     static inline HsBaCustomPipelineConfig_t HsBaCustomConfigDefault(void)
     {
         HsBaCustomPipelineConfig_t cfg;
+        cfg.struct_size = sizeof(cfg);
         cfg.pipeline_lua_script = 0;
         cfg.pipeline_lua_source = 0;
         cfg.entry_func = 0;

@@ -139,7 +139,8 @@ BOOST_AUTO_TEST_CASE(bind_uploaded_model_sets_model_path)
     void* cfg = CreateDefaultConfig(HSBA_PIPELINE_FDM);
     BOOST_REQUIRE(cfg != nullptr);
     StringArena arena;
-    BOOST_CHECK(BindUploadedModel(ConfigTypeInfo(HSBA_PIPELINE_FDM), cfg, "/srv/uploads/job-1/cube.stl", "cube.stl", arena));
+    BOOST_CHECK(
+        BindUploadedModel(ConfigTypeInfo(HSBA_PIPELINE_FDM), cfg, "/srv/uploads/job-1/cube.stl", "cube.stl", arena));
 
     const auto* fdm = static_cast<const HsBaFdmPipelineConfig_t*>(cfg);
     BOOST_REQUIRE(fdm->model_path != nullptr);
@@ -276,6 +277,41 @@ BOOST_AUTO_TEST_CASE(in_use_uploads_are_never_evicted)
     BOOST_CHECK(!second.empty());
     BOOST_CHECK(!store.Get(first, info));
     BOOST_CHECK(store.Get(second, info));
+}
+
+BOOST_AUTO_TEST_CASE(release_by_job_unpins_a_queued_upload)
+{
+    // Mirrors the cancel/delete-queued exit path: a job that never reaches Execute must
+    // still have its in_use reference dropped, or the file is pinned against eviction forever.
+    TempDir dir("release_by_job");
+    UploadStore store(MakeOptions(dir.str(), 2, 3600, "count"));
+
+    const std::string id = AdoptFile(store, dir, "job-1", "cube.stl", "solid");
+    BOOST_REQUIRE(!id.empty());
+    store.MarkInUse("job-1");
+    UploadInfo info;
+    BOOST_REQUIRE(store.Get(id, info));
+    BOOST_CHECK_EQUAL(info.state, "in_use");
+
+    // A queued job holds the file, so API deletion is refused while the pin is up.
+    BOOST_CHECK(store.Remove(id) == UploadRemoveResult::InUse);
+
+    // Releasing an unrelated job id must not disturb the pinned entry.
+    store.ReleaseByJob("job-999");
+    BOOST_REQUIRE(store.Get(id, info));
+    BOOST_CHECK_EQUAL(info.state, "in_use");
+
+    // Cancelling or deleting the still-queued job drops the pin and starts the retention clock.
+    store.ReleaseByJob("job-1");
+    BOOST_REQUIRE(store.Get(id, info));
+    BOOST_CHECK_EQUAL(info.state, "terminal");
+    BOOST_CHECK(info.job_id.empty());
+    BOOST_CHECK(info.expires_at > 0);
+    BOOST_CHECK(Exists(info.path));  // releasing never deletes the file itself
+
+    // Freed from the in_use exemption, the entry is reclaimable again.
+    BOOST_CHECK(store.Remove(id) == UploadRemoveResult::Removed);
+    BOOST_CHECK(!Exists(info.path));
 }
 
 BOOST_AUTO_TEST_CASE(remove_deletes_the_file)

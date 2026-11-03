@@ -421,7 +421,14 @@ void RunJob(HsBaJob* job)
         job->stage_text = "Cancelled";
         job->stage.store(HSBA_STAGE_CANCELLED);
     }
-    job->state.store(final_state);
+    // Publish the final state while holding wait_mutex so it cannot slip in between a waiter's
+    // predicate check and the moment that waiter blocks. A store+notify issued without the lock is
+    // the classic lost-wakeup: the waiter would miss this only notification, and one waiting with
+    // timeout_ms < 0 would then hang forever even though RunJob already finished.
+    {
+        const std::lock_guard<std::mutex> lock(job->wait_mutex);
+        job->state.store(final_state);
+    }
     job->wait_cv.notify_all();
 
     if (job->on_done)
@@ -458,20 +465,32 @@ void ConfigClone::Build(const ConfigT& source, std::initializer_list<const char*
     {
         return;
     }
-    std::memcpy(raw, &source, size_bytes);
+    // ABI guard: only copy the bytes the host actually allocated. A caller that leaves struct_size
+    // at 0 (aggregate {0} init or a hand-rolled memset) is treated as "size unknown" and keeps the
+    // previous full-struct copy; a caller that reports a smaller size gets a truncated copy with the
+    // library-side tail fields zero-initialised instead of reading past the host's allocation.
+    const std::size_t host_size = source.struct_size;
+    const std::size_t copy_bytes = (host_size != 0 && host_size < size_bytes) ? host_size : size_bytes;
+    std::memset(raw, 0, size_bytes);
+    std::memcpy(raw, &source, copy_bytes);
     auto* dst = static_cast<ConfigT*>(raw);
+    // Publish the library's own sizeof so downstream helpers observe a truthful value.
+    dst->struct_size = static_cast<unsigned>(size_bytes);
     // Resize up front: no reallocation may move a std::string whose c_str() we publish below.
     strings.resize(fields.size());
     std::size_t index = 0;
     for (const char* ConfigT::* field : fields)
     {
-        strings[index] = source.*field ? std::string(source.*field) : std::string();
+        // Read the value through the copy so a truncated host never causes an out-of-range access
+        // on the caller's original buffer. Beyond copy_bytes the field is already NULL from memset.
+        const char* value = dst->*field;
+        strings[index] = value ? std::string(value) : std::string();
         dst->*field = strings[index].c_str();
         ++index;
     }
     // Every Config struct carries the request flag as its tail field; the job owns the atomic.
     dst->cancel_flag = cancel_flag;
-    dst->capture_geometry = source.capture_geometry != 0 ? 1 : 0;
+    dst->capture_geometry = dst->capture_geometry != 0 ? 1 : 0;
 }
 
 void ConfigClone::BuildFileTransfer(const HsBaFileTransferPipelineConfig_t& source, const void* cancel_flag)
@@ -483,21 +502,28 @@ void ConfigClone::BuildFileTransfer(const HsBaFileTransferPipelineConfig_t& sour
     {
         return;
     }
-    std::memcpy(raw, &source, size_bytes);
+    // Same ABI guard as Build(): only memcpy what the host actually allocated, zero-fill the tail.
+    const std::size_t host_size = source.struct_size;
+    const std::size_t copy_bytes = (host_size != 0 && host_size < size_bytes) ? host_size : size_bytes;
+    std::memset(raw, 0, size_bytes);
+    std::memcpy(raw, &source, copy_bytes);
     auto* dst = static_cast<HsBaFileTransferPipelineConfig_t*>(raw);
-    const int count = source.file_count > 0 ? source.file_count : 0;
+    dst->struct_size = static_cast<unsigned>(size_bytes);
+    // file_count / file_paths live within every historical version of the struct, so reading them
+    // from the copy is safe; a host that reported a smaller struct_size will simply see zeros.
+    const int count = dst->file_count > 0 ? dst->file_count : 0;
     strings.resize(static_cast<std::size_t>(count) + 2);
-    strings[0] = source.host ? std::string(source.host) : std::string();
-    strings[1] = source.port ? std::string(source.port) : std::string();
+    strings[0] = dst->host ? std::string(dst->host) : std::string();
+    strings[1] = dst->port ? std::string(dst->port) : std::string();
     dst->host = strings[0].c_str();
     dst->port = strings[1].c_str();
-    if (count > 0 && source.file_paths)
+    if (count > 0 && dst->file_paths)
     {
         path_array = std::make_unique<char*[]>(static_cast<std::size_t>(count));
         for (int i = 0; i < count; ++i)
         {
-            strings[static_cast<std::size_t>(i) + 2] =
-                source.file_paths[i] ? std::string(source.file_paths[i]) : std::string();
+            const char* value = dst->file_paths[i];
+            strings[static_cast<std::size_t>(i) + 2] = value ? std::string(value) : std::string();
             path_array[static_cast<std::size_t>(i)] =
                 const_cast<char*>(strings[static_cast<std::size_t>(i) + 2].c_str());
         }

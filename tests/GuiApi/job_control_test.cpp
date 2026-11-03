@@ -10,6 +10,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdlib>
 #include <mutex>
 #include <string>
@@ -478,6 +479,43 @@ BOOST_AUTO_TEST_CASE(thumbnail_switch_embeds_a_png_in_the_gcode_comments)
     BOOST_CHECK_EQUAL(png[23], '\x40');  // 64
 
     HsBaFreeJobResultView(&view);
+    HsBaReleaseJob(job);
+}
+
+BOOST_AUTO_TEST_CASE(struct_size_of_every_default_config_matches_sizeof)
+{
+    // ABI guard: the nine *ConfigDefault() factories must publish the caller's sizeof so
+    // ConfigClone can pick the right truncation. A silent regression here would leave every
+    // host on the "unknown size" full-copy path, re-exposing the tail-field OOB the guard
+    // is meant to prevent.
+    BOOST_CHECK_EQUAL(HsBaFdmConfigDefault().struct_size, sizeof(HsBaFdmPipelineConfig_t));
+    BOOST_CHECK_EQUAL(HsBaSlaConfigDefault().struct_size, sizeof(HsBaSlaPipelineConfig_t));
+    BOOST_CHECK_EQUAL(HsBaSlsConfigDefault().struct_size, sizeof(HsBaSlsPipelineConfig_t));
+    BOOST_CHECK_EQUAL(HsBaSlmConfigDefault().struct_size, sizeof(HsBaSlmPipelineConfig_t));
+    BOOST_CHECK_EQUAL(HsBaLomConfigDefault().struct_size, sizeof(HsBaLomPipelineConfig_t));
+    BOOST_CHECK_EQUAL(HsBaTdpConfigDefault().struct_size, sizeof(HsBaTdpPipelineConfig_t));
+    BOOST_CHECK_EQUAL(HsBaWaamConfigDefault().struct_size, sizeof(HsBaWaamPipelineConfig_t));
+    BOOST_CHECK_EQUAL(HsBaFileTransferConfigDefault().struct_size, sizeof(HsBaFileTransferPipelineConfig_t));
+    BOOST_CHECK_EQUAL(HsBaCustomConfigDefault().struct_size, sizeof(HsBaCustomPipelineConfig_t));
+}
+
+BOOST_AUTO_TEST_CASE(truncated_struct_size_is_clamped_instead_of_read_past_the_host)
+{
+    // Simulate an old host compiled against a header without the tail GUI fields: they can only
+    // honestly report the offset up to (but excluding) capture_geometry. ConfigClone must copy
+    // only that prefix and zero the rest; the pipeline still has to run to completion without
+    // dereferencing the garbage that a naive full-size memcpy would have left in cancel_flag.
+    HsBaFdmPipelineConfig_t cfg = MissingModelConfig();
+    cfg.capture_geometry = 1;  // pretend the caller set it, but reported a smaller struct_size
+    cfg.struct_size = offsetof(HsBaFdmPipelineConfig_t, capture_geometry);
+    HsBaJobHandle job = HsBaSubmitJob(HSBA_PIPELINE_FDM, &cfg, nullptr, nullptr, nullptr, nullptr);
+    BOOST_REQUIRE(job != nullptr);
+    BOOST_CHECK_EQUAL(HsBaWaitJob(job, kJobTimeoutMs), 1);
+    // A run that failed on the missing model still ends deterministically; the key assertion is
+    // that the process survived the ConfigClone truncation path at all.
+    BOOST_CHECK(HsBaJobGetState(job) == HSBA_JOB_FAILED || HsBaJobGetState(job) == HSBA_JOB_SUCCEEDED);
+    // Capture was beyond the reported struct_size, so the library must have seen 0.
+    BOOST_CHECK_EQUAL(HsBaJobGeometryId(job), 0);
     HsBaReleaseJob(job);
 }
 

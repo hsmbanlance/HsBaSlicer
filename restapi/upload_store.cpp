@@ -198,8 +198,32 @@ void UploadStore::Unlink(const std::string& job_id)
     }
 }
 
-std::vector<UploadInfo> UploadStore::List(const std::string& state_filter, std::size_t offset,
-                                          std::size_t limit) const
+void UploadStore::ReleaseByJob(const std::string& job_id)
+{
+    if (job_id.empty())
+    {
+        return;
+    }
+    const long long now = NowSeconds();
+    std::lock_guard<std::mutex> lk(mtx_);
+    for (auto& [id, entry] : entries_)
+    {
+        if (entry.job_id == job_id)
+        {
+            entry.in_use = false;
+            // The owning job is gone and never reported a terminal state, so the retention clock
+            // starts here; the association is dropped as well because no future lookup can reach
+            // this job id once its record has been erased.
+            if (entry.terminal_at == 0)
+            {
+                entry.terminal_at = now;
+            }
+            entry.job_id.clear();
+        }
+    }
+}
+
+std::vector<UploadInfo> UploadStore::List(const std::string& state_filter, std::size_t offset, std::size_t limit) const
 {
     std::vector<UploadInfo> matched;
     {
@@ -361,7 +385,7 @@ void UploadStore::SweepLoop()
 }
 
 std::vector<UploadStore::Entry> UploadStore::EvictLocked(long long now, std::size_t incoming_count,
-                                                        long long incoming_bytes)
+                                                         long long incoming_bytes)
 {
     std::vector<Entry> evicted;
 
@@ -387,8 +411,7 @@ std::vector<UploadStore::Entry> UploadStore::EvictLocked(long long now, std::siz
     const long long cap_bytes = options_.max_total_mb * 1024 * 1024;
     const std::size_t cap_files = static_cast<std::size_t>(std::max(1, options_.max_files));
     const auto over_count = [&] { return ByCount() && entries_.size() + incoming_count > cap_files; };
-    const auto over_size = [&]
-    { return ByTime() && cap_bytes > 0 && TotalBytesLocked() + incoming_bytes > cap_bytes; };
+    const auto over_size = [&] { return ByTime() && cap_bytes > 0 && TotalBytesLocked() + incoming_bytes > cap_bytes; };
     if (!over_count() && !over_size())
     {
         return evicted;

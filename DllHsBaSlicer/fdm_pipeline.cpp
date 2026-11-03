@@ -754,7 +754,10 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             if (!SaveGCode(result.gcode_content, cfg.output_path))
             {
                 result.success = false;
-                result.error_message = "Failed to write G-code to " + cfg.output_path;
+                // Keep the server-side path out of the caller-visible error; the caller already
+                // knows cfg.output_path (it set it) and result.output_path echoes it back for the
+                // rare default-only case, so the message can stay generic without losing diagnosability.
+                result.error_message = "Failed to write G-code to the job output file";
             }
         }
 

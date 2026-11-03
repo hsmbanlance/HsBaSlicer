@@ -80,7 +80,11 @@ async function call(path, options) {
   }
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(failureText(response.status, text, path));
+    const err = new Error(failureText(response.status, text, path));
+    // Expose the HTTP status so callers can branch on 401 without parsing the message. Existing
+    // consumers keep seeing the same thrown Error with the same message text.
+    err.status = response.status;
+    throw err;
   }
   return { response: response, text: text };
 }
@@ -484,7 +488,12 @@ async function submitJob() {
 }
 
 async function refreshJobs() {
+  // A newer refresh has taken over while this one awaited the network, so its result is stale and
+  // applying it would flicker the table back to a past snapshot. The counter is bumped here and
+  // checked after each await so manual clicks and the auto-tick can share one invalidation path.
+  const my = ++refreshSeq.jobs;
   const listing = await callJson("/api/jobs?limit=50");
+  if (my !== refreshSeq.jobs) return;
   const jobs = (listing && listing.jobs) || [];
   tableFor("jobs-body", JOB_COLUMNS).render(jobs, buildJobRow, "no jobs yet");
   // A package strip belongs to a job; once that job leaves the list its result may be gone, and a
@@ -495,16 +504,66 @@ async function refreshJobs() {
 }
 
 async function refreshUploads() {
+  const my = ++refreshSeq.uploads;
   let uploads = [];
   let notice = "no uploaded models";
   try {
     const listing = await callJson("/api/uploads?limit=50");
+    if (my !== refreshSeq.uploads) return;
     uploads = (listing && listing.uploads) || [];
   } catch (error) {
+    if (my !== refreshSeq.uploads) return;
     // An upload pool that is switched off is a state worth showing, not a failed action.
     notice = error.message;
   }
   tableFor("uploads-body", UPLOAD_COLUMNS).render(uploads, buildUploadRow, notice);
+}
+
+// Per-list monotonic generation counter: every refresh owns a slot, and a fetch whose slot has been
+// retaken by a newer refresh drops out before rendering. Together with the polling inFlight guard
+// below this eliminates both request stacking and "old response overwrites new render" flickers.
+const refreshSeq = { jobs: 0, uploads: 0 };
+
+// One self-scheduling loop drives the jobs + uploads auto-refresh: the next tick is queued only
+// after the previous one finishes, so a slow backend cannot stack requests, and a 401 pauses the
+// loop until the API key is (re-)saved. The inFlight flag is belt-and-suspenders for any external
+// caller that might kick a tick before the previous one unwound.
+const jobsPolling = { inFlight: false, paused: false, timer: 0 };
+
+async function jobsPollTick() {
+  if (jobsPolling.inFlight || jobsPolling.paused) return;
+  jobsPolling.inFlight = true;
+  try {
+    if (byId("jobs-auto").checked) {
+      await refreshJobs();
+      await refreshUploads();
+    }
+  } catch (error) {
+    if (error && error.status === 401) {
+      jobsPolling.paused = true;
+      writeLog("jobs auto-refresh paused: unauthorized (401); save an API key to resume", "error");
+      return;
+    }
+    writeLog(error.message, "error");
+  } finally {
+    jobsPolling.inFlight = false;
+  }
+  jobsPolling.timer = window.setTimeout(jobsPollTick, JOBS_EVERY_MS);
+}
+
+function startJobsPolling() {
+  // Skip the clear when there is nothing to clear: a fresh module and a test stub that returns 0
+  // from setTimeout would otherwise hand clearTimeout an id it has never issued.
+  if (jobsPolling.timer) window.clearTimeout(jobsPolling.timer);
+  jobsPolling.timer = window.setTimeout(jobsPollTick, JOBS_EVERY_MS);
+}
+
+/** @brief Clear the 401 pause and re-arm the loop; called when the API token is saved or cleared. */
+function resumeJobsPolling() {
+  if (!jobsPolling.paused) return;
+  jobsPolling.paused = false;
+  writeLog("jobs auto-refresh resumed after token change", "ok");
+  startJobsPolling();
 }
 
 /**
@@ -1309,6 +1368,9 @@ function saveToken() {
     writeLog("token cleared", "ok");
   }
   run(refreshVersion);
+  // A token edit is the only supported way out of the 401 pause; re-arm the loop here so the user
+  // does not have to reload the page after providing a fresh key.
+  resumeJobsPolling();
 }
 
 function init() {
@@ -1367,14 +1429,9 @@ function init() {
   run(refreshHealth);
 
   window.setInterval(() => run(refreshHealth), HEALTH_EVERY_MS);
-  window.setInterval(() => {
-    if (byId("jobs-auto").checked) {
-      run(async () => {
-        await refreshJobs();
-        await refreshUploads();
-      });
-    }
-  }, JOBS_EVERY_MS);
+  // A self-scheduling tick replaces the old setInterval for jobs/uploads: overlapping requests on
+  // a slow backend are impossible now, and 401 stops the loop until a fresh token is saved.
+  startJobsPolling();
 }
 
 document.addEventListener("DOMContentLoaded", init);

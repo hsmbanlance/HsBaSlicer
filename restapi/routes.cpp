@@ -412,7 +412,9 @@ void SubmitMultipartJob(const Request& req, Response& res, Ctx& ctx, HsBaPipelin
         const std::filesystem::path stored = std::filesystem::u8path(path);
         std::filesystem::remove(stored, ec);
         std::filesystem::remove(stored.parent_path(), ec);
-        ReplyError(res, 500, "could not store model file", path, outfmt);
+        // Report only the file name: the directory the server stores uploads into is none of the
+        // caller's business, matching the BaseFileName posture used elsewhere in this file.
+        ReplyError(res, 500, "could not store model file", BaseFileName(path), outfmt);
         return;
     }
 
@@ -461,15 +463,19 @@ void SubmitMultipartJob(const Request& req, Response& res, Ctx& ctx, HsBaPipelin
         // the proto message or the parameter wide table.
         SetCaptureGeometry(kind, config, 1);
     }
+    // Pin the file before handing the job to the queue: once Submit returns, a worker may run
+    // the job straight to a terminal state whose MarkTerminal already cleared the reference,
+    // so pinning afterwards would re-pin a finished file and orphan it forever.
+    ctx.uploads.MarkInUse(job_id);
     const std::string id = ctx.jobs.Submit(kind, config, std::move(arena), job_id);
     if (id.empty())
     {
+        // Queue full: the job never got enqueued, so release the pin before discarding the upload.
+        ctx.uploads.ReleaseByJob(job_id);
         ctx.uploads.Remove(upload_id);
         ReplyError(res, 429, "job queue full", "max_jobs reached", outfmt);
         return;
     }
-    // The job is queued: exempt the file from the age clock until the run finishes.
-    ctx.uploads.MarkInUse(id);
 
     JobStatusView view;
     ctx.jobs.Status(id, view);
@@ -880,6 +886,9 @@ void HandleCancelJob(const Request& req, Response& res, Ctx& ctx, const std::str
         ReplyValue(res, 202, CancelView{id, "cancelled", "cancellation requested"}, fmt, "Job");
         break;
     case CancelResult::Removed:
+        // The queued job was erased without ever reaching Execute, so release its upload
+        // reference here; otherwise the pinned file would never be reclaimed.
+        ctx.uploads.ReleaseByJob(id);
         ReplyValue(res, 202, CancelView{id, "cancelled", "queued job removed before it started"}, fmt, "Job");
         break;
     case CancelResult::AlreadyTerminal:
@@ -941,9 +950,11 @@ void HandleDeleteJob(const Request& req, Response& res, Ctx& ctx, const std::str
     switch (ctx.jobs.Remove(id))
     {
     case JobManager::RemoveResult::Removed:
-        // Drop the pool association only: the uploaded model follows the upload pool's
-        // own retention schedule rather than the (much shorter) job result TTL.
-        ctx.uploads.Unlink(id);
+        // Release the pool reference and detach the association: the uploaded model then follows
+        // the upload pool's own retention schedule rather than the (much shorter) job result TTL.
+        // A job deleted while still queued never reported a terminal state, so this is also what
+        // frees its pinned file from the in_use exemption (Unlink alone would leave it stuck).
+        ctx.uploads.ReleaseByJob(id);
         res.status = 204;  // no body on success
         break;
     case JobManager::RemoveResult::NotFound:

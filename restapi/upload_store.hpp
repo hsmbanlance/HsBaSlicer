@@ -37,27 +37,27 @@ namespace HsBa::Slicer::RestApi
 /** @brief Retention knobs of the upload pool (mirrors the [upload] ini section). */
 struct UploadOptions
 {
-    std::string dir;                 ///< Root directory; empty disables the pool entirely.
-    int max_files = 256;             ///< Retained entries; the config loader floors it at HSBA_MODEL_POOL_SIZE.
-    long long ttl_seconds = 604800;  ///< Retention after the owning job finishes; 0 = never expires by age.
-    std::string evict_mode = "both"; ///< "ttl" | "count" | "both" | "manual".
-    long long max_total_mb = 0;      ///< Directory-wide size cap in MB; 0 = unlimited.
-    int sweep_interval_seconds = 60; ///< Background sweep period.
+    std::string dir;                  ///< Root directory; empty disables the pool entirely.
+    int max_files = 256;              ///< Retained entries; the config loader floors it at HSBA_MODEL_POOL_SIZE.
+    long long ttl_seconds = 604800;   ///< Retention after the owning job finishes; 0 = never expires by age.
+    std::string evict_mode = "both";  ///< "ttl" | "count" | "both" | "manual".
+    long long max_total_mb = 0;       ///< Directory-wide size cap in MB; 0 = unlimited.
+    int sweep_interval_seconds = 60;  ///< Background sweep period.
 };
 
 /** @brief Serializable view of one pooled upload (GET /api/uploads). */
 struct UploadInfo
 {
-    std::string id;                  ///< Pool id ("upl-<n>").
-    std::string job_id;              ///< Owning job ("job-<n>"), empty once unlinked.
-    std::string file_name;           ///< Sanitized name on disk.
-    std::string original_name;       ///< Client-supplied name (pre-sanitizing).
-    std::string path;                ///< Server-side path of the stored file.
-    std::string state;               ///< "pending" | "in_use" | "terminal".
-    long long size_bytes = 0;        ///< File size in bytes.
-    long long created_at = 0;        ///< Unix epoch seconds.
-    long long expires_at = 0;        ///< Unix epoch seconds; 0 = never expires by age.
-    long long remaining_seconds = 0; ///< Seconds until expires_at; 0 when unlimited or already expired.
+    std::string id;                   ///< Pool id ("upl-<n>").
+    std::string job_id;               ///< Owning job ("job-<n>"), empty once unlinked.
+    std::string file_name;            ///< Sanitized name on disk.
+    std::string original_name;        ///< Client-supplied name (pre-sanitizing).
+    std::string path;                 ///< Server-side path of the stored file.
+    std::string state;                ///< "pending" | "in_use" | "terminal".
+    long long size_bytes = 0;         ///< File size in bytes.
+    long long created_at = 0;         ///< Unix epoch seconds.
+    long long expires_at = 0;         ///< Unix epoch seconds; 0 = never expires by age.
+    long long remaining_seconds = 0;  ///< Seconds until expires_at; 0 when unlimited or already expired.
 };
 
 /** @brief Outcome of a DELETE /api/uploads/{id} request. */
@@ -109,6 +109,14 @@ public:
     void Unlink(const std::string& job_id);
 
     /**
+     * @brief Release the reference held by a job that will never reach a terminal state on its
+     *        own (cancelled or deleted while still queued). Clears @c in_use, starts the retention
+     *        clock and detaches the job association, so the entry ages out normally instead of
+     *        being pinned against both the TTL and count reclaim policies forever.
+     */
+    void ReleaseByJob(const std::string& job_id);
+
+    /**
      * @brief Snapshot pooled uploads, oldest first.
      * @param state_filter "pending" | "in_use" | "terminal"; empty = all.
      * @param offset       Skip this many matching entries.
@@ -144,9 +152,9 @@ private:
         std::string original_name;
         std::string path;
         long long size_bytes = 0;
-        long long created_at = 0;  ///< Epoch seconds.
-        long long terminal_at = 0; ///< Epoch seconds; 0 while the job has not finished.
-        bool in_use = false;       ///< Referenced by a queued/running job.
+        long long created_at = 0;   ///< Epoch seconds.
+        long long terminal_at = 0;  ///< Epoch seconds; 0 while the job has not finished.
+        bool in_use = false;        ///< Referenced by a queued/running job.
     };
 
     void SweepLoop();
