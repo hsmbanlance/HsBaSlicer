@@ -807,7 +807,80 @@ function applyConfigFlags(text, flags) {
   return JSON.stringify(parsed, null, 2);
 }
 
+/**
+ * @brief Localization registry, kept free of any browser surface.
+ *
+ * Translation is keyed on the English source text: the console ships English as its built-in
+ * default, so an unregistered language or a key a dictionary omits returns the source verbatim and
+ * an untranslated string still reads as intended rather than as a blank. Dictionaries and the
+ * browser-side wiring live in /i18n.js; this file holds only the lookup so /app.js can translate
+ * the strings it renders and the node:vm tests can exercise the lookup without a DOM. It touches no
+ * host object, because these helpers are evaluated in a bare sandbox with nothing but the intrinsics.
+ */
+const LOCALES = new Map();
+const DEFAULT_LOCALE = "en";
+let activeLocale = DEFAULT_LOCALE;
+
+/** @brief Register one language's English-keyed dictionary (@p table may be empty). */
+function registerLocale(code, table) {
+  LOCALES.set(String(code), table || {});
+}
+
+/** @brief Languages the page may offer: the built-in default first, then every registered table. */
+function availableLocales() {
+  const codes = [DEFAULT_LOCALE];
+  for (const code of LOCALES.keys()) {
+    if (code !== DEFAULT_LOCALE && codes.indexOf(code) === -1) {
+      codes.push(code);
+    }
+  }
+  return codes;
+}
+
+/** @brief Switch the active language; an unknown code falls back to the built-in English. */
+function setLocale(code) {
+  activeLocale = LOCALES.has(String(code)) ? String(code) : DEFAULT_LOCALE;
+  return activeLocale;
+}
+
+/** @brief The language currently in effect. */
+function currentLocale() {
+  return activeLocale;
+}
+
+/**
+ * @brief Translate one UI string, keyed on its English source text.
+ * @param {string} text The English source text, which doubles as the lookup key.
+ * @param {Record<string, string | number>} [params] Values substituted into {name} placeholders.
+ * @returns {string} The localized text with placeholders filled, or @p text when no table supplies it.
+ *
+ * English is the built-in default and needs no table: while the active language is English the key
+ * is returned untouched (then substituted), so every assembled message keeps its exact English
+ * wording and only a real translation ever diverges from it.
+ */
+function tr(text, params) {
+  if (typeof text !== "string") {
+    return text;
+  }
+  const table = LOCALES.get(activeLocale);
+  let out = text;
+  if (table && Object.prototype.hasOwnProperty.call(table, text)) {
+    out = table[text];
+  }
+  if (params) {
+    for (const key of Object.keys(params)) {
+      out = out.split("{" + key + "}").join(String(params[key]));
+    }
+  }
+  return out;
+}
+
 globalThis.HsBaHttp = {
+  registerLocale: registerLocale,
+  availableLocales: availableLocales,
+  setLocale: setLocale,
+  currentLocale: currentLocale,
+  tr: tr,
   PREVIEW_LIMIT_BYTES: PREVIEW_LIMIT_BYTES,
   GEOMETRY_ROUND_DIGITS: GEOMETRY_ROUND_DIGITS,
   GEOMETRY_VIEW_PAD: GEOMETRY_VIEW_PAD,

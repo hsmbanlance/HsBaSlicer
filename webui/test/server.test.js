@@ -339,12 +339,32 @@ describe("static bundle", () => {
     });
   });
 
+  it("registers the dictionaries before app.js renders them", async () => {
+    await withConsole({}, async ({ base }) => {
+      const html = await (await fetch(`${base}/`)).text();
+      // i18n.js is what fills the locale registry app.js reads through HsBaHttp.tr, so it has to
+      // be evaluated after the helpers publish that namespace and before app.js renders a row - a
+      // misordered tag would leave the whole console in English with every asset still serving 200.
+      const helpers = html.indexOf('src="/httphelpers.js"');
+      const i18n = html.indexOf('src="/i18n.js"');
+      const app = html.indexOf('src="/app.js"');
+      assert.ok(i18n > 0, "i18n.js is not referenced");
+      assert.ok(helpers < i18n, "i18n.js loads before the helpers it registers into");
+      assert.ok(i18n < app, "i18n.js loads after the code that reads the dictionaries");
+      // The served localization layer really installs a non-English table through the shared engine.
+      const i18nSource = await (await fetch(`${base}/i18n.js`)).text();
+      assert.match(i18nSource, /registerLocale\("zh"/);
+      assert.match(i18nSource, /HsBaHttp/);
+    });
+  });
+
   it("serves every asset with its own media type", async () => {
     await withConsole({}, async ({ base }) => {
       const expectations = [
         ["/index.html", /^text\/html/],
         ["/app.css", /^text\/css/],
         ["/httphelpers.js", /^text\/javascript/],
+        ["/i18n.js", /^text\/javascript/],
         ["/app.js", /^text\/javascript/],
         ["/favicon.svg", /^image\/svg\+xml/],
       ];
@@ -765,6 +785,111 @@ describe("result preview", () => {
       assert.equal(http_.previewText(big).shownBytes, http_.PREVIEW_LIMIT_BYTES);
       assert.equal(http_.previewText(big).truncated, true);
       assert.equal(http_.previewText("x".repeat(http_.PREVIEW_LIMIT_BYTES)).truncated, false);
+    });
+  });
+});
+
+// ---------------------------- localization ----------------------------
+
+describe("localization engine", () => {
+  it("keeps English verbatim until a table is registered", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      // Fresh sandbox, default language: no dictionary installed, so every key is its own answer.
+      assert.equal(http_.currentLocale(), "en");
+      assert.equal(http_.tr("Preview"), "Preview");
+      assert.equal(http_.tr("a phrase nothing translates"), "a phrase nothing translates");
+    });
+  });
+
+  it("translates a hit, keeps the English key on a miss and fills {placeholders}", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      http_.registerLocale("zh", { Preview: "\u9884\u89c8", "{size} of {type}": "{size} \u7c7b\u578b {type}" });
+      assert.equal(http_.setLocale("zh"), "zh");
+      assert.equal(http_.currentLocale(), "zh");
+      assert.equal(http_.tr("Preview"), "\u9884\u89c8");
+      // A string the active table has no entry for is returned untouched, so partial coverage is safe.
+      assert.equal(http_.tr("Result"), "Result");
+      // Interpolation runs on the translated value.
+      assert.equal(http_.tr("{size} of {type}", { size: "1 KB", type: "binary" }), "1 KB \u7c7b\u578b binary");
+      // Interpolation also runs when the key is absent (identity, then substituted).
+      assert.equal(http_.tr("{size} of {type}", { size: "2", type: "x" }), "2 \u7c7b\u578b x");
+      // Non-strings pass straight through - the callers hand tr() dynamic values it must not stringify.
+      assert.equal(http_.tr(42), 42);
+      assert.equal(http_.tr(undefined), undefined);
+    });
+  });
+
+  it("falls back to English for a code with no table", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      http_.registerLocale("zh", {});
+      // An unregistered language never becomes active; setLocale reports the language it settled on.
+      assert.equal(http_.setLocale("de"), "en");
+      assert.equal(http_.currentLocale(), "en");
+      assert.equal(http_.tr("Preview"), "Preview");
+      // A registered-but-empty table still activates and yields identity, never a throw.
+      assert.equal(http_.setLocale("zh"), "zh");
+      assert.equal(http_.tr("Preview"), "Preview");
+    });
+  });
+
+  it("lists the default first and every registered language exactly once", async () => {
+    await withConsole({}, async ({ base }) => {
+      const http_ = await loadHelpers(base);
+      assert.deepEqual(local(http_.availableLocales()), ["en"]);
+      http_.registerLocale("zh", {});
+      http_.registerLocale("fr", {});
+      // Re-registering the default must not push a second "en" onto the list the switcher reads.
+      http_.registerLocale("en", { x: "y" });
+      const codes = local(http_.availableLocales());
+      assert.deepEqual(codes.filter((code) => code === "en").length, 1);
+      assert.equal(codes[0], "en");
+      assert.ok(codes.includes("zh") && codes.includes("fr"));
+    });
+  });
+});
+
+describe("localization in the rendered page", () => {
+  // The row the fake upstream always boots with: a finished fdm job (state "success") in column 2,
+  // whose Actions cell carries the Preview/Result/... buttons app.js labels through tr().
+  const ZH_PAGE = {
+    code: "zh",
+    table: {
+      Preview: "\u9884\u89c8",
+      Result: "\u7ed3\u679c",
+      Geometry: "\u51e0\u4f55",
+      Cancel: "\u53d6\u6d88",
+      Delete: "\u5220\u9664",
+      success: "\u6210\u529f",
+    },
+  };
+
+  it("renders the default page in English verbatim", async () => {
+    await withConsole({}, async ({ base }) => {
+      const harness = await bootPage(base);
+      assert.deepEqual(harness.logErrors(), []);
+      const row = harness.byId("jobs-body").children[0];
+      assert.equal(cells(row)[2].textContent, "success");
+      assert.ok(jobButton(harness, 0, "Preview"), "no English Preview button on the default page");
+    });
+  });
+
+  it("re-renders the same rows in the chosen language, leaving server data untranslated", async () => {
+    await withConsole({}, async ({ base }) => {
+      const harness = await bootPage(base, { locale: ZH_PAGE });
+      assert.deepEqual(harness.logErrors(), []);
+      const row = harness.byId("jobs-body").children[0];
+      const state = cells(row)[2];
+      // The human-facing label goes through tr(), so an active table changes the rendered text...
+      assert.equal(state.textContent, "\u6210\u529f");
+      // ...while the class hook derived from the raw API value stays exactly as the server sent it.
+      assert.equal(state.className, "state-success");
+      // Buttons are labelled through tr() at the call site, not by mutating the JOB_ACTIONS literal.
+      const actions = cells(cells(row)[cells(row).length - 1]).map((button) => button.textContent);
+      assert.ok(actions.includes("\u9884\u89c8"), `no translated Preview button (got ${actions.join(", ")})`);
+      assert.ok(!actions.includes("Preview"), "the English label leaked into a translated page");
     });
   });
 });
@@ -1627,7 +1752,7 @@ function makeElement(tag) {
  * no-ops, which keeps the test process free of timers, and every awaited fetch chain is drained by
  * settle().
  */
-async function bootPage(base) {
+async function bootPage(base, options = {}) {
   const elements = new Map();
   const body = makeElement("body");
   const store = new Map();
@@ -1688,6 +1813,19 @@ async function bootPage(base) {
   for (const file of ["httphelpers.js", "app.js"]) {
     const source = await (await fetch(`${base}/${file}`)).text();
     vm.runInContext(source, context, { filename: file });
+    if (file === "httphelpers.js" && options.locale) {
+      // Drive the switch the way /i18n.js does in a browser - register a dictionary and activate
+      // it - but go through the real HsBaHttp engine rather than loading i18n.js here: that file
+      // walks the DOM with a TreeWalker the fake has none of. Doing it after the helpers load and
+      // before app.js means the rows app.js renders come up in the chosen language, exactly like
+      // the deferred-script order in index.html (helpers, i18n, app).
+      vm.runInContext(
+        `HsBaHttp.registerLocale(${JSON.stringify(options.locale.code)}, ${JSON.stringify(options.locale.table)});\n`
+          + `HsBaHttp.setLocale(${JSON.stringify(options.locale.code)});`,
+        context,
+        { filename: "i18n-injected.js" },
+      );
+    }
   }
   for (const handler of domReady) {
     handler();

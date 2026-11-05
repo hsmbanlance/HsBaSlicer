@@ -30,6 +30,11 @@ const GEOMETRY_GROUPS = [
 
 const byId = (id) => document.getElementById(id);
 
+// Shorthand for the English-keyed translation lookup that lives in /httphelpers.js. It stays the
+// identity while the active language is English (the built-in default the node:vm tests run against),
+// so every message below keeps its exact English wording unless a dictionary from /i18n.js rewords it.
+const tr = (text, params) => HsBaHttp.tr(text, params);
+
 function storedToken() {
   return localStorage.getItem(TOKEN_KEY) || "";
 }
@@ -159,7 +164,7 @@ function actionsCell(row, index, actions) {
     if (!button) {
       button = document.createElement("button");
       button.type = "button";
-      button.textContent = action.label;
+      button.textContent = tr(action.label);
       cell.appendChild(button);
       bindOnce(button, () => action.handler(row));
     }
@@ -177,7 +182,7 @@ function pathCell(row, index, path, fallback, read) {
   const cell = cellAt(row, index, {
     className: "path" + (path ? " has-value" : ""),
     text: path || fallback || "-",
-    title: path ? path + "\n(click to copy)" : fallback || "",
+    title: path ? path + "\n" + tr("(click to copy)") : fallback || "",
   });
   bindOnce(cell, () => copyText(read(row)));
   return cell;
@@ -235,7 +240,7 @@ function buildJobRow(row, job) {
   row.job = job;
   cellAt(row, 0, { className: "mono", text: job.id });
   cellAt(row, 1, { text: job.kind });
-  cellAt(row, 2, { className: "state-" + job.state, text: job.state, title: job.error_message || "" });
+  cellAt(row, 2, { className: "state-" + job.state, text: tr(job.state), title: job.error_message || "" });
   cellAt(row, 3, {
     className: "muted",
     // A Lua pipeline reports free-form progress text and may report none; the stable stage key the
@@ -258,7 +263,7 @@ function buildUploadRow(row, upload) {
   cellAt(row, 2, { text: upload.original_name || upload.file_name });
   pathCell(row, 3, upload.path, "-", (r) => r.upload.path);
   cellAt(row, 4, { text: formatBytes(upload.size_bytes) });
-  cellAt(row, 5, { className: "state-" + upload.state, text: upload.state });
+  cellAt(row, 5, { className: "state-" + upload.state, text: tr(upload.state) });
   cellAt(row, 6, { className: "muted", text: formatRemaining(upload.remaining_seconds) });
   actionsCell(row, 7, UPLOAD_ACTIONS);
 }
@@ -346,10 +351,10 @@ function tableFor(id, columns) {
 
 async function copyText(value) {
   if (!navigator.clipboard) {
-    throw new Error("clipboard unavailable: open the console on localhost or over https");
+    throw new Error(tr("clipboard unavailable: open the console on localhost or over https"));
   }
   await navigator.clipboard.writeText(value);
-  writeLog("copied " + value, "ok");
+  writeLog(tr("copied") + " " + value, "ok");
 }
 
 /** Run an action, reporting failures in the log panel instead of the browser console. */
@@ -391,10 +396,10 @@ async function refreshHealth() {
   const badge = byId("health");
   try {
     const health = await callJson("/api/health");
-    badge.textContent = "ok - " + health.uptime_seconds + " s";
+    badge.textContent = tr("ok") + " - " + health.uptime_seconds + " s";
     badge.className = "badge badge-ok";
   } catch (error) {
-    badge.textContent = error.message.indexOf("HTTP 401") === 0 ? "token required" : "unreachable";
+    badge.textContent = error.message.indexOf("HTTP 401") === 0 ? tr("token required") : tr("unreachable");
     badge.className = "badge badge-down";
   }
 }
@@ -420,7 +425,7 @@ async function loadKinds() {
     select.appendChild(option);
   }
   if (!select.childElementCount) {
-    throw new Error("the REST server reported no pipeline kinds");
+    throw new Error(tr("the REST server reported no pipeline kinds"));
   }
   // Filling the select picks its first option without any change event reaching the page, so the
   // preview-image box has to be re-evaluated here rather than only when the operator switches kind.
@@ -430,11 +435,11 @@ async function loadKinds() {
 async function loadDefaultConfig() {
   const kind = byId("kind").value;
   if (!kind) {
-    throw new Error("no pipeline selected");
+    throw new Error(tr("no pipeline selected"));
   }
   const result = await call("/api/config/default/" + encodeURIComponent(kind) + "?format=json");
   byId("config").value = result.text;
-  writeLog("loaded the default config of " + kind, "ok");
+  writeLog(tr("loaded the default config of") + " " + kind, "ok");
 }
 
 /**
@@ -451,10 +456,10 @@ async function submitJob() {
   const kind = byId("kind").value;
   const config = byId("config").value.trim();
   if (!kind) {
-    throw new Error("no pipeline selected");
+    throw new Error(tr("no pipeline selected"));
   }
   if (!config) {
-    throw new Error("load a default config (or paste one) before submitting");
+    throw new Error(tr("load a default config (or paste one) before submitting"));
   }
 
   let body = config;
@@ -463,7 +468,7 @@ async function submitJob() {
     if (body === config) {
       // A config the console cannot parse is a config it cannot patch, and the operator deserves to
       // know the box had no effect rather than to wonder why the result carries no pictures.
-      writeLog("config is not JSON - gcode_thumbnails not applied", "info");
+      writeLog(tr("config is not JSON - gcode_thumbnails not applied"), "info");
     }
   }
 
@@ -483,7 +488,7 @@ async function submitJob() {
       body: body
     });
   }
-  writeLog("submitted " + job.id + " (" + kind + ")", "ok");
+  writeLog(tr("submitted") + " " + job.id + " (" + kind + ")", "ok");
   await refreshJobs();
 }
 
@@ -495,7 +500,7 @@ async function refreshJobs() {
   const listing = await callJson("/api/jobs?limit=50");
   if (my !== refreshSeq.jobs) return;
   const jobs = (listing && listing.jobs) || [];
-  tableFor("jobs-body", JOB_COLUMNS).render(jobs, buildJobRow, "no jobs yet");
+  tableFor("jobs-body", JOB_COLUMNS).render(jobs, buildJobRow, tr("no jobs yet"));
   // A package strip belongs to a job; once that job leaves the list its result may be gone, and a
   // strip that keeps pointing at a deleted archive is worse than one that says it stopped.
   if (pack.loaded && !jobs.some((job) => job.id === pack.id)) {
@@ -506,7 +511,7 @@ async function refreshJobs() {
 async function refreshUploads() {
   const my = ++refreshSeq.uploads;
   let uploads = [];
-  let notice = "no uploaded models";
+  let notice = tr("no uploaded models");
   try {
     const listing = await callJson("/api/uploads?limit=50");
     if (my !== refreshSeq.uploads) return;
@@ -541,7 +546,7 @@ async function jobsPollTick() {
   } catch (error) {
     if (error && error.status === 401) {
       jobsPolling.paused = true;
-      writeLog("jobs auto-refresh paused: unauthorized (401); save an API key to resume", "error");
+      writeLog(tr("jobs auto-refresh paused: unauthorized (401); save an API key to resume"), "error");
       return;
     }
     writeLog(error.message, "error");
@@ -562,7 +567,7 @@ function startJobsPolling() {
 function resumeJobsPolling() {
   if (!jobsPolling.paused) return;
   jobsPolling.paused = false;
-  writeLog("jobs auto-refresh resumed after token change", "ok");
+  writeLog(tr("jobs auto-refresh resumed after token change"), "ok");
   startJobsPolling();
 }
 
@@ -596,7 +601,7 @@ async function downloadResult(id, kind) {
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(link.href), 10000);
-  writeLog("downloaded " + name + " (" + formatBytes(blob.size) + ")", "ok");
+  writeLog(tr("downloaded") + " " + name + " (" + formatBytes(blob.size) + ")", "ok");
 }
 
 /** @brief The result currently on screen, so Images can ask for the package of the right job. */
@@ -623,13 +628,15 @@ async function previewResult(id, kind) {
   // Both picture strips belong to the result on screen, so both have to be retired with it: leaving
   // the package strip up would show one job's layer under another job's heading.
   clearPackage();
-  byId("preview-title").textContent = "Result preview - " + name;
+  byId("preview-title").textContent = tr("Result preview") + " - " + name;
   if (!HsBaHttp.isPreviewable(contentType)) {
     box.hidden = true;
     box.textContent = "";
     meta.textContent =
-      formatBytes(blob.size) + " of " + (contentType || "unknown type") + ", not text - use Result to download it";
-    writeLog("preview needs a download instead: " + name + " is " + (contentType || "binary"), "info");
+      tr("{size} of {type}, not text - use Result to download it",
+        { size: formatBytes(blob.size), type: contentType || tr("unknown type") });
+    writeLog(tr("preview needs a download instead:") + " " + name + " " + tr("is") + " " +
+      (contentType || tr("binary")), "info");
     return;
   }
 
@@ -639,10 +646,16 @@ async function previewResult(id, kind) {
   box.hidden = false;
   const blocks = renderGcodeThumbnails(body);
   meta.textContent =
-    formatBytes(view.bytes) + ", " + view.lines + " lines" +
-    (view.truncated ? " - showing the first " + formatBytes(view.shownBytes) + ", use Result for the whole file" : "") +
-    (kind === "fdm" && blocks === 0 ? " - no embedded previews, set gcode_thumbnails to 1" : "");
-  writeLog("previewed " + name + " (" + formatBytes(view.shownBytes) + " of " + formatBytes(view.bytes) + ")", "ok");
+    formatBytes(view.bytes) + ", " + view.lines + " " + tr("lines") +
+    (view.truncated
+      ? " - " + tr("showing the first") + " " + formatBytes(view.shownBytes) + ", " +
+        tr("use Result for the whole file")
+      : "") +
+    (kind === "fdm" && blocks === 0
+      ? " - " + tr("no embedded previews, set gcode_thumbnails to 1")
+      : "");
+  writeLog(tr("previewed") + " " + name + " (" + formatBytes(view.shownBytes) + " of " +
+    formatBytes(view.bytes) + ")", "ok");
 }
 
 /**
@@ -661,7 +674,8 @@ function renderGcodeThumbnails(text) {
     if (block.skipped) {
       const note = document.createElement("p");
       note.className = "thumbnail-note";
-      note.textContent = (block.name || "preview") + " was not embedded: " + block.reason;
+      note.textContent =
+        (block.name || tr("preview")) + " " + tr("was not embedded:") + " " + block.reason;
       stage.appendChild(note);
       continue;
     }
@@ -670,11 +684,12 @@ function renderGcodeThumbnails(text) {
     }
     const image = document.createElement("img");
     image.setAttribute("src", url);
-    image.setAttribute("alt", block.name || "model preview");
+    image.setAttribute("alt", block.name || tr("model preview"));
     stage.appendChild(image);
     const label = document.createElement("span");
     label.className = "thumbnail-label";
-    label.textContent = (block.name || "preview") + " (" + block.width + "x" + block.height + ")";
+    label.textContent =
+      (block.name || tr("preview")) + " (" + block.width + "x" + block.height + ")";
     stage.appendChild(label);
   }
   stage.hidden = stage.childElementCount === 0;
@@ -722,7 +737,7 @@ function clearPackage() {
  */
 async function browsePackage(id) {
   if (!id) {
-    writeLog("preview a result first - Images works on the job whose result is on screen", "info");
+    writeLog(tr("preview a result first - Images works on the job whose result is on screen"), "info");
     return;
   }
   let listing;
@@ -731,8 +746,8 @@ async function browsePackage(id) {
   } catch (error) {
     setPackageMessage(
       /result is not a package/.test(error.message)
-        ? "this result is a single file, not a package"
-        : "no package to read: " + error.message,
+        ? tr("this result is a single file, not a package")
+        : tr("no package to read:") + " " + error.message,
     );
     // The server's own sentence belongs in the log, which is what run() writes for a rejected call.
     throw error;
@@ -741,8 +756,8 @@ async function browsePackage(id) {
   pack.entries = HsBaHttp.packageImages((listing && listing.entries) || []);
   pack.loaded = true;
   if (!pack.entries.length) {
-    setPackageMessage("package has no images - SLA exports PNG/JPG/SVG layers");
-    writeLog("package of " + pack.id + " holds no images", "info");
+    setPackageMessage(tr("package has no images - SLA exports PNG/JPG/SVG layers"));
+    writeLog(tr("package of") + " " + pack.id + " " + tr("holds no images"), "info");
     return;
   }
   showPackageImage(0);
@@ -772,8 +787,8 @@ function clearPreview() {
   const box = byId("preview");
   box.hidden = true;
   box.textContent = "";
-  byId("preview-title").textContent = "Result preview";
-  byId("preview-meta").textContent = "no result previewed yet";
+  byId("preview-title").textContent = tr("Result preview");
+  byId("preview-meta").textContent = tr("no result previewed yet");
   previewedJob = { id: "", kind: "" };
   clearThumbnails();
   clearPackage();
@@ -886,7 +901,7 @@ async function selectGeometryView(view) {
     return;
   }
   if (view === "path" && !hasContinuousPath()) {
-    const refusal = "this run deposited no continuous path - spiral_mode=1 belongs to fdm, tdp and waam";
+    const refusal = tr("this run deposited no continuous path - spiral_mode=1 belongs to fdm, tdp and waam");
     setGeometryMessage(refusal);
     writeLog(refusal, "error");
     return;
@@ -919,7 +934,7 @@ async function openGeometry(id, job) {
     const summary = await callJson(geometryPath(id, "/geometry"));
     const count = Number(summary.layer_count) || 0;
     if (count <= 0) {
-      setGeometryMessage("this job holds no layer geometry - submit it with capture geometry enabled");
+      setGeometryMessage(tr("this job holds no layer geometry - submit it with capture geometry enabled"));
       setGeometryControlsEnabled(false);
       return;
     }
@@ -937,9 +952,9 @@ async function openGeometry(id, job) {
     slider.max = String(count - 1);
     slider.value = String(geometry.layer);
     await showGeometryView();
-    writeLog("opened the geometry of " + id + " (" + count + " layers, " + job.kind + ")", "ok");
+    writeLog(tr("opened the geometry of") + " " + id + " (" + count + " " + tr("layers") + ", " + job.kind + ")", "ok");
   } catch (error) {
-    setGeometryMessage(error.message + " - the snapshot pool keeps only the last few jobs");
+    setGeometryMessage(error.message + " - " + tr("the snapshot pool keeps only the last few jobs"));
     setGeometryControlsEnabled(false);
     writeLog(error.message, "error");
   }
@@ -1043,7 +1058,7 @@ async function loadGeometryPath(force) {
     setGeometryControlsEnabled(true);
     renderGeometry();
   } catch (error) {
-    setGeometryMessage(error.message + " - spiral runs only");
+    setGeometryMessage(error.message + " - " + tr("spiral runs only"));
     setGeometryControlsEnabled(false);
     writeLog(error.message, "error");
   }
@@ -1103,13 +1118,14 @@ function renderLayerView(svg, ordered) {
 
   const counts = geometry.counts || { outlines: 0, fills: 0, supports: 0, dropped: 0 };
   const undrawn = counts.dropped
-    ? " (" + counts.dropped + " paths left undrawn, " + HsBaHttp.GEOMETRY_MAX_PATHS + " is the budget)"
+    ? " (" + counts.dropped + " " + tr("paths left undrawn,") + " " + HsBaHttp.GEOMETRY_MAX_PATHS +
+      " " + tr("is the budget") + ")"
     : "";
   byId("geometry-meta").textContent =
-    "layer " + (geometry.layer + 1) + " / " + geometryLayerCount() +
-    ", z " + geometry.z + " mm, outlines " + geometry.paths.outlines.length +
-    " / fills " + geometry.paths.fills.length +
-    " / supports " + geometry.paths.supports.length + undrawn;
+    tr("layer") + " " + (geometry.layer + 1) + " / " + geometryLayerCount() +
+    ", z " + geometry.z + " mm, " + tr("outlines") + " " + geometry.paths.outlines.length +
+    " / " + tr("fills") + " " + geometry.paths.fills.length +
+    " / " + tr("supports") + " " + geometry.paths.supports.length + undrawn;
 }
 
 /**
@@ -1181,10 +1197,12 @@ function renderStackView(svg, ordered) {
   }
   byId("geometry-stage").hidden = false;
 
-  const undrawn = dropped ? " (" + dropped + " left undrawn, " + budget + " per layer)" : "";
+  const undrawn = dropped
+    ? " (" + dropped + " " + tr("left undrawn,") + " " + budget + " " + tr("per layer") + ")"
+    : "";
   byId("geometry-meta").textContent =
-    geometry.view + " " + planes.length + " layers of " + geometryLayerCount() +
-    ", " + total + " paths" + undrawn + " - lines between rings are inferred travel";
+    geometry.view + " " + planes.length + " " + tr("layers of") + " " + geometryLayerCount() +
+    ", " + total + " " + tr("paths") + undrawn + " - " + tr("lines between rings are inferred travel");
 }
 
 /** Draw the continuous polyline of a spiral run. */
@@ -1202,8 +1220,8 @@ function renderPathView(svg, ordered) {
 
   const range = geometry.path.zRange || [];
   byId("geometry-meta").textContent =
-    "path " + geometry.path.count + " points, z " + (range[0] || 0) + " - " + (range[1] || 0) +
-    " mm - one uninterrupted line, the arrow marks where the run was heading";
+    tr("path") + " " + geometry.path.count + " " + tr("points") + ", z " + (range[0] || 0) + " - " +
+    (range[1] || 0) + " mm - " + tr("one uninterrupted line, the arrow marks where the run was heading");
 }
 
 /** Redraw the selected view from what is already fetched - no request, no re-parse. */
@@ -1333,13 +1351,13 @@ function endDrag() {
 
 async function deleteJob(id) {
   await call("/api/jobs/" + encodeURIComponent(id), { method: "DELETE" });
-  writeLog("deleted " + id, "ok");
+  writeLog(tr("deleted") + " " + id, "ok");
   await refreshJobs();
 }
 
 async function deleteUpload(id) {
   await call("/api/uploads/" + encodeURIComponent(id), { method: "DELETE" });
-  writeLog("deleted " + id, "ok");
+  writeLog(tr("deleted") + " " + id, "ok");
   await refreshUploads();
 }
 
@@ -1352,7 +1370,8 @@ async function deleteUpload(id) {
 async function cancelJob(id) {
   const view = await callJson("/api/jobs/" + encodeURIComponent(id) + "/cancel", { method: "POST" });
   writeLog(
-    "cancel requested for " + id + ": " + (view.detail || "accepted") + "; the job stops at its next safe point",
+    tr("cancel requested for") + " " + id + ": " + (view.detail || tr("accepted")) + "; " +
+      tr("the job stops at its next safe point"),
     "ok",
   );
   await refreshJobs();
@@ -1416,7 +1435,7 @@ function init() {
   stage.addEventListener("mousemove", moveDrag);
   stage.addEventListener("mouseup", endDrag);
   stage.addEventListener("mouseleave", endDrag);
-  setGeometryMessage("no layer geometry previewed yet");
+  setGeometryMessage(tr("no layer geometry previewed yet"));
   setGeometryControlsEnabled(false);
 
   run(refreshVersion);

@@ -336,6 +336,45 @@ the sample model with `?geometry=1` and `spiral_mode=1`, then reads the summary 
 polyline and its monotone `z` back from `/geometry/path`. That live-slice snapshot stays a single case,
 because geometry only exists once a job is terminal and the pool keeps just the last few snapshots.
 
+## Localization
+
+The console can render its own chrome in more than one language. English is both the default and
+the lookup key: every user-facing string is registered under its English text, so an untranslated
+build (or a language with no entry for a phrase) simply shows English back. Nothing about the
+default output changes — the English strings are the identity mapping.
+
+The machinery splits along the same DOM-free seam the rest of the console uses:
+
+- `public/httphelpers.js` owns the locale engine but stays browser-free, so the unit tests can run
+  it in a bare sandbox. It keeps a registry of locales, tracks the active one (`en` unless set
+  otherwise), and exposes `tr(text, params)` — a lookup that returns `text` unchanged when the
+  active table has no entry, then expands `{name}` placeholders from `params`. It never touches any
+  host object.
+- `public/i18n.js` is the browser-only layer that the automated harness deliberately does not load.
+  It registers the dictionaries (`en` is the implicit identity; `zh` ships with the console), picks a
+  locale from the stored preference or `navigator.language`, walks the already-parsed DOM with a
+  `TreeWalker` to translate static text nodes and `placeholder`/`title`/`aria-label` attributes, and
+  builds the language `<select>` in the status bar. Changing it stores the choice under
+  `hsba.console.lang` and reloads the page so every dynamic string is regenerated through `tr`.
+- `public/app.js` routes its runtime messages (status text, log lines, preview and geometry meta) in
+  and out of `tr`, translating at the call site rather than mutating the literals the source tests
+  assert against. Server-driven text — `error.message`, paths, `progress_stage`, state class names —
+  is left exactly as the API returned it.
+
+**Adding a language** means adding a dictionary to `i18n.js`, calling `registerLocale("<code>",
+<table>)` with keys spelled as their English source text, and listing the code in the `LOCALE_NAMES`
+map the switcher reads. Static page text needs no per-element wiring: the `TreeWalker` picks up any
+English string that has a dictionary entry, so a new locale is a data change, not a markup change.
+
+The engine is covered by `test/server.test.js` in the same two ways the rest of the console is: the
+served `httphelpers.js` runs in a bare `node:vm` (identity on English, translate on a hit, fall back
+to the key on a miss, `{name}` interpolation, unknown-code fallback, `availableLocales`), and
+`bootPage` registers a table through the real `HsBaHttp` before `app.js` renders so the assertions
+read translated button and state text back out of the fake DOM — while proving the class hook built
+from the raw API value (`state-success`) stays untranslated. `i18n.js` itself is not loaded by the
+harness (the fake DOM has no `TreeWalker`), so its wiring is checked by asserting it is served as
+`text/javascript` and referenced between the helpers and `app.js`.
+
 ## Layout
 
 ```
@@ -345,8 +384,9 @@ webui/
 ├── public/
 │   ├── index.html       dashboard markup (no inline script/style)
 │   ├── app.css          dark theme
-│   ├── httphelpers.js   DOM-free download-name, preview and geometry maths (unit tested)
-│   ├── app.js           dashboard logic (fetch + rendering)
+│   ├── httphelpers.js   DOM-free download-name, preview and geometry maths + the locale/`tr` engine (unit tested)
+│   ├── i18n.js          dictionaries (en/zh), static-DOM translation and the language switcher (browser only)
+│   ├── app.js           dashboard logic (fetch + rendering, dynamic strings routed through `tr`)
 │   └── favicon.svg
 └── test/
     ├── server.test.js   node:test integration suite (fake upstream)
