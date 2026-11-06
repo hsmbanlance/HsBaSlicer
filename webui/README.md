@@ -85,6 +85,24 @@ file name alone does not tell a CLI user where the model landed. When the pool i
 (no `[upload] dir` in `restapi.ini`), that table states the server's answer instead of failing an
 action.
 
+## Client structure (MVC)
+
+The browser code under `public/` is split into the three classic MVC layers, each an IIFE that
+publishes its surface on the shared `globalThis.HsBaApp` namespace. `index.html` loads them in
+dependency order (`httphelpers.js` → `i18n.js` → `model.js` → `view.js` → `app.js`, all `defer`),
+so a layer only ever dereferences a namespace its predecessor has already installed.
+
+| Layer | File | Owns | Sees |
+|---|---|---|---|
+| **Model** | `public/model.js` | client-side session state (geometry snapshot, packed result, the result on screen, the polling counters) and every read of `/api/*` (`call`/`callJson`/`fetchResult`, the `X-API-Key` header, path helpers) | no DOM at all |
+| **View** | `public/view.js` | everything that turns state into DOM: table cells, the log panel, the preview/package strips, the SVG geometry drawing | `HsBaApp.Model` for state, and hands user gestures back to `HsBaApp.Controller` |
+| **Controller** | `public/app.js` | the orchestration: what a click means, the jobs/uploads polling loop, `init()` and all event wiring | calls into `HsBaApp.Model` and `HsBaApp.View`; exports `run`, `copyText` and the `JOB_ACTIONS`/`UPLOAD_ACTIONS` tables the View binds |
+
+The split is a pure refactor: the English wording, the endpoint calls and the rendered behaviour are
+byte-for-byte what a single `app.js` produced, and the test harness boots all three files into one
+`node:vm` context and asserts the page contract against the concatenation, so nothing the tests
+locked onto `app.js` (`/api/pipelines`, `X-API-Key`, the SVG namespace, `JOB_COLUMNS`) was weakened.
+
 ## Layer geometry preview
 
 The **Geometry** button on a job row opens the "Layer geometry" panel, which draws the sliced model
@@ -265,7 +283,8 @@ the block and base64 bounds) and the package helpers (per-segment URL encoding, 
 numeric ordering, the JSON-only submission flag). Keeping that maths in the DOM-free helpers is
 what makes it testable at all: the page then only has to prove it applied the numbers.
 
-The page logic itself is executed too: `test/server.test.js` runs the served `app.js` in a `node:vm`
+The page logic itself is executed too: `test/server.test.js` runs the served `model.js`, `view.js`
+and `app.js` in a `node:vm`
 context against a minimal DOM (elements created on demand by id, working `localStorage`, a `fetch`
 bound to the console origin, no-op timers) and then presses the buttons a user would. That covers
 rendering the job rows, previewing an inline text result under its fallback name, refusing to decode
@@ -282,7 +301,7 @@ No packages are needed.
 Because that fake hands out every id as its own detached node, it cannot see the page's *nesting*, and
 nesting is where two real bugs hid: a heading filled with `textContent` deleted the `Images` and
 `Clear` buttons built inside it, and a "no pictures" sentence written into the hidden strip was never
-readable. Those are therefore asserted against the served HTML instead: every id `app.js` fills with
+readable. Those are therefore asserted against the served HTML instead: every id the page script fills with
 `textContent` must be a leaf element, and the package caption must not be a descendant of the strip.
 The switch was also checked the other way round: with the buttons moved into a plain `<span>` the new
 assertions pass, and putting the id back on the `<h2>` fails with

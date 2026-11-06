@@ -365,6 +365,8 @@ describe("static bundle", () => {
         ["/app.css", /^text\/css/],
         ["/httphelpers.js", /^text\/javascript/],
         ["/i18n.js", /^text\/javascript/],
+        ["/model.js", /^text\/javascript/],
+        ["/view.js", /^text\/javascript/],
         ["/app.js", /^text\/javascript/],
         ["/favicon.svg", /^image\/svg\+xml/],
       ];
@@ -373,7 +375,12 @@ describe("static bundle", () => {
         assert.equal(response.status, 200, path);
         assert.match(response.headers.get("content-type"), expected, path);
       }
-      const script = await (await fetch(`${base}/app.js`)).text();
+      // The page script is the three MVC files concatenated in load order; X-API-Key now lives in
+      // model.js, /api/pipelines in app.js and the SVG namespace in view.js, so the whole bundle has
+      // to be scanned to keep the off-origin and endpoint claims honest.
+      const script = (await Promise.all(["model.js", "view.js", "app.js"].map(
+        (file) => fetch(`${base}/${file}`).then((response) => response.text()),
+      ))).join("\n");
       assert.match(script, /\/api\/pipelines/);
       assert.match(script, /X-API-Key/);
       // The bundle must still fetch nothing off-origin. The one URI literal it does carry is the SVG
@@ -1328,7 +1335,11 @@ describe("package entries and embedded previews", () => {
 /** Fetch the served bundle once so several assertions can share one round trip. */
 async function pageBundle(base) {
   const html = await (await fetch(`${base}/`)).text();
-  const script = await (await fetch(`${base}/app.js`)).text();
+  // The console is now three MVC files (model.js, view.js, app.js); the source-literal assertions
+  // below are written against the whole page script, so they read the concatenation in load order.
+  const script = (await Promise.all(["model.js", "view.js", "app.js"].map(
+    (file) => fetch(`${base}/${file}`).then((response) => response.text()),
+  ))).join("\n");
   return { html, script };
 }
 
@@ -1578,6 +1589,26 @@ describe("page contract", () => {
     });
   });
 
+  it("lets a wide table scroll inside its card instead of overflowing the page", async () => {
+    await withConsole({}, async ({ base }) => {
+      const css = await (await fetch(`${base}/app.css`)).text();
+      // A grid item defaults to min-width:auto, so the uploads table (a nowrap header plus the 300px
+      // path column) used to push every card past a narrow viewport, where body's overflow-x:hidden
+      // then clipped it off-screen with no way to reach it. The single column is minmax(0,1fr) so the
+      // card shrinks to the viewport and the table scrolls inside its own region instead.
+      const mainRule = css.match(/main \{[^}]*\}/);
+      assert.ok(mainRule, "main is no longer laid out as a grid");
+      assert.match(mainRule[0], /display: grid/);
+      assert.match(mainRule[0], /grid-template-columns: minmax\(0, 1fr\)/);
+      const wrapRule = css.match(/\.table-wrap \{[^}]*\}/);
+      assert.ok(wrapRule, "the table no longer has its own scroll region");
+      assert.match(wrapRule[0], /overflow: auto/);
+      // The page itself never scrolls sideways: the body clips it and each long region owns its gutter.
+      const bodyRule = css.match(/body \{[^}]*\}/);
+      assert.match(bodyRule[0], /overflow-x: hidden/);
+    });
+  });
+
   it("only calls endpoints that the proxy forwards", async () => {
     await withConsole({}, async ({ base }) => {
       const { script } = await pageBundle(base);
@@ -1810,7 +1841,7 @@ async function bootPage(base, options = {}) {
   sandbox.window = sandbox;
 
   const context = vm.createContext(sandbox);
-  for (const file of ["httphelpers.js", "app.js"]) {
+  for (const file of ["httphelpers.js", "model.js", "view.js", "app.js"]) {
     const source = await (await fetch(`${base}/${file}`)).text();
     vm.runInContext(source, context, { filename: file });
     if (file === "httphelpers.js" && options.locale) {

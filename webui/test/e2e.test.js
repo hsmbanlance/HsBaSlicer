@@ -425,7 +425,7 @@ describe("end to end with a real HsBaSlicerRestServer", () => {
 
     // The whole bundle has to be reachable from the page's own origin, including the helpers
     // behind the Preview button; a missing asset would only show up as a browser console error.
-    for (const asset of ["/app.css", "/httphelpers.js", "/app.js", "/favicon.svg"]) {
+    for (const asset of ["/app.css", "/httphelpers.js", "/model.js", "/view.js", "/app.js", "/favicon.svg"]) {
       const response = await fetch(`${consoleUrlOf()}${asset}`);
       assert.equal(response.status, 200, asset);
       assert.ok(response.headers.get("content-type"), `${asset} has no media type`);

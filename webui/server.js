@@ -38,6 +38,8 @@ const ASSETS = new Map([
   ["/app.css", ["app.css", "text/css; charset=utf-8"]],
   ["/httphelpers.js", ["httphelpers.js", "text/javascript; charset=utf-8"]],
   ["/i18n.js", ["i18n.js", "text/javascript; charset=utf-8"]],
+  ["/model.js", ["model.js", "text/javascript; charset=utf-8"]],
+  ["/view.js", ["view.js", "text/javascript; charset=utf-8"]],
   ["/app.js", ["app.js", "text/javascript; charset=utf-8"]],
   ["/favicon.svg", ["favicon.svg", "image/svg+xml"]],
 ]);

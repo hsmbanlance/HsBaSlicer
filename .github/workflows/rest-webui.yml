@@ -47,6 +47,8 @@ jobs:
         run: |
           node --check server.js
           node --check public/httphelpers.js
+          node --check public/model.js
+          node --check public/view.js
           node --check public/app.js
           node --check test/server.test.js
           node --check test/e2e.test.js
