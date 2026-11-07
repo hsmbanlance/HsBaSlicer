@@ -4,7 +4,9 @@ name: Docker REST API Image
 #   - push/PR 仅改动 docker/** 或本文件时 → 只跑秒级静态检查（hadolint + 上下文检查），
 #     不在自动触发里做小时级的 vcpkg 冷编译。
 #   - 完整镜像构建 + 运行冒烟（/api/health、/api/version）通过 workflow_dispatch 手动
-#     触发；gha 层缓存命中后增量构建可降至分钟级。
+#     触发；gha 层缓存命中后增量构建可降至分钟级。注意：Dispatch 按钮仅在本文件存
+#     在于默认分支（或 UI 选中分支）时可见；push/PR 触发时 build job 显示为
+#     skipped 是预期行为，非解析错误。
 # 与 rest-webui.yml（Node 控制台）、cmake-multi-platform.yml（Linux 原生构建）分层互补：
 # 本工作流只关心"镜像能否产出并跑起来"，切片功能正确性由原生流水线测试覆盖。
 
@@ -70,8 +72,16 @@ jobs:
           # runtime 阶段的 sed 覆盖依赖 restapi.ini 的默认 host 行仍然存在
           grep -q "^host = 127.0.0.1" restapi/restapi.ini
 
+      # 非 Dispatch 触发时 build job 会被跳过，在 Summary 里显式声明，避免静默 skip
+      - name: Note skipped build job
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          echo "build job 仅由 workflow_dispatch 手动触发（vcpkg 冷编译小时级），本次运行按设计跳过。" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "触发方式：Actions → Docker REST API Image → Run workflow" | tee -a "$GITHUB_STEP_SUMMARY"
+
   build:
-    name: Build image & smoke test (${{ inputs.license || 'mit' }})
+    # name 不用表达式：未调度的 job 在 UI 里按模板原文显示，容易被误读为解析失败
+    name: Build image & smoke test
     if: github.event_name == 'workflow_dispatch'
     needs: lint
     runs-on: ubuntu-latest
@@ -92,7 +102,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR (push only)
-        if: ${{ github.event.inputs.push_image != '' }}
+        if: ${{ inputs.push_image != '' }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -111,10 +121,10 @@ jobs:
           cache-from: type=gha,scope=docker-rest-api-${{ inputs.license }}
           cache-to: type=gha,scope=docker-rest-api-${{ inputs.license }},mode=max
           load: true
-          push: ${{ github.event.inputs.push_image != '' }}
+          push: ${{ inputs.push_image != '' }}
           tags: |
             hsba-rest-api:ci-${{ github.run_id }}
-            ${{ github.event.inputs.push_image != '' && format('ghcr.io/{0}/hsba-rest-api:{1}', github.repository, inputs.license) || '' }}
+            ${{ inputs.push_image != '' && format('ghcr.io/{0}/hsba-rest-api:{1}', github.repository, inputs.license) || '' }}
 
       # 冒烟：容器外访问必须成立（ini host 已改 0.0.0.0），健康探针走环回免鉴权路径
       - name: Smoke test
