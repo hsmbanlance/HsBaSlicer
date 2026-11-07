@@ -1,0 +1,29 @@
+# ---------------------------------------------------------------------------
+# Docker 构建上下文排除清单
+#
+# 生效条件：BuildKit 下用 docker build -f docker/Dockerfile . 构建时，与
+# Dockerfile 同名的 Dockerfile.dockerignore 自动优先于根目录 .dockerignore。
+#
+# 注意：samples/tests/static_tests/docs 等目录虽不编译（Dockerfile 已用
+# CMake 选项关闭），但顶层 add_subdirectory 需要目录存在，不可排除；
+# overlay-ports/triplets 被 vcpkg-configuration.json 引用，同样必须保留。
+# ---------------------------------------------------------------------------
+.git
+.gitignore
+.github
+.vs
+.vscode
+.qoder
+.agents
+.cache
+out
+vcpkg_installed
+android
+ios
+nvim
+*.obj
+*.pdb
+*.log
+mftest.obj
+static_analyzer_report.txt
+skills-lock.json
