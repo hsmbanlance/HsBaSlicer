@@ -1,0 +1,1 @@
+Standalone HTTP(S) service exposing the HsBaSlicer slicing pipeline as a JSON/XML REST API with async job queue, multipart model upload, param store, and geometry/package endpoints.

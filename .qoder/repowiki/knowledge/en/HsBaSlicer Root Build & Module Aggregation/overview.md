@@ -1,1 +1,0 @@
-Top-level CMake project that aggregates HsBaSlicer's slicing-engine submodules, resolves vcpkg dependencies, and produces shared/static libraries plus optional REST API and sample executables.

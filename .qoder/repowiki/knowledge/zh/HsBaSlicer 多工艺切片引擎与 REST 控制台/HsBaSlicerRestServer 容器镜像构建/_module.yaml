@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: docker
+title: HsBaSlicerRestServer 容器镜像构建
+scope:
+    - docker/
+source_files: []
+depends_on: []
+related_to:
+    - path: webui
