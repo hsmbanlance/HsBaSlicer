@@ -42,7 +42,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# vcpkg：bootstrap 后按需 checkout 基线（镜像内不需要 git 历史，深度 1 即可）
+# vcpkg：bootstrap 后按需 checkout 基线（镜像内不需要 git 历史，深度 1 即可）。
+# 注意 vcpkg 基线是 commit SHA 而非 tag，GitHub 支持按完整 SHA 直取对象。
 RUN git clone --depth 1 https://github.com/microsoft/vcpkg.git /opt/vcpkg \
     && /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics
 ENV VCPKG_ROOT=/opt/vcpkg
@@ -60,7 +61,7 @@ WORKDIR /src
 COPY vcpkg.json vcpkg-configuration.json CMakeLists.txt CMakePresets.json ./
 
 RUN if [ -n "${VCPKG_BASELINE}" ]; then \
-        git -C /opt/vcpkg fetch --tags --depth 1 "origin/tag:${VCPKG_BASELINE}" \
+        git -C /opt/vcpkg fetch --depth 1 origin "${VCPKG_BASELINE}" \
         && git -C /opt/vcpkg checkout "${VCPKG_BASELINE}"; \
     fi
 
@@ -68,9 +69,11 @@ COPY . .
 
 # 配置（工具链在 cmake 调用期间触发 vcpkg 依赖编译，即本镜像最慢的一步）。
 # downloads 与 binary caching 均挂到 BuildKit 缓存，跨构建复用。
+# 注意：VCPKG_BINARY_SOURCES 环境变量中同一 source 的各字段用逗号分隔，
+# 多个 source 之间才用分号（与 --binarysource 命令行全分号不同）。
 RUN --mount=type=cache,target=/root/.cache/vcpkg/downloads \
     --mount=type=cache,target=/root/.cache/vcpkg/installed \
-    export VCPKG_BINARY_SOURCES="clear;files;/root/.cache/vcpkg/installed;readwrite" \
+    export VCPKG_BINARY_SOURCES="clear;files,/root/.cache/vcpkg/installed,readwrite" \
     && cmake --preset linux-release \
         -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
         -DCMAKE_INSTALL_PREFIX=/opt/hsba-install \
