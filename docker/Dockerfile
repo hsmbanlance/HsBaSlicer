@@ -70,7 +70,7 @@ COPY . .
 # downloads 与 binary caching 均挂到 BuildKit 缓存，跨构建复用。
 RUN --mount=type=cache,target=/root/.cache/vcpkg/downloads \
     --mount=type=cache,target=/root/.cache/vcpkg/installed \
-    export VCPKG_BINARY_SOURCES="clear;read,files;/root/.cache/vcpkg/installed;write,files;/root/.cache/vcpkg/installed" \
+    export VCPKG_BINARY_SOURCES="clear;files;/root/.cache/vcpkg/installed;readwrite" \
     && cmake --preset linux-release \
         -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
         -DCMAKE_INSTALL_PREFIX=/opt/hsba-install \
