@@ -91,7 +91,10 @@ RUN wget -q --tries=10 "${POWERSHELL_DEB_URL}" \
 # 注意 vcpkg 基线是 commit SHA 而非 tag，GitHub 支持按完整 SHA 直取对象。
 RUN git clone --depth 1 https://github.com/microsoft/vcpkg.git /opt/vcpkg \
     && /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics
-ENV VCPKG_ROOT=/opt/vcpkg
+# vcpkg 下载缓存默认在 VCPKG_ROOT/downloads（不在任何 cache mount 内），显式指向
+# BuildKit cache：工具链 tar 包与端口源码归档跨构建/断点重跑可复用
+ENV VCPKG_ROOT=/opt/vcpkg \
+    VCPKG_DOWNLOADS=/root/.cache/vcpkg/downloads
 
 # rest-api 与 CMake 的 HSBA_BUILD_REST_API=ON 双门控缺一不可（顶层 CMakeLists
 # 会校验 ENV 或 CMake 变量中的 rest-api 特性）。
@@ -113,26 +116,59 @@ RUN if [ -n "${VCPKG_BASELINE}" ]; then \
         && git -C /opt/vcpkg checkout "${VCPKG_BASELINE}"; \
     fi
 
+# 预热 vcpkg-tool 自带的 cmake/ninja：vcpkg 内置下载器对连接失败不重试（curl
+# error 7 直接判定非瞬态错误），这里先用系统 wget（--tries 重试 + -c 断点续传）
+# 拉到 downloads 缓存；vcpkg 检测到缓存文件后直接使用并自行 sha512 校验（完整性
+# 不绕过）。版本从 checkout 后的 vcpkg-tool-metadata.txt 读取，基线变化后本层
+# 自然重跑；预热失败不阻断构建，由下方 configure 重试循环兜底。
+RUN --mount=type=cache,target=/root/.cache/vcpkg/downloads \
+    meta=/opt/vcpkg/scripts/vcpkg-tool-metadata.txt; \
+    cmake_ver=$(awk -F= '/^CMAKE_VERSION=/{print $2; exit}' "$meta"); \
+    ninja_ver=$(awk -F= '/^NINJA_VERSION=/{print $2; exit}' "$meta"); \
+    echo ">>> pre-warming vcpkg tools: cmake ${cmake_ver}, ninja ${ninja_ver}"; \
+    wget -c -q --tries=15 --timeout=60 \
+        -O "${VCPKG_DOWNLOADS}/cmake-${cmake_ver}-linux-x86_64.tar.gz.part" \
+        "https://github.com/Kitware/CMake/releases/download/v${cmake_ver}/cmake-${cmake_ver}-linux-x86_64.tar.gz" \
+    && mv "${VCPKG_DOWNLOADS}/cmake-${cmake_ver}-linux-x86_64.tar.gz.part" \
+          "${VCPKG_DOWNLOADS}/cmake-${cmake_ver}-linux-x86_64.tar.gz" \
+    || echo "WARNING: cmake pre-warm failed; configure retries will re-attempt"; \
+    wget -c -q --tries=15 --timeout=60 \
+        -O "${VCPKG_DOWNLOADS}/ninja-linux.zip.part" \
+        "https://github.com/ninja-build/ninja/releases/download/v${ninja_ver}/ninja-linux.zip" \
+    && mv "${VCPKG_DOWNLOADS}/ninja-linux.zip.part" \
+          "${VCPKG_DOWNLOADS}/ninja-linux.zip" \
+    || echo "WARNING: ninja pre-warm failed; configure retries will re-attempt"
+
 COPY . .
 
 # 配置（工具链在 cmake 调用期间触发 vcpkg 依赖编译，即本镜像最慢的一步）。
 # downloads 与 binary caching 均挂到 BuildKit 缓存，跨构建复用。
+# vcpkg 对连接失败不重试（curl error 7 判为非瞬态错误），外层 shell 最多重试
+# 5 次，重试间清理二进制目录避免陈旧 CMakeCache 条目干扰。
 # 注意：VCPKG_BINARY_SOURCES 环境变量中同一 source 的各字段用逗号分隔，
 # 多个 source 之间才用分号（与 --binarysource 命令行全分号不同）。
 RUN --mount=type=cache,target=/root/.cache/vcpkg/downloads \
     --mount=type=cache,target=/root/.cache/vcpkg/installed \
     export VCPKG_BINARY_SOURCES="clear;files,/root/.cache/vcpkg/installed,readwrite" \
-    && cmake --preset linux-release \
-        -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
-        -DCMAKE_INSTALL_PREFIX=/opt/hsba-install \
-        -DVCPKG_MANIFEST_FEATURES="${HSBA_FEATURES}" \
-        -DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON \
-        -DHSBA_BUILD_REST_API=ON \
-        -DHSBA_SLICER_BUILD_SAMPLES=OFF \
-        -DHSBA_SLICER_USE_TESTS=OFF \
-        -DHSBA_SLICER_USE_STATIC_TESTS=OFF \
-        -DHSBA_SLICER_BUILD_DOCS=OFF \
-    && cmake --build --preset linux-release \
+    && ok=0 \
+    && for attempt in 1 2 3 4 5; do \
+        echo ">>> CMake configure attempt ${attempt}/5"; \
+        if cmake --preset linux-release \
+            -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_INSTALL_PREFIX=/opt/hsba-install \
+            -DVCPKG_MANIFEST_FEATURES="${HSBA_FEATURES}" \
+            -DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON \
+            -DHSBA_BUILD_REST_API=ON \
+            -DHSBA_SLICER_BUILD_SAMPLES=OFF \
+            -DHSBA_SLICER_USE_TESTS=OFF \
+            -DHSBA_SLICER_USE_STATIC_TESTS=OFF \
+            -DHSBA_SLICER_BUILD_DOCS=OFF; \
+        then ok=1; break; fi; \
+        rm -rf out/build/linux-release; \
+        [ "${attempt}" = 5 ] || { echo ">>> configure attempt ${attempt} failed; retrying in 30s"; sleep 30; }; \
+    done; \
+    [ "${ok}" = 1 ] || { echo "ERROR: CMake configure failed after 5 attempts"; exit 1; }; \
+    cmake --build --preset linux-release \
         --target HsBaSlicerRestServer \
         --parallel "${JOBS:-0}" \
     && cmake --install out/build/linux-release
