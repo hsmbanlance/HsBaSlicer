@@ -14,7 +14,22 @@
 - [static_check/feature_check.cmake](file://static_check/feature_check.cmake)
 - [.github/workflows/build-linux.yml](file://.github/workflows/build-linux.yml)
 - [.github/workflows/test-coverage.yml](file://.github/workflows/test-coverage.yml)
+- [.github/workflows/rest-webui.yml](file://.github/workflows/rest-webui.yml)
+- [.github/workflows/cmake-multi-platform.yml](file://.github/workflows/cmake-multi-platform.yml)
+- [integration/slice-ui.test.mjs](file://integration/slice-ui.test.mjs)
+- [tests/GuiApi/geometry_store_test.cpp](file://tests/GuiApi/geometry_store_test.cpp)
+- [tests/GuiApi/job_control_test.cpp](file://tests/GuiApi/job_control_test.cpp)
+- [tests/RestApi/endpoint_http_test.cpp](file://tests/RestApi/endpoint_http_test.cpp)
+- [webui/test/e2e.test.js](file://webui/test/e2e.test.js)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Added comprehensive testing infrastructure section covering integration tests for slice UI, end-to-end tests for web server, and unit tests for new components
+- Updated CI/CD pipeline documentation to include automated testing workflows
+- Enhanced testing framework documentation with Google Test and Boost.Test coverage
+- Added detailed coverage of REST API endpoint testing and GUI component testing
+- Included Node.js-based integration testing for web console functionality
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -22,16 +37,17 @@
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Dependency Analysis](#dependency-analysis)
-7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
+6. [Testing Infrastructure](#testing-infrastructure)
+7. [Dependency Analysis](#dependency-analysis)
+8. [Performance Considerations](#performance-considerations)
+9. [Troubleshooting Guide](#troubleshooting-guide)
+10. [Conclusion](#conclusion)
+11. [Appendices](#appendices)
 
 ## Introduction
-This document describes how to develop, test, and contribute to HsBaSlicer. It focuses on the development environment setup with CMake and vcpkg, IDE recommendations for Visual Studio, CLion, and VS Code, debugging techniques, testing strategies using Boost.Test, static analysis with clang-tidy and clang-format, code quality standards, contribution workflows, continuous integration, and common troubleshooting steps.
+This document describes how to develop, test, and contribute to HsBaSlicer. It focuses on the development environment setup with CMake and vcpkg, IDE recommendations for Visual Studio, CLion, and VS Code, debugging techniques, comprehensive testing strategies using Google Test and Boost.Test, static analysis with clang-tidy and clang-format, code quality standards, contribution workflows, continuous integration, and common troubleshooting steps.
 
-HsBaSlicer is a modular, cross-platform C++ framework for 3D-printing slicers. The repository provides desktop, Android, and iOS build targets, extensive unit tests, coverage gating, and CI workflows.
+HsBaSlicer is a modular, cross-platform C++ framework for 3D-printing slicers. The repository provides desktop, Android, and iOS build targets, extensive unit tests, integration tests, end-to-end tests, coverage gating, and automated CI/CD pipelines.
 
 **Section sources**
 - [README.md:21-23](file://README.md#L21-L23)
@@ -41,7 +57,7 @@ The project uses a top-level CMake configuration that detects compiler capabilit
 
 - Build system: root `CMakeLists.txt`, `CMakePresets.json`, `vcpkg.json`
 - Static analysis: `.clang-format`, `.clang-tidy`, `static_check/cpp_analyzer.py`, `static_check/feature_check.cmake`
-- Testing: `tests/CMakeLists.txt` and per-feature test executables
+- Testing: `tests/CMakeLists.txt` and per-feature test executables, integration tests, end-to-end tests
 - Coverage: `cmake/coverage.cmake`
 - CI: `.github/workflows/*.yml`
 
@@ -58,6 +74,10 @@ Format[".clang-format"]
 Lint[".clang-tidy"]
 CI_Linux[".github/workflows/build-linux.yml"]
 CI_Coverage[".github/workflows/test-coverage.yml"]
+Integration["integration/slice-ui.test.mjs"]
+WebUI_E2E["webui/test/e2e.test.js"]
+GUI_Tests["tests/GuiApi/*_test.cpp"]
+REST_Tests["tests/RestApi/*_test.cpp"]
 Root --> Presets
 Root --> VCPKG
 Root --> Tests
@@ -68,13 +88,16 @@ Root --> Lint
 CI_Linux --> Root
 CI_Coverage --> Coverage
 CI_Coverage --> Tests
+Integration --> WebUI_E2E
+GUI_Tests --> Tests
+REST_Tests --> Tests
 ```
 
 **Diagram sources**
 - [CMakeLists.txt:1-695](file://CMakeLists.txt#L1-L695)
 - [CMakePresets.json:1-239](file://CMakePresets.json#L1-L239)
 - [vcpkg.json:1-113](file://vcpkg.json#L1-L113)
-- [tests/CMakeLists.txt:1-1206](file://tests/CMakeLists.txt#L1-L1206)
+- [tests/CMakeLists.txt:1-1673](file://tests/CMakeLists.txt#L1-L1673)
 - [cmake/coverage.cmake:1-173](file://cmake/coverage.cmake#L1-L173)
 - [static_check/cpp_analyzer.py:1-383](file://static_check/cpp_analyzer.py#L1-L383)
 - [static_check/feature_check.cmake:1-123](file://static_check/feature_check.cmake#L1-L123)
@@ -82,6 +105,8 @@ CI_Coverage --> Tests
 - [.clang-tidy:1-96](file://.clang-tidy#L1-L96)
 - [.github/workflows/build-linux.yml:1-82](file://.github/workflows/build-linux.yml#L1-L82)
 - [.github/workflows/test-coverage.yml:1-136](file://.github/workflows/test-coverage.yml#L1-L136)
+- [integration/slice-ui.test.mjs:1-603](file://integration/slice-ui.test.mjs#L1-L603)
+- [webui/test/e2e.test.js:370-409](file://webui/test/e2e.test.js#L370-L409)
 
 **Section sources**
 - [CMakeLists.txt:1-695](file://CMakeLists.txt#L1-L695)
@@ -102,6 +127,8 @@ This section summarizes the development toolchain components used by contributor
   - Python analyzer performs additional checks such as memory allocation patterns and complexity thresholds.
 - Testing:
   - Boost.Test is used across many test executables; CTest orchestrates execution.
+  - Node.js-based integration tests for web console functionality.
+  - End-to-end tests for REST API and web UI interaction.
 - Coverage:
   - gcov/gcovr instrumentation and threshold gates are configured via CMake.
 
@@ -112,33 +139,39 @@ This section summarizes the development toolchain components used by contributor
 - [.clang-format:1-99](file://.clang-format#L1-L99)
 - [.clang-tidy:1-96](file://.clang-tidy#L1-L96)
 - [static_check/cpp_analyzer.py:1-383](file://static_check/cpp_analyzer.py#L1-L383)
-- [tests/CMakeLists.txt:1-1206](file://tests/CMakeLists.txt#L1-L1206)
+- [tests/CMakeLists.txt:1-1673](file://tests/CMakeLists.txt#L1-L1673)
 - [cmake/coverage.cmake:1-173](file://cmake/coverage.cmake#L1-L173)
 
 ## Architecture Overview
-The development workflow integrates CMake, vcpkg, Boost.Test, clang-tidy, clang-format, gcov/gcovr, and GitHub Actions.
+The development workflow integrates CMake, vcpkg, Boost.Test, Node.js testing, clang-tidy, clang-format, gcov/gcovr, and GitHub Actions.
 
 ```mermaid
 sequenceDiagram
 participant Dev as "Developer"
 participant CMake as "CMake + Presets"
 participant VCPKG as "vcpkg"
-participant Test as "Boost.Test + CTest"
+participant UnitTests as "Boost.Test + CTest"
+participant IntegrationTests as "Node.js Integration Tests"
+participant E2ETests as "End-to-End Tests"
 participant Coverage as "gcov/gcovr"
 participant CI as "GitHub Actions"
 Dev->>CMake : Configure with preset (e.g., linux-coverage)
 CMake->>VCPKG : Resolve dependencies from vcpkg.json
 CMake-->>Dev : Generate build tree
-Dev->>Test : Build and run tests via CTest
-Test-->>Coverage : Produce .gcda data
-Coverage-->>CI : Enforce coverage thresholds
+Dev->>UnitTests : Build and run unit tests via CTest
+UnitTests-->>Coverage : Produce .gcda data
+Dev->>IntegrationTests : Run integration tests (slice-ui.test.mjs)
+IntegrationTests->>E2ETests : Execute end-to-end scenarios
+E2ETests-->>CI : Report results
 CI->>CMake : Run build-linux.yml or test-coverage.yml
 ```
 
 **Diagram sources**
 - [CMakePresets.json:1-239](file://CMakePresets.json#L1-L239)
 - [vcpkg.json:1-113](file://vcpkg.json#L1-L113)
-- [tests/CMakeLists.txt:1-1206](file://tests/CMakeLists.txt#L1-L1206)
+- [tests/CMakeLists.txt:1-1673](file://tests/CMakeLists.txt#L1-L1673)
+- [integration/slice-ui.test.mjs:1-603](file://integration/slice-ui.test.mjs#L1-L603)
+- [webui/test/e2e.test.js:370-409](file://webui/test/e2e.test.js#L370-L409)
 - [cmake/coverage.cmake:1-173](file://cmake/coverage.cmake#L1-L173)
 - [.github/workflows/build-linux.yml:1-82](file://.github/workflows/build-linux.yml#L1-L82)
 - [.github/workflows/test-coverage.yml:1-136](file://.github/workflows/test-coverage.yml#L1-L136)
@@ -227,10 +260,10 @@ RunAfterBuild --> End
 ```
 
 **Diagram sources**
-- [tests/CMakeLists.txt:1-1206](file://tests/CMakeLists.txt#L1-L1206)
+- [tests/CMakeLists.txt:1-1673](file://tests/CMakeLists.txt#L1-L1673)
 
 **Section sources**
-- [tests/CMakeLists.txt:1-1206](file://tests/CMakeLists.txt#L1-L1206)
+- [tests/CMakeLists.txt:1-1673](file://tests/CMakeLists.txt#L1-L1673)
 
 #### Integration Testing Approaches
 - Integration-style tests link multiple internal libraries (e.g., Lua adapters, path generators, support modules).
@@ -241,7 +274,7 @@ Examples:
 - `param_store_test` exercises parameter storage with Lua and SQL adapter interactions.
 
 **Section sources**
-- [tests/CMakeLists.txt:1-1206](file://tests/CMakeLists.txt#L1-L1206)
+- [tests/CMakeLists.txt:1-1673](file://tests/CMakeLists.txt#L1-L1673)
 
 #### Performance Benchmarking Methods
 - The repository does not define dedicated benchmark targets in the provided files.
@@ -341,14 +374,23 @@ Diagnostics --> Review["Code Review"]
   - Uses the `linux-coverage` preset to instrument builds.
   - Runs tests and enforces coverage thresholds for core and other modules.
   - Uploads coverage reports as artifacts.
+- `rest-webui.yml`:
+  - Tests Node.js web console independently without C++ dependencies.
+  - Runs syntax checks and integration tests for web UI components.
+- `cmake-multi-platform.yml`:
+  - Multi-platform builds and testing across Windows, Linux, and macOS.
+  - Includes REST API endpoint testing and end-to-end web console testing.
 
 ```mermaid
 sequenceDiagram
 participant PR as "Pull Request"
 participant CI_Build as "build-linux.yml"
 participant CI_Coverage as "test-coverage.yml"
+participant CI_WebUI as "rest-webui.yml"
+participant CI_Multi as "cmake-multi-platform.yml"
 participant CMake as "CMake Presets"
 participant Tests as "CTest"
+participant NodeTests as "Node.js Tests"
 participant Coverage as "gcovr Gates"
 PR->>CI_Build : Trigger workflow
 CI_Build->>CMake : Configure + Build
@@ -357,18 +399,28 @@ PR->>CI_Coverage : Trigger workflow
 CI_Coverage->>CMake : Configure with linux-coverage
 CI_Coverage->>Tests : Run tests producing gcov data
 CI_Coverage->>Coverage : Enforce thresholds
+PR->>CI_WebUI : Trigger workflow (webui changes)
+CI_WebUI->>NodeTests : Run Node.js syntax and integration tests
+PR->>CI_Multi : Trigger workflow
+CI_Multi->>CMake : Configure for multiple platforms
+CI_Multi->>Tests : Run platform-specific tests
+CI_Multi->>NodeTests : Run end-to-end web console tests
 Coverage-->>PR : Pass/Fail result
 ```
 
 **Diagram sources**
 - [.github/workflows/build-linux.yml:1-82](file://.github/workflows/build-linux.yml#L1-L82)
 - [.github/workflows/test-coverage.yml:1-136](file://.github/workflows/test-coverage.yml#L1-L136)
+- [.github/workflows/rest-webui.yml:1-79](file://.github/workflows/rest-webui.yml#L1-L79)
+- [.github/workflows/cmake-multi-platform.yml:1-517](file://.github/workflows/cmake-multi-platform.yml#L1-L517)
 - [CMakePresets.json:1-239](file://CMakePresets.json#L1-L239)
 - [cmake/coverage.cmake:1-173](file://cmake/coverage.cmake#L1-L173)
 
 **Section sources**
 - [.github/workflows/build-linux.yml:1-82](file://.github/workflows/build-linux.yml#L1-L82)
 - [.github/workflows/test-coverage.yml:1-136](file://.github/workflows/test-coverage.yml#L1-L136)
+- [.github/workflows/rest-webui.yml:1-79](file://.github/workflows/rest-webui.yml#L1-L79)
+- [.github/workflows/cmake-multi-platform.yml:1-517](file://.github/workflows/cmake-multi-platform.yml#L1-L517)
 
 ### Release Procedures
 - The repository provides install/export targets and CMake package configuration files.
@@ -381,6 +433,167 @@ Coverage-->>PR : Pass/Fail result
 
 **Section sources**
 - [CMakeLists.txt:459-665](file://CMakeLists.txt#L459-L665)
+
+## Testing Infrastructure
+
+### Comprehensive Testing Strategy
+
+The HsBaSlicer project implements a multi-layered testing strategy that covers unit testing, integration testing, and end-to-end testing across different components and technologies.
+
+#### Unit Testing with Boost.Test
+
+The core C++ components are tested using Boost.Test framework with comprehensive coverage of:
+
+- **Geometry Store Testing**: Tests the snapshot pool contract including LRU eviction, reference counting, and ownership management
+- **Job Control Testing**: Validates job handle lifecycle, cancellation state machine, callback threading, and geometry read-back
+- **REST API Endpoint Testing**: HTTP-level contract tests for the real route table with status codes, content negotiation, and multipart uploads
+
+```mermaid
+flowchart TD
+GeometryStore["Geometry Store Tests<br/>LRU, References, Ownership"] --> BoostTest["Boost.Test Framework"]
+JobControl["Job Control Tests<br/>Lifecycle, Cancellation, Threading"] --> BoostTest
+RESTAPI["REST API Tests<br/>HTTP Contracts, Status Codes"] --> BoostTest
+BoostTest --> CTest["CTest Orchestration"]
+CTest --> Coverage["Coverage Collection"]
+```
+
+**Diagram sources**
+- [tests/GuiApi/geometry_store_test.cpp:1-290](file://tests/GuiApi/geometry_store_test.cpp#L1-L290)
+- [tests/GuiApi/job_control_test.cpp:1-523](file://tests/GuiApi/job_control_test.cpp#L1-L523)
+- [tests/RestApi/endpoint_http_test.cpp:1-35](file://tests/RestApi/endpoint_http_test.cpp#L1-L35)
+
+**Section sources**
+- [tests/GuiApi/geometry_store_test.cpp:1-290](file://tests/GuiApi/geometry_store_test.cpp#L1-L290)
+- [tests/GuiApi/job_control_test.cpp:1-523](file://tests/GuiApi/job_control_test.cpp#L1-L523)
+- [tests/RestApi/endpoint_http_test.cpp:1-35](file://tests/RestApi/endpoint_http_test.cpp#L1-L35)
+
+#### Integration Testing with Node.js
+
+The project includes sophisticated integration tests that bridge the gap between unit tests and end-to-end scenarios:
+
+- **Slice UI Integration Tests**: Drive the WebUI client against a real HsBaSlicerRestServer process
+- **Web Console Testing**: Validate the standalone REST console functionality
+- **Model Processing**: Test complete slicing workflows with real STL models
+
+Key features of the integration test suite:
+- Minimal DOM implementation faithful to browser semantics
+- Real model processing with Stanford Bunny STL file
+- Complete submit → poll → Preview workflow validation
+- Pipeline kind rendering verification against live server data
+
+```mermaid
+sequenceDiagram
+participant TestRunner as "Node.js Test Runner"
+participant DOM as "Minimal DOM Implementation"
+participant Console as "Web Console Server"
+participant REST as "HsBaSlicerRestServer"
+participant Model as "Real STL Model"
+TestRunner->>DOM : Boot minimal DOM with served scripts
+DOM->>Console : Initialize web console
+Console->>REST : Connect to REST server
+REST->>Model : Process real STL model
+TestRunner->>DOM : Simulate user interactions
+DOM->>Console : Submit slice job
+Console->>REST : Execute slicing operation
+REST-->>Console : Return sliced results
+Console-->>DOM : Update UI with results
+TestRunner->>DOM : Verify preview functionality
+```
+
+**Diagram sources**
+- [integration/slice-ui.test.mjs:196-417](file://integration/slice-ui.test.mjs#L196-L417)
+- [integration/slice-ui.test.mjs:443-603](file://integration/slice-ui.test.mjs#L443-L603)
+
+**Section sources**
+- [integration/slice-ui.test.mjs:1-603](file://integration/slice-ui.test.mjs#L1-L603)
+
+#### End-to-End Testing
+
+The end-to-end test suite validates the complete user experience:
+
+- **Web Server Integration**: Tests the web server's ability to serve the console and proxy API requests
+- **Real Server Communication**: Validates communication with actual HsBaSlicerRestServer binary
+- **User Workflow Simulation**: Simulates complete user workflows from model upload to result preview
+
+The e2e tests:
+- Start a fake HsBaSlicerRestServer with a small route table
+- Launch a real console instance on an ephemeral port
+- Talk to the console over HTTP to validate the browser contract
+- Cover static bundle serving, `/api/*` proxy, credential forwarding, and CLI surface
+
+**Section sources**
+- [webui/test/server.test.js:1-47](file://webui/test/server.test.js#L1-L47)
+- [webui/test/e2e.test.js:370-409](file://webui/test/e2e.test.js#L370-L409)
+
+### Automated CI/CD Pipelines
+
+#### GitHub Actions Workflows
+
+The project implements comprehensive CI/CD automation across multiple platforms and test types:
+
+##### REST Web Console Testing (`rest-webui.yml`)
+- Independent Node.js testing without C++ dependencies
+- Syntax checking for all JavaScript files
+- Integration test execution with Node.js test runner
+- CLI smoke testing for console server functionality
+
+##### Multi-Platform Testing (`cmake-multi-platform.yml`)
+- Builds across Windows, Linux, and macOS
+- REST API endpoint testing on Linux
+- Sample model caching and fetching
+- End-to-end web console testing against real server
+
+##### Coverage Testing (`test-coverage.yml`)
+- Coverage-instrumented builds with gcov/gcovr
+- Threshold enforcement for core and other modules
+- Coverage report artifact generation
+
+```mermaid
+flowchart TD
+Push["Code Push/PR"] --> MultiPlatform["Multi-Platform Build & Test"]
+Push --> WebUI["Web UI Testing"]
+Push --> Coverage["Coverage Testing"]
+MultiPlatform --> LinuxBuild["Linux Build"]
+MultiPlatform --> WindowsBuild["Windows Build"]
+MultiPlatform --> MacBuild["macOS Build"]
+LinuxBuild --> RESTAPITests["REST API Tests"]
+LinuxBuild --> E2ETests["End-to-End Tests"]
+WebUI --> NodeSyntax["Node.js Syntax Check"]
+WebUI --> IntegrationTests["Integration Tests"]
+WebUI --> CLISmoke["CLI Smoke Test"]
+Coverage --> CoverageGates["Coverage Gates"]
+Coverage --> Reports["Coverage Reports"]
+```
+
+**Diagram sources**
+- [.github/workflows/cmake-multi-platform.yml:1-517](file://.github/workflows/cmake-multi-platform.yml#L1-L517)
+- [.github/workflows/rest-webui.yml:1-79](file://.github/workflows/rest-webui.yml#L1-L79)
+- [.github/workflows/test-coverage.yml:1-136](file://.github/workflows/test-coverage.yml#L1-L136)
+
+**Section sources**
+- [.github/workflows/rest-webui.yml:1-79](file://.github/workflows/rest-webui.yml#L1-L79)
+- [.github/workflows/cmake-multi-platform.yml:1-517](file://.github/workflows/cmake-multi-platform.yml#L1-L517)
+- [.github/workflows/test-coverage.yml:1-136](file://.github/workflows/test-coverage.yml#L1-L136)
+
+### Testing Best Practices
+
+#### Writing Effective Tests
+
+1. **Unit Tests**: Focus on single component functionality with clear assertions
+2. **Integration Tests**: Validate component interactions and external dependencies
+3. **End-to-End Tests**: Simulate complete user workflows and system behavior
+4. **Mock External Services**: Use fakes and stubs for network calls and file I/O
+5. **Parameterized Tests**: Use test data variations to cover edge cases
+
+#### Test Maintenance
+
+- Keep tests fast and reliable by avoiding unnecessary dependencies
+- Use fixtures and setup helpers to reduce duplication
+- Maintain separate test data files for complex scenarios
+- Regularly review and update tests as code evolves
+
+**Section sources**
+- [tests/CMakeLists.txt:1513-1673](file://tests/CMakeLists.txt#L1513-L1673)
 
 ## Dependency Analysis
 The build depends on many third-party libraries managed by vcpkg. The top-level CMake file locates these dependencies and enables platform-specific features.
@@ -464,10 +677,11 @@ CMake --> MagicEnum
 ### Test Failures
 - If tests do not run after build, check `HSBA_SLICER_RUN_TESTS_AFTER_BUILD` and `HSBA_RUN_TESTS_AFTER_BUILD`.
 - Cross-compilation disables automatic test execution.
+- Node.js integration tests require proper Node.js installation and PATH configuration.
 
 **Section sources**
 - [CMakeLists.txt:392-407](file://CMakeLists.txt#L392-L407)
-- [tests/CMakeLists.txt:1-1206](file://tests/CMakeLists.txt#L1-L1206)
+- [tests/CMakeLists.txt:1-1673](file://tests/CMakeLists.txt#L1-L1673)
 
 ### Coverage Threshold Failures
 - Coverage gates enforce minimum line coverage for core and other modules.
@@ -485,10 +699,17 @@ CMake --> MagicEnum
 - [.clang-tidy:1-96](file://.clang-tidy#L1-L96)
 - [.clang-format:1-99](file://.clang-format#L1-L99)
 
-## Conclusion
-HsBaSlicer provides a robust development environment built on CMake, vcpkg, Boost.Test, clang-tidy, clang-format, and CI pipelines. Developers should follow the preset-driven workflow, adhere to formatting and static analysis rules, write tests for new functionality, and rely on coverage gates to prevent regressions. Contributions are welcomed through pull requests and issue reporting, with CI ensuring consistency across platforms.
+### Integration Test Issues
+- REST server binary not found: Ensure `HSBA_REST_SERVER` environment variable points to built binary
+- Sample model missing: Download Stanford Bunny STL or set `HSBA_SAMPLE_MODEL` environment variable
+- Node.js version compatibility: Use Node.js 20+ for integration tests
 
-[No sources needed since this section summarizes without analyzing specific files]
+**Section sources**
+- [integration/slice-ui.test.mjs:440-447](file://integration/slice-ui.test.mjs#L440-L447)
+- [integration/slice-ui.test.mjs:170-194](file://integration/slice-ui.test.mjs#L170-L194)
+
+## Conclusion
+HsBaSlicer provides a robust development environment built on CMake, vcpkg, Boost.Test, Node.js testing, clang-tidy, clang-format, and comprehensive CI/CD pipelines. The project implements a multi-layered testing strategy covering unit tests, integration tests, and end-to-end tests across different technologies. Developers should follow the preset-driven workflow, adhere to formatting and static analysis rules, write comprehensive tests for new functionality, and rely on automated CI/CD pipelines to ensure consistency across platforms. Contributions are welcomed through pull requests and issue reporting, with automated testing ensuring code quality and reliability.
 
 ## Appendices
 
@@ -499,9 +720,15 @@ HsBaSlicer provides a robust development environment built on CMake, vcpkg, Boos
   - `cmake --build --preset <preset-name>`
 - Run tests:
   - `ctest --preset <preset-name>`
+- Run integration tests:
+  - `node --test integration/slice-ui.test.mjs`
+- Run web UI tests:
+  - `cd webui && node --test`
 - Coverage report:
   - `cmake --build --preset <coverage-preset-report-target>`
 
 **Section sources**
 - [CMakePresets.json:1-239](file://CMakePresets.json#L1-L239)
 - [.github/workflows/test-coverage.yml:88-102](file://.github/workflows/test-coverage.yml#L88-L102)
+- [integration/slice-ui.test.mjs:24](file://integration/slice-ui.test.mjs#L24)
+- [.github/workflows/rest-webui.yml:59-60](file://.github/workflows/rest-webui.yml#L59-L60)

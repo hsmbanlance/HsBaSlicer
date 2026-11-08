@@ -37,6 +37,10 @@ std::string SafeStr(const char* s)
 
 // Copy the file-transfer specific counters; a no-op for every other result type
 // (detected via requires-expression, valid only because this is a template).
+//
+// The tail-added ABI fields ride along the same way: geometry_id exists on every result
+// struct except the file-transfer one, and a cooperative stop is recognised from the
+// "Cancelled" error prefix, because the C result structs carry no status field.
 template <typename R>
 void CaptureExtra(SliceOutcome& o, const R& r)
 {
@@ -45,6 +49,24 @@ void CaptureExtra(SliceOutcome& o, const R& r)
         o.files_transferred = r.files_transferred;
         o.total_files = r.total_files;
     }
+    if constexpr (requires { r.geometry_id; })
+    {
+        o.geometry_id = r.geometry_id;
+    }
+    constexpr std::string_view cancelled_prefix = "Cancelled";
+    if (o.error_message.compare(0, cancelled_prefix.size(), cancelled_prefix) == 0)
+    {
+        o.cancelled = 1;
+    }
+}
+
+// FDM keeps its G-code in memory (the result struct has no path field), so the file the
+// pipeline wrote is reported from the config the caller supplied. Other kinds read the
+// path out of their own result struct.
+std::string FdmOutputPath(int success, const void* cfg)
+{
+    const auto* fdm = static_cast<const HsBaFdmPipelineConfig_t*>(cfg);
+    return (success != 0 && fdm->output_path) ? std::string(fdm->output_path) : std::string();
 }
 
 // ---- per-kind operations ---------------------------------------------------
@@ -90,11 +112,19 @@ void CaptureExtra(SliceOutcome& o, const R& r)
         {                                                                                                              \
             FREE_STRINGS(static_cast<CFG*>(cfg));                                                                      \
         }                                                                                                              \
+        void set_capture(void* cfg, int enabled)                                                                       \
+        {                                                                                                              \
+            static_cast<CFG*>(cfg)->capture_geometry = enabled;                                                        \
+        }                                                                                                              \
+        void set_cancel(void* cfg, const void* flag)                                                                   \
+        {                                                                                                              \
+            static_cast<CFG*>(cfg)->cancel_flag = flag;                                                                \
+        }                                                                                                              \
     }
 
 HSBA_DEFINE_KIND(FDM, "fdm", HsBaFdmPipelineConfig_t, HsBaFdmPipelineResult_t, HsBaCreateDefaultConfig,
-                 HsBaRunFdmPipeline, HsBaFreePipelineResult, (std::string()), SafeStr(r.gcode_content), r.total_layers,
-                 0, HsBaFdmConfigFromProtoBytes, HsBaFdmConfigToProtoBytes, HsBaFreeFdmConfigStrings)
+                 HsBaRunFdmPipeline, HsBaFreePipelineResult, FdmOutputPath(r.success, cfg), SafeStr(r.gcode_content),
+                 r.total_layers, 0, HsBaFdmConfigFromProtoBytes, HsBaFdmConfigToProtoBytes, HsBaFreeFdmConfigStrings)
 HSBA_DEFINE_KIND(SLA, "sla", HsBaSlaPipelineConfig_t, HsBaSlaPipelineResult_t, HsBaCreateDefaultSlaConfig,
                  HsBaRunSlaPipeline, HsBaFreeSlaPipelineResult, SafeStr(r.export_path), (std::string()), r.total_layers,
                  0, HsBaSlaConfigFromProtoBytes, HsBaSlaConfigToProtoBytes, HsBaFreeSlaConfigStrings)
@@ -129,6 +159,8 @@ using RunFn = SliceOutcome (*)(const void*, HsBaProgressCallback, void*);
 using FromProtoFn = int (*)(const void*, int, void*);
 using ToProtoFn = int (*)(const void*, void**, int*);
 using FreeStringsFn = void (*)(void*);
+using SetCaptureFn = void (*)(void*, int);
+using SetCancelFn = void (*)(void*, const void*);
 
 struct KindOps
 {
@@ -140,6 +172,8 @@ struct KindOps
     FromProtoFn from_proto = nullptr;
     ToProtoFn to_proto = nullptr;
     FreeStringsFn free_strings = nullptr;
+    SetCaptureFn set_capture = nullptr;
+    SetCancelFn set_cancel = nullptr;
 };
 
 #define HSBA_KIND_ENTRY(ENUM_NAME, WIRE)                                                                               \
@@ -147,6 +181,7 @@ struct KindOps
     {                                                                                                                  \
         WIRE, &k_##ENUM_NAME::typeinfo, &k_##ENUM_NAME::create, &k_##ENUM_NAME::destroy, &k_##ENUM_NAME::run,          \
             &k_##ENUM_NAME::from_proto, &k_##ENUM_NAME::to_proto, &k_##ENUM_NAME::free_strings,                        \
+            &k_##ENUM_NAME::set_capture, &k_##ENUM_NAME::set_cancel,                                                   \
     }
 
 // The table below is indexed positionally, so the enum order must match exactly.
@@ -218,6 +253,22 @@ void DestroyConfig(HsBaPipelineKind kind, void* config)
     if (IsValidKind(kind) && config)
     {
         KindTable()[kind].destroy(config);
+    }
+}
+
+void SetCaptureGeometry(HsBaPipelineKind kind, void* config, int enabled)
+{
+    if (IsValidKind(kind) && config)
+    {
+        KindTable()[kind].set_capture(config, enabled != 0 ? 1 : 0);
+    }
+}
+
+void SetCancelFlag(HsBaPipelineKind kind, void* config, const void* flag)
+{
+    if (IsValidKind(kind) && config)
+    {
+        KindTable()[kind].set_cancel(config, flag);
     }
 }
 

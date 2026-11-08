@@ -68,6 +68,42 @@ template <typename FieldType>
 void add_member(rapidjson::Value& parent, std::string_view name, const FieldType& field,
                 rapidjson::Document::AllocatorType& allocator);
 
+// RapidJSON only provides exact GenericValue constructors and TypeHelper getters for bool, int,
+// unsigned, long, unsigned long, int64_t, uint64_t, float and double. Arithmetic types outside
+// that set (e.g. long long on LP64 Linux/macOS, where int64_t is long) match several equally
+// ranked conversions, which makes AddMember/PushBack ambiguous and Get<T> incomplete. Normalizing
+// every arithmetic value keeps the conversion unambiguous on all platforms.
+
+/// @brief Build a JSON number/bool from an arbitrary arithmetic value.
+template <typename T>
+requires std::is_arithmetic_v<T> rapidjson::Value MakeArithmeticJson(T value)
+{
+    using ValueType = std::remove_cv_t<T>;
+    if constexpr (std::is_same_v<ValueType, bool>)
+        return rapidjson::Value(value);
+    else if constexpr (std::is_floating_point_v<ValueType>)
+        return rapidjson::Value(static_cast<double>(value));
+    else if constexpr (std::is_signed_v<ValueType>)
+        return rapidjson::Value(static_cast<int64_t>(value));
+    else
+        return rapidjson::Value(static_cast<uint64_t>(value));
+}
+
+/// @brief Read a JSON number back into an arbitrary arithmetic type.
+template <typename T>
+requires std::is_arithmetic_v<T> T ArithmeticFromJson(const rapidjson::Value& json)
+{
+    using ValueType = std::remove_cv_t<T>;
+    if constexpr (std::is_same_v<ValueType, bool>)
+        return json.IsTrue();
+    else if constexpr (std::is_floating_point_v<ValueType>)
+        return static_cast<ValueType>(json.GetDouble());
+    else if constexpr (std::is_signed_v<ValueType>)
+        return static_cast<ValueType>(json.GetInt64());
+    else
+        return static_cast<ValueType>(json.GetUint64());
+}
+
 // Helper: expand reflectable fields into add_member calls (works around MSVC template-lambda parsing)
 template <typename FieldType, std::size_t... Is>
 void add_reflectable_members_impl(rapidjson::Value& parent, const FieldType& field,
@@ -156,7 +192,7 @@ requires std::is_arithmetic_v<FieldType> void add_member(rapidjson::Value& paren
                                                          const FieldType& field,
                                                          rapidjson::Document::AllocatorType& allocator)
 {
-    parent.AddMember(rapidjson::StringRef(name.data()), field, allocator);
+    parent.AddMember(rapidjson::StringRef(name.data()), MakeArithmeticJson(field), allocator);
 }
 
 template <std::ranges::range Range>
@@ -191,7 +227,7 @@ requires(!std::is_same_v<Range, std::string> && !std::is_same_v<Range, std::stri
         }
         else if constexpr (std::is_arithmetic_v<ItemType>)
         {
-            array_json.PushBack(item, allocator);
+            array_json.PushBack(MakeArithmeticJson(item), allocator);
         }
         else if constexpr (OptionalLike<ItemType>)
         {
@@ -222,7 +258,7 @@ requires(!std::is_same_v<Range, std::string> && !std::is_same_v<Range, std::stri
                 }
                 else if constexpr (std::is_arithmetic_v<ValueType>)
                 {
-                    array_json.PushBack(*item, allocator);
+                    array_json.PushBack(MakeArithmeticJson(*item), allocator);
                 }
                 else if constexpr (std::is_enum_v<ValueType>)
                 {
@@ -272,7 +308,7 @@ void add_member(rapidjson::Value& parent, std::string_view name, const Opt& opt,
         }
         else if constexpr (std::is_arithmetic_v<ValueType>)
         {
-            parent.AddMember(rapidjson::StringRef(name.data()), *opt, allocator);
+            parent.AddMember(rapidjson::StringRef(name.data()), MakeArithmeticJson(*opt), allocator);
         }
         else if constexpr (std::is_enum_v<ValueType>)
         {
@@ -355,7 +391,7 @@ template <typename FieldType>
 requires std::is_arithmetic_v<FieldType> void set_field_from_json(FieldType& field, const rapidjson::Value& field_json)
 {
     if (field_json.IsNumber())
-        field = field_json.template Get<FieldType>();
+        field = ArithmeticFromJson<FieldType>(field_json);
 }
 
 template <std::ranges::range Range>
@@ -390,7 +426,7 @@ requires(!std::is_same_v<Range, std::string>) void set_field_from_json(Range& fi
         else if constexpr (std::is_arithmetic_v<ItemType>)
         {
             if (item_json.IsNumber())
-                field.push_back(item_json.template Get<ItemType>());
+                field.push_back(ArithmeticFromJson<ItemType>(item_json));
         }
         else
         {
@@ -426,7 +462,7 @@ void set_field_from_json(Opt& opt, const rapidjson::Value& field_json)
     else if constexpr (std::is_arithmetic_v<ValueType>)
     {
         if (field_json.IsNumber())
-            opt = field_json.template Get<ValueType>();
+            opt = ArithmeticFromJson<ValueType>(field_json);
     }
     else if constexpr (std::is_enum_v<ValueType>)
     {

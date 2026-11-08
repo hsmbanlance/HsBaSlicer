@@ -120,3 +120,58 @@ constexpr int a = 42;
 int main(void){ (void)a; return 1; }
 " ${result})
 endfunction()
+
+# Module interface units must not expose TU-local (internal-linkage) entities,
+# but a global module fragment always carries some: Eigen declares
+# `const int Dynamic = -1;` and libstdc++ keeps internal constants, both
+# reachable through any interface mentioning Eigen/std containers.
+# GCC 16 turned the diagnostic into -Wexpose-global-module-tu-local, while older
+# GCC treats it as a hard error with no way to silence it. MSVC and Clang do not
+# implement the check, so they are accepted without probing.
+# Sets ${result} to TRUE when the wrapper can be built and ${flag_var} to the
+# compile options required to keep it alive (empty when none are needed).
+function(check_cxx_modules_tu_local_exposure result flag_var)
+  if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set(${result} TRUE PARENT_SCOPE)
+    set(${flag_var} "" PARENT_SCOPE)
+    return()
+  endif()
+  include(CheckCXXSourceCompiles)
+  include(CheckCXXCompilerFlag)
+  set(_src [[
+module;
+namespace probe {
+const int InternalDim = -1;
+struct S { int get(int v = InternalDim) const { return v; } };
+}
+export module hsba_tu_local_probe;
+export namespace hsba_probe { inline int use(const probe::S& s) { return s.get(); } }
+]])
+  # Unknown -W... options are a driver error for GCC, so this reports the real
+  # availability; -Wno- forms would be silently accepted even when unknown.
+  check_cxx_compiler_flag("-Wexpose-global-module-tu-local" HSBA_HAS_TU_LOCAL_WARN)
+  if(HSBA_HAS_TU_LOCAL_WARN)
+    set(_flags "-Wno-expose-global-module-tu-local")
+  else()
+    set(_flags "")
+  endif()
+  set(_saved_flags "${CMAKE_REQUIRED_FLAGS}")
+  set(_saved_type "${CMAKE_TRY_COMPILE_TARGET_TYPE}")
+  set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+  # Compile only: a module interface unit has nothing to link.
+  set(CMAKE_REQUIRED_FLAGS "-fmodules-ts")
+  check_cxx_source_compiles("${_src}" HSBA_TU_LOCAL_PLAIN_OK)
+  set(_ok "${HSBA_TU_LOCAL_PLAIN_OK}")
+  if(NOT HSBA_TU_LOCAL_PLAIN_OK AND _flags)
+    set(CMAKE_REQUIRED_FLAGS "-fmodules-ts ${_flags}")
+    check_cxx_source_compiles("${_src}" HSBA_TU_LOCAL_SUPPRESSED_OK)
+    set(_ok "${HSBA_TU_LOCAL_SUPPRESSED_OK}")
+  endif()
+  set(CMAKE_REQUIRED_FLAGS "${_saved_flags}")
+  set(CMAKE_TRY_COMPILE_TARGET_TYPE "${_saved_type}")
+  if(NOT _ok)
+    set(_flags "")
+  endif()
+  set(${result} ${_ok} PARENT_SCOPE)
+  set(${flag_var} "${_flags}" PARENT_SCOPE)
+endfunction()

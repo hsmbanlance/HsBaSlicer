@@ -67,6 +67,8 @@ public static class HsBaSlicerNative
         public IntPtr infill_lua_script;
         public IntPtr infill_lua_func;
         public IntPtr output_path;
+        public int    capture_geometry;      // new tail field: 0 = no layer capture, 1 = capture
+        public IntPtr cancel_flag;           // new tail field: std::atomic<bool>*; always pass IntPtr.Zero from C#
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -77,6 +79,7 @@ public static class HsBaSlicerNative
         public IntPtr gcode_content;       // char*, freed by HsBaFreePipelineResult
         public IntPtr error_message;
         public double elapsed_seconds;
+        public long   geometry_id;         // new tail field: layer-geometry snapshot id, 0 = none
     }
 
     // ---- Callback delegates: must match the C function-pointer signatures ----
@@ -120,10 +123,75 @@ public static class HsBaSlicerNative
 
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
     public static extern void HsBaAddEventCallback(IntPtr eventName, LuaRegFn func);
+
+    // ---- Job handles (job_control.h): the opaque HsBaJobHandle maps to IntPtr ----
+    [StructLayout(LayoutKind.Sequential)]
+    public struct JobResultView
+    {
+        public int    success;
+        public int    total_layers;
+        public long   geometry_id;
+        public IntPtr inline_content;      // char*, released only by HsBaFreeJobResultView
+        public IntPtr output_path;
+        public IntPtr error_message;
+        public double elapsed_seconds;
+        public int    files_transferred;
+        public int    total_files;
+    }
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void ProgressCallbackEx(int percent, int stage, IntPtr stageText, IntPtr userData);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void JobDoneCallback(IntPtr job, IntPtr userData);   // HsBaJobHandle -> IntPtr
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr HsBaSubmitJob(int kind, ref FdmPipelineConfig config,
+        ProgressCallbackEx onProgress, IntPtr progressUserData,
+        JobDoneCallback onDone, IntPtr doneUserData);
+
+    // Other process kinds (SLA/SLS/...) have different field sets: use the IntPtr overload
+    // with a pinned/marshalled struct pointer
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr HsBaSubmitJob(int kind, IntPtr config,
+        ProgressCallbackEx onProgress, IntPtr progressUserData,
+        JobDoneCallback onDone, IntPtr doneUserData);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int  HsBaCancelJob(IntPtr job);            // 1 = recorded, 0 = already terminal
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int  HsBaWaitJob(IntPtr job, long timeoutMs);   // -1 = wait forever
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int  HsBaJobGetState(IntPtr job);          // HsBaJobState_t
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern long HsBaJobGeometryId(IntPtr job);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int  HsBaJobCopyResult(IntPtr job, out JobResultView view);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void HsBaFreeJobResultView(ref JobResultView view);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void HsBaReleaseJob(IntPtr job);
+
+    // ---- Layer geometry (geometry_export.h) ----
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int HsBaGeometryLayerCount(long geometryId);
 }
 ```
 
 > SLA / SLS structs have more fields but are declared the same way: mirror the **order and types** from `pipeline_types.h`, using `IntPtr` for every `const char*` and `int` for enums.
+
+**ABI notes about the new tail fields** (details in [GUI Support API](./gui_support_api.md)):
+
+1. Every Config ends with `int capture_geometry` followed by `IntPtr cancel_flag`, and every Result ends with `long geometry_id`. **Omitting any of them changes the struct size**, and C# marshalling then reads garbage from the following fields; upgrading the DLL requires updating the mirrored structs at the same time.
+2. `cancel_flag` points at a C++ `std::atomic<bool>`; a managed `bool` / `AtomicBoolean` cannot be passed as that pointer (the GC moves objects). C# hosts should always set `IntPtr.Zero` and cancel through the job handle instead: `HsBaCancelJob(job)`. If you really need the flag, allocate unmanaged memory for it and keep it alive for the whole run.
+3. `HsBaJobHandle` is an opaque pointer, mapped as `IntPtr`; **delegates must be kept in static fields** (like `ProgressCallback`), otherwise the GC collects them and the native callback crashes. Read the three strings of `JobResultView` with `Marshal.PtrToStringUTF8`, then call `HsBaFreeJobResultView` only — never pass those pointers to any `HsBaFree*PipelineResult`.
+4. Main-thread marshalling is unchanged: `HsBaSubmitJob` may be called from any thread (it spawns its own), but its callbacks still fire on the job thread and must be posted back to the Unity main thread as shown in the next section.
 
 ### 1.2 High-Level Wrapper (Async + Main-Thread Marshalling)
 

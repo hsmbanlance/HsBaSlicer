@@ -337,6 +337,123 @@ void setupLuaExtensions()
 
 > **Note**: Registration function pointers must remain valid for the entire process lifetime (use static or global functions).
 
+## 5. Job Handles: Stage Colours / Cancel Button / Layer Preview
+
+With `HsBaSubmitJob` (truly non-blocking; the UI thread is freed as soon as it returns) and `HsBaStage_t`,
+desktop hosts no longer need a hand-written worker thread: submission can happen directly on the UI
+thread, while callbacks still fire on the job thread and must be marshalled back as before.
+
+### Qt: Stage-Based Colouring + Cancel Button
+
+```cpp
+// slicer_worker.h -- no QThread needed; the handle is a member so the button can use it
+class SlicerWorker : public QObject {
+    Q_OBJECT
+public:
+    explicit SlicerWorker(QObject* parent = nullptr) : QObject(parent) {}
+    ~SlicerWorker() { if (m_job) HsBaReleaseJob(m_job); }
+
+    void start(const HsBaFdmPipelineConfig_t& cfg) {
+        if (m_job) { HsBaReleaseJob(m_job); m_job = nullptr; }
+        m_job = HsBaSubmitJob(HSBA_PIPELINE_FDM, &cfg, &SlicerWorker::onProgress, this,
+                             &SlicerWorker::onDone, this);
+    }
+    void cancel() { if (m_job) HsBaCancelJob(m_job); }   // cooperative; safe from the UI thread
+
+signals:
+    void stageChanged(int percent, const QString& stageId, const QString& text);
+    void finished();
+
+private:
+    static void onProgress(int percent, HsBaStage_t stage, const char* text, void* ud) {
+        auto* self = static_cast<SlicerWorker*>(ud);
+        // Cross-thread signals are queued automatically; stageId is a stable identifier usable
+        // as both an i18n key and a colour key
+        emit self->stageChanged(percent, QString::fromUtf8(HsBaStageName(stage)),
+                                 QString::fromUtf8(text ? text : ""));
+    }
+    static void onDone(HsBaJobHandle, void* ud) {
+        emit static_cast<SlicerWorker*>(ud)->stageChanged(100, QString(), QString());
+        emit static_cast<SlicerWorker*>(ud)->finished();
+    }
+    HsBaJobHandle m_job = nullptr;
+};
+```
+
+Colouring by stage identifier is far more robust than matching volatile English text:
+
+```cpp
+static QColor stageColor(const QString& id) {
+    if (id.startsWith("model"))    return Qt::gray;         // mesh loading
+    if (id.startsWith("slicing"))  return Qt::darkBlue;     // slicing
+    if (id.startsWith("support"))  return Qt::darkYellow;   // supports ("skipped" lands here too)
+    if (id.startsWith("floor"))    return Qt::darkMagenta;
+    if (id.startsWith("fill"))     return Qt::darkGreen;    // infill
+    if (id == "path.start" || id == "file.write" || id == "export") return Qt::darkCyan;
+    if (id == "cancelled")         return Qt::red;
+    if (id == "done")              return Qt::darkGreen;
+    return Qt::lightGray;                                   // unknown / empty
+}
+// connect(&w, &SlicerWorker::stageChanged, [&](int pct, const QString& id, const QString&) {
+//     ui->progress->setValue(pct); ui->progress->setStyleSheet(stageColor(id).name()); });
+```
+
+> When `on_done` fires, the library has already dropped its own reference, but `m_job` is still the host
+> reference, so `HsBaJobCopyResult` / `HsBaJobGeometryId` can be called safely from the `finished()` slot;
+> leave the final `HsBaReleaseJob` to the destructor.
+
+### wxWidgets: Marshalling Stages and Geometry with CallAfter
+
+```cpp
+void SlicePanel::OnSubmit(wxCommandEvent&)
+{
+    HsBaFdmPipelineConfig_t cfg = MakeConfig();
+    cfg.capture_geometry = 1;                 // only when a per-layer preview is needed
+    m_job = HsBaSubmitJob(HSBA_PIPELINE_FDM, &cfg, ProgressTrampoline, this, DoneTrampoline, this);
+}
+
+void SlicePanel::OnCancel(wxCommandEvent&) { if (m_job) HsBaCancelJob(m_job); }
+
+void SlicePanel::ProgressTrampoline(int percent, HsBaStage_t stage, const char* text, void* ud) {
+    auto* self = static_cast<SlicePanel*>(ud);
+    const wxString id = wxString::FromUTF8(HsBaStageName(stage));   // copy: pointers die with the callback
+    const wxString msg = wxString::FromUTF8(text ? text : "");
+    self->CallAfter([self, percent, id, msg] {                    // marshal back to the UI thread
+        self->m_gauge->SetValue(percent);
+        self->SetLabel(msg.empty() ? id : msg);
+    });
+}
+```
+
+Layer outline drawing: geometry is readable only after the job reaches a terminal state. Copy the points
+into the canvas' own containers, because the raw pointers become invalid once `HsBaFreeLayerGeometry`
+returns.
+
+```cpp
+void SlicePanel::LoadLayer(int layer) {
+    const long long gid = HsBaJobGeometryId(m_job);
+    if (HsBaGeometryLayerCount(gid) <= 0) return;             // not captured, or evicted from the pool
+    HsBaLayerGeometry_t geom = {0};
+    if (!HsBaGetLayerGeometry(gid, layer, &geom)) return;
+    const wxRect2DDouble bounds(geom.bounds_min[0], geom.bounds_min[1],
+                                geom.bounds_max[0], geom.bounds_max[1]);   // read the numbers before freeing
+    m_polylines.clear();                                      // std::vector<std::vector<wxPoint2DDouble>>
+    const HsBaRing_t* slots[3] = { geom.outlines, geom.fills, geom.supports };
+    const int counts[3] = { geom.outline_count, geom.fill_count, geom.support_count };
+    for (int s = 0; s < 3; ++s)
+        for (int r = 0; r < counts[s]; ++r) {
+            std::vector<wxPoint2DDouble> pts;
+            pts.reserve(slots[s][r].point_count);
+            for (int i = 0; i < slots[s][r].point_count; ++i)
+                pts.emplace_back(slots[s][r].xy[2 * i], slots[s][r].xy[2 * i + 1]);
+            m_polylines.push_back(std::move(pts));
+        }
+    HsBaFreeLayerGeometry(&geom);     // frees the whole block (and zeroes geom); never free sub-arrays
+    m_canvas->Fit(bounds);            // adaptive scaling from this layer's bounds_min/max
+    m_canvas->Refresh();
+}
+```
+
 ## FAQ
 
 | Symptom | Cause & Fix |
@@ -346,3 +463,5 @@ void setupLuaExtensions()
 | Crash when updating widgets inside a callback | Callbacks run on library threads; marshal via signals/slots or `CallAfter` |
 | Non-ASCII paths fail | Pass UTF-8 encoded paths (`QString::toStdString` / `wxString::ToStdString(wxConvUTF8)`) |
 | Garbled result strings or crash | `HsBaFree*PipelineResult` called too early; copy first, then free |
+| The cancel button does nothing immediately | Cancellation is cooperative and only takes effect at stage boundaries and inside per-layer loops; mesh loading, one Lua callback or a zip run must finish first |
+| Layer preview stays blank | `capture_geometry` was 0 at submission; or the job has not reached a terminal state yet (capture happens at the end of the pipeline); or the snapshot was evicted (see `HSBA_GEOMETRY_POOL_MAX`) |

@@ -14,6 +14,11 @@
 - [spiral_path.hpp](file://LibHsBaSlicer/Path/spiral_path.hpp)
 - [sls_export.hpp](file://LibHsBaSlicer/Path/sls_export.hpp)
 - [waam_export.hpp](file://LibHsBaSlicer/Path/waam_export.hpp)
+- [geometry_export.h](file://DllHsBaSlicer/geometry_export.h)
+- [geometry_store.hpp](file://DllHsBaSlicer/geometry_store.hpp)
+- [geometry_store.cpp](file://DllHsBaSlicer/geometry_store.cpp)
+- [fdm_pipeline.cpp](file://DllHsBaSlicer/fdm_pipeline.cpp)
+- [waam_pipeline.cpp](file://DllHsBaSlicer/waam_pipeline.cpp)
 - [pipeline_parallel.hpp](file://DllHsBaSlicer/pipeline_parallel.hpp)
 - [parallel.hpp](file://base/parallel.hpp)
 - [thread_pool.hpp](file://base/thread_pool.hpp)
@@ -21,24 +26,27 @@
 
 ## Update Summary
 **Changes Made**   
-- Updated Performance Considerations section to document ParallelMapLayers optimization
-- Added new section on Concurrent Layer Processing Architecture
-- Enhanced Detailed Component Analysis with parallel processing details
-- Updated Performance Considerations with specific parallelization benefits
-- Added troubleshooting guidance for parallel execution issues
+- Added new section on Continuous Toolpath Export and Spiral Visualization Support
+- Enhanced G-code generation documentation with Base64-encoded PNG thumbnail embedding
+- Updated geometry snapshot system to include continuous path data for spiral runs
+- Added REST API endpoint documentation for continuous toolpath access
+- Expanded troubleshooting guide with parallel processing and thumbnail-related issues
+- Updated performance considerations to reflect enhanced visualization capabilities
 
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
-5. [Concurrent Layer Processing Architecture](#concurrent-layer-processing-architecture)
-6. [Detailed Component Analysis](#detailed-component-analysis)
-7. [Dependency Analysis](#dependency-analysis)
-8. [Performance Considerations](#performance-considerations)
-9. [Troubleshooting Guide](#troubleshooting-guide)
-10. [Conclusion](#conclusion)
-11. [Appendices](#appendices)
+5. [Continuous Toolpath Export and Spiral Visualization](#continuous-toolpath-export-and-spiral-visualization)
+6. [G-code Thumbnail Generation System](#g-code-thumbnail-generation-system)
+7. [Concurrent Layer Processing Architecture](#concurrent-layer-processing-architecture)
+8. [Detailed Component Analysis](#detailed-component-analysis)
+9. [Dependency Analysis](#dependency-analysis)
+10. [Performance Considerations](#performance-considerations)
+11. [Troubleshooting Guide](#troubleshooting-guide)
+12. [Conclusion](#conclusion)
+13. [Appendices](#appendices)
 
 ## Introduction
 This document explains the Path Generation module that combines the `paths/` and `LibHsBaSlicer/Path/` directories. It covers:
@@ -46,13 +54,14 @@ This document explains the Path Generation module that combines the `paths/` and
 - Robot path output for ABB, KUKA, and FANUC industrial robots.
 - Weld robot path generation for WAAM and other additive welding processes.
 - Path optimization algorithms for reducing travel distance and improving print quality.
-- Spiral/vase mode support through continuous helical outer-wall generation.
+- **Enhanced spiral/vase mode support through continuous helical outer-wall generation with visualization capabilities**.
+- **Base64-encoded PNG thumbnail generation for model projections embedded in G-code headers**.
 - The relationship between 2D slice contours and 3D toolpaths.
 - Parameter tuning for materials and geometries.
 - Export formats and integration with the overall slicing pipeline.
-- **ParallelMapLayers-based concurrent processing for significantly improved serialization performance on large models.**
+- **ParallelMapLayers-based concurrent processing for significantly improved serialization performance on large models**.
 
-The module is designed so that 2D polygon slices can be converted into executable machine instructions, whether those are G-code for desktop printers or robot programs for industrial equipment, with modern parallel processing capabilities for optimal performance.
+The module is designed so that 2D polygon slices can be converted into executable machine instructions, whether those are G-code for desktop printers or robot programs for industrial equipment, with modern parallel processing capabilities and enhanced visualization features for optimal performance.
 
 ## Project Structure
 The Path Generation module is split into two complementary layers:
@@ -65,6 +74,10 @@ The Path Generation module is split into two complementary layers:
   - Region-based path optimizer.
   - Spiral/vase wall generator.
   - SLS and WAAM export packages.
+- `DllHsBaSlicer/`: Enhanced geometry snapshot system with continuous path support.
+  - Geometry snapshot pool with reference counting.
+  - C ABI for continuous toolpath access.
+  - G-code thumbnail generation and embedding.
 
 ```mermaid
 graph TB
@@ -72,7 +85,7 @@ subgraph "paths/"
 IP["IPath.hpp"]
 LP["LayersPath<br/>per-layer polygons"]
 PP["PointsPath<br/>G-point sequence"]
-GP["GCodePath<br/>multi-firmware G-code"]
+GP["GCodePath<br/>multi-firmware G-code<br/>with thumbnails"]
 RP["RobotPath<br/>ABB/KUKA/FANUC"]
 WRP["WeldRobotPath<br/>weld parameters"]
 IMP["ImagesPath<br/>config + images"]
@@ -83,6 +96,12 @@ PO["path_optimizer.hpp<br/>RegionPathOptimizer"]
 SP["spiral_path.hpp<br/>SpiralizeOuterWall"]
 SLSE["sls_export.hpp<br/>SLS package"]
 WAE["waam_export.hpp<br/>WAAM package"]
+end
+subgraph "DllHsBaSlicer/"
+GE["geometry_export.h<br/>C ABI for geometry"]
+GS["geometry_store.hpp/.cpp<br/>snapshot pool"]
+FP["fdm_pipeline.cpp<br/>thumbnail generation"]
+WP["waam_pipeline.cpp<br/>continuous path"]
 end
 subgraph "Base Infrastructure"
 PPH["parallel.hpp<br/>ParallelForLayers<br/>ParallelMapLayers"]
@@ -100,6 +119,9 @@ PO --> LP
 SP --> GP
 SLSE --> IMP
 WAE --> WRP
+GE --> GS
+FP --> GE
+WP --> GE
 PPH --> PG
 PPH --> GP
 TPH --> PPH
@@ -118,6 +140,8 @@ TPH --> PPH
 - [spiral_path.hpp:16-58](file://LibHsBaSlicer/Path/spiral_path.hpp#L16-L58)
 - [sls_export.hpp:17-56](file://LibHsBaSlicer/Path/sls_export.hpp#L17-L56)
 - [waam_export.hpp:17-72](file://LibHsBaSlicer/Path/waam_export.hpp#L17-L72)
+- [geometry_export.h:1-150](file://DllHsBaSlicer/geometry_export.h#L1-L150)
+- [geometry_store.hpp:1-96](file://DllHsBaSlicer/geometry_store.hpp#L1-L96)
 - [parallel.hpp:178-219](file://base/parallel.hpp#L178-L219)
 - [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
 
@@ -134,7 +158,7 @@ The Path Generation module centers on a small set of well-defined components:
 | `OutPoints3` | 3D output point with planar X/Y and build height Z | `x`, `y`, `z` | Shared coordinate type |
 | `LayersPath` | Ordered per-layer polygons plus config | `layerConfig`, `PolygonsD` | Layered geometry |
 | `PointsPath` | Ordered G-code motion points | `GPoint[]` | G-code text |
-| `GCodePath` | Multi-firmware G-code from layers | `GCodePrinterConfig`, optional continuous wall | Marlin/RepRap/Klipper G-code |
+| `GCodePath` | Multi-firmware G-code from layers | `GCodePrinterConfig`, optional continuous wall, thumbnails | Marlin/RepRap/Klipper G-code |
 | `RobotPath` | Industrial robot program | `RLPoint[]`, robot brand | ABB/KUKA/FANUC code |
 | `WeldRobotPath` | Robot program with welding parameters | `WeldRLPoint[]` | Welding-aware robot code |
 | `ImagesPath` | Config sidecar plus named image payloads | `config`, `images map` | Image-oriented export |
@@ -142,6 +166,8 @@ The Path Generation module centers on a small set of well-defined components:
 | `SpiralizeOuterWall` | Continuous helical outer wall | Per-layer closed contours | 3D spiral polyline |
 | `WaamRobotPackage` / `SlsPackage` | Pipeline export packages | Contours, heights, settings | Lua-driven export |
 | `ParallelMapLayers` | Concurrent layer processing engine | Atomic cursor + ThreadPool | Parallel result vectors |
+| `GeometrySnapshot` | Process-wide geometry snapshot pool | Outlines, fills, supports, zs, path_xyz | Reference-counted snapshots |
+| `GCodeThumbnail` | Base64-encoded preview image | name, width, height, format, base64, reason | Embedded G-code header comments |
 
 **Section sources**
 - [IPath.hpp:20-65](file://paths/IPath.hpp#L20-L65)
@@ -156,14 +182,17 @@ The Path Generation module centers on a small set of well-defined components:
 - [sls_export.hpp:17-56](file://LibHsBaSlicer/Path/sls_export.hpp#L17-L56)
 - [waam_export.hpp:17-72](file://LibHsBaSlicer/Path/waam_export.hpp#L17-L72)
 - [parallel.hpp:209-219](file://base/parallel.hpp#L209-L219)
+- [geometry_store.hpp:39-50](file://DllHsBaSlicer/geometry_store.hpp#L39-L50)
+- [gcodepath.hpp:69-77](file://paths/gcodepath.hpp#L69-L77)
 
 ## Architecture Overview
-The architecture separates concerns into three layers with integrated parallel processing:
+The architecture separates concerns into four layers with integrated parallel processing and enhanced visualization:
 
 1. **Geometry layer**: 2D polygons from slicing (`PolygonsD`) and shared 3D point types.
 2. **Path representation layer**: `IPath` subclasses store either layered polygons, point sequences, or robot moves.
 3. **Export layer**: Firmware-specific G-code, robot-brand code, or Lua-driven export packages.
-4. **Parallel processing layer**: Process-wide ThreadPool with atomic cursor scheduling for concurrent layer operations.
+4. **Visualization layer**: Geometry snapshot pool with continuous path support and thumbnail generation.
+5. **Parallel processing layer**: Process-wide ThreadPool with atomic cursor scheduling for concurrent layer operations.
 
 ```mermaid
 graph LR
@@ -185,6 +214,8 @@ Weld --> WeldKUKA["Welding-aware KUKA"]
 Weld --> WeldFanuc["Welding-aware FANUC"]
 PipelinePool["Process-wide ThreadPool"] --> Generator
 PipelinePool --> Serial
+Thumbnails["Model Thumbnails"] --> GCode
+Snapshots["Geometry Snapshots"] --> Visualization["WebUI Visualization"]
 ```
 
 **Diagram sources**
@@ -195,9 +226,109 @@ PipelinePool --> Serial
 - [weldrobotpath.hpp:16-96](file://paths/weldrobotpath.hpp#L16-L96)
 - [parallel.hpp:64-68](file://base/parallel.hpp#L64-L68)
 
+## Continuous Toolpath Export and Spiral Visualization
+
+**Updated** The Path Generation module now includes comprehensive support for continuous toolpath export and spiral visualization, enabling real-time visualization of spiral/vase mode deposition paths.
+
+### Geometry Snapshot Pool System
+The enhanced geometry snapshot system provides process-wide storage for both per-layer geometry and continuous toolpaths:
+
+- **Reference counting**: Each snapshot maintains its own reference count plus host references via `Retain`/`Release`
+- **LRU eviction**: Oldest unreferenced snapshots are evicted when pool exceeds `HSBA_GEOMETRY_POOL_MAX` limit
+- **Thread safety**: All operations protected by mutex for concurrent access from multiple threads
+- **Memory efficiency**: Single malloc block allocation for ring arrays and coordinates
+
+```mermaid
+flowchart TD
+Capture["CaptureLayerGeometry()"] --> Store["Store outlines/fills/supports/zs/path_xyz"]
+Store --> Bounds["Compute layer bounds"]
+Bounds --> Pool["Add to process-wide pool"]
+Pool --> Evict{"Pool size > max?"}
+Evict --> |Yes| LRU["Evict oldest unreferenced snapshot"]
+Evict --> |No| ReturnId["Return geometry_id"]
+```
+
+**Diagram sources**
+- [geometry_store.cpp:177-207](file://DllHsBaSlicer/geometry_store.cpp#L177-L207)
+- [geometry_store.cpp:150-173](file://DllHsBaSlicer/geometry_store.cpp#L150-L173)
+
+### Continuous Path Integration
+Spiral runs now publish their continuous helical path alongside per-layer geometry:
+
+- **FDM pipeline**: Generates spiral path via `SpiralizeOuterWall` before capturing geometry
+- **WAAM pipeline**: Similar integration for welding applications  
+- **TDP pipeline**: Consistent approach across supported processes
+- **Path validation**: Only whole xyz triples are exported, ensuring data integrity
+
+### C ABI for Continuous Path Access
+New C ABI functions provide safe access to continuous toolpath data:
+
+- `HsBaGeometryPathPointCount()`: Query point count without allocating memory
+- `HsBaGetGeometryPath()`: Copy continuous path to caller-allocated buffer
+- `HsBaFreeGeometryPath()`: Release allocated path data
+- Memory contract: Single malloc block containing flattened x,y,z coordinates
+
+**Section sources**
+- [geometry_store.hpp:39-50](file://DllHsBaSlicer/geometry_store.hpp#L39-L50)
+- [geometry_store.cpp:177-207](file://DllHsBaSlicer/geometry_store.cpp#L177-L207)
+- [geometry_export.h:67-82](file://DllHsBaSlicer/geometry_export.h#L67-L82)
+- [fdm_pipeline.cpp:671-684](file://DllHsBaSlicer/fdm_pipeline.cpp#L671-L684)
+- [waam_pipeline.cpp:293-308](file://DllHsBaSlicer/waam_pipeline.cpp#L293-L308)
+
+## G-code Thumbnail Generation System
+
+**Updated** The G-code generation system now supports automatic generation and embedding of Base64-encoded PNG thumbnails representing top and side views of the original model mesh.
+
+### Thumbnail Generation Pipeline
+The thumbnail system generates preview images from the original model mesh before slicing:
+
+- **Model projection**: Projects triangle mesh to 2D silhouettes for top and side views
+- **Image rendering**: Converts polygons to PNG format using rasterization
+- **Base64 encoding**: Encodes binary image data for safe embedding in G-code comments
+- **Budget management**: Enforces size limits to prevent excessive G-code file growth
+
+```mermaid
+sequenceDiagram
+participant Model as "Original Model"
+participant Proj as "Projection Engine"
+participant Render as "Image Renderer"
+participant Encode as "Base64 Encoder"
+participant GCode as "GCodePath"
+Model->>Proj : TriangleMesh()
+Proj->>Render : ProjectMeshSilhouette(plane)
+Render->>Encode : RenderPolygonsToImageBuffer()
+Encode->>GCode : SetThumbnails(thumbs)
+GCode->>GCode : GenerateThumbnails()
+```
+
+**Diagram sources**
+- [fdm_pipeline.cpp:332-384](file://DllHsBaSlicer/fdm_pipeline.cpp#L332-L384)
+- [gcodepath.hpp:115-123](file://paths/gcodepath.hpp#L115-L123)
+
+### Error Handling and Fallbacks
+The system gracefully handles various failure scenarios:
+
+- **Missing mesh**: Custom or parametric models without triangulation return skip notices
+- **Large meshes**: Models exceeding triangle budget return appropriate error messages
+- **Rendering failures**: Projection or rasterization errors are captured as reasons
+- **Size limits**: Base64 data exceeding budget is replaced with skip notice
+
+### Configuration and Integration
+Thumbnail generation is controlled by FDM pipeline configuration:
+
+- `gcode_thumbnails`: Enable/disable thumbnail generation (0=false, 1=true)
+- `gcode_thumbnail_size`: Long edge pixel dimension (0=default 256, clamped to [32,512])
+- Automatic integration into G-code header comment blocks
+- WebUI support for displaying embedded thumbnails
+
+**Section sources**
+- [fdm_pipeline.cpp:285-384](file://DllHsBaSlicer/fdm_pipeline.cpp#L285-L384)
+- [gcodepath.hpp:69-77](file://paths/gcodepath.hpp#L69-L77)
+- [gcodepath.hpp:115-123](file://paths/gcodepath.hpp#L115-L123)
+
 ## Concurrent Layer Processing Architecture
 
-**Updated** The Path Generation module now leverages `ParallelMapLayers` for concurrent processing of independent layers, significantly optimizing serialization performance for large models.
+**Updated** The Path Generation module now leverages `ParallelMapLayers` for concurrent processing of independent layers, significantly optimizing serialization performance for large models while supporting enhanced visualization features.
 
 ### Process-Wide Thread Pool Infrastructure
 The parallel infrastructure is built around a process-wide `ThreadPool` singleton accessed via `PipelinePool()`:
@@ -342,6 +473,7 @@ RunLua --> Write
 - Firmware selection: Marlin, RepRap, Klipper.
 - Printer configuration such as nozzle diameter, filament diameter, temperatures, speeds, retraction, extrusion mode, and layer height.
 - Optional continuous spiral wall emission before per-layer data.
+- **Enhanced thumbnail embedding for model projection previews**.
 - Extrusion calculation based on segment length and printer configuration.
 - **Parallel layer serialization via ParallelMapLayers for improved performance**.
 
@@ -363,6 +495,7 @@ GC->>PM : ParallelMapLayers(GenLayerGCode)
 PM-->>GC : Parallel layer G-code strings
 GC->>FW : GenerateHeader(firmware)
 GC->>GC : GenerateContinuousWall() if present
+GC->>GC : GenerateThumbnails() if enabled
 GC->>FW : Concatenate parallel layer bodies
 GC->>FW : GenerateFooter(firmware)
 FW-->>User : Firmware-specific G-code string
@@ -643,6 +776,9 @@ IMP --> IP
 PH --> TPH["thread_pool.hpp"]
 PH --> PG
 PH --> GP
+GE["geometry_export.h"] --> GS["geometry_store.hpp/.cpp"]
+FP["fdm_pipeline.cpp"] --> GE
+WP["waam_pipeline.cpp"] --> GE
 ```
 
 **Diagram sources**
@@ -660,6 +796,10 @@ PH --> GP
 - [IPath.hpp:10-65](file://paths/IPath.hpp#L10-L65)
 - [parallel.hpp:178-219](file://base/parallel.hpp#L178-L219)
 - [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
+- [geometry_export.h:1-150](file://DllHsBaSlicer/geometry_export.h#L1-L150)
+- [geometry_store.hpp:1-96](file://DllHsBaSlicer/geometry_store.hpp#L1-L96)
+- [fdm_pipeline.cpp:1-200](file://DllHsBaSlicer/fdm_pipeline.cpp#L1-L200)
+- [waam_pipeline.cpp:281-313](file://DllHsBaSlicer/waam_pipeline.cpp#L281-L313)
 
 **Section sources**
 - [path_generator.hpp:10-91](file://LibHsBaSlicer/Path/path_generator.hpp#L10-L91)
@@ -676,16 +816,26 @@ PH --> GP
 - [IPath.hpp:10-65](file://paths/IPath.hpp#L10-L65)
 - [parallel.hpp:178-219](file://base/parallel.hpp#L178-L219)
 - [thread_pool.hpp:29-162](file://base/thread_pool.hpp#L29-L162)
+- [geometry_export.h:1-150](file://DllHsBaSlicer/geometry_export.h#L1-L150)
+- [geometry_store.hpp:1-96](file://DllHsBaSlicer/geometry_store.hpp#L1-L96)
+- [fdm_pipeline.cpp:1-200](file://DllHsBaSlicer/fdm_pipeline.cpp#L1-L200)
+- [waam_pipeline.cpp:281-313](file://DllHsBaSlicer/waam_pipeline.cpp#L281-L313)
 
 ## Performance Considerations
 
-**Updated** The Path Generation module now incorporates significant parallel processing optimizations that dramatically improve performance for large models:
+**Updated** The Path Generation module now incorporates significant parallel processing optimizations and enhanced visualization capabilities that dramatically improve performance for large models:
 
 ### Parallel Processing Benefits
 - **Concurrent layer processing**: `ParallelMapLayers` enables simultaneous processing of independent layers during both path generation and G-code serialization
 - **Process-wide thread pool**: Single `ThreadPool` instance eliminates repeated initialization overhead across multiple parallel operations
 - **Atomic cursor scheduling**: Dynamic load balancing prevents thread starvation and improves utilization efficiency
 - **Memory-efficient string assembly**: Pre-calculation of total output size avoids incremental string growth during concatenation
+
+### Enhanced Visualization Performance
+- **Efficient geometry snapshot pooling**: LRU eviction prevents memory leaks while maintaining quick access to recent snapshots
+- **Batch thumbnail generation**: Top and side view projections are generated together to minimize redundant computations
+- **Base64 encoding optimization**: Direct encoding from image buffers reduces intermediate memory allocations
+- **Continuous path caching**: Spiral paths are computed once and reused for both visualization and export
 
 ### Performance Optimization Strategies
 - Prefer region-based path optimization before filling to reduce total travel distance.
@@ -698,22 +848,29 @@ PH --> GP
   - Default uses hardware_concurrency() for automatic scaling
   - Set to 1 for serial execution (debugging/regression testing)
   - Set to specific value for fine-tuned performance control
+- **Enable geometry capture selectively**: Only enable `capture_geometry` when visualization is needed to avoid memory overhead
+- **Control thumbnail generation**: Disable `gcode_thumbnails` for production builds to reduce G-code file size
 
 ### Memory Management
 - **Pre-sized result vectors**: `ParallelMapLayers` allocates output vectors upfront to avoid reallocation
 - **Reserve capacity**: String concatenation pre-calculates total size to prevent memory fragmentation
 - **Local temporary storage**: Parallel workers use local vectors that are moved to final destinations
+- **Reference-counted snapshots**: Geometry snapshots are automatically reclaimed when no longer needed
+- **Budget-controlled thumbnails**: Base64 data is limited to prevent excessive G-code file growth
 
 ### Scaling Characteristics
 - **Linear scaling**: Performance scales approximately linearly with number of cores for CPU-bound operations
 - **Memory bandwidth bound**: Very large models may become limited by memory bandwidth rather than CPU cores
 - **Diminishing returns**: Beyond hardware concurrency, additional threads provide no benefit and may increase overhead
+- **Visualization overhead**: Geometry snapshots and thumbnails add memory overhead proportional to model complexity
 
 **Section sources**
 - [parallel.hpp:37-75](file://base/parallel.hpp#L37-L75)
 - [parallel.hpp:90-174](file://base/parallel.hpp#L90-L174)
 - [path_generator.cpp:120-141](file://LibHsBaSlicer/Path/path_generator.cpp#L120-L141)
 - [gcodepath.cpp:335-368](file://paths/gcodepath.cpp#L335-L368)
+- [geometry_store.cpp:57-73](file://DllHsBaSlicer/geometry_store.cpp#L57-L73)
+- [fdm_pipeline.cpp:217-217](file://DllHsBaSlicer/fdm_pipeline.cpp#L217-L217)
 
 ## Troubleshooting Guide
 Common issues and resolution strategies:
@@ -731,6 +888,11 @@ Common issues and resolution strategies:
 | **Slow G-code generation** | Insufficient parallelism or memory constraints | Set `HSBA_PIPELINE_THREADS` appropriately, monitor memory usage |
 | **Inconsistent layer ordering** | Race conditions in custom parallel code | Ensure only main thread modifies shared state, use proper synchronization |
 | **Thread pool exhaustion** | Nested parallel operations or resource leaks | Avoid submitting work from within parallel callbacks, check for proper cleanup |
+| **Geometry snapshots not available** | Snapshot pool overflow or premature release | Check `HSBA_GEOMETRY_POOL_MAX`, ensure proper retain/release lifecycle |
+| **Continuous path missing** | Non-spiral run or invalid geometry | Verify `spiral_mode` is enabled, check geometry capture was performed |
+| **Thumbnail generation fails** | Model lacks mesh or projection failed | Check model type, verify mesh availability, review error reasons |
+| **Excessive G-code file size** | Thumbnails enabled or large model projections | Disable `gcode_thumbnails`, adjust thumbnail size limits |
+| **Visualization performance issues** | Too many geometry snapshots or large models | Monitor pool usage, consider disabling geometry capture for large models |
 
 **Section sources**
 - [gcodepath.hpp:32-49](file://paths/gcodepath.hpp#L32-L49)
@@ -740,18 +902,22 @@ Common issues and resolution strategies:
 - [imagespath.hpp:32-50](file://paths/imagespath.hpp#L32-L50)
 - [sls_export.hpp:35-56](file://LibHsBaSlicer/Path/sls_export.hpp#L35-L56)
 - [parallel.hpp:56-68](file://base/parallel.hpp#L56-L68)
+- [geometry_store.cpp:57-73](file://DllHsBaSlicer/geometry_store.cpp#L57-L73)
+- [fdm_pipeline.cpp:332-384](file://DllHsBaSlicer/fdm_pipeline.cpp#L332-L384)
 
 ## Conclusion
-The Path Generation module provides a cohesive system for turning 2D slice contours into executable manufacturing instructions, now enhanced with advanced parallel processing capabilities. It supports:
+The Path Generation module provides a cohesive system for turning 2D slice contours into executable manufacturing instructions, now enhanced with advanced parallel processing capabilities and sophisticated visualization features. It supports:
 - FDM G-code generation for multiple firmware targets with concurrent layer serialization.
 - Industrial robot program generation for ABB, KUKA, and FANUC.
 - Welding-aware robot paths for WAAM and related processes.
 - Region-based path optimization to reduce travel and improve quality.
-- Spiral/vase mode for continuous helical walls.
+- **Enhanced spiral/vase mode with continuous helical walls and real-time visualization support**.
+- **Automatic Base64-encoded PNG thumbnail generation for model projection previews**.
 - Flexible export through native formats and Lua-driven scripts.
-- **Process-wide parallel infrastructure with dynamic load balancing for optimal performance on large models.**
+- **Process-wide parallel infrastructure with dynamic load balancing for optimal performance on large models**.
+- **Comprehensive geometry snapshot system with reference counting and LRU eviction**.
 
-By combining layered polygon data, point-based motion primitives, brand-specific exporters, and modern parallel processing techniques, the module bridges slicing geometry and real-world production equipment with significantly improved performance characteristics.
+By combining layered polygon data, point-based motion primitives, brand-specific exporters, modern parallel processing techniques, and enhanced visualization capabilities, the module bridges slicing geometry and real-world production equipment with significantly improved performance characteristics and user experience.
 
 ## Appendices
 
@@ -806,3 +972,24 @@ By combining layered polygon data, point-based motion primitives, brand-specific
 **Section sources**
 - [parallel.hpp:37-54](file://base/parallel.hpp#L37-L54)
 - [parallel.hpp:56-75](file://base/parallel.hpp#L56-L75)
+
+#### Enable G-code Thumbnail Generation
+1. Set `gcode_thumbnails = 1` in FDM pipeline configuration.
+2. Optionally configure `gcode_thumbnail_size` for image dimensions.
+3. Execute FDM pipeline to generate G-code with embedded thumbnails.
+4. Parse G-code header comments to extract Base64-encoded PNG images.
+
+**Section sources**
+- [fdm_pipeline.cpp:443-444](file://DllHsBaSlicer/fdm_pipeline.cpp#L443-L444)
+- [gcodepath.hpp:115-123](file://paths/gcodepath.hpp#L115-L123)
+
+#### Access Continuous Toolpath Data
+1. Capture geometry during pipeline execution with `capture_geometry = 1`.
+2. Retrieve `geometry_id` from pipeline result.
+3. Query `HsBaGeometryPathPointCount()` to check for continuous path.
+4. Call `HsBaGetGeometryPath()` to retrieve continuous toolpath data.
+5. Free allocated path data with `HsBaFreeGeometryPath()`.
+
+**Section sources**
+- [geometry_export.h:107-126](file://DllHsBaSlicer/geometry_export.h#L107-L126)
+- [geometry_store.cpp:331-402](file://DllHsBaSlicer/geometry_store.cpp#L331-L402)

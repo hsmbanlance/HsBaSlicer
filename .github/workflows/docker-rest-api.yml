@@ -1,0 +1,152 @@
+name: Docker REST API Image
+
+# 独立验证 docker/ 下的 HsBaSlicerRestServer 容器镜像，与其余 C++ pipeline 矩阵互不触发：
+#   - push/PR 仅改动 docker/** 或本文件时 → 只跑秒级静态检查（hadolint + 上下文检查），
+#     不在自动触发里做小时级的 vcpkg 冷编译。
+#   - 完整镜像构建 + 运行冒烟（/api/health、/api/version）通过 workflow_dispatch 手动
+#     触发；gha 层缓存命中后增量构建可降至分钟级。注意：Dispatch 按钮仅在本文件存
+#     在于默认分支（或 UI 选中分支）时可见；push/PR 触发时 build job 显示为
+#     skipped 是预期行为，非解析错误。
+# 与 rest-webui.yml（Node 控制台）、cmake-multi-platform.yml（Linux 原生构建）分层互补：
+# 本工作流只关心"镜像能否产出并跑起来"，切片功能正确性由原生流水线测试覆盖。
+
+on:
+  push:
+    paths:
+      - "docker/**"
+      - ".github/workflows/docker-rest-api.yml"
+  pull_request:
+    paths:
+      - "docker/**"
+      - ".github/workflows/docker-rest-api.yml"
+  workflow_dispatch:
+    inputs:
+      license:
+        description: "镜像构建的 vcpkg 特性集"
+        type: choice
+        default: mit
+        options:
+          - mit      # rest-api（MIT，CI 缓存友好）
+          - copyleft # rest-api;copyleft（CGAL/OCCT，GPL-3.0-or-later convey 义务）
+      push_image:
+        description: "构建后推送到 GHCR（留空则仅本地构建+冒烟）"
+        type: string
+        default: ""
+      vcpkg_baseline:
+        description: "vcpkg git 基线覆盖（留空沿用 vcpkg-configuration.json）"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-rest-api-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Static checks (no image build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Dockerfile syntax (hadolint via docker build --check)
+        run: docker build --check --no-cache -f docker/Dockerfile .
+
+      - name: Context sanity checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 双门控：HSBA_BUILD_REST_API 与 rest-api 特性必须同时出现在构建命令里
+          grep -q -- "-DHSBA_BUILD_REST_API=ON" docker/Dockerfile
+          grep -q "VCPKG_MANIFEST_FEATURES" docker/Dockerfile
+          # Dockerfile.dockerignore 不得排除顶层 add_subdirectory 依赖的目录
+          for d in samples tests static_tests docs overlay-ports triplets; do
+            if grep -Eq "^${d}(/| |\$)" docker/Dockerfile.dockerignore; then
+              echo "::error::docker/Dockerfile.dockerignore excludes ${d}/, configure will fail"
+              exit 1
+            fi
+          done
+          # runtime 阶段的 sed 覆盖依赖 restapi.ini 的默认 host 行仍然存在
+          grep -q "^host = 127.0.0.1" restapi/restapi.ini
+
+      # 非 Dispatch 触发时 build job 会被跳过，在 Summary 里显式声明，避免静默 skip
+      - name: Note skipped build job
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          echo "build job 仅由 workflow_dispatch 手动触发（vcpkg 冷编译小时级），本次运行按设计跳过。" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "触发方式：Actions → Docker REST API Image → Run workflow" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  build:
+    # name 不用表达式：未调度的 job 在 UI 里按模板原文显示，容易被误读为解析失败
+    name: Build image & smoke test
+    if: github.event_name == 'workflow_dispatch'
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Compute HSBA_FEATURES
+        id: features
+        run: |
+          if [ "${{ inputs.license }}" = "copyleft" ]; then
+            echo "value=rest-api;copyleft" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=rest-api" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR (push only)
+        if: ${{ inputs.push_image != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          # BuildKit 自动应用 docker/Dockerfile.dockerignore（与 Dockerfile 同名规则）
+          build-args: |
+            HSBA_FEATURES=${{ steps.features.outputs.value }}
+            VCPKG_BASELINE=${{ inputs.vcpkg_baseline }}
+          cache-from: type=gha,scope=docker-rest-api-${{ inputs.license }}
+          cache-to: type=gha,scope=docker-rest-api-${{ inputs.license }},mode=max
+          load: true
+          push: ${{ inputs.push_image != '' }}
+          tags: |
+            hsba-rest-api:ci-${{ github.run_id }}
+            ${{ inputs.push_image != '' && format('ghcr.io/{0}/hsba-rest-api:{1}', github.repository, inputs.license) || '' }}
+
+      # 冒烟：容器外访问必须成立（ini host 已改 0.0.0.0），健康探针走环回免鉴权路径
+      - name: Smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name hsba-smoke -p 8080:8080 hsba-rest-api:ci-${{ github.run_id }}
+          ok=""
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/api/health > /dev/null 2>&1; then ok=1; break; fi
+            sleep 2
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::/api/health never became ready"
+            docker logs hsba-smoke
+            exit 1
+          fi
+          curl -fsS http://127.0.0.1:8080/api/version
+          curl -fsS http://127.0.0.1:8080/api/pipelines
+          docker inspect --format '{{.State.Health.Status}}' hsba-smoke
+          docker stop hsba-smoke
+
+      - name: Always remove smoke container
+        if: always()
+        run: docker rm -f hsba-smoke || true

@@ -1,0 +1,17 @@
+{
+  "name": "hsba-rest-console",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Standalone browser console and same-origin proxy for HsBaSlicerRestServer",
+  "type": "module",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test",
+    "test:e2e": "node --test test/e2e.test.js"
+  }
+}

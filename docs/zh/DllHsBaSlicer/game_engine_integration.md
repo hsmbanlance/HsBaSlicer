@@ -67,6 +67,8 @@ public static class HsBaSlicerNative
         public IntPtr infill_lua_script;
         public IntPtr infill_lua_func;
         public IntPtr output_path;
+        public int    capture_geometry;      // 尾部新增：0 = 不采集层几何，1 = 采集
+        public IntPtr cancel_flag;           // 尾部新增：std::atomic<bool>*；C# 侧请一律传 IntPtr.Zero
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -77,6 +79,7 @@ public static class HsBaSlicerNative
         public IntPtr gcode_content;       // char*，用 HsBaFreePipelineResult 释放
         public IntPtr error_message;
         public double elapsed_seconds;
+        public long   geometry_id;         // 尾部新增：层几何快照 id，0 = 无快照
     }
 
     // ---- 回调委托：必须与 C 端函数指针签名一致 ----
@@ -120,10 +123,74 @@ public static class HsBaSlicerNative
 
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
     public static extern void HsBaAddEventCallback(IntPtr eventName, LuaRegFn func);
+
+    // ---- 作业句柄（job_control.h）：不透明指针 HsBaJobHandle 一律映射为 IntPtr ----
+    [StructLayout(LayoutKind.Sequential)]
+    public struct JobResultView
+    {
+        public int    success;
+        public int    total_layers;
+        public long   geometry_id;
+        public IntPtr inline_content;      // char*，只能由 HsBaFreeJobResultView 释放
+        public IntPtr output_path;
+        public IntPtr error_message;
+        public double elapsed_seconds;
+        public int    files_transferred;
+        public int    total_files;
+    }
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void ProgressCallbackEx(int percent, int stage, IntPtr stageText, IntPtr userData);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void JobDoneCallback(IntPtr job, IntPtr userData);   // HsBaJobHandle -> IntPtr
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr HsBaSubmitJob(int kind, ref FdmPipelineConfig config,
+        ProgressCallbackEx onProgress, IntPtr progressUserData,
+        JobDoneCallback onDone, IntPtr doneUserData);
+
+    // 其他工艺（SLA/SLS/...）字段集不同，用 IntPtr 重载 + 手写固定结构体指针
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr HsBaSubmitJob(int kind, IntPtr config,
+        ProgressCallbackEx onProgress, IntPtr progressUserData,
+        JobDoneCallback onDone, IntPtr doneUserData);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int  HsBaCancelJob(IntPtr job);            // 1 = 已记录, 0 = 已终态
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int  HsBaWaitJob(IntPtr job, long timeoutMs);   // -1 = 无限等待
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int  HsBaJobGetState(IntPtr job);          // HsBaJobState_t
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern long HsBaJobGeometryId(IntPtr job);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int  HsBaJobCopyResult(IntPtr job, out JobResultView view);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void HsBaFreeJobResultView(ref JobResultView view);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void HsBaReleaseJob(IntPtr job);
+
+    // ---- 层几何（geometry_export.h）----
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int HsBaGeometryLayerCount(long geometryId);
 }
 ```
 
 > SLA / SLS 结构体字段较多，声明方式相同：按 `pipeline_types.h` 中字段**顺序与类型**逐一映射，`const char*` 一律用 `IntPtr`，枚举用 `int`。
+
+**尾部新字段的 ABI 提醒**（详见 [GUI 支撑 API](./gui_support_api.md)）：
+
+1. 所有 Config 尾部依次是 `int capture_geometry` + `IntPtr cancel_flag`，所有 Result 尾部是 `long geometry_id`。**缺任何一个字段都会让结构体尺寸错位**，C# 侧 marshal 时表现为后续字段读到垃圾值；升级 DLL 必须同步改镜像结构体。
+2. `cancel_flag` 指向 C++ 侧的 `std::atomic<bool>`，托管堆上的 `bool` / `AtomicBoolean` 无法作为该指针传入（GC 会移动对象）。C# 宿主请始终置 `IntPtr.Zero`，取消改走作业句柄路径：`HsBaCancelJob(job)`；确有需要时可用 `NativeAlloc` / `StackAlloc` 固定缓冲，但要保证生命周期覆盖整个运行。
+3. `HsBaJobHandle` 是不透明指针，用 `IntPtr` 映射即可；**委托必须存在静态字段**（同 `ProgressCallback`），否则会被 GC 回收导致原生回调时崩溃。`JobResultView` 里三个字符串用 `Marshal.PtrToStringUTF8` 读出，之后只能调 `HsBaFreeJobResultView`，不要传给任何 `HsBaFree*PipelineResult`。
+4. Unity 主线程调度不变：`HsBaSubmitJob` 在任意线程调用都可以（它自己起线程），但回调仍在作业线程触发，仍需像下面第 2 节那样投递回主线程。
 
 ### 2. 高层封装（异步 + 主线程调度）
 

@@ -8,97 +8,92 @@ source_files:
     - CMakeLists.txt
     - CMakePresets.json
     - vcpkg.json
-    - .github/workflows/build-windows.yml
-    - .github/workflows/build-linux.yml
-    - .github/workflows/build-ios.yml
-    - .github/workflows/build-android.yml
-    - .github/workflows/test-coverage.yml
     - cmake/coverage.cmake
-    - version/CMakeLists.txt
-    - version/Generator_Version.ps1
     - cmake/HsBaWindowsUtf8.cmake
-    - cmake/HsBaSlicerConfig.cmake.in
-    - android/app/build.gradle
+    - cmake/deploy_dlls.cmake
+    - version/Generator_Version.ps1
+    - .github/workflows/build-linux.yml
+    - .github/workflows/test-coverage.yml
 ---
 
-## 1. 构建系统总览
+## 1. 构建系统概览
 
-HsBaSlicer 以 **CMake ≥ 3.28** 为唯一顶层构建入口，统一聚合核心库、C ABI 动态库、C++20 module、示例与测试；依赖通过 **vcpkg**（`vcpkg.json` + `vcpkg-configuration.json`）管理，跨平台交叉编译由 CMake Presets (`CMakePresets.json`) 驱动，CI 基于 GitHub Actions 按平台分工作流。
+HsBaSlicer 采用 **CMake 3.28+** 作为顶层构建系统，配合 **vcpkg** 管理第三方依赖，通过 `CMakePresets.json` 提供跨平台（Windows / Linux / macOS / Android / iOS）的标准化配置。所有可执行产物与共享库统一输出到 `${CMAKE_BINARY_DIR}/bin/$<CONFIG>`，并通过 `GNUInstallDirs` + `configure_package_config_file` 导出 `HsBaSlicerTargets.cmake` 供下游 CMake 项目使用。
 
-语言标准：C++20 强制开启，C 标准根据编译器版本在 C11/C23 之间自动选择（GCC ≥ 13 / Clang ≥ 16 / MSVC ≥ 19.36 时启用 C23），并通过 `static_check/feature_check.cmake` 在配置阶段检测 concepts、ranges、source_location、NTTP class/FP、template-template matching、coroutines、explicit this 等特性，缺失则 `message(FATAL_ERROR)` 终止。
+- 语言标准：C++20（`CMAKE_CXX_STANDARD=20`），C 根据编译器版本在 C11/C23 之间选择；MSVC 强制 `/utf-8` 编码。
+- 全局启用 `-fPIC`（`CMAKE_POSITION_INDEPENDENT_CODE ON`），因为静态库最终链接为共享库 `DllHsBaSlicer`。
+- Debug 后缀：`CMAKE_DEBUG_POSTFIX="d"`。
+- 可选特性通过 `option()` 门控：`HSBA_BUILD_REST_API`、`HSBA_SLICER_MODULE`、`HSBA_COVERAGE`、`HSBA_SLICER_USE_TESTS`、`HSBA_SLICER_BUILD_SAMPLES`、`HSBA_SLICER_BUILD_DOCS`、`HSBA_ENABLE_THREAD_POOL_COROUTINE`、`HSBA_HSBA_USE_BIT7Z`、`HSBA_USE_DLL_LOADER`、`HSBA_PROTOBUF_OUT`。
 
-## 2. 关键文件与职责
+## 2. 关键文件与包
 
-| 文件 | 职责 |
+| 角色 | 文件 |
 |---|---|
-| `CMakeLists.txt` | 顶层项目配置：特性探测、依赖 find_package、子目录装配、install/export、ctest 注册 |
-| `CMakePresets.json` | 预置 Windows/Linux/macOS/iOS/Android 的 configure/build/test preset，含 Android arm64 与 iOS Xcode preset |
-| `.github/workflows/*.yml` | 各平台构建、iOS/Android 构建、覆盖率门禁、Wiki 发布 |
-| `cmake/coverage.cmake` | gcov/gcovr 覆盖率门控（core ≥ 45%，other ≥ 25%） |
-| `version/CMakeLists.txt` + `Generator_Version.ps1` | 配置阶段调用 PowerShell 解析 `vcpkg.json` 生成 `version.cpp`（含 build type、triplet、许可证、第三方清单） |
-| `cmake/HsBaWindowsUtf8.cmake` | Windows 可执行嵌入 UTF-8 activeCodePage manifest |
-| `cmake/deploy_dlls.cmake` | DLL 部署辅助脚本 |
-| `cmake/HsBaSlicerConfig.cmake.in` | 安装后供下游 `find_package(HsBaSlicer)` 使用的 Config 模板 |
-| `vcpkg.json` | 依赖声明与 copyleft feature（CGAL/OpenCASCADE） |
-| `android/app/build.gradle` | Android Gradle 应用层构建（JNI 加载原生库） |
+| 顶层工程 | `CMakeLists.txt` |
+| 预设/工具链 | `CMakePresets.json` |
+| 依赖清单 | `vcpkg.json`（含 `copyleft`、`rest-api` 两个 feature） |
+| 覆盖率脚本 | `cmake/coverage.cmake` |
+| Windows UTF-8 manifest 辅助 | `cmake/HsBaWindowsUtf8.cmake` |
+| PDB 部署脚本 | `cmake/deploy_dlls.cmake` |
+| 版本生成器 | `version/Generator_Version.ps1` |
+| CI 工作流 | `.github/workflows/build-{linux,windows,macos,android,ios}.yml`、`.github/workflows/test-coverage.yml` |
 
 ## 3. 架构与约定
 
-### 3.1 依赖与特性裁剪
-- 所有第三方库通过 `find_package(... CONFIG REQUIRED)` 或 `pkg_check_modules(Clipper2 ...)` 引入，全部经 vcpkg 提供。
-- 可选内核通过三态缓存变量 `HSBA_COPL`（AUTO/ON/OFF）控制：AUTO 下优先检查环境变量 `VCPKG_MANIFEST_FEATURES` 是否包含 `copyleft`，否则探测 CGAL/OpenCASCADE 是否已安装；启用后定义 `HSBA_COPL`、`USE_CGAL`、`USE_OCCT`、`USE_CAD_KERNEL`，并将项目许可证切换为 GPL-3.0-or-later。
-- 平台相关开关：
-  - `HSBA_DESKTOP` / `HSBA_MOBILE` / `HSBA_GAME_CONSOLE`（由 `VCPKG_TARGET_TRIPLET` 推断）
-  - `HSBA_USE_DLL_LOADER`（仅桌面默认 ON，移动端关闭并定义 `HSBA_NO_DLL_LOADER`）
-  - `HSBA_HSBA_USE_BIT7Z`（非桌面默认 OFF）
-  - `HSBA_SLICER_MODULE`（C++20 modules，需工具链支持）
-  - `HSBA_POLYGON_DUMP`（桌面默认 ON，导出 SVG 调试能力）
-  - `HSBA_ENABLE_THREAD_POOL_COROUTINE`（线程池协程支持）
-- Debug 构建自动定义 `DISABLE_BOOLEAN_OPERATIONS`，避免 CGAL/IGL 在 Debug 下的内存爆炸。
+### 3.1 依赖管理与特性开关
 
-### 3.2 静态/共享库策略
-- 全局 `CMAKE_POSITION_INDEPENDENT_CODE = ON`，确保所有静态库能以 PIC 链接进共享库。
-- `BUILD_SHARED_LIBS` 由 `VCPKG_TARGET_TRIPLET` 决定：匹配 `windows`/`xbox`/`dynamic` 时 ON，匹配 `linux`/`android`/`static` 时 OFF；未设置时默认 OFF。
-- 输出目录统一收敛到 `${CMAKE_BINARY_DIR}/bin/$<CONFIG>`（运行时与库）。Debug 产物追加 `d` 后缀（`CMAKE_DEBUG_POSTFIX`）。
+- 依赖集中在 `vcpkg.json`，通过 `default-features` 默认启用 `copyleft`（CGAL/OpenCascade/libigl[cgal]），`rest-api`（cpp-httplib）需显式开启。
+- `HSBA_COPL` 为三态缓存变量（AUTO/ON/OFF）：AUTO 时探测 `VCPKG_MANIFEST_FEATURES`、`VCPKG_MANIFEST_NO_DEFAULT_FEATURES` 环境变量或 CGAL/OpenCASCADE 是否已安装；ON/OFF 强制覆盖。启用后定义 `HSBA_COPL` 并切换项目许可证为 GPL-3.0-or-later。
+- `HSBA_BUILD_REST_API` 仅在桌面平台生效，且会检查 `VCPKG_MANIFEST_FEATURES` 中是否包含 `rest-api`，否则 `message(FATAL_ERROR ...)` 终止配置。
+- 平台宏：`HSBA_DESKTOP`、`HSBA_MOBILE`、`HSBA_GAME_CONSOLE`（由 `VCPKG_TARGET_TRIPLET` 匹配 xbox/switch/playstation/stadia 触发），以及各内核宏 `USE_IGL`、`USE_CGAL`、`USE_OCCT`、`USE_OPENVDB`、`HAS_OPENCV`、`HSBA_HAS_CXX_MODULES`、`HSBA_HAS_NTTP_FP`、`HSBA_HAS_C_GENERIC`、`HSBA_HAS_CXX_COROUTINES`、`HSBA_HAS_C23_CONSTEXPR`、`HSBA_HAS_CXX_EXPLICIT_THIS`。
 
-### 3.3 目标组织与安装
-- 顶层 `add_subdirectory` 顺序即依赖顺序：proto → base → cipher → utils → logger → 2D → paths → fileoperator → meshmodel → cadmodel(条件) → pointcloud(条件) → preprocess → support → pipelinetypes → convert → LibHsBaSlicer → ModuleHsBaSlicer(条件) → DllHsBaSlicer → HsBaSlicer → version。
-- 通过 `install(EXPORT HsBaSlicerTargets NAMESPACE HsBaSlicer::)` 导出 CMake targets，配合 `configure_package_config_file` 生成 `HsBaSlicerConfig.cmake` 与 `SameMajorVersion` 兼容的版本文件，供下游 `find_package(HsBaSlicer)` 消费。
-- 公共头文件按模块目录结构安装至 `include/HsBaSlicer/<module>/`。
+### 3.2 子目录组织与构建顺序
 
-### 3.4 测试体系
-- 运行期测试：Boost.Test，通过顶层 `enable_testing()` + `add_subdirectory(tests)` 注册，`ctest` 执行。`HSBA_SLICER_RUN_TESTS_AFTER_BUILD=OFF` 在交叉编译时禁用自动运行。
-- 编译期静态测试：`static_tests/`，使用 constexpr/static_assert 验证模板/反射/Lua 绑定，独立 target。
-- 覆盖率门禁：`HSBA_COVERAGE=ON` 时对所有目标注入 `--coverage`，`coverage` 自定义目标用 gcovr 分别计算 core 与 other 两组行覆盖率，低于阈值（core 45%、other 25%）直接失败。
+顶层 `add_subdirectory` 按依赖顺序引入：`third_parts_without_vcpkg → proto → base → cipher → utils → logger(条件) → 2D → paths → fileoperator → meshmodel → cadmodel(条件) → pointcloud(条件) → preprocess → support → pipelinetypes → convert → LibHsBaSlicer → ModuleHsBaSlicer(条件) → DllHsBaSlicer → HsBaSlicer → version`，最后可选地加入 `restapi`、`samples`、`tests`、`static_tests`、`docs`。
 
-### 3.5 版本信息生成
-- `version/CMakeLists.txt` 在配置阶段调用 `Generator_Version.ps1`，读取 `vcpkg.json` 中依赖列表、`VCPKG_TARGET_TRIPLET`、`HSBA_COPL`、构建时间，生成 `version.cpp`，编译为静态库 `HsBaVersion` 暴露给上层查询。
+### 3.3 安装与导出
 
-### 3.6 文档与静态检查
-- Doxygen：`docs/CMakeLists.txt` + `Doxyfile`，通过 `HSBA_SLICER_BUILD_DOCS` 选项控制，找不到 Doxygen 时自动关闭。
-- 静态检查：`static_check/clang-format-batch.py`、`cpp_analyzer.py`、`feature_check.cmake`。
+- 导出目标集 `_HSBA_INSTALL_TARGETS` 包含所有内部静态库，`LibHsBaSlicer`、`ModuleHsBaSlicer`、`HsBaSlicerRestServer` 单独 install。
+- 公共头文件按模块目录结构安装到 `include/HsBaSlicer/<module>/`。
+- 生成 `HsBaSlicerConfig.cmake` + `HsBaSlicerConfigVersion.cmake`（`SameMajorVersion` 兼容性），命名空间 `HsBaSlicer::`。
 
-## 4. CI 流水线（GitHub Actions）
+### 3.4 版本信息生成
 
-| 工作流 | 触发 | 行为 |
-|---|---|---|
-| `build-windows.yml` | `workflow_dispatch` | VS x64 + Ninja + vcpkg，Release 构建 |
-| `build-linux.yml` | `workflow_dispatch` | Ubuntu + Ninja + vcpkg，Release 构建 + ctest |
-| `build-macos.yml` | `workflow_dispatch` | macOS 构建 |
-| `build-ios.yml` | `workflow_dispatch` | iOS (Xcode) 构建 |
-| `build-android.yml` | `workflow_dispatch` | Android arm64 构建 |
-| `test-coverage.yml` | PR to master/dev + `workflow_dispatch` | 使用 `linux-coverage` preset 构建 + 运行测试 + gcovr 门控（core≥45%/other≥25%），上传 HTML/XML 报告 |
-| `publish-wiki.yml` | `workflow_dispatch` | 将 docs 同步到 GitHub Wiki |
+`version/Generator_Version.ps1` 在 CMake 配置阶段被调用，解析 `vcpkg.json` 中的依赖列表与平台条件，结合 `BuildType`、`Platform`、`VcpkgTriplet`、`Copyleft` 参数生成 `version.cpp`，其中自动推导项目许可证（含 GPL/LGPL 依赖则取 `GPL-3.0-or-later`，否则 `MIT`）。
 
-所有工作流均复用同一模式：clone vcpkg → bootstrap → `vcpkg integrate install` → 设置 `VCPKG_BINARY_SOURCES=x-gha,readwrite` → cache `vcpkg/downloads`（key 含 `vcpkg.json` hash）→ cmake 配置 → 构建。
+### 3.5 测试与覆盖率
 
-## 5. 约束与规则
+- 单元测试基于 Boost.Test，通过 `enable_testing()` + `add_subdirectory("tests")` 注册，`ctest` 运行。
+- 交叉编译时禁用自动运行测试（`HSBA_SLICER_RUN_TESTS_AFTER_BUILD=OFF`）。
+- 覆盖率通过 `HSBA_COVERAGE=ON` 或 preset `linux-coverage` 启用，对所有目标注入 `--coverage`，使用 `gcovr` 分两档阈值门禁：**核心模块**（base/2D/utils/cipher/meshmodel/paths/preprocess/support/LibHsBaSlicer）≥ 45%，**其他模块** ≥ 25%。
+- 覆盖率报告写入 `${CMAKE_BINARY_DIR}/coverage/`，CI 将 HTML/XML 作为 artifact 上传并在 job summary 中打印摘要。
 
-- **C++ 标准**：强制 C++20（`set(CMAKE_CXX_STANDARD 20)` + `REQUIRED`），缺少 concepts/ranges/source_location/template-template matching 的编译器直接 FATAL_ERROR。
-- **Copyleft 许可证切换**：启用 `copyleft` vcpkg feature 或 `HSBA_COPL=ON` 后，项目对外许可证从 MIT 切换为 GPL-3.0-or-later（见 `vcpkg.json` features 描述与顶层 `message`）。
-- **游戏主机目标**：当 `VCPKG_TARGET_TRIPLET` 匹配 xbox/switch/playstation/stadia 时定义 `HSBA_IS_GAME_CONSOLE` 及具体 triplet 宏，同时关闭 logger、DLL loader、bit7z、OpenCV、CAD/PointCloud/SQL 等子模块。
-- **Android/iOS 裁剪**：这两个平台默认关闭 tests、DLL loader、bit7z、OpenCV、CAD、PointCloud、MySQL/PostgreSQL（仅保留 SQLite3），并在 `CMAKE_SYSTEM_NAME` 上显式区分。
-- **覆盖率门槛**：`cmake/coverage.cmake` 中硬编码 core ≥ 45%、other ≥ 25%，任何低于阈值的提交都会使 `coverage` 目标失败。
-- **PowerShell 依赖**：`version/CMakeLists.txt` 在找不到 `pwsh`/`powershell` 时报 `FATAL_ERROR`，因此 Linux CI 必须安装 PowerShell。
-- **输出布局**：所有可执行与库统一输出到 `${CMAKE_BINARY_DIR}/bin/$<CONFIG>`，资源 `logcfg.ini` 在配置阶段复制到该目录。
-- **Install 命名空间**：对外暴露的 CMake target 统一使用 `HsBaSlicer::` 前缀（如 `HsBaSlicer::LibHsBaSlicer`），由 `NAMESPACE HsBaSlicer::` 保证。
+### 3.6 CI 流水线
+
+- `build-linux.yml`：Ubuntu runner，安装大量 X11/GL 依赖，克隆 vcpkg 并 bootstrap，设置 `VCPKG_BINARY_SOURCES=clear;x-gha,readwrite` 启用 GHA 二进制缓存，Ninja + Release 构建，`ctest --parallel 2`。
+- `test-coverage.yml`：PR 触发（master/dev），限制 `CMAKE_BUILD_PARALLEL_LEVEL=2` 和 `VCPKG_MAX_CONCURRENCY=2` 防止 CAD 模块 OOM，依次执行 configure/build/test/coverage-gates。
+- 各平台独立 workflow（windows/macos/android/ios）复用相同 vcpkg + CMake 模式。
+
+### 3.7 预置构建环境
+
+`CMakePresets.json` 定义了以下 preset：
+
+- `windows-base` → `x64-debug` / `x64-release`
+- `linux-debug` / `linux-release` / `linux-coverage`
+- `android-release` (arm64-android, android-28)
+- `macos-debug` / `macos-release`
+- `ios-release` (Xcode generator, arm64, deployment target 26.5)
+
+所有 preset 均指向 `out/build/${presetName}` / `out/install/${presetName}`，并使用 `$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake` 作为 toolchain 文件。Linux/macOS preset 还包含 VS Remote Settings vendor 扩展以支持远程开发。
+
+## 4. 约定与约束
+
+- **编译器能力检测**：`static_check/feature_check.cmake` 在配置早期检查 concepts/ranges/source_location/template-template NTTP 等特性，缺失则 `message(FATAL_ERROR ...)` 终止构建。
+- **REST API 必须搭配 vcpkg feature**：仅设 `HSBA_BUILD_REST_API=ON` 不够，还必须通过 `VCPKG_MANIFEST_FEATURES=rest-api` 安装 cpp-httplib，否则配置失败。
+- **Copyleft 内核三态**：`HSBA_COPL=AUTO` 是默认值，自动探测 vcpkg manifest 行为或已安装包；启用后项目许可证从 MIT 切换到 GPL-3.0-or-later。
+- **Android/iOS/GameConsole 下禁用**：tests、DLL loader、bit7z、OpenCV、OpenVDB、Sqlpp11 MySQL/PostgreSQL、CAD kernel、PointCloud、logger 等。
+- **Debug 构建禁用布尔运算**：定义 `DISABLE_BOOLEAN_OPERATIONS`，避免 CGAL/IGL 在 Debug 下的高内存占用。
+- **vcpkg 二进制缓存**：CI 通过 `VCPKG_BINARY_SOURCES=clear;x-gha,readwrite` 与 `actions/cache@v5` 缓存 `vcpkg/downloads`，key 基于 `vcpkg.json` 哈希。
+- **覆盖率阈值不可随意下调**：`cmake/coverage.cmake` 注释明确说明阈值是当前测试套件的反回归基线（core ~53%, other ~29%），提高阈值需伴随新测试。
+- **输出布局统一**：所有平台可执行文件和库都输出到 `bin/$<CONFIG>`，资源文件（`logcfg.ini`、`restapi.ini`）在配置阶段复制到该目录。
+- **Windows UTF-8 代码页**：通过 `cmake/HsBaWindowsUtf8.cmake` 在每个可执行目标上嵌入 activeCodePage UTF-8 manifest，使窄字符路径被当作 UTF-8 处理。

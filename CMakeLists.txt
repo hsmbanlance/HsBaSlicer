@@ -117,6 +117,18 @@ endif()
 option(HSBA_SLICER_MODULE "Build ModuleHsBaSlicer C++20 module wrapper" ON)
 check_cxx_modules_support(HAS_CXX_MODULES)
 if(HSBA_SLICER_MODULE AND HAS_CXX_MODULES)
+  # The wrapper's exported interface reaches internal-linkage names declared by
+  # its global module fragment headers (Eigen's `const int Dynamic`, libstdc++
+  # internals) plus pipeline_types.h's `static inline` defaults. Toolchains that
+  # reject that outright cannot build the wrapper at all; see feature_check.cmake
+  # for the probe and for the warning switch that makes it tolerable.
+  check_cxx_modules_tu_local_exposure(HSBA_MODULES_TU_LOCAL_OK HSBA_MODULES_TU_LOCAL_FLAGS)
+  if(NOT HSBA_MODULES_TU_LOCAL_OK)
+    message(STATUS "C++20 modules: GMF headers expose TU-local entities and ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION} treats it as an error; HSBA_SLICER_MODULE disabled. Use the LibHsBaSlicer header API or the DllHsBaSlicer C ABI, or build with GCC >= 16.")
+    set(HSBA_SLICER_MODULE OFF)
+  endif()
+endif()
+if(HSBA_SLICER_MODULE AND HAS_CXX_MODULES)
   message(STATUS "C++20 modules supported; ModuleHsBaSlicer will be built")
   add_compile_definitions(HSBA_HAS_CXX_MODULES)
 else()
@@ -588,10 +600,22 @@ install(FILES
     DllHsBaSlicer/fdm_pipeline.h
     DllHsBaSlicer/sla_pipeline.h
     DllHsBaSlicer/sls_pipeline.h
+    DllHsBaSlicer/slm_pipeline.h
+    DllHsBaSlicer/lom_pipeline.h
+    DllHsBaSlicer/tdp_pipeline.h
+    DllHsBaSlicer/waam_pipeline.h
+    DllHsBaSlicer/file_transfer_pipeline.h
     DllHsBaSlicer/custom_pipeline.h
     DllHsBaSlicer/param_store_pipeline.h
     DllHsBaSlicer/pipeline_convert.h
     DllHsBaSlicer/initialize.h
+    DllHsBaSlicer/model_preprocess.h
+    DllHsBaSlicer/lua_register.h
+    DllHsBaSlicer/event_source_register.h
+    DllHsBaSlicer/version_info.h
+    DllHsBaSlicer/progress_stage.h
+    DllHsBaSlicer/geometry_export.h
+    DllHsBaSlicer/job_control.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer
 )
 

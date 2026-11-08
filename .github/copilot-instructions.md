@@ -32,15 +32,20 @@ Purpose: help an AI agent become productive quickly by pointing out the reposito
   - `GET /api/pipelines/{kind}/default-config` (alias `/api/config/default/{kind}`)
   - `POST /api/config/convert` — proto bytes → JSON/XML (default) or, with `?to=proto`, JSON/XML body → protobuf
   - `POST /api/jobs` (submit, async queue) / `POST /api/jobs/{kind}` (override auto-detected kind), `GET /api/jobs` (list, `?state=&offset=&limit=`), `GET /api/jobs/{id}`, `GET /api/jobs/{id}/result`, `DELETE /api/jobs/{id}`
+  - `POST /api/jobs/{kind}` also takes `multipart/form-data` (`config` part = JSON/XML, `model` part = model file); the file lands in `<upload_dir>/<job-id>/` and is reflected into `model_path`
+  - `GET /api/uploads` (list, `?state=pending|in_use|terminal`), `GET /api/uploads/{id}`, `DELETE /api/uploads/{id}` (409 while `in_use`)
   - `PUT /api/params/{kind}/{name}` / `POST /api/params/{kind}` — ParamStore persistence (requires `[paramstore] backend` in `restapi.ini`)
 - JSON + XML both supported: format chosen by `?format=` query, then `Accept` header, then `server.default_format`; response `Content-Type` set accordingly (`content_negotiate.cpp`).
-- Runtime configuration comes from `restapi.ini` next to the executable (`server.host/port/default_format/max_concurrent_jobs/max_jobs/result_ttl_seconds`, `[paramstore]` block); missing file falls back to built-in defaults. Listen address must come from the ini — do not hardcode.
-- Architecture notes: `job_manager.*` is the async queue (queued/running/success/failed states, TTL cleanup); `pipeline_executor.*` dispatches per-kind C ABI calls (create → run sync on a worker thread → free); `config_bridge.*` reuses `utils/struct_json.hpp` reflection serialization.
-- Tests: `tests/RestApi/` (`ctest -R restapi` covers content negotiation, config roundtrip, job manager).
+- Runtime configuration comes from `restapi.ini` next to the executable (`server.host/port/default_format/max_concurrent_jobs/max_jobs/result_ttl_seconds`, `[auth]`, `[upload]`, `[paramstore]` blocks); missing file falls back to built-in defaults. Listen address must come from the ini — do not hardcode.
+- Architecture notes: `job_manager.*` is the async queue (queued/running/success/failed states, TTL cleanup); `pipeline_executor.*` dispatches per-kind C ABI calls (create → run sync on a worker thread → free); `config_bridge.*` reuses `utils/struct_json.hpp` reflection serialization; `upload_bridge.*` sanitizes upload names and injects `model_path`; `upload_store.*` owns the upload pool (TTL/count/manual reclaim, `ReconcileDisk()` on startup).
+- Tests: `tests/RestApi/` (`ctest -R restapi` covers content negotiation, config roundtrip, job manager, upload store).
 - Pitfalls when editing this module:
   - httplib handlers take only `(Request, Response)`; read regex captures via `req.matches[N]`, not a `std::smatch&` parameter.
   - Every struct passed to `SerializeValue` must live in a *named* namespace — MSVC boost::pfr rejects types in unnamed namespaces and lambdas (error C7631).
   - `std::string_view` does not implicitly convert to `std::string` in copy-init positions (set_content, aggregate init); construct explicitly.
+  - The upload pool is decoupled from `server.result_ttl_seconds`: reaping a job (or `DELETE /api/jobs/{id}`) only unlinks the upload — never delete the model file from `JobManager`, that is `UploadStore`'s job alone (`on_terminal` starts its clock).
+  - Strings injected into a config from an upload must be copied into the `StringArena` (`new char[]`) like `DeserializeConfig` does; never `malloc` — the arena releases them.
+  - `upload_store` (`HSBA_MODEL_POOL_SIZE`) floors `[upload] max_files`; keep the `#ifndef` fallback in both `server_config.cpp` and its test when touching that constant.
 
 ## Project-specific patterns & conventions ✨
 - Namespace convention: `HsBa::Slicer` (top-level) and `HsBa::Slicer::Utils` for utilities.
@@ -58,7 +63,7 @@ Purpose: help an AI agent become productive quickly by pointing out the reposito
 
 ## Important files to inspect (quick map) 📁
 - Build & CI: `CMakeLists.txt`, `vcpkg.json`, `.github/workflows/cmake-multi-platform.yml`
-- REST server: `restapi/routes.cpp` (endpoints), `restapi/restapi.ini` (runtime config), `restapi/job_manager.*`, `restapi/pipeline_executor.*`, `restapi/config_bridge.*`
+- REST server: `restapi/routes.cpp` (endpoints), `restapi/restapi.ini` (runtime config), `restapi/job_manager.*`, `restapi/pipeline_executor.*`, `restapi/config_bridge.*`, `restapi/upload_bridge.*`, `restapi/upload_store.*`
 - Protobuf: `proto/` and `proto/CMakeLists.txt` (look for `HSBA_PROTO_OUT_*` options)
 - Lua adapters: `fileoperator/LuaAdapter.*`, `2D/LuaAdapter.*`, `cipher/LuaAdapter.*`
 - Tests: `tests/CMakeLists.txt`, `tests/*_test.cpp` (Boost.Test)

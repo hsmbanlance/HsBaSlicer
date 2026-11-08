@@ -1,4 +1,4 @@
-# Deployment Troubleshooting & FAQ
+Based on my analysis of the repository, I can now update the deployment troubleshooting documentation to reflect the new Docker containerization and CI/CD automation features. Here's the updated document:
 
 <cite>
 **Referenced Files in This Document**
@@ -11,7 +11,21 @@
 - [cmake/deploy_dlls.cmake](file://cmake/deploy_dlls.cmake)
 - [LICENSE.txt](file://LICENSE.txt)
 - [tests/Models/openvdb_model_test.cpp](file://tests/Models/openvdb_model_test.cpp)
+- [docker/Dockerfile](file://docker/Dockerfile)
+- [docker/Dockerfile.dockerignore](file://docker/Dockerfile.dockerignore)
+- [.github/workflows/docker-rest-api.yml](file://.github/workflows/docker-rest-api.yml)
+- [.github/workflows/cmake-multi-platform.yml](file://.github/workflows/cmake-multi-platform.yml)
+- [.github/workflows/test-coverage.yml](file://.github/workflows/test-coverage.yml)
+- [.github/workflows/rest-webui.yml](file://.github/workflows/rest-webui.yml)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Added comprehensive Docker containerization deployment section with multi-stage builds
+- Updated CI/CD automation section with GitHub Actions workflows for automated testing and building
+- Added container-specific troubleshooting and deployment scenarios
+- Enhanced build system documentation with Docker integration
+- Added new diagnostic tools for containerized deployments
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -21,17 +35,20 @@
 5. [Detailed Component Analysis](#detailed-component-analysis)
 6. [Dependency Analysis](#dependency-analysis)
 7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
+8. [Containerization and Deployment](#containerization-and-deployment)
+9. [CI/CD Automation](#cicd-automation)
+10. [Troubleshooting Guide](#troubleshooting-guide)
+11. [Conclusion](#conclusion)
+12. [Appendices](#appendices)
 
 ## Introduction
-This document is the deployment troubleshooting and FAQ guide for HsBaSlicer. It focuses on build failures, dependency resolution with vcpkg, platform-specific issues, runtime performance and memory diagnostics, distribution packaging strategies, licensing implications, supported platforms, migration guidance, known limitations, and roadmap items. The content is derived from the repository’s CMake configuration, vcpkg manifests, presets, documentation, and tests.
+This document is the deployment troubleshooting and FAQ guide for HsBaSlicer. It focuses on build failures, dependency resolution with vcpkg, platform-specific issues, runtime performance and memory diagnostics, distribution packaging strategies, licensing implications, supported platforms, migration guidance, known limitations, and roadmap items. The content is derived from the repository's CMake configuration, vcpkg manifests, presets, documentation, tests, Docker files, and GitHub Actions workflows.
 
 HsBaSlicer is a modular, cross-platform C++ framework for 3D-printing slicers. It exposes:
 - A shared-library C ABI entry point (`DllHsBaSlicer`) for external languages.
 - A static/shared library API (`LibHsBaSlicer`) for full slicing workflows.
 - Optional copyleft kernels (CGAL, OpenCascade) that change the effective license to GPL-3.0-or-later when enabled.
+- **New**: Docker containerization for REST API server deployment with automated CI/CD pipelines.
 
 **Section sources**
 - [README.md:21-39](file://README.md#L21-L39)
@@ -42,6 +59,8 @@ The project uses a layered structure:
 - Core libraries under `base`, `utils`, `cipher`, `2D`, `paths`, `support`, `meshmodel`, `cadmodel`, `pointcloud`, `preprocess`, `pipelinetypes`, `convert`.
 - Public APIs under `LibHsBaSlicer` (C++) and `DllHsBaSlicer` (C ABI).
 - Build orchestration via top-level `CMakeLists.txt`, `CMakePresets.json`, and vcpkg manifests.
+- **New**: Containerization support under `docker/` with multi-stage Docker builds.
+- **New**: CI/CD automation under `.github/workflows/` with comprehensive testing and deployment pipelines.
 - Documentation under `docs`, including platform and dependency notes.
 
 ```mermaid
@@ -53,6 +72,8 @@ Root --> Docs["Documentation<br/>en/zh"]
 Root --> Presets["CMakePresets.json"]
 Root --> VCPKG["vcpkg.json / vcpkg-configuration.json"]
 Root --> License["LICENSE.txt"]
+Root --> Docker["docker/<br/>Multi-stage container builds"]
+Root --> CI[".github/workflows/<br/>Automated testing & deployment"]
 ```
 
 **Diagram sources**
@@ -60,6 +81,8 @@ Root --> License["LICENSE.txt"]
 - [CMakePresets.json:1-239](file://CMakePresets.json#L1-L239)
 - [vcpkg.json:1-113](file://vcpkg.json#L1-L113)
 - [LICENSE.txt:1-23](file://LICENSE.txt#L1-L23)
+- [docker/Dockerfile:1-134](file://docker/Dockerfile#L1-L134)
+- [.github/workflows/docker-rest-api.yml:1-153](file://.github/workflows/docker-rest-api.yml#L1-L153)
 
 **Section sources**
 - [README.md:29-39](file://README.md#L29-L39)
@@ -72,6 +95,7 @@ Key components relevant to deployment and operation:
 - Copyleft kernel integration: CGAL and OpenCascade are conditionally linked based on the `copyleft` feature and platform availability.
 - Dynamic loading: Runtime DLL loader is enabled on desktop and disabled on non-desktop platforms.
 - Compression: bit7z is optional and disabled on non-desktop platforms.
+- **New**: Docker containerization for REST API server with optimized multi-stage builds.
 
 ```mermaid
 classDiagram
@@ -95,16 +119,23 @@ class Compression {
 + "bit7z optional"
 + "Disabled on non-desktop"
 }
+class DockerContainer {
++ "Multi-stage builds"
++ "Optimized runtime images"
++ "REST API server"
+}
 DllHsBaSlicer --> LibHsBaSlicer : "uses"
 DllHsBaSlicer --> CopyleftKernels : "conditionally links"
 DllHsBaSlicer --> RuntimeLoader : "platform-gated"
 DllHsBaSlicer --> Compression : "optional"
+DockerContainer --> DllHsBaSlicer : "packages"
 ```
 
 **Diagram sources**
 - [CMakeLists.txt:228-256](file://CMakeLists.txt#L228-L256)
 - [CMakeLists.txt:284-318](file://CMakeLists.txt#L284-L318)
 - [DllHsBaSlicer/CMakeLists.txt:1-58](file://DllHsBaSlicer/CMakeLists.txt#L1-L58)
+- [docker/Dockerfile:29-134](file://docker/Dockerfile#L29-L134)
 
 **Section sources**
 - [CMakeLists.txt:228-256](file://CMakeLists.txt#L228-L256)
@@ -113,6 +144,8 @@ DllHsBaSlicer --> Compression : "optional"
 
 ## Architecture Overview
 At build time, CMake detects compiler capabilities, platform, and dependencies. At configure time, it decides whether to enable copyleft kernels, dynamic loading, compression, and which targets to install/export. At runtime, the application loads the appropriate pipeline interfaces through the C ABI or C++ API.
+
+**Updated** Added Docker containerization architecture for streamlined REST API deployment.
 
 ```mermaid
 flowchart TD
@@ -127,6 +160,8 @@ Features --> Loader["Enable HSBA_USE_DLL_LOADER<br/>Desktop only"]
 Loader --> Compress["Enable HSBA_USE_BIT7Z<br/>Desktop only"]
 Compress --> Targets["Build Targets<br/>DllHsBaSlicer/LibHsBaSlicer/etc."]
 Targets --> Install["Install & Export<br/>find_package(HsBaSlicer)"]
+Install --> Docker["Docker Containerization<br/>Multi-stage builds"]
+Docker --> Runtime["Runtime Deployment<br/>Containerized REST API"]
 ```
 
 **Diagram sources**
@@ -134,6 +169,7 @@ Targets --> Install["Install & Export<br/>find_package(HsBaSlicer)"]
 - [CMakeLists.txt:170-204](file://CMakeLists.txt#L170-L204)
 - [CMakeLists.txt:228-256](file://CMakeLists.txt#L228-L256)
 - [CMakeLists.txt:456-665](file://CMakeLists.txt#L456-L665)
+- [docker/Dockerfile:29-134](file://docker/Dockerfile#L29-L134)
 
 **Section sources**
 - [CMakeLists.txt:129-157](file://CMakeLists.txt#L129-L157)
@@ -261,8 +297,148 @@ Recommendations:
 
 **Section sources**
 - [CMakeLists.txt:294-298](file://CMakeLists.txt#L294-L298)
-- [.github/workflows/test-coverage.yml:1-31](file://.github/workflows/test-coverage.yml#L1-L31)
+- [.github/workflows/test-coverage.yml:1-136](file://.github/workflows/test-coverage.yml#L1-L136)
 - [tests/Models/openvdb_model_test.cpp:10-20](file://tests/Models/openvdb_model_test.cpp#L10-L20)
+
+## Containerization and Deployment
+
+### Docker Containerization
+**New** HsBaSlicer now provides comprehensive Docker containerization support for deploying the REST API server with optimized multi-stage builds.
+
+#### Multi-Stage Build Architecture
+The Docker implementation uses a two-stage build process:
+- **Builder stage**: Compiles dependencies using vcpkg and builds the HsBaSlicerRestServer binary
+- **Runtime stage**: Contains only the minimal runtime dependencies and the compiled binary
+
+```mermaid
+flowchart TD
+DStart(["Docker Build"]) --> Builder["Stage 1: Builder<br/>Ubuntu 24.04<br/>vcpkg + CMake Build"]
+Builder --> Runtime["Stage 2: Runtime<br/>Ubuntu 24.04<br/>Minimal Dependencies"]
+Runtime --> Deploy["Deployed Container<br/>REST API Server"]
+```
+
+**Diagram sources**
+- [docker/Dockerfile:29-134](file://docker/Dockerfile#L29-L134)
+
+#### Key Features
+- **Optimized image sizes**: Runtime images contain only necessary dependencies
+- **Security hardening**: Runs as non-root user (`hsba`)
+- **Health monitoring**: Built-in health check endpoints
+- **Configuration management**: Environment-based configuration with sensible defaults
+- **Build caching**: Efficient vcpkg binary caching for faster rebuilds
+
+#### Basic Usage
+```bash
+# Build the container image
+docker build -f docker/Dockerfile -t hsba-rest-api:latest .
+
+# Run the container
+docker run -d -p 8080:8080 -e HSBA_REST_AUTH_TOKEN=<token> hsba-rest-api:latest
+
+# Health check
+curl http://localhost:8080/api/health
+```
+
+#### Advanced Configuration
+- **Feature selection**: Control copyleft kernel inclusion via `HSBA_FEATURES` environment variable
+- **vcpkg baseline override**: Specify exact dependency versions with `VCPKG_BASELINE`
+- **Parallel builds**: Control build parallelism with `JOBS` argument
+- **Volume mounting**: Persist data with `-v hsba-data:/app/data`
+
+**Section sources**
+- [docker/Dockerfile:1-134](file://docker/Dockerfile#L1-L134)
+- [docker/Dockerfile.dockerignore:1-30](file://docker/Dockerfile.dockerignore#L1-L30)
+
+### Container Troubleshooting
+
+#### Common Docker Issues
+
+##### Build Failures
+Symptoms:
+- Slow builds due to missing vcpkg cache
+- Permission errors during container startup
+- Missing runtime dependencies
+
+Resolution:
+- Ensure BuildKit is enabled for optimal caching
+- Verify Docker daemon has sufficient disk space
+- Check that required directories are not excluded by `.dockerignore`
+
+##### Runtime Issues
+Symptoms:
+- Container fails to start or crashes immediately
+- Health check endpoints return errors
+- Port binding conflicts
+
+Resolution:
+- Verify port availability and permissions
+- Check container logs with `docker logs <container-id>`
+- Ensure proper volume permissions for data persistence
+
+**Section sources**
+- [docker/Dockerfile:90-134](file://docker/Dockerfile#L90-L134)
+
+## CI/CD Automation
+
+### GitHub Actions Workflows
+**New** Comprehensive CI/CD automation with specialized workflows for different aspects of the build and deployment process.
+
+#### Workflow Architecture
+```mermaid
+flowchart TD
+PR["Pull Request/Push"] --> Matrix["Multi-Platform Build Matrix<br/>Windows/Linux/macOS"]
+PR --> Docker["Docker REST API Workflow<br/>Syntax validation + smoke tests"]
+PR --> WebUI["REST WebUI Workflow<br/>Node.js syntax checks"]
+PR --> Coverage["Test Coverage Workflow<br/>gcov instrumentation"]
+Matrix --> Tests["Unit Tests<br/>ctest"]
+Matrix --> RestAPI["REST API Tests<br/>Linux only"]
+Matrix --> E2E["End-to-End Tests<br/>Real server integration"]
+Docker --> Lint["Dockerfile Syntax Check<br/>hadolint"]
+Docker --> Build["Image Build<br/>Multi-stage"]
+Docker --> Smoke["Smoke Tests<br/>Health endpoints"]
+WebUI --> NodeTests["Node.js Tests<br/>Multiple versions"]
+Coverage --> Gates["Coverage Thresholds<br/>Core: 45%, Other: 25%"]
+```
+
+**Diagram sources**
+- [.github/workflows/cmake-multi-platform.yml:1-517](file://.github/workflows/cmake-multi-platform.yml#L1-L517)
+- [.github/workflows/docker-rest-api.yml:1-153](file://.github/workflows/docker-rest-api.yml#L1-L153)
+- [.github/workflows/rest-webui.yml:1-79](file://.github/workflows/rest-webui.yml#L1-L79)
+- [.github/workflows/test-coverage.yml:1-136](file://.github/workflows/test-coverage.yml#L1-L136)
+
+#### Specialized Workflows
+
+##### Multi-Platform Build Matrix
+- **Platforms**: Windows, Linux, macOS
+- **Features**: Full test suite, REST API validation, end-to-end testing
+- **Caching**: Optimized vcpkg binary caching across platforms
+
+##### Docker REST API Workflow
+- **Triggers**: Changes to `docker/**` or workflow file
+- **Validation**: Dockerfile syntax checking with hadolint
+- **Testing**: Container build and smoke tests
+- **Deployment**: Optional push to GitHub Container Registry
+
+##### REST WebUI Workflow
+- **Scope**: Node.js console application only
+- **Versions**: Tests against Node.js 20, 22, 24
+- **Independence**: No C++ dependencies, pure JavaScript testing
+
+##### Test Coverage Workflow
+- **Metrics**: Line coverage with gcov/gcovr
+- **Thresholds**: Core modules ≥45%, Other modules ≥25%
+- **Reporting**: HTML/XML reports with job summary integration
+
+#### Build Optimization
+- **Parallel builds**: Controlled parallelism to prevent OOM on CI runners
+- **Dependency caching**: Extensive use of GitHub Actions caching for vcpkg downloads
+- **Selective testing**: Platform-specific test execution to optimize CI time
+
+**Section sources**
+- [.github/workflows/cmake-multi-platform.yml:1-517](file://.github/workflows/cmake-multi-platform.yml#L1-L517)
+- [.github/workflows/docker-rest-api.yml:1-153](file://.github/workflows/docker-rest-api.yml#L1-L153)
+- [.github/workflows/rest-webui.yml:1-79](file://.github/workflows/rest-webui.yml#L1-L79)
+- [.github/workflows/test-coverage.yml:1-136](file://.github/workflows/test-coverage.yml#L1-L136)
 
 ## Troubleshooting Guide
 
@@ -304,6 +480,59 @@ Resolution:
 **Section sources**
 - [docs/en/vcpkg-dependencies.md:23-42](file://docs/en/vcpkg-dependencies.md#L23-L42)
 - [CMakePresets.json:114-208](file://CMakePresets.json#L114-L208)
+
+### Container-Specific Issues
+
+#### Docker Build Failures
+Symptoms:
+- Slow builds due to missing vcpkg cache
+- Permission errors during container startup
+- Missing runtime dependencies
+
+Resolution:
+- Enable BuildKit for optimal caching: `DOCKER_BUILDKIT=1`
+- Clear Docker cache if corrupted: `docker builder prune`
+- Verify Docker daemon has sufficient disk space
+
+#### Container Runtime Issues
+Symptoms:
+- Container fails to start or crashes immediately
+- Health check endpoints return errors
+- Port binding conflicts
+
+Resolution:
+- Check container logs: `docker logs <container-id>`
+- Verify port availability: `netstat -tulpn | grep 8080`
+- Check volume permissions for data persistence
+
+**Section sources**
+- [docker/Dockerfile:90-134](file://docker/Dockerfile#L90-L134)
+
+### CI/CD Pipeline Issues
+
+#### GitHub Actions Failures
+Symptoms:
+- Workflow runs fail with permission errors
+- Cache misses causing slow builds
+- Timeout errors on long-running jobs
+
+Resolution:
+- Verify workflow permissions in repository settings
+- Clear GitHub Actions cache if corrupted
+- Adjust timeout values for large builds
+
+#### Coverage Threshold Failures
+Symptoms:
+- PR blocked due to insufficient code coverage
+- Coverage reports not generated
+
+Resolution:
+- Add unit tests for uncovered code paths
+- Review coverage thresholds in test-coverage workflow
+- Check gcovr installation and configuration
+
+**Section sources**
+- [.github/workflows/test-coverage.yml:100-136](file://.github/workflows/test-coverage.yml#L100-L136)
 
 ### Runtime Issues
 
@@ -379,15 +608,32 @@ Steps:
 - [README.md:100-185](file://README.md#L100-L185)
 - [CMakeLists.txt:456-665](file://CMakeLists.txt#L456-L665)
 
+#### Containerized Deployment
+Use cases:
+- Cloud-native deployments with Kubernetes or Docker Swarm
+- Isolated development environments
+- Consistent production deployments across platforms
+
+Steps:
+- Build container image: `docker build -f docker/Dockerfile -t hsba-rest-api:latest .`
+- Run with configuration: `docker run -d -p 8080:8080 -e HSBA_REST_AUTH_TOKEN=<token> hsba-rest-api:latest`
+- Monitor health: `curl http://localhost:8080/api/health`
+
+**Section sources**
+- [docker/Dockerfile:1-134](file://docker/Dockerfile#L1-L134)
+
 ### Diagnostic Tools and Techniques
 - Coverage builds: Instrumented Debug builds with gcov/gcovr; CI gates coverage thresholds.
 - Compile commands: Enable `CMAKE_EXPORT_COMPILE_COMMANDS` for IDE/tooling integration.
 - Logging: Configure logging via `logcfg.ini` copied into the output directory during configure.
+- **New**: Container health monitoring with built-in health check endpoints.
+- **New**: CI/CD pipeline monitoring through GitHub Actions workflow status.
 
 **Section sources**
 - [CMakePresets.json:86-113](file://CMakePresets.json#L86-L113)
 - [CMakePresets.json:22-32](file://CMakePresets.json#L22-L32)
 - [CMakeLists.txt:355-365](file://CMakeLists.txt#L355-L365)
+- [docker/Dockerfile:126-127](file://docker/Dockerfile#L126-L127)
 
 ### Frequently Asked Questions
 
@@ -395,6 +641,7 @@ Steps:
 - Desktop: Windows, Linux, macOS.
 - Mobile: Android (NDK), iOS (Xcode).
 - Game consoles: Supported via triplets; some features disabled.
+- **New**: Containerized deployments on any platform supporting Docker.
 
 **Section sources**
 - [CMakeLists.txt:131-157](file://CMakeLists.txt#L131-L157)
@@ -426,24 +673,37 @@ Steps:
 - [README.md:100-185](file://README.md#L100-L185)
 - [CMakeLists.txt:641-665](file://CMakeLists.txt#L641-L665)
 
+#### How do I deploy using Docker?
+- Build the container image using the provided Dockerfile.
+- Run with appropriate environment variables for authentication and configuration.
+- Use volume mounts for persistent data storage.
+
+**Section sources**
+- [docker/Dockerfile:1-134](file://docker/Dockerfile#L1-L134)
+
 ### Known Limitations and Workarounds
 - Dynamic loading disabled on non-desktop platforms; use static linking or supported plugin mechanisms.
 - bit7z disabled on non-desktop platforms; rely on miniz or alternative compression if needed.
 - Boolean operations disabled in Debug builds; use Release for geometry-heavy workflows.
+- **New**: Docker builds require significant disk space for dependency compilation; ensure adequate storage.
+- **New**: CI/CD workflows may timeout on first run due to dependency caching; subsequent runs are much faster.
 
 **Section sources**
 - [CMakeLists.txt:228-256](file://CMakeLists.txt#L228-L256)
 - [CMakeLists.txt:294-298](file://CMakeLists.txt#L294-L298)
+- [docker/Dockerfile:21-23](file://docker/Dockerfile#L21-L23)
 
 ### Future Roadmap Items
 - Expand game console support with tailored logger and feature toggles.
 - Improve mobile compression options beyond miniz/bit7z constraints.
 - Enhance coverage baselines as tests evolve.
+- **New**: Expand container orchestration support with Helm charts and Kubernetes manifests.
+- **New**: Add more granular CI/CD workflows for different deployment targets.
 
 [No sources needed since this section provides general guidance]
 
 ## Conclusion
-This guide consolidates common build and runtime issues for HsBaSlicer, clarifies dependency and licensing behavior, and outlines deployment strategies. Use the provided presets and CMake options to tailor builds for your target platform, and consult the dependency matrix and licensing notes to plan your distribution model.
+This guide consolidates common build and runtime issues for HsBaSlicer, clarifies dependency and licensing behavior, and outlines deployment strategies including modern containerization approaches. The new Docker containerization and CI/CD automation provide streamlined deployment options while maintaining the flexibility of traditional build methods. Use the provided presets, CMake options, Docker configurations, and GitHub Actions workflows to tailor your deployment for your target platform and environment.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -458,3 +718,45 @@ Usage:
 
 **Section sources**
 - [cmake/deploy_dlls.cmake:1-27](file://cmake/deploy_dlls.cmake#L1-L27)
+
+### Docker Quick Reference
+Common Docker commands for HsBaSlicer deployment:
+
+```bash
+# Build image
+docker build -f docker/Dockerfile -t hsba-rest-api:latest .
+
+# Run container
+docker run -d \
+  -p 8080:8080 \
+  -e HSBA_REST_AUTH_TOKEN=mysecret \
+  -v hsba-data:/app/data \
+  hsba-rest-api:latest
+
+# View logs
+docker logs -f <container-id>
+
+# Check health
+curl http://localhost:8080/api/health
+
+# Stop container
+docker stop <container-id>
+```
+
+**Section sources**
+- [docker/Dockerfile:7-9](file://docker/Dockerfile#L7-L9)
+- [docker/Dockerfile:118-134](file://docker/Dockerfile#L118-L134)
+
+### CI/CD Workflow Reference
+GitHub Actions workflows available for automated testing and deployment:
+
+- **Multi-Platform Builds**: `cmake-multi-platform.yml` - Tests on Windows, Linux, macOS
+- **Docker REST API**: `docker-rest-api.yml` - Container build and smoke tests  
+- **REST WebUI**: `rest-webui.yml` - Node.js console application testing
+- **Test Coverage**: `test-coverage.yml` - Code coverage analysis and reporting
+
+**Section sources**
+- [.github/workflows/cmake-multi-platform.yml:1-517](file://.github/workflows/cmake-multi-platform.yml#L1-L517)
+- [.github/workflows/docker-rest-api.yml:1-153](file://.github/workflows/docker-rest-api.yml#L1-L153)
+- [.github/workflows/rest-webui.yml:1-79](file://.github/workflows/rest-webui.yml#L1-L79)
+- [.github/workflows/test-coverage.yml:1-136](file://.github/workflows/test-coverage.yml#L1-L136)

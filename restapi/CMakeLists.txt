@@ -12,10 +12,17 @@
 find_package(httplib CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 
-add_executable(HsBaSlicerRestServer
-    main.cpp
+# Implementation library: every translation unit except main(). The unit tests under
+# tests/RestApi link this target instead of re-compiling a hand-picked subset of the
+# sources, so a restapi test always compiles the real HTTP layer (routes.cpp) as well.
+# A handler that no longer builds against the installed cpp-httplib therefore breaks
+# the test build too, instead of only the server build.
+add_library(HsBaSlicerRestApi STATIC
+    restapi.hpp
     server_config.hpp
     server_config.cpp
+    auth_gate.hpp
+    auth_gate.cpp
     content_negotiate.hpp
     content_negotiate.cpp
     serialize_value.hpp
@@ -25,12 +32,24 @@ add_executable(HsBaSlicerRestServer
     pipeline_executor.cpp
     job_manager.hpp
     job_manager.cpp
-    restapi.hpp
+    upload_bridge.hpp
+    upload_bridge.cpp
+    upload_store.hpp
+    upload_store.cpp
+    package_reader.hpp
+    package_reader.cpp
+    routes.hpp
     routes.cpp)
 
-target_include_directories(HsBaSlicerRestServer PRIVATE
+target_include_directories(HsBaSlicerRestApi PUBLIC
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/DllHsBaSlicer)
+
+add_executable(HsBaSlicerRestServer
+    main.cpp)
+
+target_link_libraries(HsBaSlicerRestServer PRIVATE
+    HsBaSlicerRestApi)
 
 # The C ABI (run/save/load/version) comes from DllHsBaSlicer; the reflection
 # bridge (FieldToAny/AnyToField), the param_reflect TypeInfo table, rw_ptree INI
@@ -38,7 +57,7 @@ target_include_directories(HsBaSlicerRestServer PRIVATE
 # Reflecting a config in this process uses this binary's own inline TypeInfo
 # copies and only ever passes completed plain-C structs across the DLL boundary,
 # so there is no cross-module sharing of a single reflected object.
-target_link_libraries(HsBaSlicerRestServer PRIVATE
+target_link_libraries(HsBaSlicerRestApi PUBLIC
     httplib::httplib
     Threads::Threads
     DllHsBaSlicer
@@ -48,7 +67,7 @@ target_link_libraries(HsBaSlicerRestServer PRIVATE
     HsBaPipelineTypes)
 
 if(NOT HSBA_GAME_CONSOLE)
-    target_link_libraries(HsBaSlicerRestServer PRIVATE HsBaSlicerLog)
+    target_link_libraries(HsBaSlicerRestApi PUBLIC HsBaSlicerLog)
 endif()
 
 # UTF-8 active-code-page manifest (no-op on non-MSVC / non-Windows).

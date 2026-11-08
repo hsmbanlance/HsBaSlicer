@@ -1508,55 +1508,166 @@ if(HSBA_USE_DLL_LOADER)
 endif()
 
 # ---------------------------------------------------------------------------
-# REST API server unit tests (desktop-only; mirror the HSBA_BUILD_REST_API gate
-# source-wise). These compile the non-HTTP restapi translation units directly
-# into the test executables, so cpp-httplib is NOT required to build them.
+# GUI support API tests: structured progress stages, layer geometry snapshots and
+# cancellable job handles. They link DllHsBaSlicer because that is where the C ABI
+# under test is published; gui_geometry_store_test is the exception, it compiles the
+# internal snapshot translation unit because the pool itself is not part of the ABI.
 # ---------------------------------------------------------------------------
-if(HSBA_DESKTOP)
-  find_package(Threads REQUIRED)
+if(TARGET DllHsBaSlicer)
+  # progress stage classification (HsBaStageFromText / HsBaStageName)
+  add_executable(gui_progress_stage_test
+      GuiApi/progress_stage_test.cpp
+  )
+
+  target_link_libraries(gui_progress_stage_test
+      PRIVATE
+      DllHsBaSlicer
+      HsBaPipelineTypes
+      Boost::unit_test_framework
+  )
+
+  target_include_directories(gui_progress_stage_test PRIVATE ${CMAKE_SOURCE_DIR})
+  target_compile_definitions(gui_progress_stage_test PRIVATE BOOST_TEST_DYN_LINK)
+
+  enable_testing()
+  add_test(NAME gui_progress_stage_test COMMAND $<TARGET_FILE:gui_progress_stage_test>)
+
+  if(HSBA_RUN_TESTS_AFTER_BUILD)
+    add_custom_command(TARGET gui_progress_stage_test POST_BUILD
+      COMMAND ${CMAKE_CTEST_COMMAND} -V -R gui_progress_stage_test
+    )
+  endif()
+
+  # snapshot pool (LRU bound, reference counting, single-block ownership)
+  add_executable(gui_geometry_store_test
+      GuiApi/geometry_store_test.cpp
+      ${CMAKE_SOURCE_DIR}/DllHsBaSlicer/geometry_store.cpp
+  )
+
+  target_link_libraries(gui_geometry_store_test
+      PRIVATE
+      HsBaSlicer2D
+      HsBaSlicerBase
+      HsBaPipelineTypes
+      Boost::unit_test_framework
+  )
+
+  # The exported queries are implemented by the translation unit compiled above, so the
+  # test has to see the export flavour of HSBA_SLICER_API instead of the import one.
+  target_compile_definitions(gui_geometry_store_test
+      PRIVATE
+      BOOST_TEST_DYN_LINK
+      HSBA_SLICER_EXPORTS
+  )
+
+  target_include_directories(gui_geometry_store_test PRIVATE ${CMAKE_SOURCE_DIR})
+
+  enable_testing()
+  add_test(NAME gui_geometry_store_test COMMAND $<TARGET_FILE:gui_geometry_store_test>)
+
+  if(HSBA_RUN_TESTS_AFTER_BUILD)
+    add_custom_command(TARGET gui_geometry_store_test POST_BUILD
+      COMMAND ${CMAKE_CTEST_COMMAND} -V -R gui_geometry_store_test
+    )
+  endif()
+
+  # job handle lifecycle (submit, cancel, wait, result view)
+  add_executable(gui_job_control_test
+      GuiApi/job_control_test.cpp
+  )
+
+  target_link_libraries(gui_job_control_test
+      PRIVATE
+      DllHsBaSlicer
+      HsBaPipelineTypes
+      # The preview case decodes the Base64 a job wrote into its G-code back into image bytes.
+      HsBaCipher
+      Boost::unit_test_framework
+  )
+
+  target_include_directories(gui_job_control_test PRIVATE ${CMAKE_SOURCE_DIR})
+  target_compile_definitions(gui_job_control_test PRIVATE BOOST_TEST_DYN_LINK)
+
+  enable_testing()
+  add_test(NAME gui_job_control_test COMMAND $<TARGET_FILE:gui_job_control_test>)
+
+  if(HSBA_RUN_TESTS_AFTER_BUILD)
+    add_custom_command(TARGET gui_job_control_test POST_BUILD
+      COMMAND ${CMAKE_CTEST_COMMAND} -V -R gui_job_control_test
+    )
+  endif()
+endif()
+
+# ---------------------------------------------------------------------------
+# REST API server unit tests. Gated by HSBA_BUILD_REST_API, the same option that
+# builds HsBaSlicerRestServer, so a default build neither builds restapi nor
+# advertises tests for it. Every case links HsBaSlicerRestApi - the shared
+# implementation library the server itself links - so these tests always compile
+# the real HTTP layer (routes.cpp) instead of a hand-picked subset of sources.
+# ---------------------------------------------------------------------------
+if(HSBA_BUILD_REST_API)
   # content_negotiate_test
   add_executable(restapi_content_negotiate_test
-  	RestApi/content_negotiate_test.cpp
-  	../restapi/content_negotiate.cpp)
-  target_link_libraries(restapi_content_negotiate_test
-  	Boost::unit_test_framework)
+    RestApi/content_negotiate_test.cpp)
+  target_link_libraries(restapi_content_negotiate_test PRIVATE
+    HsBaSlicerRestApi
+    Boost::unit_test_framework)
   target_compile_definitions(restapi_content_negotiate_test PRIVATE BOOST_TEST_DYN_LINK)
   enable_testing()
   add_test(NAME restapi_content_negotiate_test COMMAND $<TARGET_FILE:restapi_content_negotiate_test>)
 
   # config_roundtrip_test
   add_executable(restapi_config_roundtrip_test
-  	RestApi/config_roundtrip_test.cpp
-  	../restapi/config_bridge.cpp
-  	../restapi/pipeline_executor.cpp)
-  target_include_directories(restapi_config_roundtrip_test PRIVATE ${CMAKE_SOURCE_DIR})
-  target_link_libraries(restapi_config_roundtrip_test
-  	HsBaSlicerBase
-  	HsBaSlicerUtils
-  	HsBaSlicerFileOperator
-  	HsBaPipelineTypes
-  	DllHsBaSlicer
-  	Boost::unit_test_framework)
+    RestApi/config_roundtrip_test.cpp)
+  target_link_libraries(restapi_config_roundtrip_test PRIVATE
+    HsBaSlicerRestApi
+    Boost::unit_test_framework)
   target_compile_definitions(restapi_config_roundtrip_test PRIVATE BOOST_TEST_DYN_LINK)
   enable_testing()
   add_test(NAME restapi_config_roundtrip_test COMMAND $<TARGET_FILE:restapi_config_roundtrip_test>)
 
   # job_manager_test
   add_executable(restapi_job_manager_test
-  	RestApi/job_manager_test.cpp
-  	../restapi/job_manager.cpp
-  	../restapi/pipeline_executor.cpp
-  	../restapi/config_bridge.cpp)
-  target_include_directories(restapi_job_manager_test PRIVATE ${CMAKE_SOURCE_DIR})
-  target_link_libraries(restapi_job_manager_test
-  	HsBaSlicerBase
-  	HsBaSlicerUtils
-  	HsBaSlicerFileOperator
-  	HsBaPipelineTypes
-  	DllHsBaSlicer
-  	Threads::Threads
-  	Boost::unit_test_framework)
+    RestApi/job_manager_test.cpp)
+  target_link_libraries(restapi_job_manager_test PRIVATE
+    HsBaSlicerRestApi
+    Boost::unit_test_framework)
   target_compile_definitions(restapi_job_manager_test PRIVATE BOOST_TEST_DYN_LINK)
   enable_testing()
   add_test(NAME restapi_job_manager_test COMMAND $<TARGET_FILE:restapi_job_manager_test>)
+
+  # auth_gate_test (pure policy decisions + ini parsing)
+  add_executable(restapi_auth_gate_test
+    RestApi/auth_gate_test.cpp)
+  target_link_libraries(restapi_auth_gate_test PRIVATE
+    HsBaSlicerRestApi
+    Boost::unit_test_framework)
+  target_compile_definitions(restapi_auth_gate_test PRIVATE BOOST_TEST_DYN_LINK)
+  enable_testing()
+  add_test(NAME restapi_auth_gate_test COMMAND $<TARGET_FILE:restapi_auth_gate_test>)
+
+  # upload_store_test (upload pool + name sanitizing + [upload] ini normalization)
+  add_executable(restapi_upload_store_test
+    RestApi/upload_store_test.cpp)
+  target_link_libraries(restapi_upload_store_test PRIVATE
+    HsBaSlicerRestApi
+    Boost::unit_test_framework)
+  target_compile_definitions(restapi_upload_store_test PRIVATE BOOST_TEST_DYN_LINK)
+  enable_testing()
+  add_test(NAME restapi_upload_store_test COMMAND $<TARGET_FILE:restapi_upload_store_test>)
+
+  # endpoint_http_test (the production route table on a real cpp-httplib listener, driven
+  # by an HTTP client: status codes, download headers, multipart uploads and the auth gate)
+  # header-only cpp-httplib plus Boost.Test exceeds the MSVC 65535 section limit in one TU
+  if(MSVC)
+    set_source_files_properties(RestApi/endpoint_http_test.cpp PROPERTIES COMPILE_OPTIONS "/bigobj")
+  endif()
+  add_executable(restapi_endpoint_http_test
+    RestApi/endpoint_http_test.cpp)
+  target_link_libraries(restapi_endpoint_http_test PRIVATE
+    HsBaSlicerRestApi
+    Boost::unit_test_framework)
+  target_compile_definitions(restapi_endpoint_http_test PRIVATE BOOST_TEST_DYN_LINK)
+  enable_testing()
+  add_test(NAME restapi_endpoint_http_test COMMAND $<TARGET_FILE:restapi_endpoint_http_test>)
 endif()

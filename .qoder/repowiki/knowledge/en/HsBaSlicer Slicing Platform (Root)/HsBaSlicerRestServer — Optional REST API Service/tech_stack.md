@@ -1,1 +1,0 @@
-cpp-httplib (`find_package(httplib CONFIG REQUIRED)` from vcpkg feature `rest-api`), std::thread + std::condition_variable for the worker pool, struct_json/struct_xml from HsBaSlicerUtils for dual JSON/XML serialization, protobuf round-trip via `ConfigToProto`/`ConfigFromProto`.

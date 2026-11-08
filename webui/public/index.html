@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>HsBaSlicer REST Console</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/app.css">
+<script src="/httphelpers.js" defer></script>
+<script src="/i18n.js" defer></script>
+<script src="/model.js" defer></script>
+<script src="/view.js" defer></script>
+<script src="/app.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">HS</span>
+    <div>
+      <h1>HsBaSlicer REST Console</h1>
+      <p id="origin" class="muted mono"></p>
+    </div>
+  </div>
+  <div class="status">
+    <span id="lang-slot" class="lang-slot"></span>
+    <span id="health" class="badge badge-idle">checking</span>
+    <span id="version" class="muted mono"></span>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Credentials</h2>
+    <div class="row">
+      <label for="token">API token</label>
+      <input id="token" type="password" autocomplete="off" spellcheck="false"
+             placeholder="only needed when the REST server requires one">
+      <button id="token-save" type="button">Save</button>
+      <button id="token-clear" type="button">Clear</button>
+    </div>
+    <p class="muted">Kept in this browser's <span class="mono">localStorage</span> and sent as
+      <span class="mono">X-API-Key</span>. Leave it empty when the console was started with
+      <span class="mono">--token</span>: the proxy injects the token server-side and the secret
+      never reaches the page.</p>
+  </section>
+
+  <section class="card">
+    <h2>Slicing</h2>
+    <div class="row">
+      <label for="kind">Pipeline</label>
+      <select id="kind"></select>
+      <button id="load-config" type="button">Load default config</button>
+      <label class="file-label" for="model">Model file</label>
+      <input id="model" type="file">
+      <label class="check"><input id="geometry-capture" type="checkbox" checked> capture geometry</label>
+      <label class="check"><input id="fdm-thumbnails" type="checkbox"> embed preview images (fdm)</label>
+      <button id="submit" type="button" class="primary">Submit job</button>
+    </div>
+    <textarea id="config" spellcheck="false" placeholder="{}"></textarea>
+    <p class="muted">Attach a model file to submit <span class="mono">multipart/form-data</span>
+      (the REST server stores it in its upload pool); leave it empty when the config already
+      names a server-side <span class="mono">model_path</span>. The <span class="mono">Output</span>
+      column shows the server-side result path reported by the API; click a path to copy it,
+      hover the state of a failed job for its error message, and use
+      <span class="mono">Preview</span> to read the result itself in the panel below the table.
+      <span class="mono">capture geometry</span> adds <span class="mono">?geometry=1</span> to the
+      submission so the <span class="mono">Layer geometry</span> panel below has something to draw.
+      <span class="mono">embed preview images</span> sets <span class="mono">gcode_thumbnails</span>
+      in the config of <span class="mono">fdm</span> only, which makes the engine project the model it
+      just sliced into the comments at the head of its G-code.</p>
+  </section>
+
+  <section class="card">
+    <h2>Jobs
+      <button id="jobs-refresh" type="button" class="ghost">Refresh</button>
+      <label class="check"><input id="jobs-auto" type="checkbox" checked> auto</label>
+    </h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Job</th><th>Pipeline</th><th>State</th><th>Progress</th>
+            <th>Layers</th><th>Elapsed</th><th>Output</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="jobs-body">
+          <tr><td colspan="8" class="empty">no jobs yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 id="geometry-title">Layer geometry
+      <button id="geometry-reload" type="button" class="ghost">Reload layer</button>
+    </h2>
+    <p id="geometry-meta" class="muted">no layer geometry previewed yet</p>
+    <div class="row">
+      <label for="geometry-layer">Layer</label>
+      <button id="geometry-prev" type="button" title="previous layer">-</button>
+      <input id="geometry-layer" type="range" min="0" max="0" value="0" step="1">
+      <button id="geometry-next" type="button" title="next layer">+</button>
+      <span id="geometry-layer-label" class="mono">-</span>
+      <label class="check"><input id="geometry-outline" type="checkbox" checked> outline</label>
+      <label class="check"><input id="geometry-fill" type="checkbox" checked> infill</label>
+      <label class="check"><input id="geometry-support" type="checkbox" checked> support</label>
+      <span class="geometry-views">
+        <button id="geometry-view-layer" type="button" class="active">Layer</button>
+        <button id="geometry-view-stack" type="button">Stack</button>
+        <button id="geometry-view-side" type="button">Side</button>
+        <button id="geometry-view-path" type="button">Path</button>
+      </span>
+      <label class="check"><input id="geometry-order" type="checkbox"> order</label>
+      <button id="geometry-fit" type="button">Fit</button>
+    </div>
+    <div id="geometry-stage" class="geometry-stage" hidden>
+      <svg id="geometry-svg" preserveAspectRatio="xMidYMid meet" role="img"></svg>
+    </div>
+    <p class="muted">Drawn from <span class="mono">/api/jobs/{id}/geometry</span>, so the job has to
+      have been submitted with <span class="mono">capture geometry</span> and must have reached a
+      terminal state; <span class="mono">Cancel</span> only asks the pipeline to stop, and it does so
+      at its next safe point. The server keeps snapshots for the last few jobs only, so an older row
+      can report that its snapshot is gone - the panel states the server's own answer verbatim.
+      Scroll to zoom, drag to pan; contours are drawn with a constant line width at every zoom level.
+      <span class="mono">Stack</span> and <span class="mono">Side</span> draw at most
+      <span class="mono">12</span> sampled layers, and only <span class="mono">Path</span> shows the
+      real continuous toolpath a spiral run deposited (it needs <span class="mono">spiral_mode</span>
+      in the config of <span class="mono">fdm</span>, <span class="mono">tdp</span> or
+      <span class="mono">waam</span>). In those two stacked views a line between neighbouring rings is
+      the travel a run would take, not measured data.</p>
+  </section>
+
+  <section class="card">
+    <h2>
+      <span id="preview-title">Result preview</span>
+      <button id="package-browse" type="button">Images</button>
+      <button id="preview-clear" type="button" class="ghost">Clear</button>
+    </h2>
+    <p id="preview-meta" class="muted">no result previewed yet</p>
+    <pre id="preview" class="preview" hidden></pre>
+    <div id="gcode-thumbnails" class="thumbnail-stage" hidden></div>
+    <div id="package-stage" class="package-stage" hidden>
+      <img id="package-image" alt="package image">
+      <div class="row">
+        <button id="package-prev" type="button" title="previous image">Prev</button>
+        <button id="package-next" type="button" title="next image">Next</button>
+      </div>
+    </div>
+    <p id="package-meta" class="muted"></p>
+    <p class="muted">Only the start of a text result is rendered (G-code from a real model is far
+      larger than this panel); <span class="mono">Result</span> still downloads the whole file.
+      Preview images embedded in that start are drawn under it, and <span class="mono">Images</span>
+      opens the pictures inside a packed result (<span class="mono">sla</span> and the other
+      package-writing kinds), one layer at a time.</p>
+  </section>
+
+  <section class="card">
+    <h2>Uploads <button id="uploads-refresh" type="button" class="ghost">Refresh</button></h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Upload</th><th>Job</th><th>File</th><th>Stored path</th><th>Size</th>
+            <th>State</th><th>Expires</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="uploads-body">
+          <tr><td colspan="8" class="empty">upload pool not queried yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Log</h2>
+    <pre id="log"></pre>
+  </section>
+</main>
+
+<footer class="muted">
+  Every request lives under <span class="mono">/api/*</span> and is proxied to the REST server:
+  <span class="mono">/api/health</span>, <span class="mono">/api/version</span>,
+  <span class="mono">/api/pipelines</span>, <span class="mono">/api/config/default</span>,
+  <span class="mono">/api/jobs</span> (results, layer geometry and cancellation included),
+  <span class="mono">/api/uploads</span>.
+</footer>
+</body>
+</html>

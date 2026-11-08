@@ -4,6 +4,7 @@
  */
 #include "custom_pipeline.h"
 
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -14,6 +15,8 @@
 #include "LibHsBaSlicer/Extends/LuaCommonTypes.hpp"
 #include "LibHsBaSlicer/Extends/lua_pipeline.hpp"
 #include "base/coroutine.hpp"
+#include "base/error.hpp"
+#include "job_control.h"
 
 namespace HsBa::Slicer::Pipeline
 {
@@ -28,6 +31,7 @@ struct InternalCustomResult
     std::string result_string;
     std::string error_message;
     double elapsed_seconds = 0.0;
+    bool cancelled = false;
 };
 
 struct InternalCustomConfig
@@ -41,6 +45,26 @@ struct InternalCustomConfig
     std::string output_path;
     HsBaCustomProgressCallback progress_cb = nullptr;
     void* progress_user_data = nullptr;
+    const void* cancel_flag = nullptr;  ///< std::atomic<bool>* set by the host or by its job handle
+
+    // A Lua pipeline is one opaque library call: it neither polls the flag nor can it be
+    // interrupted without unwinding through the Lua VM, so cancellation is honoured right
+    // before the call and, when requested during it, on the way out (see the Run body).
+    // capture_geometry is ignored because the geometry a script produces is unknown here.
+    /** @brief Whether the host asked this run to stop. */
+    bool CancelRequested() const
+    {
+        return cancel_flag && static_cast<const std::atomic<bool>*>(cancel_flag)->load(std::memory_order_relaxed);
+    }
+
+    /** @brief Throw at a cancellation point so the run unwinds as a cancelled result. */
+    void CheckCancel() const
+    {
+        if (CancelRequested())
+        {
+            throw CancelledError("pipeline cancelled");
+        }
+    }
 };
 
 struct OwnedCString
@@ -95,6 +119,7 @@ InternalCustomConfig BuildCustomConfig(const HsBaCustomPipelineConfig_t* cfg, Hs
     ic.output_path = cfg->output_path ? cfg->output_path : "";
     ic.progress_cb = cb;
     ic.progress_user_data = ud;
+    ic.cancel_flag = cfg->cancel_flag;
     return ic;
 }
 
@@ -111,6 +136,7 @@ HsBaCustomPipelineResult_t ToCCustomResult(const InternalCustomResult& ir)
     cr.result_string = result_string.release();
     cr.error_message = error.release();
     cr.elapsed_seconds = ir.elapsed_seconds;
+    cr.geometry_id = 0;  // A Lua pipeline never contributes a layer-geometry snapshot
     return cr;
 }
 
@@ -148,18 +174,60 @@ Utils::Task<InternalCustomResult> RunCustomPipelineAsync(const InternalCustomCon
         }
     };
 
-    const LuaPipelineOutput out = RunLuaPipeline(ctx);
+    try
+    {
+        cfg.CheckCancel();
+        const LuaPipelineOutput out = RunLuaPipeline(ctx);
 
-    result.success = out.success;
-    result.total_layers = out.total_layers;
-    result.output_path = out.output_path;
-    result.result_string = out.result_string;
-    result.error_message = out.error_message;
+        result.success = out.success;
+        result.total_layers = out.total_layers;
+        result.output_path = out.output_path;
+        result.result_string = out.result_string;
+        result.error_message = out.error_message;
+        if (cfg.CancelRequested())
+        {
+            // The script ran to completion because it cannot be interrupted, but the host
+            // asked to stop, so the run is published as cancelled instead of successful.
+            result.success = false;
+            result.cancelled = true;
+            result.error_message = "Cancelled: pipeline cancelled during the Lua script";
+        }
+    }
+    catch (const CancelledError& e)
+    {
+        result.success = false;
+        result.cancelled = true;
+        // The "Cancelled" prefix is what the C ABI callers use to tell a cancelled run
+        // apart from a failed one, since the result structs carry no status field.
+        result.error_message = std::string("Cancelled: ") + e.what();
+    }
 
     auto end_time = std::chrono::steady_clock::now();
     result.elapsed_seconds = std::chrono::duration<double>(end_time - start_time).count();
 
     co_return result;
+}
+
+// Carries the caller's result callback across the job thread boundary.
+struct CustomAsyncThunk
+{
+    HsBaCustomResultCallback callback = nullptr;
+    void* user_data = nullptr;
+};
+
+/**
+ * @brief Job completion hook of HsBaRunCustomPipelineAsync.
+ *
+ * The job owns the temporary result struct and its strings, and releases both once this
+ * callback returns, matching the copy-then-HsBaFreeCustomPipelineResult contract.
+ */
+void DeliverCustomResult(void* typed_result, void* thunk)
+{
+    const std::unique_ptr<CustomAsyncThunk> owned(static_cast<CustomAsyncThunk*>(thunk));
+    if (owned->callback && typed_result)
+    {
+        owned->callback(*static_cast<HsBaCustomPipelineResult_t*>(typed_result), owned->user_data);
+    }
 }
 
 }  // anonymous namespace
@@ -186,18 +254,13 @@ HSBA_SLICER_API void HsBaRunCustomPipelineAsync(const HsBaCustomPipelineConfig_t
                                                 HsBaCustomProgressCallback callback, void* user_data,
                                                 HsBaCustomResultCallback result_callback, void* result_user_data)
 {
-    auto shared_cfg = std::make_shared<HsBa::Slicer::Pipeline::InternalCustomConfig>(
-        HsBa::Slicer::Pipeline::BuildCustomConfig(config, callback, user_data));
-    auto task = HsBa::Slicer::Pipeline::RunCustomPipelineAsync(*shared_cfg);
-    task.then(
-        [shared_cfg, result_callback, result_user_data](const HsBa::Slicer::Pipeline::InternalCustomResult& ir)
-        {
-            auto cr = HsBa::Slicer::Pipeline::ToCCustomResult(ir);
-            if (result_callback)
-            {
-                result_callback(cr, result_user_data);
-            }
-        });  // NOLINT(clang-analyzer-unix.Malloc) C-ABI ownership transfer: result_callback frees cr strings
+    // Delegate to the job machinery: the configuration is deep-copied, so neither config nor
+    // its strings have to outlive this call, and the caller is not blocked any more.
+    auto* thunk = new HsBa::Slicer::Pipeline::CustomAsyncThunk();
+    thunk->callback = result_callback;
+    thunk->user_data = result_user_data;
+    HsBa::Slicer::Pipeline::SubmitLegacyJob(HSBA_PIPELINE_CUSTOM, config, callback, user_data,
+                                            &HsBa::Slicer::Pipeline::DeliverCustomResult, thunk);
 }
 
 HSBA_SLICER_API void HsBaFreeCustomPipelineResult(HsBaCustomPipelineResult_t* result)

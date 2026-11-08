@@ -10,8 +10,9 @@ elsewhere.
 
 The HTTP server is backed by [cpp-httplib](https://github.com/yhirose/cpp-httplib),
 which is installed through the vcpkg **`rest-api`** manifest feature (not part of
-`default-features`). Both the CMake option and the vcpkg feature must be enabled
-together, in the same configure session:
+`default-features`). That feature selects `cpp-httplib[openssl]`, so HTTPS is
+available in every REST-enabled build. Both the CMake option and the vcpkg feature
+must be enabled together, in the same configure session:
 
 ```sh
 cmake --preset <existing-preset> \
@@ -26,15 +27,24 @@ existing `HSBA_COPL` pattern).
 
 The HTTP transport layer (`routes.cpp`) is the only part that needs
 cpp-httplib. The non-HTTP units (`content_negotiate`, `config_bridge`,
-`pipeline_executor`, `job_manager`, `server_config`) have no HTTP dependency and
-are covered by the standalone unit tests under `tests/RestApi/`.
+`pipeline_executor`, `job_manager`, `server_config`, `auth_gate`, `upload_bridge`,
+`upload_store`) have no HTTP dependency and are covered by the standalone unit tests
+under `tests/RestApi/`.
+
+Those tests share the module's gate: with `HSBA_BUILD_REST_API=OFF` (the default)
+neither the server nor its tests are built, so a configuration can no longer expose
+tests for a module it does not compile. When enabled, every case links the
+`HsBaSlicerRestApi` implementation library (which contains `routes.cpp`), so an HTTP
+layer that stops compiling also breaks the test build.
 
 ## Configuration (`restapi.ini`)
 
 The server reads `restapi.ini` from its working directory (same convention as
 `logcfg.ini`); a copy is placed next to the executable at build time. Override
-the path with `--config <file>`. Command-line `--host` / `--port` override the
-ini values. A missing file is not an error — the built-in defaults apply.
+the path with `--config <file>`. Command-line options override the ini values, and
+`HSBA_REST_AUTH_TOKEN` / `HSBA_REST_TLS_CERT` / `HSBA_REST_TLS_KEY` fill a value
+only when the ini left it empty (so an image can ship a token-free ini). A missing
+file is not an error — the built-in defaults apply.
 
 | Section | Key | Default | Meaning |
 |---|---|---|---|
@@ -44,9 +54,20 @@ ini values. A missing file is not an error — the built-in defaults apply.
 | `[server]` | `max_concurrent_jobs` | `2` | Worker threads running slicing jobs concurrently. |
 | `[server]` | `max_jobs` | `128` | Tracked-job cap; new submissions get HTTP 429 beyond it. |
 | `[server]` | `result_ttl_seconds` | `3600` | Finished-job retention before reaping. |
+| `[server]` | `tls_cert` / `tls_key` | *(empty)* | PEM pair enabling HTTPS; must be set together, empty means plain HTTP. |
+| `[server]` | `require_tls` | `false` | Refuse to start unless a PEM pair is configured. |
+| `[auth]` | `enabled` | *(auto)* | `true` / `false` / empty = auto: auto arms the gate exactly when a token exists. |
+| `[auth]` | `token` | *(empty)* | Shared token checked against `Authorization: Bearer` / `X-API-Key`. |
 | `[paramstore]` | `backend` | `sqlite` | `sqlite` / `mysql` / `postgresql`; empty disables `/api/params` (503). |
 | `[paramstore]` | `sqlite_path` / `host` / `user` / `password` / `database` / `port` / `crypto_password` | | ParamStore connection (per-request). |
-| `[auth]` | — | — | Reserved; not read in this release. |
+| `[upload]` | `dir` | *(empty)* | Root directory for uploaded models; **empty disables** multipart submission (503). |
+| `[upload]` | `max_files` | `256` | Retained upload count, floored at `HSBA_MODEL_POOL_SIZE` (10 with CGAL/OCCT, otherwise 1). |
+| `[upload]` | `ttl_seconds` | `604800` | Retention in seconds, **counted from the job's terminal state**; `0` disables age-based reclaim (capped at 30 days). |
+| `[upload]` | `evict_mode` | `both` | Reclaim policy: `ttl` / `count` / `both` / `manual`; unknown values fall back to `both`. |
+| `[upload]` | `max_file_mb` | `256` | Per-file cap; larger parts get 413. |
+| `[upload]` | `max_request_mb` | `260` | Whole-body cap including multipart boundaries; raised to `max_file_mb + 4` when lower. |
+| `[upload]` | `max_total_mb` | `0` | Directory-wide size cap in MB; `0` = unlimited. |
+| `[upload]` | `sweep_interval_seconds` | `60` | Background reclaim period, clamped to `[5, 3600]`. |
 
 ## Format negotiation
 
@@ -68,11 +89,20 @@ are bridged through `param_reflect` reflection field-by-field (`config_bridge`).
 | `GET` | `/api/pipelines` | Supported pipeline kinds. | dispatch table |
 | `GET` | `/api/pipelines/{kind}/default-config` | Default config for a kind. | `HsBaCreateDefault*Config` |
 | `POST` | `/api/config/convert?kind={kind}` | Convert proto bytes → JSON/XML; append `&to=proto` to encode a JSON/XML body → proto bytes. | `HsBa*ConfigFromProtoBytes/ToProtoBytes` |
-| `POST` | `/api/jobs?kind={kind}` or `/api/jobs/{kind}` | Submit a slicing job. | `HsBaRun*Pipeline` (async) |
+| `POST` | `/api/jobs?kind={kind}` or `/api/jobs/{kind}` | Submit a slicing job (JSON/XML body, or `multipart/form-data`, see below); append `?geometry=1` to capture per-layer geometry for the endpoints below. | `HsBaRun*Pipeline` (async) |
 | `GET` | `/api/jobs?state=&offset=&limit=` | List / paginate jobs (optional state filter). | job queue |
 | `GET` | `/api/jobs/{id}` | Job status (state/progress/result metadata). | job queue |
-| `GET` | `/api/jobs/{id}/result` | Downloadable artifact (gcode text / output file). | job queue |
-| `DELETE` | `/api/jobs/{id}` | Delete a queued or finished job (running jobs are refused). | job queue |
+| `GET` | `/api/jobs/{id}/result` | Downloadable artifact (gcode text / output file); the file branch names only the file; cancelled jobs get 409. | job queue |
+| `POST` | `/api/jobs/{id}/cancel` | Request cancellation: running → `202` flag set, queued → `202` dropped outright, terminal → `409`, unknown → `404`. | job queue (`cancel_flag`) |
+| `GET` | `/api/jobs/{id}/geometry` | Geometry summary (layer count + global bounds); `?full=1` additionally expands `z_heights` / `layer_bounds`. | `HsBaGeometryLayerCount` |
+| `GET` | `/api/jobs/{id}/geometry/{layer}` | One layer of rings (outlines / fills / supports, coordinates as flat numeric arrays). | `HsBaGetLayerGeometry` |
+| `GET` | `/api/jobs/{id}/geometry/path` | The continuous toolpath of a spiral run as flat `x,y,z` triples; `404` for any other run. | `HsBaGetGeometryPath` |
+| `GET` | `/api/jobs/{id}/package` | Entry listing of a result package (zip): names, sizes and media types. `404` for a single-file result. | reads `output_path` with miniz |
+| `GET` | `/api/jobs/{id}/package/{entry}` | One entry's bytes, typed by its extension; `{entry}` may contain folders. | reads `output_path` with miniz |
+| `DELETE` | `/api/jobs/{id}` | Delete a queued or finished job (running jobs are refused); only unlinks its upload. | job queue |
+| `GET` | `/api/uploads?state=&offset=&limit=` | List pooled uploads (`pending` / `in_use` / `terminal`). | upload pool |
+| `GET` | `/api/uploads/{id}` | Details of a single upload. | upload pool |
+| `DELETE` | `/api/uploads/{id}` | Delete one upload (409 while a job still references it). | upload pool |
 | `PUT` | `/api/params/{kind}/{key}` | Upsert a config into the ParamStore. | `HsBaSavePipelineParams` |
 | `GET` | `/api/params/{kind}/{key}` | Load a config from the ParamStore. | `HsBaLoadPipelineParams` |
 
@@ -83,22 +113,356 @@ Spec-verbatim aliases are also served: `GET /api/kinds` (≡ `/api/pipelines`),
 `GET /api/config/default/{kind}` (≡ `/api/pipelines/{kind}/default-config`), and
 `POST /api/params/{kind}?key=` (≡ `PUT /api/params/{kind}/{key}`).
 
+## Job cancellation and layer geometry
+
+### State machine
+
+Job `state` is one of `queued`, `running`, `success`, `failed`, `cancelled` (the last three are
+terminal). `progress_stage_id` in `GET /api/jobs/{id}` is a stable stage key (such as
+`slicing.layer`) and reads `unknown` when the pipeline text cannot be classified;
+`geometry_available` / `geometry_layers` are non-zero only after a terminal state.
+
+Cancellation is **cooperative**: pipelines check the flag only at stage boundaries and inside
+per-layer loops, so `202` means "recorded", not "stopped". Work already in flight (mesh loading,
+one Lua callback, a zip run) has to finish. Cancelling a terminal job yields
+`409 job already finished`, while its record stays readable.
+
+```json
+{
+  "id": "7f3c1a2b",
+  "kind": "fdm",
+  "state": "cancelled",
+  "progress_percent": 60,
+  "progress_stage": "Slicing layer",
+  "success": 0,
+  "total_layers": 0,
+  "elapsed_seconds": 4.19,
+  "output_path": "",
+  "error_message": "Cancelled: pipeline cancelled",
+  "progress_stage_id": "cancelled",
+  "geometry_layers": 0,
+  "geometry_available": 0
+}
+```
+
+### Enabling capture at submission
+
+`POST /api/jobs/{kind}?geometry=1` (also accepts `geometry=true`) sets the struct's
+`capture_geometry` to 1 on the server. The switch is **not part of the config field table**, so it
+never appears in `default-config`, body validation, proto messages or the parameter wide table;
+`custom` and `filetransfer` capture nothing, so all three geometry endpoints always answer `404` there.
+A **spiral run** — `spiral_mode = 1` in the config of `fdm`, `tdp` or `waam` — additionally stores the
+one uninterrupted line it deposited, which `/geometry/path` below serves; the overview tells you
+whether to ask for it via `has_path`.
+
+### `GET /api/jobs/{id}/geometry`
+
+```json
+{
+  "id": "7f3c1a2b",
+  "geometry_id": 12,
+  "layer_count": 214,
+  "bounds": [0.0, 0.0, 68.4, 51.2],
+  "has_path": 1,
+  "z_heights": [0.2, 0.4],
+  "layer_bounds": [0.0, 0.0, 68.4, 51.2, 0.0, 0.0, 67.9, 50.8]
+}
+```
+
+`z_heights` and `layer_bounds` are emitted **only with `?full=1`**; the default response carries the
+first five fields (a `layer_count` in the thousands is not expanded blindly). `geometry_id` is
+directly usable by a native host in the same process (pass it to `HsBaGetLayerGeometry`); to an HTTP
+client it is just an opaque number. `has_path` is `1` only when `GET /api/jobs/{id}/geometry/path`
+will succeed, so a client never has to probe a run that deposited no continuous line.
+
+### `GET /api/jobs/{id}/geometry/{layer}`
+
+```json
+{
+  "id": "7f3c1a2b",
+  "layer_index": 0,
+  "z_height": 0.2,
+  "bounds": [0.0, 0.0, 68.4, 51.2],
+  "outlines": [{"point_count": 4, "closed": 1, "xy": [0.0, 0.0, 68.4, 0.0, 68.4, 51.2, 0.0, 51.2]}],
+  "fills": [{"point_count": 2, "closed": 0, "xy": [1.0, 2.0, 30.0, 2.0]}],
+  "supports": []
+}
+```
+
+Coordinates are millimetres and `xy` is flat `x0,y0,x1,y1,...` (to keep bodies small);
+`closed=1` marks a closed contour, `0` an open polyline. Slot meaning depends on the process: FDM
+fills all three; the SLA raft/bottom sheet appears **only in `fills` of layer 0**; SLS / SLM / LOM /
+TDP / WAAM provide `outlines` only.
+
+Geometry is readable only **after** the job reaches a terminal state (capture happens at the end of
+the pipeline). An out-of-range `{layer}` yields `404 layer index out of range` (with
+`detail` = `layer_count=N`), a non-numeric index yields `400 layer index must be a non-negative
+integer`, and a snapshot already reclaimed by the in-process cap (environment variable
+`HSBA_GEOMETRY_POOL_MAX`, default 4) yields `404 geometry snapshot is no longer available`.
+
+### `GET /api/jobs/{id}/geometry/path`
+
+```json
+{
+  "id": "7f3c1a2b",
+  "geometry_id": 12,
+  "point_count": 5210,
+  "xyz": [34.1, 21.8, 0.2, 34.3, 21.8, 0.2, 34.5, 21.9, 0.4],
+  "bounds": [0.0, 0.0, 68.4, 51.2],
+  "z_range": [0.2, 42.8]
+}
+```
+
+`xyz` is one flat array of `3 * point_count` millimetre values (`x0,y0,z0,x1,y1,z1,...`) holding the
+polyline in **deposition order**; `z` never decreases along it, because each point carries the height
+of the layer it was extruded on. The line is open — there is no `closed` flag — and the client draws
+straight segments between consecutive points, since those segments are exactly what the nozzle moved
+along (including the travel that a per-layer ring view cannot show). Only a spiral run has such a
+line; nothing else in this server produces one.
+
+The error ladder is the one above plus one rung of its own: `404 job not found` (unknown id), `404
+job captured no layer geometry` with `detail=submit with ?geometry=1` (the job never asked for a
+snapshot), `404 geometry snapshot is no longer available` (reclaimed by the pool), and `404 job
+emitted no continuous path` with `detail=spiral_mode=1` — the snapshot exists and has layers, but the
+run was not a spiral one, so there is no polyline to hand out. `path` is a reserved segment: a literal
+`path` in the URL is matched by this endpoint, so it is not a valid `{layer}` value.
+
+## Result package entries
+
+Some pipelines finish by writing an archive (SLA always does; SLS, SLM, LOM and TDP do it through
+their export Lua). `/result` can only hand that archive over as one opaque download, so two read-only
+routes open it instead: one lists its entries, the other serves one entry's bytes. Neither adds any
+state - the archive is already on disk and already finished, so it is opened per request.
+
+### `GET /api/jobs/{id}/package`
+
+```json
+{
+  "id": "7f3c1a2b",
+  "name": "result.zip",
+  "entry_count": 6,
+  "entries": [
+    { "path": "config.json", "size": 412, "uncompressed_size": 1180, "media_type": "application/json" },
+    { "path": "layers/layer_0.png", "size": 5033, "uncompressed_size": 18241, "media_type": "image/png" }
+  ]
+}
+```
+
+`path` is the name **exactly as stored in the archive**, `/` separated, and `name` is the bare file
+name of the archive the pipeline wrote (never its directory). `size` is the compressed size and
+`uncompressed_size` the expanded one, both in bytes; `media_type` is derived from the extension by
+the same table `GET /package/{entry}` sends as `Content-Type`. Directory entries are skipped, so
+`entry_count` counts files only.
+
+The built-in SLA exporter stores `config.json`, `layers/layer_N.png|jpg|svg`, `floor/floor_raft.*`
+and `supports/layer_N.*` - but a layer whose render is empty is **not written at all**, so layer
+numbers are not necessarily contiguous and the count is a lower bound. For SLS, SLM, LOM and TDP the
+entry names come from the export Lua the caller supplied, which may store anything: the listing is
+therefore accurate for the job you asked about, but it is **not a stable contract** to code against.
+
+### `GET /api/jobs/{id}/package/{entry}`
+
+Serves one entry as raw bytes with the media type its extension suggests - `image/png`,
+`image/jpeg`, `image/svg+xml`, `application/json`, `text/plain; charset=utf-8` for `.txt`/`.gcode`/`.nc`,
+and `application/octet-stream` for anything else. `{entry}` is matched greedily, so a stored folder
+name like `layers/layer_0.png` is addressed as written; each URL segment still has to be percent-encoded
+by the client.
+
+Every response carries `X-Content-Type-Options: nosniff`, so a mislabeled entry is never reinterpreted
+by the browser. An `image/svg+xml` response additionally carries `Content-Security-Policy: default-src
+'none'`: an SVG inside a package came out of an exporter script and is about as trusted as any other
+result byte, so this is the backstop for the contexts where a browser would run its script (an `<img>`
+reference does not).
+
+### Error ladder of both package routes
+
+The front rungs are exactly the ones of `/result`, in the same order, so a client that already handles
+`/result` needs no new error vocabulary:
+
+| Status | `message` | `detail` | When |
+| --- | --- | --- | --- |
+| `400` | `invalid package entry name` | the entry name | Entry route only, and checked **before** the job is looked up: empty, longer than 512 bytes, leading `/`, a backslash, a control character, or a `..` anywhere. An inner `/` is legal. |
+| `401` | `missing credentials` / `invalid credentials` | the send-hint / a mismatch note | The `[auth]` pre-routing check, as on every non-public endpoint; it runs before either package handler. |
+| `404` | `job not found` | the job id | Unknown id. |
+| `409` | `job was cancelled` | the job id | Cancelled jobs have no usable result. |
+| `409` | `job not finished successfully` | the job id | Still `queued` / `running` / `failed`. |
+| `404` | `result is not a package` | `inline result`, or the job id when there is no result at all | The pipeline answered inline (FDM G-code) or wrote nothing. |
+| `404` | `package not readable` | the bare archive file name | The file is gone, is not a zip, or cannot be opened. The server's working directory is never named. |
+| `404` | `package entry not found` | the entry name | No such entry in this archive. |
+| `409` | `package entry too large` | the entry name | `uncompressed_size` exceeds 32 MiB (`PACKAGE_ENTRY_MAX_BYTES`). Refused from the archive record **before** any bytes are allocated, so a stub entry cannot make this process expand gigabytes. |
+
+`404` answers never echo the archive path, and the entry-name check running first means a traversal
+attempt is rejected without the file system being touched at all.
+
+## Model file upload
+
+Besides a JSON/XML body, `POST /api/jobs/{kind}` accepts **`multipart/form-data`**: a part
+named `config` (JSON or XML, selected by that part's `Content-Type`) plus a part named
+`model` (the model file).
+
+```sh
+curl -X POST http://127.0.0.1:8080/api/jobs/fdm \
+     -F 'config=@fdm.json;type=application/json' \
+     -F 'model=@cube.stl'
+# 202 + Location: /api/jobs/job-7
+```
+
+Server-side order of operations:
+
+1. Sanitize the file name: keep only `[A-Za-z0-9._-]`, drop any directory component and
+   `..`, truncate to 128 bytes, fall back to `model.bin` when nothing survives.
+2. Store it at `<upload_dir>/<job-id>/<safe-name>` and reflect that path into the config's
+   `model_path` (plus `model_name` when the struct declares it). The strings are copied
+   into the `StringArena`, the same ownership model as `DeserializeConfig` — **never
+   malloc'ed**.
+3. Register it in the upload pool and submit the job; the entry stays `in_use` until the
+   worker is done with it and is never reclaimed meanwhile.
+
+Failure paths: `400` (missing `config`/`model` part, unparsable config, or a kind without
+`model_path` — e.g. `filetransfer`), `413` (model larger than `max_file_mb`), `429` (job
+queue full), `503` (`[upload] dir` not configured, or the pool is full). Every failure
+removes the file that was just written.
+
+### Pool and retention policy
+
+The pool is **fully decoupled from `result_ttl_seconds`**: finishing a job only flips the
+entry from `in_use` to `terminal` and starts its clock, while reaping a job (or
+`DELETE /api/jobs/{id}`) merely unlinks it — **the model file is never deleted**. Files
+are reclaimed only by the pool's own policy:
+
+- `ttl`: measured from `terminal_at` (from `created_at` while unlinked); reclaimed past
+  `ttl_seconds`.
+- `count`: once the entry count exceeds `max_files`, the oldest `created_at` goes first.
+- `both` (default): both rules apply.
+- `manual`: only `DELETE /api/uploads/{id}` deletes files.
+
+`in_use` entries are exempt from both `ttl` and `count`; when every entry is referenced by a
+live job, a new upload is refused with 503 instead of sacrificing a model being sliced. On
+restart the `job-*` directories under `upload_dir` are re-adopted with the directory mtime
+as `created_at`, so a restart neither loses track of retained models nor keeps expired ones
+forever; directories not named `job-*` are left untouched.
+
+Entry fields: `id` (`upl-<n>`), `job_id`, `file_name` (sanitized), `original_name`
+(client-supplied), `path`, `state`, `size_bytes`, `created_at`, `expires_at` (0 = no age
+expiry), `remaining_seconds`.
+
+```sh
+curl 'http://127.0.0.1:8080/api/uploads?state=terminal&limit=10'
+curl http://127.0.0.1:8080/api/uploads/upl-3        # 404 when deleted or never existed
+curl -X DELETE http://127.0.0.1:8080/api/uploads/upl-3   # 204; 409 while in_use
+```
+
+### Output path
+
+`output_path` in the config is honoured by every kind: the pipeline writes its artifact there
+and, once the job reaches a terminal state, `GET /api/jobs/{id}` reports that file in
+`output_path` (which is what the console's Output column shows and copies). Which branch
+`GET /api/jobs/{id}/result` takes depends on the kind: FDM keeps the G-code in memory and answers
+with that text, Custom answers with the Lua script's return value, and every other kind serves the
+file named by `export_path`.
+
+The kinds differ in what they write but share one reporting path: `fdm` writes G-code text,
+`sla`/`sls`/`slm`/`lom`/`tdp` write a zip package (reported as `export_path`), `waam` writes a robot
+path as text, and `custom` writes whatever its script chooses, reporting it through
+`HsBa.setOutputPath`. SLS, SLM, LOM and 3DP have no built-in exporter and therefore require
+`export_lua_script`, and Custom requires `pipeline_lua_script` or `pipeline_lua_source` to run at
+all: without one the job ends `failed` and `output_path` stays empty, so the server never reports a
+file it did not write. A Custom script's own file is reachable only through `output_path`, because
+its result endpoint is taken by the return value.
+
+The file branch puts only the last component of `output_path` into `Content-Disposition` — never the
+server-side directory — and falls back to the job id when that name contains a quote, a backslash or
+a control character; the inline-text branch sends no such header. The web console applies the same
+rule to pick the save name (adding the extension the kind writes — `.gcode`, `.zip`, `.txt` — when no
+header arrived) and adds a **Preview** panel: a text result is rendered up to the first 64 KiB
+together with the whole file's byte and line counts, while a binary result is described by name and
+size only. This contract is covered by `tests/RestApi/endpoint_http_test.cpp` (the production route
+table installed on a real cpp-httplib listener) and by `webui/test/e2e.test.js`, which runs every
+file-writing kind against the real binary using the open model the samples download.
+
+## Authorization and TLS
+
+Authorization is enforced **only on non-loopback binds**. A `127.0.0.1` / `::1` /
+`localhost` bind stays token-free by design, which keeps local `curl` workflows and
+container `HEALTHCHECK` probes working.
+
+```sh
+# expose on the LAN over HTTPS, requiring the shared token
+HsBaSlicerRestServer --host 0.0.0.0 \
+    --tls-cert server.crt --tls-key server.key --require-tls \
+    --auth-token "$HSBA_REST_AUTH_TOKEN"
+
+curl -k -H "Authorization: Bearer $HSBA_REST_AUTH_TOKEN" https://host:8080/api/version
+curl -k -H "X-API-Key: $HSBA_REST_AUTH_TOKEN"            https://host:8080/api/jobs
+curl -k https://host:8080/api/health   # probe: always reachable without credentials
+```
+
+Details and deliberate limits:
+
+- Accepted credentials: `Authorization: Bearer <token>` (the `bearer` scheme is
+  case-insensitive, and a scheme-less value is compared verbatim) or `X-API-Key: <token>`;
+  `Authorization` wins when both are sent. Comparison is constant-time over the length.
+- Exempt paths: `/` and `/api/health`. Everything else — including future endpoints —
+  is gated by a pre-routing hook.
+- Startup fails with a message when `enabled=true` carries an empty token, when only one
+  of `tls_cert` / `tls_key` is set, or when `require_tls=true` has no pair.
+- Binding a non-loopback address without a token only logs a warning (plaintext is
+  reported too); it does not silently pretend to be secure.
+- Single shared token, no user accounts, no rotation endpoint, no rate limiting
+  (`[rate_limit]` is still reserved). Put a reverse proxy in front when you need those.
+
+## Web console (separate module)
+
+A browser console lives in [`webui/`](../../../webui/README.md). It is deliberately **not** part of
+`HsBaSlicerRestServer`: it never links the C++ libraries, is not wired into the CMake/vcpkg
+build, and is released on its own schedule with its own CI workflow
+(`.github/workflows/rest-webui.yml`). It is a dependency-free Node.js process that serves a
+static dashboard and reverse-proxies `/api/*` to this server, so no CORS support is needed here.
+
+```sh
+cd webui
+node server.js --rest-url http://127.0.0.1:8080 --token "$HSBA_REST_AUTH_TOKEN"
+# http://127.0.0.1:5080/
+```
+
+Because the proxy calls the API like any other client, the server behaves exactly as documented
+above — nothing here changes the endpoint, format, upload or authorization contracts.
+
 ## Slicing flow
 
 1. `GET /api/pipelines/{kind}/default-config` to obtain a template.
 2. Edit the fields and `POST /api/jobs/{kind}` with the config body → `202` and
-   `Location: /api/jobs/{id}`.
-3. Poll `GET /api/jobs/{id}` until `state` is `success` or `failed`.
+   `Location: /api/jobs/{id}`. When the model is not already on a server-side path, send
+   `multipart/form-data` instead and attach it in the same request (previous section).
+3. Poll `GET /api/jobs/{id}` until `state` is `success`, `failed` or `cancelled`.
 4. On success fetch `GET /api/jobs/{id}/result`.
+5. (Optional) Submit with `?geometry=1`, then read `GET /api/jobs/{id}/geometry` for the summary and
+   `GET /api/jobs/{id}/geometry/{layer}` for single-layer outlines to draw a preview; when the summary
+   says `has_path: 1`, `GET /api/jobs/{id}/geometry/path` adds the whole continuous line.
+6. (Optional) When the result is an archive (SLA always is), `GET /api/jobs/{id}/package` lists its
+   entries and `GET /api/jobs/{id}/package/{entry}` serves one layer image without downloading the
+   whole package first.
+7. (Optional) `POST /api/jobs/{id}/cancel` to stop a running job; after cancellation the result
+   endpoint answers `409`.
 
 ## Errors
 
 Failures are uniform `{code, message, detail}` JSON / `<Error>` XML:
-`400` invalid kind/body/config conversion, `404` unknown job or key, `409` job
-not finished (result) or still running (delete), `429` queue full, `503` ParamStore
-not configured. `DELETE /api/jobs/{id}` returns `204` on success.
+`400` invalid kind/body/config conversion, a missing multipart part, a geometry layer index that
+is not a non-negative integer, or an unusable package entry name; `401` missing or
+wrong credentials (`WWW-Authenticate: Bearer realm="HsBaSlicer"`), `404` unknown
+job/upload/key, or geometry that was never captured / was reclaimed / a layer index out of range,
+or a result that is not a package / a package that cannot be opened / a missing package entry,
+`409` job not finished (result), cancelled (result: `job was cancelled`), still running (job delete),
+already terminal (cancel request), a package entry over 32 MiB (`package entry too large`), or upload still
+referenced by a job (upload delete), `413` model larger than `[upload] max_file_mb`, `429`
+queue full, `503` ParamStore not configured / model upload disabled / upload pool full.
+`DELETE /api/jobs/{id}` and `DELETE /api/uploads/{id}` return `204` on success; `POST
+/api/jobs/{id}/cancel` returns `202` (the run is still unwinding, not already stopped).
 
 ## Security note
 
-No authentication is implemented (trusted local/LAN model). Do **not** bind to a
-public interface on an untrusted network.
+Loopback bindings are unauthenticated by design; on any other interface a token is
+required as soon as `[auth] token` (or `--auth-token` / `HSBA_REST_AUTH_TOKEN`) is set.
+Serve TLS on exposed networks — either your own PEM pair or a reverse proxy that
+terminates TLS — and never ship an image containing a real token.

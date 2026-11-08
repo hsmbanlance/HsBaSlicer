@@ -1,0 +1,78 @@
+name: REST Web Console
+
+# The console under webui/ is a standalone, dependency-free Node.js project. It talks to
+# HsBaSlicerRestServer over plain HTTP and never links, loads or imports the C++ libraries, so
+# it is built and tested independently: no vcpkg, no CMake, no NuGet restore, no C++ toolchain.
+# This workflow therefore only runs for changes that touch webui/ itself.
+
+on:
+  push:
+    paths:
+      - "webui/**"
+      - ".github/workflows/rest-webui.yml"
+  pull_request:
+    paths:
+      - "webui/**"
+      - ".github/workflows/rest-webui.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rest-webui-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test on Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    defaults:
+      run:
+        working-directory: webui
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Syntax check
+        run: |
+          node --check server.js
+          node --check public/httphelpers.js
+          node --check public/model.js
+          node --check public/view.js
+          node --check public/app.js
+          node --check test/server.test.js
+          node --check test/e2e.test.js
+
+      # test/e2e.test.js needs a HsBaSlicerRestServer binary and therefore reports as
+      # skipped here; the pipeline matrix runs in the Linux leg of cmake-multi-platform.yml,
+      # which builds the server, and can be run locally right after a restapi build.
+      - name: Integration tests
+        run: node --test
+
+      - name: CLI smoke test
+        shell: bash
+        run: |
+          node server.js --host 127.0.0.1 --port 5099 --rest-url http://127.0.0.1:8080 > console.log 2>&1 &
+          console_pid=$!
+          for _ in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:5099/healthz > /dev/null 2>&1; then
+              break
+            fi
+            sleep 0.25
+          done
+          curl -fsS http://127.0.0.1:5099/ | grep -q "HsBaSlicer REST Console"
+          curl -fsS http://127.0.0.1:5099/app.js | grep -q "/api/pipelines"
+          # app.js dereferences HsBaHttp, so the helpers have to be served too
+          curl -fsS http://127.0.0.1:5099/httphelpers.js | grep -q "globalThis.HsBaHttp"
+          kill "$console_pid"
+          cat console.log

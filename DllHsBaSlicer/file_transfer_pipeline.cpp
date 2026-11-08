@@ -4,6 +4,7 @@
  */
 #include "file_transfer_pipeline.h"
 
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -16,6 +17,7 @@
 #include "LibHsBaSlicer/Transfer/file_transfer.hpp"
 #include "base/coroutine.hpp"
 #include "base/error.hpp"
+#include "job_control.h"
 
 namespace HsBa::Slicer::Pipeline
 {
@@ -29,6 +31,7 @@ struct InternalFileTransferResult
     int total_files = 0;
     std::string error_message;
     double elapsed_seconds = 0.0;
+    bool cancelled = false;
 };
 
 struct InternalFileTransferConfig
@@ -36,6 +39,25 @@ struct InternalFileTransferConfig
     FileTransferConfig lib_config;
     HsBaFileTransferProgressCallback progress_cb = nullptr;
     void* progress_user_data = nullptr;
+    const void* cancel_flag = nullptr;  ///< std::atomic<bool>* set by the host or by its job handle
+
+    // TransferFiles walks the whole file list inside LibHsBaSlicer and owns no cancellation
+    // hook, so cancellation is honoured before the call starts and, when requested while it
+    // runs, once it returns. capture_geometry is meaningless for a transfer.
+    /** @brief Whether the host asked this run to stop. */
+    bool CancelRequested() const
+    {
+        return cancel_flag && static_cast<const std::atomic<bool>*>(cancel_flag)->load(std::memory_order_relaxed);
+    }
+
+    /** @brief Throw at a cancellation point so the run unwinds as a cancelled result. */
+    void CheckCancel() const
+    {
+        if (CancelRequested())
+        {
+            throw CancelledError("pipeline cancelled");
+        }
+    }
 };
 
 struct OwnedCString
@@ -96,6 +118,7 @@ InternalFileTransferConfig BuildFileTransferConfig(const HsBaFileTransferPipelin
 
     ic.progress_cb = cb;
     ic.progress_user_data = ud;
+    ic.cancel_flag = cfg->cancel_flag;
     return ic;
 }
 
@@ -109,6 +132,7 @@ HsBaFileTransferPipelineResult_t ToCResult(const InternalFileTransferResult& ir)
     cr.total_files = ir.total_files;
     cr.error_message = error.release();
     cr.elapsed_seconds = ir.elapsed_seconds;
+    cr.geometry_id = 0;  // A file transfer has no layer geometry
     return cr;
 }
 
@@ -121,6 +145,7 @@ Utils::Task<InternalFileTransferResult> RunFileTransferPipelineAsync(const Inter
 
     try
     {
+        cfg.CheckCancel();
         // Delegate to LibHsBaSlicer TransferFiles
         FileTransferProgressFunc progress_func = nullptr;
         if (cfg.progress_cb)
@@ -135,6 +160,22 @@ Utils::Task<InternalFileTransferResult> RunFileTransferPipelineAsync(const Inter
         result.files_transferred = lib_result.files_transferred;
         result.total_files = lib_result.total_files;
         result.error_message = lib_result.error_message;
+        if (cfg.CancelRequested())
+        {
+            // The upload ran to completion because it cannot be interrupted, but the host
+            // asked to stop, so the run is published as cancelled instead of successful.
+            result.success = false;
+            result.cancelled = true;
+            result.error_message = "Cancelled: pipeline cancelled during the file transfer";
+        }
+    }
+    catch (const CancelledError& e)
+    {
+        result.success = false;
+        result.cancelled = true;
+        // The "Cancelled" prefix is what the C ABI callers use to tell a cancelled run
+        // apart from a failed one, since the result structs carry no status field.
+        result.error_message = std::string("Cancelled: ") + e.what();
     }
     catch (const RuntimeError& e)
     {
@@ -146,6 +187,28 @@ Utils::Task<InternalFileTransferResult> RunFileTransferPipelineAsync(const Inter
     result.elapsed_seconds = std::chrono::duration<double>(end_time - start_time).count();
 
     co_return result;
+}
+
+// Carries the caller's result callback across the job thread boundary.
+struct FileTransferAsyncThunk
+{
+    HsBaFileTransferResultCallback callback = nullptr;
+    void* user_data = nullptr;
+};
+
+/**
+ * @brief Job completion hook of HsBaRunFileTransferPipelineAsync.
+ *
+ * The job owns the temporary result struct and its strings, and releases both once this
+ * callback returns, matching the copy-then-HsBaFreeFileTransferPipelineResult contract.
+ */
+void DeliverFileTransferResult(void* typed_result, void* thunk)
+{
+    const std::unique_ptr<FileTransferAsyncThunk> owned(static_cast<FileTransferAsyncThunk*>(thunk));
+    if (owned->callback && typed_result)
+    {
+        owned->callback(*static_cast<HsBaFileTransferPipelineResult_t*>(typed_result), owned->user_data);
+    }
 }
 
 }  // anonymous namespace
@@ -173,18 +236,13 @@ HSBA_SLICER_API void HsBaRunFileTransferPipelineAsync(const HsBaFileTransferPipe
                                                       HsBaFileTransferResultCallback result_callback,
                                                       void* result_user_data)
 {
-    auto shared_cfg = std::make_shared<HsBa::Slicer::Pipeline::InternalFileTransferConfig>(
-        HsBa::Slicer::Pipeline::BuildFileTransferConfig(config, callback, user_data));
-    auto task = HsBa::Slicer::Pipeline::RunFileTransferPipelineAsync(*shared_cfg);
-    task.then(
-        [shared_cfg, result_callback, result_user_data](const HsBa::Slicer::Pipeline::InternalFileTransferResult& ir)
-        {
-            auto cr = HsBa::Slicer::Pipeline::ToCResult(ir);
-            if (result_callback)
-            {
-                result_callback(cr, result_user_data);
-            }
-        });  // NOLINT(clang-analyzer-unix.Malloc) C-ABI ownership transfer: result_callback frees cr strings
+    // Delegate to the job machinery: the configuration is deep-copied (including the path
+    // array), so neither config nor its strings have to outlive this call.
+    auto* thunk = new HsBa::Slicer::Pipeline::FileTransferAsyncThunk();
+    thunk->callback = result_callback;
+    thunk->user_data = result_user_data;
+    HsBa::Slicer::Pipeline::SubmitLegacyJob(HSBA_PIPELINE_FILETRANSFER, config, callback, user_data,
+                                            &HsBa::Slicer::Pipeline::DeliverFileTransferResult, thunk);
 }
 
 HSBA_SLICER_API void HsBaFreeFileTransferPipelineResult(HsBaFileTransferPipelineResult_t* result)

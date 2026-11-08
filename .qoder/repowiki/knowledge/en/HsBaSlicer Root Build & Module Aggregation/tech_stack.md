@@ -1,1 +1,0 @@
-CMake ≥ 3.28, C++20 (with optional C++ modules via `hsba_slicer.cppm`), vcpkg manifest-driven dependency management; copyleft kernels (CGAL, OpenCASCADE) toggle the project license between MIT and GPL-3.0-or-later; optional REST server built on cpp-httplib.

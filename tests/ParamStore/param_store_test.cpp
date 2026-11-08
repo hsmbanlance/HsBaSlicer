@@ -94,9 +94,13 @@ BOOST_AUTO_TEST_CASE(reflection_completeness)
     auto* fdm = GetTypeInfo<HsBaFdmPipelineConfig_t>();
     auto* sla = GetTypeInfo<HsBaSlaPipelineConfig_t>();
     BOOST_CHECK(IsPipelineConfigType(fdm));
-    BOOST_CHECK_EQUAL(fdm->fields.size(), 38u);
+    // FDM 尾部追加了 gcode_thumbnails / gcode_thumbnail_size，字段数随之 +2；此处同步上调，
+    // 使新增字段必须同时出现在反射表里才能通过。
+    BOOST_CHECK_EQUAL(fdm->fields.size(), 40u);
     BOOST_CHECK_EQUAL(sla->fields.size(), 32u);
     BOOST_CHECK(fdm->fields.count("layer_height") == 1);
+    BOOST_CHECK(fdm->fields.count("gcode_thumbnails") == 1);
+    BOOST_CHECK(fdm->fields.count("gcode_thumbnail_size") == 1);
     BOOST_CHECK(fdm->fields.count("model_name") == 1);
     BOOST_CHECK(fdm->fields.count("fill_mode") == 1);
 

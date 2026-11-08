@@ -337,6 +337,116 @@ void setupLuaExtensions()
 
 > **注意**：注册函数指针必须在整个进程生命周期内保持有效（建议用静态函数或全局函数）。
 
+## 五、作业句柄：进度上色 / 取消按钮 / 单层轮廓
+
+有了 `HsBaSubmitJob`（真异步、返回即解放 UI 线程）与 `HsBaStage_t`，桌面端不再需要自己写工作线程：提交可以直接在 UI 线程做，回调仍然在作业线程触发，照旧需要调度回 UI。
+
+### Qt：阶段上色 + 取消按钮
+
+```cpp
+// slicer_worker.h —— 不再需要 QThread，句柄存成员变量供按钮使用
+class SlicerWorker : public QObject {
+    Q_OBJECT
+public:
+    explicit SlicerWorker(QObject* parent = nullptr) : QObject(parent) {}
+    ~SlicerWorker() { if (m_job) HsBaReleaseJob(m_job); }
+
+    void start(const HsBaFdmPipelineConfig_t& cfg) {
+        if (m_job) { HsBaReleaseJob(m_job); m_job = nullptr; }
+        m_job = HsBaSubmitJob(HSBA_PIPELINE_FDM, &cfg, &SlicerWorker::onProgress, this,
+                             &SlicerWorker::onDone, this);
+    }
+    void cancel() { if (m_job) HsBaCancelJob(m_job); }   // 协作式，UI 线程直接调用
+
+signals:
+    void stageChanged(int percent, const QString& stageId, const QString& text);
+    void finished();
+
+private:
+    static void onProgress(int percent, HsBaStage_t stage, const char* text, void* ud) {
+        auto* self = static_cast<SlicerWorker*>(ud);
+        // 跨线程信号自动排队；stageId 是稳定标识符，可作 i18n 键与配色键
+        emit self->stageChanged(percent, QString::fromUtf8(HsBaStageName(stage)),
+                                 QString::fromUtf8(text ? text : ""));
+    }
+    static void onDone(HsBaJobHandle, void* ud) {
+        emit static_cast<SlicerWorker*>(ud)->stageChanged(100, QString(), QString());
+        emit static_cast<SlicerWorker*>(ud)->finished();
+    }
+    HsBaJobHandle m_job = nullptr;
+};
+```
+
+槽函数里按阶段前缀上色，比匹配易变的英文文本可靠得多：
+
+```cpp
+static QColor stageColor(const QString& id) {
+    if (id.startsWith("model"))    return Qt::gray;         // 网格加载
+    if (id.startsWith("slicing"))  return Qt::darkBlue;     // 切片
+    if (id.startsWith("support"))  return Qt::darkYellow;   // 支撑（skipped 也走这里）
+    if (id.startsWith("floor"))    return Qt::darkMagenta;
+    if (id.startsWith("fill"))     return Qt::darkGreen;    // 填充
+    if (id == "path.start" || id == "file.write" || id == "export") return Qt::darkCyan;
+    if (id == "cancelled")         return Qt::red;
+    if (id == "done")              return Qt::darkGreen;
+    return Qt::lightGray;                                   // unknown / 空串
+}
+// connect(&w, &SlicerWorker::stageChanged, [&](int pct, const QString& id, const QString&) {
+//     ui->progress->setValue(pct); ui->progress->setStyleSheet(stageColor(id).name()); });
+```
+
+> `on_done` 触发时库已释放自己的引用，但成员 `m_job` 仍是宿主引用，可以在 `finished()` 槽里安全调 `HsBaJobCopyResult` / `HsBaJobGeometryId`；最后一次 `HsBaReleaseJob` 交给析构。
+
+### wxWidgets：CallAfter 搬运阶段与几何
+
+```cpp
+void SlicePanel::OnSubmit(wxCommandEvent&)
+{
+    HsBaFdmPipelineConfig_t cfg = MakeConfig();
+    cfg.capture_geometry = 1;                 // 需要逐层预览时才打开
+    m_job = HsBaSubmitJob(HSBA_PIPELINE_FDM, &cfg, ProgressTrampoline, this, DoneTrampoline, this);
+}
+
+void SlicePanel::OnCancel(wxCommandEvent&) { if (m_job) HsBaCancelJob(m_job); }
+
+void SlicePanel::ProgressTrampoline(int percent, HsBaStage_t stage, const char* text, void* ud) {
+    auto* self = static_cast<SlicePanel*>(ud);
+    const wxString id = wxString::FromUTF8(HsBaStageName(stage));   // 先拷贝，回调返回后指针失效
+    const wxString msg = wxString::FromUTF8(text ? text : "");
+    self->CallAfter([self, percent, id, msg] {                    // 调度回 UI 线程
+        self->m_gauge->SetValue(percent);
+        self->SetLabel(msg.empty() ? id : msg);
+    });
+}
+```
+
+单层轮廓绘制：几何只在作业终态后可读，绘制时把点集拷贝进画布自己的容器，`HsBaFreeLayerGeometry` 调用后原始指针即失效。
+
+```cpp
+void SlicePanel::LoadLayer(int layer) {
+    const long long gid = HsBaJobGeometryId(m_job);
+    if (HsBaGeometryLayerCount(gid) <= 0) return;             // 未采集或已被池回收
+    HsBaLayerGeometry_t geom = {0};
+    if (!HsBaGetLayerGeometry(gid, layer, &geom)) return;
+    const wxRect2DDouble bounds(geom.bounds_min[0], geom.bounds_min[1],
+                                geom.bounds_max[0], geom.bounds_max[1]);   // free 前读完数值
+    m_polylines.clear();                                      // std::vector<std::vector<wxPoint2DDouble>>
+    const HsBaRing_t* slots[3] = { geom.outlines, geom.fills, geom.supports };
+    const int counts[3] = { geom.outline_count, geom.fill_count, geom.support_count };
+    for (int s = 0; s < 3; ++s)
+        for (int r = 0; r < counts[s]; ++r) {
+            std::vector<wxPoint2DDouble> pts;
+            pts.reserve(slots[s][r].point_count);
+            for (int i = 0; i < slots[s][r].point_count; ++i)
+                pts.emplace_back(slots[s][r].xy[2 * i], slots[s][r].xy[2 * i + 1]);
+            m_polylines.push_back(std::move(pts));
+        }
+    HsBaFreeLayerGeometry(&geom);     // 整块 free，不可逐个 free 子数组（调用后 geom 被清零）
+    m_canvas->Fit(bounds);            // 用该层 bounds_min/max 做自适应缩放
+    m_canvas->Refresh();
+}
+```
+
 ## 常见问题
 
 | 现象 | 原因与处理 |
@@ -346,3 +456,5 @@ void setupLuaExtensions()
 | 回调中更新控件崩溃 | 回调在库线程；必须经信号槽 / `CallAfter` 调度回 UI 线程 |
 | 中文路径切片失败 | 确保传入 UTF-8 编码路径（`QString::toStdString` / `wxString::ToStdString(wxConvUTF8)`） |
 | 结果字符串乱码或崩溃 | 提前调用了 `HsBaFree*PipelineResult`；先拷贝再释放 |
+| 点了取消按钮但作业还在跑 | 取消是协作式的，只在阶段边界与逐层循环内生效；正在进行的是网格加载、一次 Lua 回调或 zip 压缩，等它结束 |
+| 层预览一片空白 | 提交时 `capture_geometry` 为 0；或作业尚未终态（采集在流水线末尾）；或快照被池淘汰（见 `HSBA_GEOMETRY_POOL_MAX`） |

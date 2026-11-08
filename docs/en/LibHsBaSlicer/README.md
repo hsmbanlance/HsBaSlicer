@@ -493,6 +493,8 @@ FdmResult result = pipeline.run(model);  // Full pipeline
 **Important**:
 - On MSVC, `#include` must appear before `import` (otherwise C2572 redefinition errors)
 - Project types in the GMF (`ModelInfo`, etc.) are NOT exported by the module; consumers must `#include` them directly
+- The aliases `Point2`/`Polygon`/`Polygons`/`Point2D`/`PolygonD`/`PolygonsD`/`LuaRegFunc` are re-exported on MSVC only: GCC (>= 15) and Clang reject re-declaring a GMF name in the module purview, so include `2D/IntPolygon.hpp`, `2D/FloatPolygons.hpp` and `LibHsBaSlicer/Extends/LuaAddFunction.hpp` when naming them
 - Config structs are shared from `pipelinetypes/pipeline_types.h`—do NOT redefine them
+- The module wrapper builds on MSVC, Clang or GCC >= 16 only: GMF headers (Eigen/libstdc++) expose TU-local entities, which GCC 15 treats as a hard error; the configure-time probe then disables `HSBA_SLICER_MODULE` automatically, so use the classic `#include` API (see `samples/LibHsBaSlicer/main_header.cpp`) or the DllHsBaSlicer C ABI instead
 
 See [C++ Usage Guide](../cpp_cmake_usage.md#using-modulehsbaslicer-c20-module) for details.

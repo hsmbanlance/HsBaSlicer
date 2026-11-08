@@ -43,3 +43,15 @@ target_compile_definitions(ModuleHsBaSlicer PUBLIC
 target_compile_options(ModuleHsBaSlicer PUBLIC
     $<$<CXX_COMPILER_ID:MSVC>:/fp:strict /fp:except->
 )
+
+# GCC >= 16 reports "interface entity exposes a TU-local entity" as a warning for
+# the internal-linkage names its GMF headers carry (Eigen::Dynamic, libstdc++
+# constants); the probe in static_check/feature_check.cmake decides whether the
+# switch exists and hands it over. PUBLIC so `import hsba.slicer;` consumers
+# inherit it. If the compiler cannot be appeased, HSBA_SLICER_MODULE is OFF and
+# this target is not configured at all.
+if(HSBA_MODULES_TU_LOCAL_FLAGS)
+    target_compile_options(ModuleHsBaSlicer PUBLIC
+        $<$<CXX_COMPILER_ID:GNU>:${HSBA_MODULES_TU_LOCAL_FLAGS}>
+    )
+endif()
