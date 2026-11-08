@@ -76,8 +76,11 @@ RUN git clone --depth 1 https://github.com/microsoft/vcpkg.git /opt/vcpkg \
 ENV VCPKG_ROOT=/opt/vcpkg
 
 # rest-api 与 CMake 的 HSBA_BUILD_REST_API=ON 双门控缺一不可（顶层 CMakeLists
-# 会校验 VCPKG_MANIFEST_FEATURES 中是否激活 rest-api）；默认特性（copyleft）
-# 一律关闭，由 HSBA_FEATURES 显式声明所需特性
+# 会校验 ENV 或 CMake 变量中的 rest-api 特性）。
+# 注意：vcpkg.cmake 工具链只读 CMake 变量 VCPKG_MANIFEST_FEATURES /
+# VCPKG_MANIFEST_NO_DEFAULT_FEATURES（拼成 --x-feature/--x-no-default-features），
+# 不读同名环境变量；ENV 仅满足顶层门控，特性开关必须靠下方 -D 传入，
+# 否则 default-features(copyleft) 照装而 rest-api(cpp-httplib) 缺失。
 ENV VCPKG_MANIFEST_FEATURES=${HSBA_FEATURES}
 ENV VCPKG_MANIFEST_NO_DEFAULT_FEATURES=1
 
@@ -104,6 +107,8 @@ RUN --mount=type=cache,target=/root/.cache/vcpkg/downloads \
     && cmake --preset linux-release \
         -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
         -DCMAKE_INSTALL_PREFIX=/opt/hsba-install \
+        -DVCPKG_MANIFEST_FEATURES="${HSBA_FEATURES}" \
+        -DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON \
         -DHSBA_BUILD_REST_API=ON \
         -DHSBA_SLICER_BUILD_SAMPLES=OFF \
         -DHSBA_SLICER_USE_TESTS=OFF \
