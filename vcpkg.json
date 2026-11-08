@@ -50,7 +50,7 @@
     "eigen3",
     {
       "name": "libigl",
-      "platform": "!windows & !linux & !osx & !android"
+      "platform": "!android"
     },
     "freetype",
     "miniz",
