@@ -78,8 +78,11 @@ RUN if [ -n "${APT_MIRROR}" ]; then \
         libxcb-record0-dev \
         libnuma1 libnuma-dev cifs-utils guile-2.2-dev haskell-stack golang-go \
         libbluetooth-dev \
-        apt-transport-https software-properties-common \
-    && wget -q --tries=10 "${POWERSHELL_DEB_URL}" \
+        apt-transport-https software-properties-common
+
+# PowerShell 独立成层：本层失败重跑只重做本层，不触发上面几百个系统包重新下载。
+# apt 索引保留到本层末尾再统一清理，供 fix-broken 解析 deb 的依赖
+RUN wget -q --tries=10 "${POWERSHELL_DEB_URL}" \
     && ( dpkg -i powershell_*.deb || apt-get install -y -o Acquire::Retries=10 -f ) \
     && rm -f powershell_*.deb \
     && rm -rf /var/lib/apt/lists/*
