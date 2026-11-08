@@ -26,11 +26,21 @@
 # ===========================================================================
 # Stage 1: builder — vcpkg 依赖编译 + CMake 构建 + 安装到 /opt/hsba-install
 # ===========================================================================
-FROM ubuntu:24.04 AS builder
+# 不钉住 ubuntu 版本：跟随 ubuntu:latest，避免本地/CI 重复拉取已被 digest 解析钉死的基础镜像；
+# PowerShell 用与 Ubuntu 大版本无关的通用 deb 包安装（见 Microsoft 安装文档）
+FROM ubuntu AS builder
 
 ARG VCPKG_BASELINE=""
 ARG HSBA_FEATURES="rest-api"
 ARG JOBS=""
+# 可选 apt 镜像源（如 https://mirrors.tuna.tsinghua.edu.cn/ubuntu/），默认官方源；
+# 仅当传入时重写 deb822 sources，适用于 Docker Hub/apt 大索引断流的受限网络环境
+ARG APT_MIRROR=""
+# PowerShell 按 Microsoft 安装文档的"手动下载通用 deb 包"方式安装：从 GitHub
+# releases 直取，不依赖 packages.microsoft.com 按版本仓库（受限网络下该源索引
+# 经常刷不出来，apt 会静默跳过导致 Unable to locate package powershell）。
+# LTS 版本号可直接覆盖
+ARG POWERSHELL_DEB_URL="https://github.com/PowerShell/PowerShell/releases/download/v7.6.6/powershell_7.6.6-1.deb_amd64.deb"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -38,7 +48,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 # 长期验证过的集合。gperf/gtk/opencv 等 port 走 autoreconf/meson 路径，最小镜像
 # 缺包会 BUILD_FAILED 并连锁打断 project()（伪装成 Ninja/编译器缺失的次生错误）。
 # PowerShell 为顶层 version/CMakeLists.txt 配置阶段的硬性要求（Generator_Version.ps1）。
-RUN apt-get update && apt-get install -y \
+# 可选 apt 镜像源重写（deb822：archive/security 均指向镜像）；留空则不改动
+RUN if [ -n "${APT_MIRROR}" ]; then \
+        sed -i "s|http://archive.ubuntu.com/ubuntu/|${APT_MIRROR}|g; s|http://security.ubuntu.com/ubuntu/|${APT_MIRROR}|g" \
+            /etc/apt/sources.list.d/ubuntu.sources; \
+    fi \
+    && apt-get update -o Acquire::Retries=10 && apt-get install -y -o Acquire::Retries=10 \
         git curl wget zip unzip tar ca-certificates file at \
         cmake ninja-build pkg-config \
         build-essential g++ gfortran gperf \
@@ -64,9 +79,9 @@ RUN apt-get update && apt-get install -y \
         libnuma1 libnuma-dev cifs-utils guile-2.2-dev haskell-stack golang-go \
         libbluetooth-dev \
         apt-transport-https software-properties-common \
-    && wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb \
-    && dpkg -i packages-microsoft-prod.deb && rm packages-microsoft-prod.deb \
-    && apt-get update && apt-get install -y powershell \
+    && wget -q --tries=10 "${POWERSHELL_DEB_URL}" \
+    && ( dpkg -i powershell_*.deb || apt-get install -y -o Acquire::Retries=10 -f ) \
+    && rm -f powershell_*.deb \
     && rm -rf /var/lib/apt/lists/*
 
 # vcpkg：bootstrap 后按需 checkout 基线（镜像内不需要 git 历史，深度 1 即可）。
@@ -122,16 +137,22 @@ RUN --mount=type=cache,target=/root/.cache/vcpkg/downloads \
 # ===========================================================================
 # Stage 2: runtime — 仅安装产物 + 少量系统运行库
 # ===========================================================================
-FROM ubuntu:24.04 AS runtime
+FROM ubuntu AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 # DllHsBaSlicer 在 Linux 下为 SHARED，vcpkg 静态库已链入其中；
 # 这里只补齐动态端口的运行时依赖（ssl/crypto/z 随镜像架构，其余显式安装）
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 运行库包名跟随当前 ubuntu:latest（26.04 resolute：libssl3t64/libmysqlclient24）；
+# 基础镜像大版本升级时需复查这几个 ABI 包名
+RUN if [ -n "${APT_MIRROR}" ]; then \
+        sed -i "s|http://archive.ubuntu.com/ubuntu/|${APT_MIRROR}|g; s|http://security.ubuntu.com/ubuntu/|${APT_MIRROR}|g" \
+            /etc/apt/sources.list.d/ubuntu.sources; \
+    fi \
+    && apt-get update -o Acquire::Retries=10 && apt-get install -y -o Acquire::Retries=10 --no-install-recommends \
         ca-certificates curl \
-        libssl3 zlib1g libpng16-16t64 libfontconfig1 libfreetype6 \
-        libmysqlclient21 libpq5 sqlite3 \
+        libssl3t64 zlib1g libpng16-16t64 libfontconfig1 libfreetype6 \
+        libmysqlclient24 libpq5 sqlite3 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --shell /usr/sbin/nologin hsba
 
