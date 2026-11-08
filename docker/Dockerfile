@@ -34,12 +34,39 @@ ARG JOBS=""
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# cmake 3.28 满足根 CMakeLists 的最低版本要求；python3 供部分 vcpkg port 使用
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        git curl ca-certificates unzip tar zip file \
-        build-essential ninja-build pkg-config \
-        autoconf automake libtool patch python3 \
-        cmake \
+# 系统依赖清单与 .github/workflows/build-linux.yml 逐项对齐：那是同一 vcpkg 依赖图
+# 长期验证过的集合。gperf/gtk/opencv 等 port 走 autoreconf/meson 路径，最小镜像
+# 缺包会 BUILD_FAILED 并连锁打断 project()（伪装成 Ninja/编译器缺失的次生错误）。
+# PowerShell 为顶层 version/CMakeLists.txt 配置阶段的硬性要求（Generator_Version.ps1）。
+RUN apt-get update && apt-get install -y \
+        git curl wget zip unzip tar ca-certificates file at \
+        cmake ninja-build pkg-config \
+        build-essential g++ gfortran gperf \
+        python3 python3-pip python3-venv python3-setuptools python3-mako \
+        python3-jinja2 python-is-python3 \
+        autoconf automake libtool libtool-bin libltdl-dev dh-autoreconf \
+        autoconf-archive xutils-dev patch bison flex libbison-dev \
+        meson nasm yasm ruby-full nodejs \
+        libncurses-dev libncurses5-dev libtirpc-dev libudev-dev libkrb5-dev \
+        libdbus-1-dev libfontconfig1-dev \
+        libx11-dev libx11-xcb-dev libxext-dev libxfixes-dev libxrender-dev \
+        libxrandr-dev libxtst-dev libxi-dev libxxf86vm-dev libxcursor-dev \
+        libxinerama-dev libxdamage-dev libxkbcommon-dev libxkbcommon-x11-dev \
+        libwayland-dev wayland-protocols libxt-dev libxaw7-dev \
+        libgl1-mesa-dev libglu1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
+        mesa-common-dev \
+        libxcb1-dev libxcb-dri3-dev libxcb-present-dev libxcb-glx0-dev \
+        libxcb-util0-dev libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev \
+        libxcb-icccm4-dev libxcb-sync-dev libxcb-xfixes0-dev libxcb-shape0-dev \
+        libxcb-randr0-dev libxcb-render-util0-dev libxcb-xinerama0-dev \
+        libxcb-xkb-dev libxcb-xinput-dev libxcb-cursor-dev libxcb-res0-dev \
+        libxcb-record0-dev \
+        libnuma1 libnuma-dev cifs-utils guile-2.2-dev haskell-stack golang-go \
+        libbluetooth-dev \
+        apt-transport-https software-properties-common \
+    && wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb \
+    && dpkg -i packages-microsoft-prod.deb && rm packages-microsoft-prod.deb \
+    && apt-get update && apt-get install -y powershell \
     && rm -rf /var/lib/apt/lists/*
 
 # vcpkg：bootstrap 后按需 checkout 基线（镜像内不需要 git 历史，深度 1 即可）。
