@@ -170,7 +170,7 @@ RUN --mount=type=cache,target=/root/.cache/vcpkg/downloads \
     [ "${ok}" = 1 ] || { echo "ERROR: CMake configure failed after 5 attempts"; exit 1; }; \
     cmake --build --preset linux-release \
         --target HsBaSlicerRestServer \
-        --parallel "${JOBS:-0}" \
+        --parallel "${JOBS:-$(nproc)}" \
     && cmake --install out/build/linux-release
 
 # ===========================================================================

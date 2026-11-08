@@ -293,6 +293,11 @@
   ],
   "buildPresets": [
     {
+      "name": "linux-release",
+      "displayName": "Build Linux Release (Ninja)",
+      "configurePreset": "linux-release"
+    },
+    {
       "name": "linux-coverage",
       "displayName": "Build coverage instrumented binaries",
       "configurePreset": "linux-coverage"
