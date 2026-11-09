@@ -144,12 +144,25 @@ jobs:
         if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
           REST_API_ARGS="-DHSBA_BUILD_REST_API=ON -DVCPKG_MANIFEST_FEATURES=rest-api"
         fi
-        cmake -B build -S . -G Ninja \
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-          -DCMAKE_C_COMPILER=$C_COMPILER \
-          -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
-          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
-          $REST_API_ARGS
+        # vcpkg treats connection failures as non-transient and gives up, so the
+        # outer shell retries configure up to 5 times, wiping the build dir in
+        # between to drop stale CMakeCache entries (same policy as docker/Dockerfile).
+        ok=0
+        for attempt in 1 2 3 4 5; do
+          echo ">>> CMake configure attempt ${attempt}/5"
+          if cmake -B build -S . -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_C_COMPILER=$C_COMPILER \
+            -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
+            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+            $REST_API_ARGS; then
+            ok=1
+            break
+          fi
+          rm -rf build
+          [ "${attempt}" = 5 ] || { echo ">>> configure attempt ${attempt} failed; retrying in 30s"; sleep 30; }
+        done
+        [ "${ok}" = 1 ] || { echo "ERROR: CMake configure failed after 5 attempts"; exit 1; }
 
     - name: Configure CMake (Windows)
       if: runner.os == 'Windows'
@@ -160,10 +173,28 @@ jobs:
         call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
 
         where ninja >nul 2>nul || (echo Ninja not found! && exit 1)
+        rem vcpkg treats connection failures as non-transient and gives up, so
+        rem retry configure up to 5 times, wiping the build dir in between to
+        rem drop stale CMakeCache entries (same policy as docker/Dockerfile).
+        set ATTEMPT=0
+        :configure_retry
+        set /a ATTEMPT+=1
+        echo ^>^>^> CMake configure attempt %ATTEMPT%/5
         cmake -B build -S . -G Ninja ^
           -DCMAKE_BUILD_TYPE=Release ^
           -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake" ^
           -DHSBA_ENABLE_THREAD_POOL_COROUTINE=OFF
+        if not errorlevel 1 goto configure_ok
+        if exist build rmdir /s /q build
+        if %ATTEMPT% == 5 (
+          echo ERROR: CMake configure failed after 5 attempts
+          exit /b 1
+        )
+        echo ^>^>^> configure attempt %ATTEMPT% failed; retrying in 30s
+        ping -n 31 127.0.0.1 >nul
+        goto configure_retry
+        :configure_ok
+        echo CMake configure succeeded
 
     - name: Build (Unix)
       if: matrix.os != 'windows-latest'
@@ -325,15 +356,28 @@ jobs:
           ls -la
           exit 1
         fi
-        cmake -B build-android -S . -G Ninja \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
-          -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
-          -DVCPKG_TARGET_TRIPLET=arm64-android \
-          -DANDROID_NDK="$ANDROID_NDK" \
-          -DANDROID_ABI=arm64-v8a \
-          -DANDROID_PLATFORM=android-28 \
-          -DCMAKE_CXX_COMPILER_CLANG_SCAN_DEPS="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang-scan-deps"
+        # vcpkg treats connection failures as non-transient and gives up, so the
+        # outer shell retries configure up to 5 times, wiping the build dir in
+        # between to drop stale CMakeCache entries (same policy as docker/Dockerfile).
+        ok=0
+        for attempt in 1 2 3 4 5; do
+          echo ">>> CMake configure attempt ${attempt}/5"
+          if cmake -B build-android -S . -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
+            -DVCPKG_TARGET_TRIPLET=arm64-android \
+            -DANDROID_NDK="$ANDROID_NDK" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-28 \
+            -DCMAKE_CXX_COMPILER_CLANG_SCAN_DEPS="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang-scan-deps"; then
+            ok=1
+            break
+          fi
+          rm -rf build-android
+          [ "${attempt}" = 5 ] || { echo ">>> configure attempt ${attempt} failed; retrying in 30s"; sleep 30; }
+        done
+        [ "${ok}" = 1 ] || { echo "ERROR: CMake configure failed after 5 attempts"; exit 1; }
 
     - name: Build native libraries
       shell: bash
@@ -420,14 +464,27 @@ jobs:
       - name: Configure CMake for iOS
         shell: bash
         run: |
-          cmake -B build-ios -S . -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
-            -DVCPKG_TARGET_TRIPLET=arm64-ios \
-            -DCMAKE_SYSTEM_NAME=iOS \
-            -DCMAKE_OSX_ARCHITECTURES=arm64 \
-            -DCMAKE_OSX_SYSROOT=iphoneos \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=26.5
+          # vcpkg treats connection failures as non-transient and gives up, so the
+          # outer shell retries configure up to 5 times, wiping the build dir in
+          # between to drop stale CMakeCache entries (same policy as docker/Dockerfile).
+          ok=0
+          for attempt in 1 2 3 4 5; do
+            echo ">>> CMake configure attempt ${attempt}/5"
+            if cmake -B build-ios -S . -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+              -DVCPKG_TARGET_TRIPLET=arm64-ios \
+              -DCMAKE_SYSTEM_NAME=iOS \
+              -DCMAKE_OSX_ARCHITECTURES=arm64 \
+              -DCMAKE_OSX_SYSROOT=iphoneos \
+              -DCMAKE_OSX_DEPLOYMENT_TARGET=26.5; then
+              ok=1
+              break
+            fi
+            rm -rf build-ios
+            [ "${attempt}" = 5 ] || { echo ">>> configure attempt ${attempt} failed; retrying in 30s"; sleep 30; }
+          done
+          [ "${ok}" = 1 ] || { echo "ERROR: CMake configure failed after 5 attempts"; exit 1; }
 
       - name: Build iOS target
         shell: bash

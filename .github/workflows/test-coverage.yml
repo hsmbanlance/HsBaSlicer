@@ -87,7 +87,22 @@ jobs:
 
       - name: Configure CMake (linux-coverage preset)
         shell: bash
-        run: cmake --preset linux-coverage -DHSBA_COVERAGE_JOBS=2
+        run: |
+          # Same retry policy as docker/Dockerfile: vcpkg gives up on transient
+          # network errors, so the outer shell retries configure up to 5 times,
+          # wiping the preset's binary dir in between to drop stale CMakeCache
+          # entries.
+          ok=0
+          for attempt in 1 2 3 4 5; do
+            echo ">>> CMake configure attempt ${attempt}/5"
+            if cmake --preset linux-coverage -DHSBA_COVERAGE_JOBS=2; then
+              ok=1
+              break
+            fi
+            rm -rf out/build/linux-coverage
+            [ "${attempt}" = 5 ] || { echo ">>> configure attempt ${attempt} failed; retrying in 30s"; sleep 30; }
+          done
+          [ "${ok}" = 1 ] || { echo "ERROR: CMake configure failed after 5 attempts"; exit 1; }
 
       - name: Build (coverage instrumented)
         shell: bash
