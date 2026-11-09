@@ -1,0 +1,1 @@
+Top-level CMake project for HsBaSlicer, a modular cross-platform C++ framework that composes geometry kernels, slicing, support generation, path planning and optional REST API into installable libraries and executables.

@@ -3,11 +3,11 @@ schema_version: 1
 locale: en-US
 branch: dev
 nodes_managed: true
-exported_at: "2026-11-07T12:50:56Z"
+exported_at: "2026-11-09T12:36:08Z"
 modules:
     "":
-        dir_name: HsBaSlicer REST API Server
-        title: HsBaSlicer REST API Server
+        dir_name: HsBaSlicer Slicer Framework (Root)
+        title: HsBaSlicer Slicer Framework (Root)
         scope: []
         source_files: []
         children: []

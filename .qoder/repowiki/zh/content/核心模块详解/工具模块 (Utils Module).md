@@ -15,6 +15,13 @@
 - [path_optimizer.cpp](file://LibHsBaSlicer/Path/path_optimizer.cpp)
 </cite>
 
+## 更新摘要
+**所做更改**   
+- 更新了 JSON 序列化部分，重点介绍了 RapidJSON 模板歧义问题的关键修复
+- 新增了 MakeArithmeticJson() 和 ArithmeticFromJson() 辅助函数的详细说明
+- 强调了 LP64 平台上的跨平台兼容性改进
+- 更新了算术类型转换的处理机制说明
+
 ## 目录
 1. [引言](#引言)
 2. [项目结构](#项目结构)
@@ -32,8 +39,8 @@
 - AppConfig 配置管理：线程安全的单例，提供共享配置访问。
 - LuaAnyObject：将 C++ AnyObject 暴露给 Lua，支持 new/cast、invoke、foreach_field 等通用操作。
 - LuaDllLoader：在 Lua 中动态加载 DLL、按函数签名解析并调用导出函数。
-- JSON/YAML 序列化：基于 RapidJSON 与 yaml-cpp 的结构体反射式序列化/反序列化。
-- 图算法库：通用有向/无向图封装、最短路径、最小生成树、连通分量、拓扑排序、最大流、遗传 TSP，以及面向“区域+门”的两层 AreaGraph。
+- JSON/YAML 序列化：基于 RapidJSON 与 yaml-cpp 的结构体反射式序列化/反序列化，包含关键的跨平台算术类型转换修复。
+- 图算法库：通用有向/无向图封装、最短路径、最小生成树、连通分量、拓扑排序、最大流、遗传 TSP，以及面向"区域+门"的两层 AreaGraph。
 
 文档以源码为依据，给出接口设计、关键行为、错误处理与性能要点，并提供可操作的集成步骤。
 
@@ -66,7 +73,7 @@ SY --> G
 - [app_config.hpp:1-49](file://utils/app_config.hpp#L1-L49)
 - [LuaAnyObject.hpp:1-523](file://utils/LuaAnyObject.hpp#L1-L523)
 - [LuaDllLoader.hpp:1-268](file://utils/LuaDllLoader.hpp#L1-L268)
-- [struct_json.hpp:1-852](file://utils/struct_json.hpp#L1-L852)
+- [struct_json.hpp:1-888](file://utils/struct_json.hpp#L1-L888)
 - [struct_yaml.hpp:1-672](file://utils/struct_yaml.hpp#L1-L672)
 - [Graph.hpp:1-1088](file://utils/Graph.hpp#L1-L1088)
 - [AreaGraph.hpp:1-690](file://utils/AreaGraph.hpp#L1-L690)
@@ -75,7 +82,7 @@ SY --> G
 - [app_config.hpp:1-49](file://utils/app_config.hpp#L1-L49)
 - [LuaAnyObject.hpp:1-523](file://utils/LuaAnyObject.hpp#L1-L523)
 - [LuaDllLoader.hpp:1-268](file://utils/LuaDllLoader.hpp#L1-L268)
-- [struct_json.hpp:1-852](file://utils/struct_json.hpp#L1-L852)
+- [struct_json.hpp:1-888](file://utils/struct_json.hpp#L1-L888)
 - [struct_yaml.hpp:1-672](file://utils/struct_yaml.hpp#L1-L672)
 - [Graph.hpp:1-1088](file://utils/Graph.hpp#L1-L1088)
 - [AreaGraph.hpp:1-690](file://utils/AreaGraph.hpp#L1-L690)
@@ -98,12 +105,13 @@ SY --> G
 
 - JSON/YAML 序列化
   - 对聚合类型、静态反射类型、容器、可选、枚举等提供 to_json/from_json、to_yaml/from_yaml。
+  - **新增**：MakeArithmeticJson() 和 ArithmeticFromJson() 辅助函数，解决 RapidJSON 模板歧义问题，确保 LP64 平台跨平台兼容性。
   - 提供 write/read 系列便捷 API，支持字符串、流、文件。
 
 - 图算法库
   - BaseGraph/DirectedGraph/UndirectedGraph：带顶点/边属性与描述信息的 Boost.Graph 包装。
   - algorithm 命名空间：BFS/DFS、Dijkstra/Bellman-Ford/A*、Prim/Kruskal、连通分量、强连通分量、拓扑排序、最大流、GeneticTSP。
-  - AreaGraph：两层“区域+门”图，支持 gate-aware 最短路径与 TSP 规划，并可导出展开图与成对距离矩阵。
+  - AreaGraph：两层"区域+门"图，支持 gate-aware 最短路径与 TSP 规划，并可导出展开图与成对距离矩阵。
 
 **章节来源**
 - [app_config.hpp:14-46](file://utils/app_config.hpp#L14-L46)
@@ -112,12 +120,13 @@ SY --> G
 - [LuaDllLoader.hpp:24-79](file://utils/LuaDllLoader.hpp#L24-L79)
 - [LuaDllLoader.cpp:13-103](file://utils/LuaDllLoader.cpp#L13-L103)
 - [struct_json.hpp:32-47](file://utils/struct_json.hpp#L32-L47)
+- [struct_json.hpp:77-105](file://utils/struct_json.hpp#L77-L105)
 - [struct_yaml.hpp:38-51](file://utils/struct_yaml.hpp#L38-L51)
 - [Graph.hpp:153-445](file://utils/Graph.hpp#L153-L445)
 - [AreaGraph.hpp:135-149](file://utils/AreaGraph.hpp#L135-L149)
 
 ## 架构总览
-utils 模块内部职责清晰，彼此耦合度低；Lua 相关组件复用 base/any_object 与 LuaNewObject 基础设施；图算法与 AreaGraph 形成“通用图 + 领域扩展”的分层。
+utils 模块内部职责清晰，彼此耦合度低；Lua 相关组件复用 base/any_object 与 LuaNewObject 基础设施；图算法与 AreaGraph 形成"通用图 + 领域扩展"的分层。
 
 ```mermaid
 classDiagram
@@ -288,13 +297,60 @@ Cpp-->>DL : "转换并返回"
 - [LuaDllLoader.cpp:13-103](file://utils/LuaDllLoader.cpp#L13-L103)
 
 ### JSON/YAML 序列化
+
+#### 核心设计与跨平台兼容性修复
+
+**更新** 引入了关键的跨平台兼容性修复，解决了 RapidJSON 模板歧义问题。
+
 - 设计要点
   - JSON：RapidJsonValueConvertible 概念 + 聚合类型 + 静态反射类型 + 容器/可选/枚举。
   - YAML：YAMLValueConvertible 概念 + 相同泛化策略。
+  - **新增跨平台支持**：MakeArithmeticJson() 和 ArithmeticFromJson() 辅助函数，专门处理算术类型转换。
   - 提供 to_json/from_json、write_json/read_json、to_yaml/from_yaml、write_yaml/read_yaml 等 API。
+
+- **关键修复：RapidJSON 模板歧义问题解决**
+  
+  RapidJSON 仅对特定类型（bool、int、unsigned、long、unsigned long、int64_t、uint64_t、float、double）提供精确的 GenericValue 构造函数和 TypeHelper 获取器。在 LP64 平台（如 Linux/macOS）上，int64_t 实际上是 long 类型，导致 AddMember/PushBack 出现模板歧义，Get<T> 也不完整。
+
+  **解决方案**：通过 MakeArithmeticJson() 和 ArithmeticFromJson() 统一所有算术值的规范化处理：
+
+  ```cpp
+  // MakeArithmeticJson: 将任意算术值转换为 RapidJSON Value
+  template <typename T>
+  requires std::is_arithmetic_v<T> rapidjson::Value MakeArithmeticJson(T value)
+  {
+      using ValueType = std::remove_cv_t<T>;
+      if constexpr (std::is_same_v<ValueType, bool>)
+          return rapidjson::Value(value);
+      else if constexpr (std::is_floating_point_v<ValueType>)
+          return rapidjson::Value(static_cast<double>(value));
+      else if constexpr (std::is_signed_v<ValueType>)
+          return rapidjson::Value(static_cast<int64_t>(value));
+      else
+          return rapidjson::Value(static_cast<uint64_t>(value));
+  }
+
+  // ArithmeticFromJson: 从 RapidJSON Value 读取任意算术类型
+  template <typename T>
+  requires std::is_arithmetic_v<T> T ArithmeticFromJson(const rapidjson::Value& json)
+  {
+      using ValueType = std::remove_cv_t<T>;
+      if constexpr (std::is_same_v<ValueType, bool>)
+          return json.IsTrue();
+      else if constexpr (std::is_floating_point_v<ValueType>)
+          return static_cast<ValueType>(json.GetDouble());
+      else if constexpr (std::is_signed_v<ValueType>)
+          return static_cast<ValueType>(json.GetInt64());
+      else
+          return static_cast<ValueType>(json.GetUint64());
+  }
+  ```
+
 - 关键行为
   - 递归处理嵌套结构与容器；Optional 空值映射为 null。
   - 文件 I/O 失败抛 IOError；JSON 解析失败抛 RuntimeError。
+  - **跨平台兼容**：所有算术类型转换都通过统一的辅助函数处理，避免平台特定的模板歧义。
+
 - 使用场景
   - 配置持久化、流水线参数交换、日志记录。
 
@@ -311,10 +367,12 @@ D --> H
 E --> H
 F --> H
 G --> H
+H --> I["MakeArithmeticJson/ArithmeticFromJson<br/>统一算术类型处理"]
 ```
 
 **图表来源**
 - [struct_json.hpp:32-47](file://utils/struct_json.hpp#L32-L47)
+- [struct_json.hpp:77-105](file://utils/struct_json.hpp#L77-L105)
 - [struct_json.hpp:301-317](file://utils/struct_json.hpp#L301-L317)
 - [struct_json.hpp:449-470](file://utils/struct_json.hpp#L449-L470)
 - [struct_yaml.hpp:46-51](file://utils/struct_yaml.hpp#L46-L51)
@@ -323,7 +381,8 @@ G --> H
 
 **章节来源**
 - [struct_json.hpp:32-47](file://utils/struct_json.hpp#L32-L47)
-- [struct_json.hpp:473-852](file://utils/struct_json.hpp#L473-L852)
+- [struct_json.hpp:77-105](file://utils/struct_json.hpp#L77-L105)
+- [struct_json.hpp:473-888](file://utils/struct_json.hpp#L473-L888)
 - [struct_yaml.hpp:38-51](file://utils/struct_yaml.hpp#L38-L51)
 - [struct_yaml.hpp:455-672](file://utils/struct_yaml.hpp#L455-L672)
 
@@ -368,11 +427,11 @@ UndirectedGraph --|> BaseGraph
 
 ### AreaGraph：区域+门两图层
 - 设计要点
-  - 将每个区域展开为“入口/出口门”节点，构建 ExpandedGraph，计算 gate-aware 最短路径。
+  - 将每个区域展开为"入口/出口门"节点，构建 ExpandedGraph，计算 gate-aware 最短路径。
   - 支持 solveTSP：先缓存所有点对最短路径，压缩为完全图，再用 GeneticTSP 求解近似最优环游。
   - 提供 dumpExpandedGraph/dumpPairwiseGraph 以便外部算法（如 Lua 脚本）在完整组合图上做二次优化。
 - 关键行为
-  - shortestPath(from,to)：源区域从每个可出发的门出发，初始成本为区域内“入口→该出口”的最小内部成本；到达目标区域任一可进入的门即结束。
+  - shortestPath(from,to)：源区域从每个可出发的门出发，初始成本为区域内"入口→该出口"的最小内部成本；到达目标区域任一可进入的门即结束。
   - ensureExpanded 惰性构建展开图，避免重复计算。
 - 使用场景
   - 多区域路径规划、SLA/SLS/WAAM 等工艺的阶段间移动优化。
@@ -458,6 +517,7 @@ AG["AreaGraph"] --> G
 - JSON/YAML
   - 大对象序列化优先使用 write_pretty_json 调试，生产用紧凑格式；尽量复用 Document/Allocator。
   - Optional 字段缺失时保持 null，避免多余成员。
+  - **跨平台优化**：MakeArithmeticJson/ArithmeticFromJson 避免了平台特定的模板歧义，提升了编译性能和运行时稳定性。
 - Graph/Algorithm
   - 使用 internalGraph 直接调用 Boost 算法时注意拷贝/映射开销；避免频繁重建图。
   - GeneticTSP 为非确定性启发式，可通过固定种群规模与代数获得稳定对比结果。
@@ -473,26 +533,27 @@ AG["AreaGraph"] --> G
   - 排查：确认已在 C++ 注册 TypeInfo；确认 RegisterAnyObject 已调用；检查参数类型与数量。
   - 参考：lua_any_object_invoke 的参数收集与异常处理。
 - LuaDllLoader
-  - 现象：get_<签名> 或 call_<签名> 报“Invalid DllLoader object”或参数个数不匹配。
+  - 现象：get_<签名> 或 call_<签名> 报"Invalid DllLoader object"或参数个数不匹配。
   - 排查：确认 DllLoader 对象有效；核对 Ret(Args...) 签名与传入参数个数一致。
 - JSON/YAML
   - 现象：read_json_from_file/read_yaml_from_file 抛 IOError。
   - 排查：检查文件路径与权限；确保文件格式正确。
   - 现象：JSON 解析失败抛 RuntimeError。
   - 排查：检查 JSON 文本合法性与编码。
+  - **跨平台问题**：如果在 LP64 平台上遇到模板歧义错误，确认使用了最新的 MakeArithmeticJson/ArithmeticFromJson 辅助函数。
 - Graph/Algorithm
   - 现象：查询顶点/边不存在抛 RuntimeError。
   - 排查：确认 addVertex/addEdge 已调用；ID 类型一致。
   - 现象：maxFlow 结果为 0。
   - 排查：确认边权重作为容量合理；检查源汇点可达性。
 - AreaGraph
-  - 现象：shortestPath 抛“Source area has no exit gates”或“Target area has no entry gates”。
+  - 现象：shortestPath 抛"Source area has no exit gates"或"Target area has no entry gates"。
   - 排查：检查 AreaConfig.gates 的 canExit/canEnter 配置；确保 addRoute 的 gate 对存在。
 
 **章节来源**
 - [LuaAnyObject.cpp:17-87](file://utils/LuaAnyObject.cpp#L17-L87)
 - [LuaDllLoader.hpp:160-245](file://utils/LuaDllLoader.hpp#L160-L245)
-- [struct_json.hpp:800-852](file://utils/struct_json.hpp#L800-L852)
+- [struct_json.hpp:800-888](file://utils/struct_json.hpp#L800-L888)
 - [struct_yaml.hpp:628-672](file://utils/struct_yaml.hpp#L628-L672)
 - [Graph.hpp:183-194](file://utils/Graph.hpp#L183-L194)
 - [Graph.hpp:261-275](file://utils/Graph.hpp#L261-L275)
@@ -503,10 +564,10 @@ AG["AreaGraph"] --> G
 utils 模块提供了贯穿 HsBaSlicer 的基础设施：
 - AppConfig 提供统一配置入口；
 - LuaAnyObject 与 LuaDllLoader 打通 C++ 与 Lua 的双向交互与动态扩展；
-- JSON/YAML 序列化简化配置与数据交换；
+- JSON/YAML 序列化简化配置与数据交换，**现已具备完整的跨平台算术类型转换支持**；
 - Graph/Algorithm 与 AreaGraph 为路径与区域规划提供高效、可扩展的算法底座。
 
-这些工具共同降低了跨语言集成、数据持久化与复杂路径优化的开发成本，同时具备良好的错误处理与性能优化空间。
+这些工具共同降低了跨语言集成、数据持久化与复杂路径优化的开发成本，同时具备良好的错误处理与性能优化空间。**最新的跨平台兼容性修复确保了在 LP64 平台上的稳定运行**。
 
 [本节为总结，不直接分析具体文件]
 
@@ -520,6 +581,7 @@ utils 模块提供了贯穿 HsBaSlicer 的基础设施：
   - 通过 AppConfigSingletone::GetInstance().GetSevenZPath() 获取 7-Zip 路径。
 - 序列化配置
   - 使用 write_json/write_yaml 输出配置；使用 read_json_from_file/read_yaml_from_file 读取。
+  - **跨平台注意**：所有算术类型现在都通过 MakeArithmeticJson/ArithmeticFromJson 统一处理，无需担心平台差异。
 - 图与区域规划
   - 使用 DirectedGraph/UndirectedGraph 建模；使用 algorithm 提供的算法求解。
   - 使用 AreaGraph 建模区域与门，调用 shortestPath/solveTSP 或导出展开图进行二次优化。
@@ -538,3 +600,25 @@ utils 模块提供了贯穿 HsBaSlicer 的基础设施：
 
 **章节来源**
 - [path_optimizer.cpp:248-288](file://LibHsBaSlicer/Path/path_optimizer.cpp#L248-L288)
+
+### 跨平台算术类型转换最佳实践
+
+**新增** 针对 LP64 平台的跨平台兼容性最佳实践：
+
+1. **自动处理**：所有算术类型现在都通过 MakeArithmeticJson/ArithmeticFromJson 自动处理，开发者无需关心底层实现细节。
+
+2. **类型安全性**：辅助函数使用 C++20 concepts 确保只在算术类型上启用，提供编译时类型检查。
+
+3. **性能优化**：通过 constexpr if 分支在编译时确定类型，避免运行时开销。
+
+4. **向后兼容**：现有代码无需修改，新的辅助函数在内部被广泛使用，透明地解决了模板歧义问题。
+
+**章节来源**
+- [struct_json.hpp:77-105](file://utils/struct_json.hpp#L77-L105)
+- [struct_json.hpp:191-196](file://utils/struct_json.hpp#L191-L196)
+- [struct_json.hpp:228-231](file://utils/struct_json.hpp#L228-L231)
+- [struct_json.hpp:259-262](file://utils/struct_json.hpp#L259-L262)
+- [struct_json.hpp:309-312](file://utils/struct_json.hpp#L309-L312)
+- [struct_json.hpp:391-395](file://utils/struct_json.hpp#L391-L395)
+- [struct_json.hpp:426-430](file://utils/struct_json.hpp#L426-L430)
+- [struct_json.hpp:462-466](file://utils/struct_json.hpp#L462-L466)

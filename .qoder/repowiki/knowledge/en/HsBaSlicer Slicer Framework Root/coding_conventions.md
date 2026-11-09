@@ -1,0 +1,5 @@
+- Feature toggles are expressed as CMake options that propagate `HSBA_*` preprocessor macros (e.g. `HSBA_COPL`, `HSBA_USE_BIT7Z`, `HSBA_HAS_CXX_MODULES`, `HSBA_DESKTOP`, `HSBA_GAME_CONSOLE`) and guard both compilation units and install/export logic.
+- Cross-language data exchange goes through protobuf schemas under `proto/` plus paired converters in `convert/` (`*2Msg.hpp` / `Msg2*.hpp`) rather than direct struct sharing between layers.
+- Each supported process type (FDM/SLA/SLS/SLM/LOM/TDP/WAAM/FILE_TRANSFER/CUSTOM/PARAM_STORE) gets its own pipeline pair (`*_pipeline.h/.cpp`) in `DllHsBaSlicer` implementing the same C ABI contract declared in `dllexport.h`.
+- Lua extensibility is provided uniformly via a `LuaAdapter.*` file per subsystem (2D, cipher, fileoperator, support) that exposes C++ types/functions to the embedded Lua runtime used by samples and tests.
+- Public headers are explicitly enumerated in the root `install(FILES ...)` blocks, keeping the installed public API surface separate from internal implementation files.

@@ -1,0 +1,1 @@
+C++20 + C11/C23 (compiler-probed); CMake 3.28+ with CMake presets; vcpkg for dependency management; Protobuf + RapidJSON + Eigen3 + OpenSSL + libigl (+ CGAL/OpenCASCADE when `copyleft` feature enabled) + OpenVDB + sqlpp11 + Lua + tinyxml2 + yaml-cpp + magic_enum + Clipper2 + miniz (+ bit7z). Optional: cpp-httplib for REST API, Doxygen for docs, gcov/gcovr for coverage.
