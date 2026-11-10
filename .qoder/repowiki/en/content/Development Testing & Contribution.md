@@ -21,15 +21,18 @@
 - [tests/GuiApi/job_control_test.cpp](file://tests/GuiApi/job_control_test.cpp)
 - [tests/RestApi/endpoint_http_test.cpp](file://tests/RestApi/endpoint_http_test.cpp)
 - [webui/test/e2e.test.js](file://webui/test/e2e.test.js)
+- [version/Generator_Version.ps1](file://version/Generator_Version.ps1)
+- [docker/Dockerfile](file://docker/Dockerfile)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive testing infrastructure section covering integration tests for slice UI, end-to-end tests for web server, and unit tests for new components
-- Updated CI/CD pipeline documentation to include automated testing workflows
-- Enhanced testing framework documentation with Google Test and Boost.Test coverage
-- Added detailed coverage of REST API endpoint testing and GUI component testing
-- Included Node.js-based integration testing for web console functionality
+- Enhanced CMake build system documentation with comprehensive multi-platform preset coverage including x64-debug, x64-release for Windows, macos-release for macOS, android-release for Android, and ios-release for iOS builds
+- Added detailed preset descriptions and IDE integration guidance for all supported platforms
+- Updated development environment setup to reflect the new comprehensive preset structure
+- Enhanced testing framework documentation with improved CI/CD pipeline coverage
+- Added detailed coverage of REST API feature detection and cpp-httplib integration
+- Updated troubleshooting guide with platform-specific build issues and solutions
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -50,7 +53,7 @@ This document describes how to develop, test, and contribute to HsBaSlicer. It f
 HsBaSlicer is a modular, cross-platform C++ framework for 3D-printing slicers. The repository provides desktop, Android, and iOS build targets, extensive unit tests, integration tests, end-to-end tests, coverage gating, and automated CI/CD pipelines.
 
 **Section sources**
-- [README.md:21-23](file://README.md#L21-L23)
+- [README.md:6-8](file://README.md#L6-L8)
 
 ## Project Structure
 The project uses a top-level CMake configuration that detects compiler capabilities, configures dependencies through vcpkg, and adds subdirectories for core modules, libraries, samples, tests, and documentation. Key development-related areas include:
@@ -78,6 +81,8 @@ Integration["integration/slice-ui.test.mjs"]
 WebUI_E2E["webui/test/e2e.test.js"]
 GUI_Tests["tests/GuiApi/*_test.cpp"]
 REST_Tests["tests/RestApi/*_test.cpp"]
+VersionGen["version/Generator_Version.ps1"]
+Docker["docker/Dockerfile"]
 Root --> Presets
 Root --> VCPKG
 Root --> Tests
@@ -91,12 +96,14 @@ CI_Coverage --> Tests
 Integration --> WebUI_E2E
 GUI_Tests --> Tests
 REST_Tests --> Tests
+VersionGen --> VCPKG
+Docker --> Presets
 ```
 
 **Diagram sources**
-- [CMakeLists.txt:1-695](file://CMakeLists.txt#L1-L695)
-- [CMakePresets.json:1-239](file://CMakePresets.json#L1-L239)
-- [vcpkg.json:1-113](file://vcpkg.json#L1-L113)
+- [CMakeLists.txt:1-796](file://CMakeLists.txt#L1-L796)
+- [CMakePresets.json:1-353](file://CMakePresets.json#L1-L353)
+- [vcpkg.json:1-125](file://vcpkg.json#L1-L125)
 - [tests/CMakeLists.txt:1-1673](file://tests/CMakeLists.txt#L1-L1673)
 - [cmake/coverage.cmake:1-173](file://cmake/coverage.cmake#L1-L173)
 - [static_check/cpp_analyzer.py:1-383](file://static_check/cpp_analyzer.py#L1-L383)
@@ -107,20 +114,25 @@ REST_Tests --> Tests
 - [.github/workflows/test-coverage.yml:1-136](file://.github/workflows/test-coverage.yml#L1-L136)
 - [integration/slice-ui.test.mjs:1-603](file://integration/slice-ui.test.mjs#L1-L603)
 - [webui/test/e2e.test.js:370-409](file://webui/test/e2e.test.js#L370-L409)
+- [version/Generator_Version.ps1:180-283](file://version/Generator_Version.ps1#L180-L283)
+- [docker/Dockerfile:171-174](file://docker/Dockerfile#L171-L174)
 
 **Section sources**
-- [CMakeLists.txt:1-695](file://CMakeLists.txt#L1-L695)
-- [CMakePresets.json:1-239](file://CMakePresets.json#L1-L239)
-- [vcpkg.json:1-113](file://vcpkg.json#L1-L113)
+- [CMakeLists.txt:1-796](file://CMakeLists.txt#L1-L796)
+- [CMakePresets.json:1-353](file://CMakePresets.json#L1-L353)
+- [vcpkg.json:1-125](file://vcpkg.json#L1-L125)
 
 ## Core Components
 This section summarizes the development toolchain components used by contributors:
 
 - CMake and presets:
   - Top-level CMake enforces modern C++ features and sets platform-specific options.
-  - Presets define Windows/Linux/macOS/iOS builds, coverage builds, and Android builds.
+  - Comprehensive presets define Windows (x64-debug, x64-release), Linux (linux-debug, linux-release, linux-coverage), macOS (macos-debug, macos-release), iOS (ios-release), and Android (android-release) builds.
+  - **Updated**: Enhanced preset structure with detailed descriptions and IDE integration support.
 - Dependency management:
   - vcpkg defines required packages and optional copyleft kernels (CGAL, OpenCascade).
+  - **Updated**: Manifest-driven dependency management with expanded thirdLibraries list generation.
+  - **New**: Rest-api feature support with cpp-httplib integration.
 - Static analysis and formatting:
   - clang-format defines Allman-style formatting rules.
   - clang-tidy restricts checks to production code and excludes tests/samples/static_tests.
@@ -133,9 +145,9 @@ This section summarizes the development toolchain components used by contributor
   - gcov/gcovr instrumentation and threshold gates are configured via CMake.
 
 **Section sources**
-- [CMakeLists.txt:1-695](file://CMakeLists.txt#L1-L695)
-- [CMakePresets.json:1-239](file://CMakePresets.json#L1-L239)
-- [vcpkg.json:1-113](file://vcpkg.json#L1-L113)
+- [CMakeLists.txt:1-796](file://CMakeLists.txt#L1-L796)
+- [CMakePresets.json:1-353](file://CMakePresets.json#L1-L353)
+- [vcpkg.json:1-125](file://vcpkg.json#L1-L125)
 - [.clang-format:1-99](file://.clang-format#L1-L99)
 - [.clang-tidy:1-96](file://.clang-tidy#L1-L96)
 - [static_check/cpp_analyzer.py:1-383](file://static_check/cpp_analyzer.py#L1-L383)
@@ -155,7 +167,7 @@ participant IntegrationTests as "Node.js Integration Tests"
 participant E2ETests as "End-to-End Tests"
 participant Coverage as "gcov/gcovr"
 participant CI as "GitHub Actions"
-Dev->>CMake : Configure with preset (e.g., linux-coverage)
+Dev->>CMake : Configure with preset (e.g., linux-release)
 CMake->>VCPKG : Resolve dependencies from vcpkg.json
 CMake-->>Dev : Generate build tree
 Dev->>UnitTests : Build and run unit tests via CTest
@@ -167,8 +179,8 @@ CI->>CMake : Run build-linux.yml or test-coverage.yml
 ```
 
 **Diagram sources**
-- [CMakePresets.json:1-239](file://CMakePresets.json#L1-L239)
-- [vcpkg.json:1-113](file://vcpkg.json#L1-L113)
+- [CMakePresets.json:1-353](file://CMakePresets.json#L1-L353)
+- [vcpkg.json:1-125](file://vcpkg.json#L1-L125)
 - [tests/CMakeLists.txt:1-1673](file://tests/CMakeLists.txt#L1-L1673)
 - [integration/slice-ui.test.mjs:1-603](file://integration/slice-ui.test.mjs#L1-L603)
 - [webui/test/e2e.test.js:370-409](file://webui/test/e2e.test.js#L370-L409)
@@ -189,6 +201,7 @@ CI->>CMake : Run build-linux.yml or test-coverage.yml
 - Dependencies:
   - vcpkg manages most third-party libraries.
   - Copyleft kernels (CGAL, OpenCASCADE) are optional and controlled by HSBA_COPL and vcpkg feature "copyleft".
+  - **New**: Rest-api feature support with cpp-httplib integration for optional RESTful API server.
 - Output layout:
   - Binaries and libraries are placed under a unified output directory structure.
 
@@ -200,10 +213,16 @@ Recommended commands:
   - iOS: ios-release
   - Android: android-release
 
+**Updated** The comprehensive preset structure now includes detailed descriptions and IDE integration support for all major platforms.
+
 **Section sources**
-- [CMakeLists.txt:1-695](file://CMakeLists.txt#L1-L695)
-- [CMakePresets.json:1-239](file://CMakePresets.json#L1-L239)
-- [vcpkg.json:1-113](file://vcpkg.json#L1-L113)
+- [CMakeLists.txt:1-796](file://CMakeLists.txt#L1-L796)
+- [CMakePresets.json:22-41](file://CMakePresets.json#L22-L41)
+- [CMakePresets.json:77-108](file://CMakePresets.json#L77-L108)
+- [CMakePresets.json:224-255](file://CMakePresets.json#L224-L255)
+- [CMakePresets.json:257-292](file://CMakePresets.json#L257-L292)
+- [CMakePresets.json:151-188](file://CMakePresets.json#L151-L188)
+- [vcpkg.json:111-122](file://vcpkg.json#L111-L122)
 
 #### IDE Setup Recommendations
 
@@ -211,6 +230,7 @@ Recommended commands:
   - Use CMake projects with presets defined in `CMakePresets.json`.
   - Select the appropriate preset (e.g., windows-x64-debug or windows-x64-release).
   - Ensure vcpkg is integrated so dependencies resolve automatically.
+  - **Updated**: Enhanced vendor configuration for Visual Studio Remote Settings with source exclusion lists.
 
 - CLion:
   - Import the project as a CMake project.
@@ -223,7 +243,7 @@ Recommended commands:
   - Integrate clang-format and clang-tidy via workspace settings.
 
 **Section sources**
-- [CMakePresets.json:1-239](file://CMakePresets.json#L1-L239)
+- [CMakePresets.json:1-353](file://CMakePresets.json#L1-L353)
 - [.clang-tidy:1-96](file://.clang-tidy#L1-L96)
 - [.clang-format:1-99](file://.clang-format#L1-L99)
 
@@ -233,7 +253,7 @@ Recommended commands:
 - On Windows, ensure symbols are available for debuggers when building Debug configurations.
 
 **Section sources**
-- [CMakePresets.json:1-239](file://CMakePresets.json#L1-L239)
+- [CMakePresets.json:1-353](file://CMakePresets.json#L1-L353)
 - [cmake/coverage.cmake:1-173](file://cmake/coverage.cmake#L1-L173)
 
 ### Testing Framework
@@ -413,7 +433,7 @@ Coverage-->>PR : Pass/Fail result
 - [.github/workflows/test-coverage.yml:1-136](file://.github/workflows/test-coverage.yml#L1-L136)
 - [.github/workflows/rest-webui.yml:1-79](file://.github/workflows/rest-webui.yml#L1-L79)
 - [.github/workflows/cmake-multi-platform.yml:1-517](file://.github/workflows/cmake-multi-platform.yml#L1-L517)
-- [CMakePresets.json:1-239](file://CMakePresets.json#L1-L239)
+- [CMakePresets.json:1-353](file://CMakePresets.json#L1-L353)
 - [cmake/coverage.cmake:1-173](file://cmake/coverage.cmake#L1-L173)
 
 **Section sources**
@@ -620,6 +640,7 @@ Lua["Lua"]
 TinyXML2["tinyxml2"]
 YAML["yaml-cpp"]
 MagicEnum["magic_enum"]
+CppHTTPLib["cpp-httplib (rest-api)"]
 CMake --> VCPKG
 CMake --> Boost
 CMake --> Clipper2
@@ -639,15 +660,18 @@ CMake --> Lua
 CMake --> TinyXML2
 CMake --> YAML
 CMake --> MagicEnum
+CMake --> CppHTTPLib
 ```
 
 **Diagram sources**
-- [CMakeLists.txt:206-348](file://CMakeLists.txt#L206-L348)
-- [vcpkg.json:1-113](file://vcpkg.json#L1-L113)
+- [CMakeLists.txt:256-389](file://CMakeLists.txt#L256-L389)
+- [vcpkg.json:10-88](file://vcpkg.json#L10-L88)
+- [vcpkg.json:111-122](file://vcpkg.json#L111-L122)
 
 **Section sources**
-- [CMakeLists.txt:206-348](file://CMakeLists.txt#L206-L348)
-- [vcpkg.json:1-113](file://vcpkg.json#L1-L113)
+- [CMakeLists.txt:256-389](file://CMakeLists.txt#L256-L389)
+- [vcpkg.json:10-88](file://vcpkg.json#L10-L88)
+- [vcpkg.json:111-122](file://vcpkg.json#L111-L122)
 
 ## Performance Considerations
 - Avoid Debug builds for performance-sensitive comparisons; use Release configurations.
@@ -656,7 +680,7 @@ CMake --> MagicEnum
 - Limit parallelism in CI to avoid OOM on large translation units.
 
 **Section sources**
-- [CMakeLists.txt:294-298](file://CMakeLists.txt#L294-L298)
+- [CMakeLists.txt:342-346](file://CMakeLists.txt#L342-L346)
 - [.github/workflows/test-coverage.yml:25-33](file://.github/workflows/test-coverage.yml#L25-L33)
 
 ## Troubleshooting Guide
@@ -668,11 +692,16 @@ CMake --> MagicEnum
   - Verify VCPKG_ROOT and toolchain file are correctly configured.
 - Copyleft kernel licensing:
   - If CGAL/OpenCASCADE are not installed or not requested via vcpkg features, copyleft features will be disabled.
+- **New**: Rest-api feature not found:
+  - Ensure `VCPKG_MANIFEST_FEATURES=rest-api` is set when building with REST API support.
+- **New**: Platform-specific preset issues:
+  - Verify correct preset selection for your target platform (e.g., use `linux-release` instead of `windows-release`).
 
 **Section sources**
 - [static_check/feature_check.cmake:1-123](file://static_check/feature_check.cmake#L1-L123)
-- [CMakeLists.txt:48-104](file://CMakeLists.txt#L48-L104)
-- [CMakeLists.txt:170-204](file://CMakeLists.txt#L170-L204)
+- [CMakeLists.txt:193-216](file://CMakeLists.txt#L193-L216)
+- [CMakeLists.txt:228-252](file://CMakeLists.txt#L228-L252)
+- [CMakePresets.json:1-353](file://CMakePresets.json#L1-L353)
 
 ### Test Failures
 - If tests do not run after build, check `HSBA_SLICER_RUN_TESTS_AFTER_BUILD` and `HSBA_RUN_TESTS_AFTER_BUILD`.
@@ -708,8 +737,44 @@ CMake --> MagicEnum
 - [integration/slice-ui.test.mjs:440-447](file://integration/slice-ui.test.mjs#L440-L447)
 - [integration/slice-ui.test.mjs:170-194](file://integration/slice-ui.test.mjs#L170-L194)
 
+### Docker Build Issues
+- When using Docker builds, ensure the `linux-release` preset is available for consistent builds.
+- The Dockerfile uses `cmake --build --preset linux-release` for reproducible builds.
+
+**Section sources**
+- [docker/Dockerfile:171-174](file://docker/Dockerfile#L171-L174)
+
+### Platform-Specific Build Issues
+
+#### Windows Build Issues
+- **Visual Studio Integration**: Ensure Visual Studio 2022+ with "Desktop development with C++" workload
+- **Ninja Generator**: Required for optimal build performance
+- **vcpkg Integration**: Run `vcpkg integrate install` for seamless IDE integration
+
+#### Linux Build Issues
+- **Missing Dependencies**: Install required system packages using the apt commands in README.md
+- **Compiler Compatibility**: GCC 11+ or Clang 14+ recommended for full C++20 support
+- **Android NDK**: Set `ANDROID_NDK_HOME` environment variable for Android builds
+
+#### macOS Build Issues
+- **Xcode Command Line Tools**: Install with `xcode-select --install`
+- **Homebrew Dependencies**: Use `brew install cmake ninja` for essential tools
+- **iOS Deployment Target**: Ensure Xcode supports deployment target 26.5+ for iOS builds
+
+#### Android/iOS Build Issues
+- **Android NDK**: Required for Android builds, set `ANDROID_NDK_HOME` environment variable
+- **iOS Toolchain**: Requires Xcode with iOS SDK for iOS builds
+- **Cross-compilation**: These platforms require specific toolchain configuration via CMake presets
+
+**Section sources**
+- [CMakePresets.json:151-188](file://CMakePresets.json#L151-L188)
+- [CMakePresets.json:257-292](file://CMakePresets.json#L257-L292)
+- [README.md:67-108](file://README.md#L67-L108)
+
 ## Conclusion
 HsBaSlicer provides a robust development environment built on CMake, vcpkg, Boost.Test, Node.js testing, clang-tidy, clang-format, and comprehensive CI/CD pipelines. The project implements a multi-layered testing strategy covering unit tests, integration tests, and end-to-end tests across different technologies. Developers should follow the preset-driven workflow, adhere to formatting and static analysis rules, write comprehensive tests for new functionality, and rely on automated CI/CD pipelines to ensure consistency across platforms. Contributions are welcomed through pull requests and issue reporting, with automated testing ensuring code quality and reliability.
+
+**Updated** The recent improvements include enhanced CMake preset structure with comprehensive multi-platform support (x64-debug, x64-release for Windows, macos-release for macOS, android-release for Android, ios-release for iOS), detailed preset descriptions with IDE integration guidance, improved vcpkg manifest-driven dependency management with automatic thirdLibraries list generation, and enhanced rest-api feature detection with cpp-httplib integration.
 
 ## Appendices
 
@@ -718,6 +783,7 @@ HsBaSlicer provides a robust development environment built on CMake, vcpkg, Boos
   - `cmake --preset <preset-name>`
 - Build:
   - `cmake --build --preset <preset-name>`
+  - **Updated**: Available presets include x64-debug, x64-release, linux-debug, linux-release, linux-coverage, macos-debug, macos-release, ios-release, android-release
 - Run tests:
   - `ctest --preset <preset-name>`
 - Run integration tests:
@@ -728,7 +794,66 @@ HsBaSlicer provides a robust development environment built on CMake, vcpkg, Boos
   - `cmake --build --preset <coverage-preset-report-target>`
 
 **Section sources**
-- [CMakePresets.json:1-239](file://CMakePresets.json#L1-L239)
+- [CMakePresets.json:1-353](file://CMakePresets.json#L1-L353)
 - [.github/workflows/test-coverage.yml:88-102](file://.github/workflows/test-coverage.yml#L88-L102)
 - [integration/slice-ui.test.mjs:24](file://integration/slice-ui.test.mjs#L24)
 - [.github/workflows/rest-webui.yml:59-60](file://.github/workflows/rest-webui.yml#L59-L60)
+- [docker/Dockerfile:171-174](file://docker/Dockerfile#L171-L174)
+
+### CMake Preset Reference
+
+#### Windows Presets
+- **x64-debug**: Debug build for Windows x64 architecture with Ninja generator
+- **x64-release**: Release build for Windows x64 architecture with optimized optimizations
+
+#### Linux Presets
+- **linux-debug**: Debug build for Linux with verbose compilation commands
+- **linux-release**: Release build for Linux with optimized performance
+- **linux-coverage**: Coverage-instrumented build for testing with gcov/gcovr
+
+#### macOS Presets
+- **macos-debug**: Debug build for macOS with development optimizations
+- **macos-release**: Release build for macOS with production optimizations
+
+#### Mobile Presets
+- **ios-release**: Release build for iOS arm64 architecture using Xcode generator
+- **android-release**: Release build for Android arm64-v8a architecture using NDK
+
+**Section sources**
+- [CMakePresets.json:22-41](file://CMakePresets.json#L22-L41)
+- [CMakePresets.json:77-108](file://CMakePresets.json#L77-L108)
+- [CMakePresets.json:224-255](file://CMakePresets.json#L224-L255)
+- [CMakePresets.json:257-292](file://CMakePresets.json#L257-L292)
+- [CMakePresets.json:151-188](file://CMakePresets.json#L151-L188)
+
+### vcpkg Manifest Features
+- **Default features**: copyleft (enables CGAL, OpenCASCADE)
+- **Optional features**: rest-api (enables cpp-httplib for REST API server)
+- **Manifest-driven dependencies**: Automatic thirdLibraries list generation during build
+
+**Section sources**
+- [vcpkg.json:4-9](file://vcpkg.json#L4-L9)
+- [vcpkg.json:111-122](file://vcpkg.json#L111-L122)
+- [version/Generator_Version.ps1:180-283](file://version/Generator_Version.ps1#L180-L283)
+
+### IDE Integration Notes
+
+#### Visual Studio Remote Settings
+Enhanced vendor configuration provides:
+- Source directory mapping for remote development
+- Automatic exclusion of build artifacts and cache directories
+- Optimized source synchronization for large codebases
+
+#### Cross-Platform Development
+- **Windows**: Full Visual Studio integration with MSVC compiler
+- **Linux**: GCC/Clang support with Ninja generator for optimal performance
+- **macOS**: Xcode integration for iOS/macOS development
+- **Mobile**: Android NDK and iOS toolchain support via CMake presets
+
+**Section sources**
+- [CMakePresets.json:58-74](file://CMakePresets.json#L58-L74)
+- [CMakePresets.json:91-107](file://CMakePresets.json#L91-L107)
+- [CMakePresets.json:205-221](file://CMakePresets.json#L205-L221)
+- [CMakePresets.json:238-254](file://CMakePresets.json#L238-L254)
+- [CMakePresets.json:275-291](file://CMakePresets.json#L275-L291)
+- [CMakePresets.json:171-187](file://CMakePresets.json#L171-L187)

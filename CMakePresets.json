@@ -293,6 +293,36 @@
   ],
   "buildPresets": [
     {
+      "name": "x64-debug",
+      "displayName": "Build x64 Debug (Ninja)",
+      "configurePreset": "x64-debug"
+    },
+    {
+      "name": "x64-release",
+      "displayName": "Build x64 Release (Ninja)",
+      "configurePreset": "x64-release"
+    },
+    {
+      "name": "macos-release",
+      "displayName": "Build macOS Release (Ninja)",
+      "configurePreset": "macos-release"
+    },
+    {
+      "name": "android-release",
+      "displayName": "Build Android Release (Ninja)",
+      "configurePreset": "android-release"
+    },
+    {
+      "name": "ios-release",
+      "displayName": "Build iOS Release (Xcode)",
+      "configurePreset": "ios-release"
+    },
+    {
+      "name": "linux-release",
+      "displayName": "Build Linux Release (Ninja)",
+      "configurePreset": "linux-release"
+    },
+    {
       "name": "linux-coverage",
       "displayName": "Build coverage instrumented binaries",
       "configurePreset": "linux-coverage"

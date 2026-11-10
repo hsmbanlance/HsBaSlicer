@@ -1,4 +1,4 @@
-Based on my analysis of the repository, I can now update the deployment troubleshooting documentation to reflect the new Docker containerization and CI/CD automation features. Here's the updated document:
+Based on my analysis of the enhanced Docker build system, I can now update the deployment troubleshooting documentation to reflect the significant improvements made. Here's the updated document:
 
 <cite>
 **Referenced Files in This Document**
@@ -21,11 +21,12 @@ Based on my analysis of the repository, I can now update the deployment troubles
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive Docker containerization deployment section with multi-stage builds
-- Updated CI/CD automation section with GitHub Actions workflows for automated testing and building
-- Added container-specific troubleshooting and deployment scenarios
-- Enhanced build system documentation with Docker integration
-- Added new diagnostic tools for containerized deployments
+- Enhanced Docker build system with improved network reliability and retry logic
+- Added PowerShell installation isolation using Microsoft official GitHub releases
+- Implemented vcpkg toolchain pre-warming for faster builds
+- Added CMake configure retry logic with exponential backoff
+- Integrated BuildKit cache optimization for dependency caching
+- Updated containerization section with advanced networking and reliability features
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -48,7 +49,7 @@ HsBaSlicer is a modular, cross-platform C++ framework for 3D-printing slicers. I
 - A shared-library C ABI entry point (`DllHsBaSlicer`) for external languages.
 - A static/shared library API (`LibHsBaSlicer`) for full slicing workflows.
 - Optional copyleft kernels (CGAL, OpenCascade) that change the effective license to GPL-3.0-or-later when enabled.
-- **New**: Docker containerization for REST API server deployment with automated CI/CD pipelines.
+- **Enhanced**: Advanced Docker containerization with improved network reliability, PowerShell isolation, vcpkg toolchain pre-warming, and CMake configure retry logic.
 
 **Section sources**
 - [README.md:21-39](file://README.md#L21-L39)
@@ -59,8 +60,8 @@ The project uses a layered structure:
 - Core libraries under `base`, `utils`, `cipher`, `2D`, `paths`, `support`, `meshmodel`, `cadmodel`, `pointcloud`, `preprocess`, `pipelinetypes`, `convert`.
 - Public APIs under `LibHsBaSlicer` (C++) and `DllHsBaSlicer` (C ABI).
 - Build orchestration via top-level `CMakeLists.txt`, `CMakePresets.json`, and vcpkg manifests.
-- **New**: Containerization support under `docker/` with multi-stage Docker builds.
-- **New**: CI/CD automation under `.github/workflows/` with comprehensive testing and deployment pipelines.
+- **Enhanced**: Advanced containerization support under `docker/` with multi-stage Docker builds and improved reliability.
+- **Enhanced**: CI/CD automation under `.github/workflows/` with comprehensive testing and deployment pipelines.
 - Documentation under `docs`, including platform and dependency notes.
 
 ```mermaid
@@ -72,7 +73,7 @@ Root --> Docs["Documentation<br/>en/zh"]
 Root --> Presets["CMakePresets.json"]
 Root --> VCPKG["vcpkg.json / vcpkg-configuration.json"]
 Root --> License["LICENSE.txt"]
-Root --> Docker["docker/<br/>Multi-stage container builds"]
+Root --> Docker["docker/<br/>Enhanced multi-stage container builds"]
 Root --> CI[".github/workflows/<br/>Automated testing & deployment"]
 ```
 
@@ -81,7 +82,7 @@ Root --> CI[".github/workflows/<br/>Automated testing & deployment"]
 - [CMakePresets.json:1-239](file://CMakePresets.json#L1-L239)
 - [vcpkg.json:1-113](file://vcpkg.json#L1-L113)
 - [LICENSE.txt:1-23](file://LICENSE.txt#L1-L23)
-- [docker/Dockerfile:1-134](file://docker/Dockerfile#L1-L134)
+- [docker/Dockerfile:1-229](file://docker/Dockerfile#L1-L229)
 - [.github/workflows/docker-rest-api.yml:1-153](file://.github/workflows/docker-rest-api.yml#L1-L153)
 
 **Section sources**
@@ -95,7 +96,7 @@ Key components relevant to deployment and operation:
 - Copyleft kernel integration: CGAL and OpenCascade are conditionally linked based on the `copyleft` feature and platform availability.
 - Dynamic loading: Runtime DLL loader is enabled on desktop and disabled on non-desktop platforms.
 - Compression: bit7z is optional and disabled on non-desktop platforms.
-- **New**: Docker containerization for REST API server with optimized multi-stage builds.
+- **Enhanced**: Advanced Docker containerization with improved network reliability, PowerShell isolation, vcpkg toolchain pre-warming, and CMake configure retry logic.
 
 ```mermaid
 classDiagram
@@ -119,23 +120,27 @@ class Compression {
 + "bit7z optional"
 + "Disabled on non-desktop"
 }
-class DockerContainer {
+class EnhancedDockerContainer {
 + "Multi-stage builds"
-+ "Optimized runtime images"
++ "Network reliability improvements"
++ "PowerShell isolation"
++ "vcpkg toolchain pre-warming"
++ "CMake configure retry logic"
++ "BuildKit cache optimization"
 + "REST API server"
 }
 DllHsBaSlicer --> LibHsBaSlicer : "uses"
 DllHsBaSlicer --> CopyleftKernels : "conditionally links"
 DllHsBaSlicer --> RuntimeLoader : "platform-gated"
 DllHsBaSlicer --> Compression : "optional"
-DockerContainer --> DllHsBaSlicer : "packages"
+EnhancedDockerContainer --> DllHsBaSlicer : "packages"
 ```
 
 **Diagram sources**
 - [CMakeLists.txt:228-256](file://CMakeLists.txt#L228-L256)
 - [CMakeLists.txt:284-318](file://CMakeLists.txt#L284-L318)
 - [DllHsBaSlicer/CMakeLists.txt:1-58](file://DllHsBaSlicer/CMakeLists.txt#L1-L58)
-- [docker/Dockerfile:29-134](file://docker/Dockerfile#L29-L134)
+- [docker/Dockerfile:1-229](file://docker/Dockerfile#L1-L229)
 
 **Section sources**
 - [CMakeLists.txt:228-256](file://CMakeLists.txt#L228-L256)
@@ -145,7 +150,7 @@ DockerContainer --> DllHsBaSlicer : "packages"
 ## Architecture Overview
 At build time, CMake detects compiler capabilities, platform, and dependencies. At configure time, it decides whether to enable copyleft kernels, dynamic loading, compression, and which targets to install/export. At runtime, the application loads the appropriate pipeline interfaces through the C ABI or C++ API.
 
-**Updated** Added Docker containerization architecture for streamlined REST API deployment.
+**Enhanced** Advanced Docker containerization architecture with improved network reliability, PowerShell isolation, vcpkg toolchain pre-warming, and CMake configure retry logic.
 
 ```mermaid
 flowchart TD
@@ -160,8 +165,8 @@ Features --> Loader["Enable HSBA_USE_DLL_LOADER<br/>Desktop only"]
 Loader --> Compress["Enable HSBA_USE_BIT7Z<br/>Desktop only"]
 Compress --> Targets["Build Targets<br/>DllHsBaSlicer/LibHsBaSlicer/etc."]
 Targets --> Install["Install & Export<br/>find_package(HsBaSlicer)"]
-Install --> Docker["Docker Containerization<br/>Multi-stage builds"]
-Docker --> Runtime["Runtime Deployment<br/>Containerized REST API"]
+Install --> EnhancedDocker["Enhanced Docker Containerization<br/>Multi-stage builds with reliability improvements"]
+EnhancedDocker --> Runtime["Runtime Deployment<br/>Containerized REST API"]
 ```
 
 **Diagram sources**
@@ -169,7 +174,7 @@ Docker --> Runtime["Runtime Deployment<br/>Containerized REST API"]
 - [CMakeLists.txt:170-204](file://CMakeLists.txt#L170-L204)
 - [CMakeLists.txt:228-256](file://CMakeLists.txt#L228-L256)
 - [CMakeLists.txt:456-665](file://CMakeLists.txt#L456-L665)
-- [docker/Dockerfile:29-134](file://docker/Dockerfile#L29-L134)
+- [docker/Dockerfile:1-229](file://docker/Dockerfile#L1-L229)
 
 **Section sources**
 - [CMakeLists.txt:129-157](file://CMakeLists.txt#L129-L157)
@@ -302,34 +307,53 @@ Recommendations:
 
 ## Containerization and Deployment
 
-### Docker Containerization
-**New** HsBaSlicer now provides comprehensive Docker containerization support for deploying the REST API server with optimized multi-stage builds.
+### Enhanced Docker Containerization
+**Enhanced** HsBaSlicer now provides advanced Docker containerization support with significantly improved network reliability, PowerShell installation isolation, vcpkg toolchain pre-warming, and CMake configure retry logic for deploying the REST API server.
 
-#### Multi-Stage Build Architecture
-The Docker implementation uses a two-stage build process:
-- **Builder stage**: Compiles dependencies using vcpkg and builds the HsBaSlicerRestServer binary
+#### Advanced Multi-Stage Build Architecture
+The enhanced Docker implementation uses a sophisticated two-stage build process with multiple reliability improvements:
+- **Builder stage**: Compiles dependencies using vcpkg with improved network handling and builds the HsBaSlicerRestServer binary
 - **Runtime stage**: Contains only the minimal runtime dependencies and the compiled binary
 
 ```mermaid
 flowchart TD
-DStart(["Docker Build"]) --> Builder["Stage 1: Builder<br/>Ubuntu 24.04<br/>vcpkg + CMake Build"]
+DStart(["Enhanced Docker Build"]) --> Builder["Stage 1: Builder<br/>Ubuntu 24.04<br/>vcpkg + CMake Build<br/>Network Reliability<br/>PowerShell Isolation"]
 Builder --> Runtime["Stage 2: Runtime<br/>Ubuntu 24.04<br/>Minimal Dependencies"]
 Runtime --> Deploy["Deployed Container<br/>REST API Server"]
 ```
 
 **Diagram sources**
-- [docker/Dockerfile:29-134](file://docker/Dockerfile#L29-L134)
+- [docker/Dockerfile:1-229](file://docker/Dockerfile#L1-L229)
 
-#### Key Features
-- **Optimized image sizes**: Runtime images contain only necessary dependencies
-- **Security hardening**: Runs as non-root user (`hsba`)
-- **Health monitoring**: Built-in health check endpoints
-- **Configuration management**: Environment-based configuration with sensible defaults
-- **Build caching**: Efficient vcpkg binary caching for faster rebuilds
+#### Key Enhancements
+
+##### Network Reliability Improvements
+- **Retry Logic**: CMake configure attempts up to 5 times with 30-second intervals between retries
+- **Download Resilience**: wget with `--tries=15 --timeout=60` for critical downloads
+- **APT Mirror Support**: Optional custom apt mirror configuration for restricted networks
+- **Connection Recovery**: Automatic cleanup of corrupted build artifacts before retry
+
+##### PowerShell Installation Isolation
+- **Microsoft Official Releases**: Direct download from GitHub releases instead of packages.microsoft.com
+- **Isolated Layer**: PowerShell installation isolated in separate layer for better caching
+- **Fallback Mechanism**: Automatic dependency resolution with `apt-get install -f` for missing dependencies
+- **Clean Package Management**: Proper cleanup of temporary .deb files and apt lists
+
+##### vcpkg Toolchain Pre-warming
+- **Proactive Download**: Downloads cmake and ninja binaries before vcpkg needs them
+- **Cache Optimization**: Uses BuildKit cache mounts for persistent toolchain downloads
+- **Version Detection**: Automatically reads required versions from vcpkg-tool-metadata.txt
+- **Graceful Fallback**: Continues build even if pre-warming fails, relying on retry logic
+
+##### BuildKit Cache Optimization
+- **Layer Caching**: Strategic use of `--mount=type=cache` for vcpkg downloads and installed packages
+- **Selective Caching**: Only caches necessary directories to minimize image size
+- **Cross-Build Reuse**: Cached layers persist across different build contexts
+- **Efficient Updates**: Smart invalidation based on dependency changes
 
 #### Basic Usage
 ```bash
-# Build the container image
+# Build the container image with enhanced reliability
 docker build -f docker/Dockerfile -t hsba-rest-api:latest .
 
 # Run the container
@@ -344,57 +368,86 @@ curl http://localhost:8080/api/health
 - **vcpkg baseline override**: Specify exact dependency versions with `VCPKG_BASELINE`
 - **Parallel builds**: Control build parallelism with `JOBS` argument
 - **Volume mounting**: Persist data with `-v hsba-data:/app/data`
+- **Custom apt mirrors**: Configure alternative package sources with `APT_MIRROR`
+- **PowerShell version override**: Use specific PowerShell version with `POWERSHELL_DEB_URL`
 
 **Section sources**
-- [docker/Dockerfile:1-134](file://docker/Dockerfile#L1-L134)
+- [docker/Dockerfile:1-229](file://docker/Dockerfile#L1-L229)
 - [docker/Dockerfile.dockerignore:1-30](file://docker/Dockerfile.dockerignore#L1-L30)
 
-### Container Troubleshooting
+### Enhanced Container Troubleshooting
 
 #### Common Docker Issues
 
-##### Build Failures
+##### Network Connectivity Problems
 Symptoms:
-- Slow builds due to missing vcpkg cache
-- Permission errors during container startup
-- Missing runtime dependencies
+- Slow builds due to failed downloads or timeouts
+- PowerShell installation failures from packages.microsoft.com
+- vcpkg dependency download failures
 
 Resolution:
-- Ensure BuildKit is enabled for optimal caching
+- Enable BuildKit for optimal caching: `DOCKER_BUILDKIT=1`
+- Use custom apt mirrors for restricted networks: `--build-arg APT_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/ubuntu/`
+- Clear Docker cache if corrupted: `docker builder prune`
 - Verify Docker daemon has sufficient disk space
-- Check that required directories are not excluded by `.dockerignore`
 
-##### Runtime Issues
+##### PowerShell Installation Failures
 Symptoms:
-- Container fails to start or crashes immediately
-- Health check endpoints return errors
-- Port binding conflicts
+- Unable to locate package powershell
+- Missing PowerShell during version generation
+- Permission errors during container startup
 
 Resolution:
-- Verify port availability and permissions
-- Check container logs with `docker logs <container-id>`
+- PowerShell is now installed from Microsoft official GitHub releases
+- Check container logs: `docker logs <container-id>`
+- Verify network connectivity to GitHub releases
 - Ensure proper volume permissions for data persistence
 
+##### Build Reliability Issues
+Symptoms:
+- Intermittent build failures due to network issues
+- Corrupted build artifacts causing repeated failures
+- Timeout errors during dependency compilation
+
+Resolution:
+- Enhanced retry logic automatically handles transient failures
+- Build artifacts are cleaned between retry attempts
+- Monitor build progress for detailed error information
+- Check BuildKit cache status: `docker builder ls`
+
+#### Advanced Network Configuration
+For environments with strict network policies:
+```bash
+# Build with custom apt mirror
+docker build \
+  --build-arg APT_MIRROR=https://your-custom-mirror/ubuntu/ \
+  --build-arg POWERSHELL_DEB_URL=https://your-proxy/github/releases/download/v7.6.6/powershell_7.6.6-1.deb_amd64.deb \
+  -f docker/Dockerfile -t hsba-rest-api:latest .
+```
+
 **Section sources**
-- [docker/Dockerfile:90-134](file://docker/Dockerfile#L90-L134)
+- [docker/Dockerfile:39-43](file://docker/Dockerfile#L39-L43)
+- [docker/Dockerfile:83-88](file://docker/Dockerfile#L83-L88)
+- [docker/Dockerfile:119-140](file://docker/Dockerfile#L119-L140)
+- [docker/Dockerfile:146-174](file://docker/Dockerfile#L146-L174)
 
 ## CI/CD Automation
 
-### GitHub Actions Workflows
-**New** Comprehensive CI/CD automation with specialized workflows for different aspects of the build and deployment process.
+### Enhanced GitHub Actions Workflows
+**Enhanced** Comprehensive CI/CD automation with specialized workflows for different aspects of the build and deployment process, featuring improved reliability and caching.
 
 #### Workflow Architecture
 ```mermaid
 flowchart TD
 PR["Pull Request/Push"] --> Matrix["Multi-Platform Build Matrix<br/>Windows/Linux/macOS"]
-PR --> Docker["Docker REST API Workflow<br/>Syntax validation + smoke tests"]
+PR --> Docker["Enhanced Docker REST API Workflow<br/>Syntax validation + smoke tests"]
 PR --> WebUI["REST WebUI Workflow<br/>Node.js syntax checks"]
 PR --> Coverage["Test Coverage Workflow<br/>gcov instrumentation"]
 Matrix --> Tests["Unit Tests<br/>ctest"]
 Matrix --> RestAPI["REST API Tests<br/>Linux only"]
 Matrix --> E2E["End-to-End Tests<br/>Real server integration"]
 Docker --> Lint["Dockerfile Syntax Check<br/>hadolint"]
-Docker --> Build["Image Build<br/>Multi-stage"]
+Docker --> Build["Enhanced Image Build<br/>Multi-stage with reliability"]
 Docker --> Smoke["Smoke Tests<br/>Health endpoints"]
 WebUI --> NodeTests["Node.js Tests<br/>Multiple versions"]
 Coverage --> Gates["Coverage Thresholds<br/>Core: 45%, Other: 25%"]
@@ -408,16 +461,17 @@ Coverage --> Gates["Coverage Thresholds<br/>Core: 45%, Other: 25%"]
 
 #### Specialized Workflows
 
-##### Multi-Platform Build Matrix
+##### Enhanced Multi-Platform Build Matrix
 - **Platforms**: Windows, Linux, macOS
 - **Features**: Full test suite, REST API validation, end-to-end testing
-- **Caching**: Optimized vcpkg binary caching across platforms
+- **Caching**: Optimized vcpkg binary caching across platforms with improved reliability
 
-##### Docker REST API Workflow
+##### Enhanced Docker REST API Workflow
 - **Triggers**: Changes to `docker/**` or workflow file
 - **Validation**: Dockerfile syntax checking with hadolint
-- **Testing**: Container build and smoke tests
+- **Testing**: Container build with enhanced reliability and smoke tests
 - **Deployment**: Optional push to GitHub Container Registry
+- **Reliability**: Improved network handling and retry mechanisms
 
 ##### REST WebUI Workflow
 - **Scope**: Node.js console application only
@@ -429,10 +483,11 @@ Coverage --> Gates["Coverage Thresholds<br/>Core: 45%, Other: 25%"]
 - **Thresholds**: Core modules ≥45%, Other modules ≥25%
 - **Reporting**: HTML/XML reports with job summary integration
 
-#### Build Optimization
+#### Enhanced Build Optimization
 - **Parallel builds**: Controlled parallelism to prevent OOM on CI runners
 - **Dependency caching**: Extensive use of GitHub Actions caching for vcpkg downloads
 - **Selective testing**: Platform-specific test execution to optimize CI time
+- **Network resilience**: Improved handling of transient network failures
 
 **Section sources**
 - [.github/workflows/cmake-multi-platform.yml:1-517](file://.github/workflows/cmake-multi-platform.yml#L1-L517)
@@ -481,20 +536,22 @@ Resolution:
 - [docs/en/vcpkg-dependencies.md:23-42](file://docs/en/vcpkg-dependencies.md#L23-L42)
 - [CMakePresets.json:114-208](file://CMakePresets.json#L114-L208)
 
-### Container-Specific Issues
+### Enhanced Container-Specific Issues
 
-#### Docker Build Failures
+#### Enhanced Docker Build Failures
 Symptoms:
-- Slow builds due to missing vcpkg cache
-- Permission errors during container startup
-- Missing runtime dependencies
+- Network connectivity issues during dependency downloads
+- PowerShell installation failures
+- Intermittent build failures due to transient network problems
 
 Resolution:
-- Enable BuildKit for optimal caching: `DOCKER_BUILDKIT=1`
-- Clear Docker cache if corrupted: `docker builder prune`
-- Verify Docker daemon has sufficient disk space
+- **Network Issues**: Enable BuildKit for optimal caching: `DOCKER_BUILDKIT=1`
+- **PowerShell Issues**: PowerShell is now installed from Microsoft official GitHub releases
+- **Transient Failures**: Enhanced retry logic automatically handles connection issues
+- **Cache Issues**: Clear Docker cache if corrupted: `docker builder prune`
+- **Disk Space**: Verify Docker daemon has sufficient disk space
 
-#### Container Runtime Issues
+#### Enhanced Container Runtime Issues
 Symptoms:
 - Container fails to start or crashes immediately
 - Health check endpoints return errors
@@ -504,13 +561,29 @@ Resolution:
 - Check container logs: `docker logs <container-id>`
 - Verify port availability: `netstat -tulpn | grep 8080`
 - Check volume permissions for data persistence
+- Verify network connectivity to external services
+
+#### Advanced Network Troubleshooting
+For environments with strict network policies:
+```bash
+# Build with custom apt mirror
+docker build \
+  --build-arg APT_MIRROR=https://your-custom-mirror/ubuntu/ \
+  -f docker/Dockerfile -t hsba-rest-api:latest .
+
+# Monitor build progress for detailed error information
+docker build -f docker/Dockerfile -t hsba-rest-api:latest . 2>&1 | tee build.log
+```
 
 **Section sources**
-- [docker/Dockerfile:90-134](file://docker/Dockerfile#L90-L134)
+- [docker/Dockerfile:36-43](file://docker/Dockerfile#L36-L43)
+- [docker/Dockerfile:83-88](file://docker/Dockerfile#L83-L88)
+- [docker/Dockerfile:119-140](file://docker/Dockerfile#L119-L140)
+- [docker/Dockerfile:146-174](file://docker/Dockerfile#L146-L174)
 
 ### CI/CD Pipeline Issues
 
-#### GitHub Actions Failures
+#### Enhanced GitHub Actions Failures
 Symptoms:
 - Workflow runs fail with permission errors
 - Cache misses causing slow builds
@@ -520,6 +593,7 @@ Resolution:
 - Verify workflow permissions in repository settings
 - Clear GitHub Actions cache if corrupted
 - Adjust timeout values for large builds
+- Monitor BuildKit cache status for optimal performance
 
 #### Coverage Threshold Failures
 Symptoms:
@@ -608,26 +682,29 @@ Steps:
 - [README.md:100-185](file://README.md#L100-L185)
 - [CMakeLists.txt:456-665](file://CMakeLists.txt#L456-L665)
 
-#### Containerized Deployment
+#### Enhanced Containerized Deployment
 Use cases:
 - Cloud-native deployments with Kubernetes or Docker Swarm
 - Isolated development environments
 - Consistent production deployments across platforms
+- Environments requiring enhanced network reliability
 
 Steps:
-- Build container image: `docker build -f docker/Dockerfile -t hsba-rest-api:latest .`
+- Build container image with enhanced reliability: `docker build -f docker/Dockerfile -t hsba-rest-api:latest .`
 - Run with configuration: `docker run -d -p 8080:8080 -e HSBA_REST_AUTH_TOKEN=<token> hsba-rest-api:latest`
 - Monitor health: `curl http://localhost:8080/api/health`
+- For restricted networks: `docker build --build-arg APT_MIRROR=https://mirror.example.com/ubuntu/ -f docker/Dockerfile -t hsba-rest-api:latest .`
 
 **Section sources**
-- [docker/Dockerfile:1-134](file://docker/Dockerfile#L1-L134)
+- [docker/Dockerfile:1-229](file://docker/Dockerfile#L1-L229)
 
 ### Diagnostic Tools and Techniques
 - Coverage builds: Instrumented Debug builds with gcov/gcovr; CI gates coverage thresholds.
 - Compile commands: Enable `CMAKE_EXPORT_COMPILE_COMMANDS` for IDE/tooling integration.
 - Logging: Configure logging via `logcfg.ini` copied into the output directory during configure.
-- **New**: Container health monitoring with built-in health check endpoints.
-- **New**: CI/CD pipeline monitoring through GitHub Actions workflow status.
+- **Enhanced**: Container health monitoring with built-in health check endpoints.
+- **Enhanced**: CI/CD pipeline monitoring through GitHub Actions workflow status.
+- **Enhanced**: BuildKit cache monitoring for optimized dependency caching.
 
 **Section sources**
 - [CMakePresets.json:86-113](file://CMakePresets.json#L86-L113)
@@ -641,7 +718,7 @@ Steps:
 - Desktop: Windows, Linux, macOS.
 - Mobile: Android (NDK), iOS (Xcode).
 - Game consoles: Supported via triplets; some features disabled.
-- **New**: Containerized deployments on any platform supporting Docker.
+- **Enhanced**: Containerized deployments on any platform supporting Docker with improved reliability.
 
 **Section sources**
 - [CMakeLists.txt:131-157](file://CMakeLists.txt#L131-L157)
@@ -673,20 +750,22 @@ Steps:
 - [README.md:100-185](file://README.md#L100-L185)
 - [CMakeLists.txt:641-665](file://CMakeLists.txt#L641-L665)
 
-#### How do I deploy using Docker?
-- Build the container image using the provided Dockerfile.
+#### How do I deploy using enhanced Docker?
+- Build the container image using the enhanced Dockerfile with improved reliability.
 - Run with appropriate environment variables for authentication and configuration.
 - Use volume mounts for persistent data storage.
+- For restricted networks, configure custom apt mirrors and PowerShell sources.
 
 **Section sources**
-- [docker/Dockerfile:1-134](file://docker/Dockerfile#L1-L134)
+- [docker/Dockerfile:1-229](file://docker/Dockerfile#L1-L229)
 
 ### Known Limitations and Workarounds
 - Dynamic loading disabled on non-desktop platforms; use static linking or supported plugin mechanisms.
 - bit7z disabled on non-desktop platforms; rely on miniz or alternative compression if needed.
 - Boolean operations disabled in Debug builds; use Release for geometry-heavy workflows.
-- **New**: Docker builds require significant disk space for dependency compilation; ensure adequate storage.
-- **New**: CI/CD workflows may timeout on first run due to dependency caching; subsequent runs are much faster.
+- **Enhanced**: Docker builds require significant disk space for dependency compilation; ensure adequate storage.
+- **Enhanced**: CI/CD workflows may timeout on first run due to dependency caching; subsequent runs are much faster.
+- **Enhanced**: Network connectivity issues are now handled with improved retry logic and fallback mechanisms.
 
 **Section sources**
 - [CMakeLists.txt:228-256](file://CMakeLists.txt#L228-L256)
@@ -697,13 +776,14 @@ Steps:
 - Expand game console support with tailored logger and feature toggles.
 - Improve mobile compression options beyond miniz/bit7z constraints.
 - Enhance coverage baselines as tests evolve.
-- **New**: Expand container orchestration support with Helm charts and Kubernetes manifests.
-- **New**: Add more granular CI/CD workflows for different deployment targets.
+- **Enhanced**: Expand container orchestration support with Helm charts and Kubernetes manifests.
+- **Enhanced**: Add more granular CI/CD workflows for different deployment targets.
+- **Enhanced**: Further improve network resilience and build reliability mechanisms.
 
 [No sources needed since this section provides general guidance]
 
 ## Conclusion
-This guide consolidates common build and runtime issues for HsBaSlicer, clarifies dependency and licensing behavior, and outlines deployment strategies including modern containerization approaches. The new Docker containerization and CI/CD automation provide streamlined deployment options while maintaining the flexibility of traditional build methods. Use the provided presets, CMake options, Docker configurations, and GitHub Actions workflows to tailor your deployment for your target platform and environment.
+This guide consolidates common build and runtime issues for HsBaSlicer, clarifies dependency and licensing behavior, and outlines deployment strategies including modern containerization approaches. The enhanced Docker containerization and CI/CD automation provide streamlined deployment options with significantly improved reliability, while maintaining the flexibility of traditional build methods. The new features include improved network handling, PowerShell isolation, vcpkg toolchain pre-warming, and CMake configure retry logic. Use the provided presets, CMake options, enhanced Docker configurations, and GitHub Actions workflows to tailor your deployment for your target platform and environment.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -719,11 +799,11 @@ Usage:
 **Section sources**
 - [cmake/deploy_dlls.cmake:1-27](file://cmake/deploy_dlls.cmake#L1-L27)
 
-### Docker Quick Reference
-Common Docker commands for HsBaSlicer deployment:
+### Enhanced Docker Quick Reference
+Common Docker commands for HsBaSlicer deployment with enhanced reliability:
 
 ```bash
-# Build image
+# Build image with enhanced reliability
 docker build -f docker/Dockerfile -t hsba-rest-api:latest .
 
 # Run container
@@ -741,17 +821,25 @@ curl http://localhost:8080/api/health
 
 # Stop container
 docker stop <container-id>
+
+# Build with custom apt mirror for restricted networks
+docker build \
+  --build-arg APT_MIRROR=https://your-custom-mirror/ubuntu/ \
+  -f docker/Dockerfile -t hsba-rest-api:latest .
+
+# Monitor BuildKit cache
+docker builder ls
 ```
 
 **Section sources**
 - [docker/Dockerfile:7-9](file://docker/Dockerfile#L7-L9)
 - [docker/Dockerfile:118-134](file://docker/Dockerfile#L118-L134)
 
-### CI/CD Workflow Reference
+### Enhanced CI/CD Workflow Reference
 GitHub Actions workflows available for automated testing and deployment:
 
 - **Multi-Platform Builds**: `cmake-multi-platform.yml` - Tests on Windows, Linux, macOS
-- **Docker REST API**: `docker-rest-api.yml` - Container build and smoke tests  
+- **Enhanced Docker REST API**: `docker-rest-api.yml` - Container build with reliability improvements and smoke tests  
 - **REST WebUI**: `rest-webui.yml` - Node.js console application testing
 - **Test Coverage**: `test-coverage.yml` - Code coverage analysis and reporting
 
@@ -760,3 +848,4 @@ GitHub Actions workflows available for automated testing and deployment:
 - [.github/workflows/docker-rest-api.yml:1-153](file://.github/workflows/docker-rest-api.yml#L1-L153)
 - [.github/workflows/rest-webui.yml:1-79](file://.github/workflows/rest-webui.yml#L1-L79)
 - [.github/workflows/test-coverage.yml:1-136](file://.github/workflows/test-coverage.yml#L1-L136)
+</docs>

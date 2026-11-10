@@ -42,9 +42,22 @@ jobs:
       - name: Configure CMake
         shell: bash
         run: |
-          cmake -B build -S . -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+          # vcpkg treats connection failures as non-transient and gives up, so the
+          # outer shell retries configure up to 5 times, wiping the build dir in
+          # between to drop stale CMakeCache entries (same policy as docker/Dockerfile).
+          ok=0
+          for attempt in 1 2 3 4 5; do
+            echo ">>> CMake configure attempt ${attempt}/5"
+            if cmake -B build -S . -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake; then
+              ok=1
+              break
+            fi
+            rm -rf build
+            [ "${attempt}" = 5 ] || { echo ">>> configure attempt ${attempt} failed; retrying in 30s"; sleep 30; }
+          done
+          [ "${ok}" = 1 ] || { echo "ERROR: CMake configure failed after 5 attempts"; exit 1; }
 
       - name: Build
         shell: bash

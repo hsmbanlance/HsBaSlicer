@@ -19,6 +19,7 @@ message(STATUS "  PowerShell: ${POWERSHELL_EXECUTABLE}")
 message(STATUS "  Output: ${VERSION_CPP_PATH}")
 message(STATUS "  Build Type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  Vcpkg Triplet: ${VCPKG_TARGET_TRIPLET}")
+message(STATUS "  Manifest Features: ${VCPKG_MANIFEST_FEATURES}")
 
 find_program(POWERSHELL_EXECUTABLE NAMES pwsh powershell)
 if(NOT POWERSHELL_EXECUTABLE)
@@ -32,7 +33,8 @@ execute_process(
             -Platform "ignored"  # Platform parameter is ignored, determined by triplet
             -VcpkgTriplet "${VCPKG_TARGET_TRIPLET}"
             -VcpkgJsonPath "${CMAKE_SOURCE_DIR}/vcpkg.json"
-            -Copyleft "${HSBA_COPL}"
+            -Features "${VCPKG_MANIFEST_FEATURES}"
+            -NoDefaultFeatures "${VCPKG_MANIFEST_NO_DEFAULT_FEATURES}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     RESULT_VARIABLE SCRIPT_RESULT
     OUTPUT_VARIABLE SCRIPT_OUTPUT

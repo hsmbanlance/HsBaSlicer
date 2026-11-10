@@ -1,1 +1,0 @@
-cpp-httplib HTTP server (with optional OpenSSL-backed SSLServer when `CPPHTTPLIB_OPENSSL_SUPPORT` is defined); boost.property_tree for `restapi.ini` parsing; protobuf via `ConfigToProto`/`ConfigFromProto` for the `/api/config/convert` endpoint; SQLite backend for ParamStore (with MySQL/PG host fields present).

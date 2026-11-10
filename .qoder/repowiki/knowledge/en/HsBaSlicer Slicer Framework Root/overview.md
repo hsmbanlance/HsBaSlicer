@@ -1,0 +1,1 @@
+Root of HsBaSlicer, a modular C++20 framework providing slicing pipelines for FDM/SLA/SLS/SLM/TDP/WAAM/LOM 3D-printing workflows, exposing C ABI, C++ API, and an optional REST server.

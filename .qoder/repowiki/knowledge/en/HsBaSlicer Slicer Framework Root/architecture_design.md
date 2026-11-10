@@ -1,0 +1,9 @@
+Top-level `CMakeLists.txt` configures the monorepo and wires ~15 sibling modules under a layered dependency graph:
+- Foundational layers: `base` (types, templates, singleton, thread pool), `cipher`, `logger`, `utils` (config, serialization, Lua bindings).
+- Data-model layers: `proto` (protobuf definitions), `convert` (Msg ↔ PipelineConfig ↔ FullTopoModel), `pipelinetypes` (shared C ABI types), `meshmodel` (IGL + optional CGAL), `cadmodel` (OpenCASCADE B-Rep), `pointcloud` (OpenVDB), `preprocess`.
+- Algorithm layers: `2D` (Clipper2-based polygons), `support` (FDM/SLA overhang detection), `paths` (layer/path/robot outputs).
+- Integration layers: `fileoperator` (ZIP/SQLite/ParamStore/Lua adapter), `LibHsBaSlicer` (C++ header-only-ish API grouping Slice/Preprocess/Support/Fill/Path/Floor/ParamStore/Transfer/Extends), `DllHsBaSlicer` (C ABI DLL exporting per-process-type pipelines: fdm/sla/sls/slm/lom/tdp/waam/file_transfer/custom/param_store).
+- Optional: `ModuleHsBaSlicer` (C++20 module wrapper `hsba_slicer.cppm`), `restapi` (cpp-httplib HTTP server gated by `HSBA_BUILD_REST_API` + vcpkg `rest-api` feature).
+- Consumers: `samples/*` (one executable per process type), `HsBaSlicer` (CLI entry), Android/iOS examples.
+
+Dependency direction is strictly downward: consumers depend on `LibHsBaSlicer` or `DllHsBaSlicer`; `DllHsBaSlicer` depends on `LibHsBaSlicer` + `fileoperator` + `utils`; `LibHsBaSlicer` composes algorithm modules; only `base`/`cipher`/`logger` have no intra-project dependencies. Protobuf messages (`proto/*.proto`) are the canonical inter-layer wire format, converted via `convert/` adapters. Licensing is conditionally dual: MIT unless `HSBA_COPL=ON` (auto-detected via CGAL/OpenCASCADE presence), which switches the project license to GPL-3.0-or-later and enables `USE_CGAL` / `USE_OCCT` / `USE_CAD_KERNEL` compile flags.

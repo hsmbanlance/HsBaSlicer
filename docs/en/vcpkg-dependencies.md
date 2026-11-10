@@ -10,7 +10,7 @@ The project license depends on whether the build links copyleft kernels:
 - A build that includes any copyleft kernel is licensed under **GPL-3.0-or-later**.
 - A build that includes none (iOS and game-console builds, or builds without the `copyleft` feature) is licensed under **MIT**.
 
-In `vcpkg.json` this is expressed with a top-level `license` of `MIT` plus a `copyleft` feature whose `license` is `GPL-3.0-or-later`. The `copyleft` feature is enabled by default on `windows | linux | osx | android`, and **CGAL, libigl[cgal] and OpenCascade are installed only as dependencies of that feature**; when the feature is disabled they are neither installed nor linked. The effective license of a build is generated at configure time into `version.cpp` and exposed via `GetVersionInfo()` / `HsBaGetVersionJson()`.
+In `vcpkg.json` this is expressed with a top-level `license` of `MIT` plus a `copyleft` feature whose `license` is `GPL-3.0-or-later`. The `copyleft` feature is enabled by default on `windows | linux | osx | android`, and **CGAL and OpenCascade are installed only as dependencies of that feature**; when the feature is disabled they are neither installed nor linked. `libigl` itself is a top-level dependency on every non-UWP platform with **no features enabled** (header-only core only, required unconditionally by the root `CMakeLists.txt`); the `copyleft` feature only adds the `libigl[cgal]` feature on top for platforms where CGAL is available (iOS and game consoles, which cannot use copyleft, keep the feature-less core libigl). The effective license of a build is generated at configure time into `version.cpp` and exposed via `GetVersionInfo()` / `HsBaGetVersionJson()`.
 
 On the CMake side, the `HSBA_COPL` option controls whether CGAL and OpenCascade are found and linked (and defines the `USE_CGAL`/`USE_OCCT` macros). The option is tri-state (default `AUTO`): with `AUTO` it resolves from the `VCPKG_MANIFEST_FEATURES` environment variable, then the `VCPKG_MANIFEST_NO_DEFAULT_FEATURES` environment variable, and finally probes whether CGAL/OpenCascade are installed (note that vcpkg default-features are NOT listed in `VCPKG_MANIFEST_FEATURES`, hence the install probe); `-DHSBA_COPL=ON/OFF` forces it explicitly. To produce an MIT-licensed build, disable the default features via the environment variable before configuring so vcpkg does not install the copyleft kernels:
 
@@ -59,6 +59,7 @@ The following packages are excluded on Android because they either have compatib
 | boost-nowide | ✓ | ✓ | ✓ | ✗ | ✗ |
 | boost-date-time | ✓ | ✓ | ✓ | ✓ | ✓ |
 | opencv | ✓ | ✓ | ✓ | ✓ | ✗ |
+| libigl (core) | ✓ | ✓ | ✓ | ✓ | ✓ |
 | opencascade | ✓ | ✓ | ✓ | ✗ | ✗ |
 | sqlpp11 (MySQL/PG) | ✓ | ✓ | ✓ | ✗ | ✗ |
 | openvdb | ✓ | ✓ | ✓ | ✗ | ✗ |

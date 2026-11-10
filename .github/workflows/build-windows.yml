@@ -37,7 +37,25 @@ jobs:
           call "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath > vspath.txt
           set /p VSPATH=<vspath.txt
           call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
+          rem vcpkg treats connection failures as non-transient and gives up, so
+          rem retry configure up to 5 times, wiping the build dir in between to
+          rem drop stale CMakeCache entries (same policy as docker/Dockerfile).
+          set ATTEMPT=0
+          :configure_retry
+          set /a ATTEMPT+=1
+          echo ^>^>^> CMake configure attempt %ATTEMPT%/5
           cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%\\scripts\\buildsystems\\vcpkg.cmake" -DHSBA_ENABLE_THREAD_POOL_COROUTINE=OFF
+          if not errorlevel 1 goto configure_ok
+          if exist build rmdir /s /q build
+          if %ATTEMPT% == 5 (
+            echo ERROR: CMake configure failed after 5 attempts
+            exit /b 1
+          )
+          echo ^>^>^> configure attempt %ATTEMPT% failed; retrying in 30s
+          ping -n 31 127.0.0.1 >nul
+          goto configure_retry
+          :configure_ok
+          echo CMake configure succeeded
 
       - name: Build
         shell: cmd

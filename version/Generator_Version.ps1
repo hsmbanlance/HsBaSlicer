@@ -1,6 +1,6 @@
 # Generator_Version.ps1
 # 此脚本在CMake配置时生成version.cpp文件
-# 用法: .\Generator_Version.ps1 -OutputPath <path_to_version.cpp> -BuildType <Debug|Release> -Platform <platform> -VcpkgTriplet <triplet>
+# 用法: .\Generator_Version.ps1 -OutputPath <path> -BuildType <Debug|Release> -Platform <platform> -VcpkgTriplet <triplet> [-Features <f1;f2>] [-NoDefaultFeatures ON|OFF]
 
 param(
     [Parameter(Mandatory=$true)]
@@ -21,8 +21,14 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$VcpkgJsonPath,
     
+    # CMake 传入的 vcpkg manifest features（对应工具链变量 VCPKG_MANIFEST_FEATURES，
+    # 分号/逗号分隔）；与 default-features 判定共同决定 thirdLibraries 与许可证
     [Parameter(Mandatory=$false)]
-    [string]$Copyleft = "OFF"
+    [string]$Features = "",
+    
+    # 对应 VCPKG_MANIFEST_NO_DEFAULT_FEATURES：ON 时忽略 vcpkg.json 的 default-features
+    [Parameter(Mandatory=$false)]
+    [string]$NoDefaultFeatures = "OFF"
 )
 
 # 获取当前时间戳
@@ -54,6 +60,26 @@ function Get-PlatformFromTriplet {
     else {
         return "Unknown"
     }
+}
+
+# 求值 vcpkg.json 的 platform 表达式：支持 |(或)、&(与)、!(非) 及平台标识，
+# 如 "windows | linux | osx"、"!uwp"、"!windows & !linux & !osx & !android"
+function Test-VcpkgPlatform {
+    param([string]$expression, [string]$platform)
+    if (-not $expression) { return $true }
+    foreach ($orGroup in ($expression -split "\|")) {
+        $groupResult = $true
+        foreach ($term in ($orGroup -split "&")) {
+            $term = $term.Trim()
+            if ($term -eq "") { continue }
+            if ($term.StartsWith("!")) {
+                if ($term.Substring(1).Trim() -eq $platform) { $groupResult = $false; break }
+            }
+            elseif ($term -ne $platform) { $groupResult = $false; break }
+        }
+        if ($groupResult) { return $true }
+    }
+    return $false
 }
 
 # 获取构建所在平台(运行脚本的机器)
@@ -90,10 +116,10 @@ $targetPlatform = Get-PlatformFromTriplet $VcpkgTriplet
 # 解析 vcpkg.json 文件
 $vcpkgJsonPath = if ($VcpkgJsonPath) { $VcpkgJsonPath } else { Join-Path $PSScriptRoot "..\vcpkg.json" }
 $thirdLibsCode = ""
-# 是否启用 vcpkg.json 的 copyleft feature（CGAL/OpenCascade 等 Copyleft 内核仅在该 feature 下安装）
-$copyleftEnabled = $Copyleft -in @("ON", "1", "True", "TRUE", "true")
 # 是否包含 GPL/LGPL 等 Copyleft 依赖，用于决定项目许可证（GPL 或 MIT）
 $hasCopyleft = $false
+# 当前构建启用的 manifest features（显式传入 + 平台匹配的 default-features）
+$enabledFeatures = @()
 
 if (Test-Path $vcpkgJsonPath) {
     try {
@@ -126,6 +152,7 @@ if (Test-Path $vcpkgJsonPath) {
             "boost-pfr" = @{ license = "BSL-1.0"; homepage = "https://www.boost.org/" }
             "cgal" = @{ license = "GPL-3.0-or-later"; homepage = "https://www.cgal.org/" }
             "clipper2" = @{ license = "BSL-1.0"; homepage = "https://github.com/AngusJohnson/Clipper2" }
+            "cpp-httplib" = @{ license = "MIT"; homepage = "https://github.com/yhirose/cpp-httplib" }
             "libjpeg-turbo" = @{ license = "IJG"; homepage = "https://libjpeg-turbo.org/" }
             "libpng" = @{ license = "libpng-2.0"; homepage = "http://www.libpng.org/" }
             "opencv" = @{ license = "Apache-2.0"; homepage = "https://opencv.org/" }
@@ -147,10 +174,28 @@ if (Test-Path $vcpkgJsonPath) {
             "openvdb" = @{ license = "Apache-2.0"; homepage = "https://www.openvdb.org/" }
         }
         
-        # 顶层依赖 + 启用 copyleft feature 时追加其 feature 依赖（CGAL、libigl[cgal]、OpenCascade）
+        # default-features：按平台表达式判定默认启用的 feature（NoDefaultFeatures=ON 时忽略）
+        $noDefault = $NoDefaultFeatures -in @("ON", "1", "True", "TRUE", "true")
+        if (-not $noDefault -and $vcpkgContent.'default-features') {
+            foreach ($df in @($vcpkgContent.'default-features')) {
+                $dfName = if ($df -is [string]) { $df } else { $df.name }
+                $dfPlatform = if ($df -is [object] -and $df.platform) { $df.platform } else { $null }
+                if ($dfName -and (-not $dfPlatform -or (Test-VcpkgPlatform $dfPlatform $currentPlatform))) {
+                    $enabledFeatures += @($dfName)
+                }
+            }
+        }
+        # 显式传入的 features（rest-api、copyleft 等，分号/逗号分隔）
+        $enabledFeatures += @($Features -split "[;,]" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" })
+        $enabledFeatures = @($enabledFeatures | Select-Object -Unique)
+
+        # 顶层依赖 + 所有启用 feature 的依赖（copyleft→CGAL/OCCT，rest-api→cpp-httplib…）
         $allDeps = @($vcpkgContent.dependencies)
-        if ($copyleftEnabled -and $vcpkgContent.features.copyleft.dependencies) {
-            $allDeps += @($vcpkgContent.features.copyleft.dependencies)
+        foreach ($featName in $enabledFeatures) {
+            $feat = $vcpkgContent.features.$featName
+            if ($feat -and $feat.dependencies) {
+                $allDeps += @($feat.dependencies)
+            }
         }
         
         # 遍历依赖并生成代码
@@ -160,23 +205,10 @@ if (Test-Path $vcpkgJsonPath) {
             $depName = if ($dep -is [string]) { $dep } else { $dep.name }
             $depPlatform = if ($dep -is [object] -and $dep.platform) { $dep.platform } else { $null }
             
-            # 检查平台条件
+            # 检查平台条件（完整表达式求值：|/!/& 组合）
             $shouldInclude = $true
             if ($depPlatform -and $currentPlatform) {
-                # 简单的平台匹配逻辑
-                if ($depPlatform -match "^!") {
-                    # 排除平台
-                    $excludePlatforms = $depPlatform -split "\|" | ForEach-Object { $_.Trim().Substring(1) }
-                    if ($excludePlatforms -contains $currentPlatform) {
-                        $shouldInclude = $false
-                    }
-                } else {
-                    # 包含平台
-                    $includePlatforms = $depPlatform -split "\|" | ForEach-Object { $_.Trim() }
-                    if ($includePlatforms -notcontains $currentPlatform) {
-                        $shouldInclude = $false
-                    }
-                }
+                $shouldInclude = Test-VcpkgPlatform $depPlatform $currentPlatform
             }
             
             if ($shouldInclude -and $libInfoMap.ContainsKey($depName) -and -not $addedLibs.ContainsKey($depName)) {
@@ -244,6 +276,7 @@ Write-Host "Generated version.cpp at: $OutputPath"
 Write-Host "Build Type: $BuildType"
 Write-Host "Platform: $Platform"
 Write-Host "Vcpkg Triplet: $VcpkgTriplet"
-Write-Host "Copyleft Feature: $(if ($copyleftEnabled) { 'enabled' } else { 'disabled' })"
+Write-Host "Manifest Features: ${Features}"
+Write-Host "Enabled Features: $($enabledFeatures -join ', ')"
 Write-Host "Project License: $projectLicense"
 Write-Host "Configure Time: $timestamp"
