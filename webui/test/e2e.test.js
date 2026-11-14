@@ -6,7 +6,9 @@
  * case talks to the genuine C++ binary, so it covers the parts only the real server can
  * prove: the actual JSON member names, the health/version handshake of a fresh process, and -
  * most importantly - genuine slicing runs. Every pipeline that writes a file is submitted and
- * checked, because a console that only lists endpoints has proved nothing.
+ * checked, because a console that only lists endpoints has proved nothing. One suite covers models
+ * built from text CSG (no mesh file at all), which is the only way the OCCT DRAW bridge gets
+ * exercised from out here. The CSG cases need no download either, so they run offline.
  *
  * The model is the same public-domain Stanford Bunny the samples build downloads (see
  * samples/FDM/CMakeLists.txt, which fetches this exact URL into this exact path): the test reuses
@@ -915,6 +917,147 @@ describe("end to end with a real HsBaSlicerRestServer", () => {
 
       const result = await fetch(`${consoleUrlOf()}/api/jobs/${accepted.id}/result`);
       assert.equal(result.status, 409);
+    });
+  });
+
+  /**
+   * Text CSG: a custom pipeline whose model is built from DRAW commands instead of a mesh file.
+   *
+   * This is the only suite here that needs no uploaded model and no download - the geometry comes
+   * from the request body - so it also proves the `model_path` really is optional for a pipeline
+   * that can describe its own part. Every case asserts numbers that only the shape itself can
+   * produce (volume, bounding box, layer count), because "the job said success and wrote bytes"
+   * would still hold if the CSG step had silently been skipped.
+   */
+  describe("builds models from text CSG", () => {
+    const CSG_SCRIPT = sampleScript("Custom/scripts/my_csg_pipeline.lua");
+
+    /**
+     * @brief Submit one custom job that builds its model from the given CSG text.
+     *
+     * The script file stays the sample's; only `machine.csg_script` varies, which is what the
+     * sample is written for. A Lua long bracket wraps the DRAW text so nothing in it needs
+     * escaping, and the layer heights are chosen so the expected layer counts are exact.
+     * The text has to leave its shape in the DRAW variable `result` - that is the name the bridge
+     * reads back - which is why the cases below name their last primitive accordingly.
+     */
+    async function submitCsgJob(name, csg) {
+      const outputPath = toPosix(path.join(tempDir, "csg", `${name}.gcode`));
+      await mkdir(path.dirname(outputPath), { recursive: true });
+      const config = {
+        output_path: outputPath,
+        pipeline_lua_script: CSG_SCRIPT,
+        pipeline_lua_source:
+          `machine = { layer_height = 2, first_layer_height = 2, csg_script = [==[${csg}]==] }\n`,
+        entry_func: "run_pipeline",
+      };
+      const submit = await fetch(`${consoleUrlOf()}/api/jobs/custom`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(config),
+      });
+      const submitBody = await submit.text();
+      assert.equal(submit.status, 202, submitBody);
+      return { id: JSON.parse(submitBody).id, outputPath };
+    }
+
+    /** @brief The `; csg_volume=` / `; model_size=` the run itself put at the head of its G-code. */
+    async function gcodeHeader(filePath) {
+      const text = await readFile(filePath, "utf8");
+      const volume = /csg_volume=([\d.]+)/.exec(text);
+      const size = /model_size=([\d.]+)x([\d.]+)x([\d.]+) mm/.exec(text);
+      assert.ok(volume && size, `the run left no CSG header in ${filePath}:\n${text.slice(0, 200)}`);
+      return { text, volume: Number(volume[1]), size: size.slice(1, 4).map(Number) };
+    }
+
+    /** @brief Assert a job ended failed, and that neither a path nor a file was published for it. */
+    async function assertRejectedJob(id, outputPath) {
+      const job = await waitForTerminalJob(consoleUrlOf(), id);
+      assert.equal(job.state, "failed", JSON.stringify(job));
+      // The reason has to survive HTTP, the C ABI and two Lua frames, or a client only learns the
+      // job died. "CSG" is what both bridge failures (script error, no shape returned) report.
+      assert.match(job.error_message, /CSG/, job.error_message);
+      assert.equal(job.output_path, "", `${job.error_message} still published ${outputPath}`);
+      assert.ok(!existsSync(outputPath), `${outputPath} exists although the run failed`);
+      const result = await fetch(`${consoleUrlOf()}/api/jobs/${id}/result`);
+      assert.equal(result.status, 409);
+      return job;
+    }
+
+    it("slices a CSG box into the gcode it reports", async () => {
+      // 12 mm tall at 2 mm layers (first layer 2 mm) is 1 + ceil(10 / 2) layers, and a 60x40x12
+      // box is exactly 28800 mm^3 - so both the shape and the layering are pinned down.
+      const { id, outputPath } = await submitCsgJob("plate", "box result 60 40 12");
+      const job = await waitForTerminalJob(consoleUrlOf(), id);
+      assert.equal(job.state, "success", job.error_message);
+      assert.equal(job.output_path, outputPath);
+      assert.equal(job.total_layers, 6, `a 12 mm box sliced into ${job.total_layers} layers`);
+
+      const header = await gcodeHeader(outputPath);
+      assert.ok(Math.abs(header.volume - 28800) < 0.01, `CSG volume ${header.volume} is not 28800 mm^3`);
+      assert.deepEqual(header.size, [60, 40, 12]);
+      // The header is only what the script claims about itself. The coordinates the printer will
+      // move to are the evidence: extruding moves across the whole 60x40 footprint, never far
+      // outside it, and Z reaching up through the 12 mm of the box.
+      const moves = header.text.split("\n").filter((line) => /^G1 X.*E\d/.test(line));
+      // Outlines alone (two walls over six layers) are a few dozen moves; the filled plate the
+      // sample asks for is thousands. This is what says the fill ran.
+      assert.ok(moves.length >= 500, `only ${moves.length} extruding moves for a 60x40 plate`);
+      const word = (line, letter) => Number(new RegExp(`${letter}(-?[\\d.]+)`).exec(line)[1]);
+      const xs = moves.map((line) => word(line, "X"));
+      const ys = moves.map((line) => word(line, "Y"));
+      const zs = header.text.split("\n").filter((line) => /\bZ[\d.]+/.test(line)).map((line) => word(line, "Z"));
+      // An extrusion has width, so its centre line sits half a line width (0.45 mm) on either side
+      // of the model edge - measured on a real run at -0.201..60.201. Anything beyond one whole
+      // line width is no longer this box.
+      const reach = (values, size) => {
+        const lo = Math.min(...values);
+        const hi = Math.max(...values);
+        assert.ok(lo >= -0.45 && hi <= size + 0.45, `the print spans ${lo}..${hi}, off a ${size} mm box`);
+        assert.ok(hi - lo > size - 0.5, `only ${hi - lo} mm of ${size} was printed`);
+      };
+      reach(xs, 60);
+      reach(ys, 40);
+      assert.ok(Math.max(...zs) > 8 && Math.max(...zs) <= 12.001, `the gcode stops at Z=${Math.max(...zs)}`);
+
+      const result = await fetch(`${consoleUrlOf()}/api/jobs/${id}/result`);
+      assert.equal(result.status, 200);
+      assert.match(result.headers.get("content-type"), /text\/plain/);
+      assert.ok((await result.text()).length > 0, "an inline answer for a written file was empty");
+    });
+
+    it("fuses the primitives a CSG script describes", async () => {
+      // A 60x40x3 plate plus a cylinder r=8 h=12 stood on top of it: the fuse has to reach 15 mm
+      // and carry both volumes (7200 + pi*64*12). A script that only ran the first command, or a
+      // boolean that silently dropped an operand, lands on a different number.
+      const csg = "set t 3\nbox base 60 40 $t\npcylinder boss 8 12\nttranslate boss 30 20 $t\nbfuse result base boss\n";
+      const { id, outputPath } = await submitCsgJob("bracket", csg);
+      const job = await waitForTerminalJob(consoleUrlOf(), id);
+      assert.equal(job.state, "success", job.error_message);
+      assert.equal(job.total_layers, 8, `a 15 mm bracket sliced into ${job.total_layers} layers`);
+
+      const header = await gcodeHeader(outputPath);
+      assert.ok(Math.abs(header.volume - (7200 + Math.PI * 64 * 12)) < 0.05, `fused volume is ${header.volume}`);
+      assert.deepEqual(header.size, [60, 40, 15]);
+    });
+
+    it("does not let one job read the shapes another job left behind", async () => {
+      // DRAW keeps every named shape of a script in one process wide bank. If a finished call
+      // released them, a later script naming one of them has nothing to resolve and must fail;
+      // a regression here turns this into a green run over someone else's geometry.
+      const first = await submitCsgJob("leak-source", "box csgLeakProbe 4 4 4\nbox result 4 4 4");
+      assert.equal((await waitForTerminalJob(consoleUrlOf(), first.id)).state, "success");
+
+      const second = await submitCsgJob("leak-reader", "bcut result csgLeakProbe csgLeakProbe");
+      await assertRejectedJob(second.id, second.outputPath);
+    });
+
+    it("fails a job whose CSG script does not run", async () => {
+      const { id, outputPath } = await submitCsgJob("broken", "thisCommandDoesNotExist 1 1 1");
+      const job = await assertRejectedJob(id, outputPath);
+      // A typo is not a missing feature: the message must not be the one a build without the
+      // DRAW bridge gives, or every CSG failure would look like a configuration problem.
+      assert.doesNotMatch(job.error_message, /DRAW Test Harness/, job.error_message);
     });
   });
 });
