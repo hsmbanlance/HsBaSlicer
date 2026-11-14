@@ -76,6 +76,16 @@ struct GCodeThumbnail
     std::string reason;          ///< Why no image came out, read only when @ref base64 is empty.
 };
 
+/// @brief Where the continuous (spiralized) wall is written relative to the per-layer bodies.
+enum class ContinuousWallPlacement
+{
+    BeforeLayers, ///< Wall first, then the layers: a run made of the helix alone, or of a helix whose
+                  ///< per-layer data sits above it (legacy default, keeps existing output byte-identical).
+    AfterLayers   ///< Wall last, so the per-layer bodies are deposited first. Needed when a spiral run
+                  ///< keeps solid layers below the helix: those must reach the plate before the vase wall
+                  ///< starts rising, otherwise the base floats above the helix in the file.
+};
+
 /// @brief GCode path output supporting multiple firmware formats.
 ///
 /// Inherits LayersPath for layer data storage and Lua extensibility.
@@ -105,12 +115,24 @@ public:
     ///
     /// Used by spiralize/vase mode: the wall is printed as one unbroken
     /// extrusion line whose Z rises across layer boundaries. When set, ToGCode
-    /// emits this wall first, then any per-layer polygon data. Empty by default,
-    /// so existing per-layer output is unchanged.
-    void setContinuousWall(std::vector<PathPoint3D> wall) { continuous_wall_ = std::move(wall); }
+    /// emits it alongside any per-layer polygon data, in the order given by
+    /// @ref ContinuousWallPlacement. Empty by default, so existing per-layer
+    /// output is unchanged.
+    ///
+    /// @param wall The helix points, in deposition order.
+    /// @param placement Whether the wall precedes the per-layer bodies (default) or follows them.
+    void setContinuousWall(std::vector<PathPoint3D> wall,
+                           ContinuousWallPlacement placement = ContinuousWallPlacement::BeforeLayers)
+    {
+        continuous_wall_ = std::move(wall);
+        wall_placement_ = placement;
+    }
 
     /// @brief Whether a continuous (spiralized) wall has been provided.
     bool hasContinuousWall() const { return !continuous_wall_.empty(); }
+
+    /// @brief Where the continuous wall is placed relative to the per-layer bodies.
+    ContinuousWallPlacement continuousWallPlacement() const { return wall_placement_; }
 
     /// @brief Embed preview images as comment blocks at the very top of the generated G-code.
     ///
@@ -125,6 +147,7 @@ public:
 private:
     GCodePrinterConfig printer_config_;
     std::vector<PathPoint3D> continuous_wall_;
+    ContinuousWallPlacement wall_placement_ = ContinuousWallPlacement::BeforeLayers;
     std::vector<GCodeThumbnail> thumbnails_;
 
     std::string GenerateHeader(GCodeFirmware fw) const;

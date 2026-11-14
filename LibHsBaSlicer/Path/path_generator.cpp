@@ -4,7 +4,9 @@
  */
 #include "path_generator.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <format>
 #include <string>
 #include <utility>
@@ -150,12 +152,45 @@ HSBA_SLICER_LIB_API std::unique_ptr<GCodePath> GenerateGCodePathV2(const std::ve
 
 HSBA_SLICER_LIB_API std::unique_ptr<GCodePath> GenerateGCodePathSpiral(const std::vector<PolygonsD>& layer_outlines,
                                                                        const std::vector<double>& layer_zs,
-                                                                       const GCodePrinterConfig& printer_config)
+                                                                       const GCodePrinterConfig& printer_config,
+                                                                       std::size_t solid_bottom_layers,
+                                                                       const std::vector<PolygonsD>& solid_bottom_fills)
 {
     auto path = std::make_unique<GCodePath>(printer_config);
 
-    // Merge all per-layer outer contours into one continuous, Z-rising helix.
-    const std::vector<SpiralPoint> helix = SpiralizeOuterWall(layer_outlines, layer_zs);
+    const std::size_t nl = std::min(layer_outlines.size(), layer_zs.size());
+    const std::size_t solid = std::min(solid_bottom_layers, nl);
+
+    // The base of the object is closed by ordinary layers: contour plus solid fill,
+    // deposited one layer at a time. Only what sits above them becomes the helix.
+    for (std::size_t i = 0; i < solid; ++i)
+    {
+        PolygonsD combined = layer_outlines[i];
+        if (i < solid_bottom_fills.size())
+        {
+            combined.insert(combined.end(), solid_bottom_fills[i].begin(), solid_bottom_fills[i].end());
+        }
+        path->push_back(std::format("Z:{:.6f}", layer_zs[i]), combined);
+    }
+
+    // Merge the remaining per-layer outer contours into one continuous, Z-rising helix.
+    // Dropping the leading layers would ideally be a view, but SpiralizeOuterWall takes
+    // vectors, so only pay for the copy when a base was actually requested.
+    std::vector<PolygonsD> trimmed_layers;
+    std::vector<double> trimmed_zs;
+    const std::vector<PolygonsD>* helix_layers = &layer_outlines;
+    const std::vector<double>* helix_zs = &layer_zs;
+    if (solid > 0)
+    {
+        trimmed_layers.assign(layer_outlines.begin() + static_cast<std::ptrdiff_t>(solid),
+                              layer_outlines.begin() + static_cast<std::ptrdiff_t>(nl));
+        trimmed_zs.assign(layer_zs.begin() + static_cast<std::ptrdiff_t>(solid),
+                          layer_zs.begin() + static_cast<std::ptrdiff_t>(nl));
+        helix_layers = &trimmed_layers;
+        helix_zs = &trimmed_zs;
+    }
+    const std::vector<SpiralPoint> helix =
+        (solid < nl) ? SpiralizeOuterWall(*helix_layers, *helix_zs) : std::vector<SpiralPoint>{};
 
     std::vector<PathPoint3D> wall;
     wall.reserve(helix.size());
@@ -164,9 +199,11 @@ HSBA_SLICER_LIB_API std::unique_ptr<GCodePath> GenerateGCodePathSpiral(const std
         wall.push_back(PathPoint3D{.x = pt.x, .y = pt.y, .z = pt.z});
     }
 
-    // Vase mode emits only the continuous wall (no per-layer polygons); ToGCode
-    // writes header + the single unbroken helix + footer.
-    path->setContinuousWall(std::move(wall));
+    // Pure vase mode still emits only the continuous wall (header + helix + footer, no
+    // per-layer travel). With a solid base the wall has to come last, otherwise the file
+    // would deposit the helix under the layers that are supposed to sit on the plate.
+    path->setContinuousWall(std::move(wall), solid > 0 ? ContinuousWallPlacement::AfterLayers
+                                                       : ContinuousWallPlacement::BeforeLayers);
     return path;
 }
 

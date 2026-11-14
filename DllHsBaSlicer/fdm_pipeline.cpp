@@ -538,7 +538,8 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
         std::vector<PolygonsD> layer_supports(total_layers);
         if (cfg.spiral_mode)
         {
-            // Vase/spiral mode emits a single continuous wall: no support, no infill.
+            // Vase/spiral mode emits a single continuous wall above its solid base:
+            // no support, no infill in the wound part of the object.
             ReportProgress(cfg, 60, "Support disabled (spiral mode)");
         }
         else if (cfg.enable_support)
@@ -575,6 +576,10 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
         const int top_start = total_layers - cfg.top_layer_count;  // [top_start, total_layers) is top
         const bool has_lua_infill = !cfg.infill_lua_script.empty();
         const std::string infill_func = cfg.infill_lua_func.empty() ? "generate_fill" : cfg.infill_lua_func;
+
+        // How many leading layers a spiral run keeps as ordinary solid layers. Those close
+        // the base; the helix starts above them. Zero for every other run.
+        const int spiral_solid = cfg.spiral_mode ? std::clamp(bottom_end, 0, total_layers) : 0;
 
         // Middle-layer fill spacing: lower density means larger spacing
         double middle_spacing = cfg.fill_spacing;
@@ -613,8 +618,14 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
 
         if (cfg.spiral_mode)
         {
-            // Spiral/vase mode has no infill; skip the fill stage entirely.
-            ReportProgress(cfg, 85, "Fill skipped (spiral mode)");
+            // Spiral/vase mode has no infill above the base, but the bottom solid layers
+            // still have to close the object: a helix that starts at layer 0 leaves the
+            // floor as nothing but its own outline, i.e. a vase with a hole in it.
+            for (int i = 0; i < spiral_solid; ++i)
+            {
+                cpp_fill_layer(i);
+            }
+            ReportProgress(cfg, 85, "Fill skipped above the solid base (spiral mode)");
         }
         else if (has_lua_infill)
         {
@@ -665,13 +676,17 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
             {
                 geometry_zs[i] = static_cast<double>(GetLayerZ(i, cfg.first_layer_height, cfg.layer_height));
             }
-            // A vase-mode run deposits one continuous helix, so the snapshot keeps the very
-            // polyline it will print: SpiralizeOuterWall is a pure function of the same
-            // inputs the exporter uses, which makes the stored path identical to the G-code.
+            // A vase-mode run deposits one continuous helix above its solid base, so the
+            // snapshot keeps the very polyline it will print: SpiralizeOuterWall is a pure
+            // function of the same inputs the exporter uses, which makes the stored path
+            // identical to the G-code. The base layers arrive through the per-layer arrays.
             std::vector<double> path_xyz;
-            if (cfg.spiral_mode)
+            if (cfg.spiral_mode && spiral_solid < total_layers)
             {
-                const std::vector<SpiralPoint> helix = SpiralizeOuterWall(layer_outlines, geometry_zs);
+                const std::vector<PolygonsD> helix_layers(layer_outlines.begin() + spiral_solid,
+                                                          layer_outlines.end());
+                const std::vector<double> helix_zs(geometry_zs.begin() + spiral_solid, geometry_zs.end());
+                const std::vector<SpiralPoint> helix = SpiralizeOuterWall(helix_layers, helix_zs);
                 path_xyz.reserve(helix.size() * 3);
                 for (const SpiralPoint& point : helix)
                 {
@@ -703,7 +718,8 @@ Utils::Task<InternalResult> RunPipelineAsync(const InternalConfig& cfg)
                 layer_zs[i] = static_cast<double>(GetLayerZ(i, cfg.first_layer_height, cfg.layer_height));
             }
 
-            auto gcode_path = GenerateGCodePathSpiral(layer_outlines, layer_zs, cfg.printer_config);
+            auto gcode_path = GenerateGCodePathSpiral(layer_outlines, layer_zs, cfg.printer_config,
+                                                      static_cast<std::size_t>(spiral_solid), layer_fills);
             if (gcode_path)
             {
                 if (!thumbnails.empty())

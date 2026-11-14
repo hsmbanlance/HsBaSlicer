@@ -382,6 +382,7 @@ std::string GCodePath::ToGCode(GCodeFirmware firmware) const
     {
         wall = GenerateContinuousWall();
     }
+    const bool wall_first = wall_placement_ == ContinuousWallPlacement::BeforeLayers;
 
     // Reserve exact capacity to avoid ostringstream's incremental growth.
     std::string header = GenerateHeader(firmware);
@@ -395,10 +396,17 @@ std::string GCodePath::ToGCode(GCodeFirmware firmware) const
     std::string out;
     out.reserve(total_size);
     out.append(header);
-    out.append(wall);
+    if (wall_first)
+    {
+        out.append(wall);
+    }
     for (const auto& s : bodies)
     {
         out.append(s);
+    }
+    if (!wall_first)
+    {
+        out.append(wall);
     }
     out.append(footer);
     return out;
