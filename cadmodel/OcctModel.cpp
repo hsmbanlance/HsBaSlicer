@@ -33,6 +33,7 @@
 #include <VrmlData_ShapeConvert.hxx>
 
 #include <BRepGProp.hxx>
+#include <BRepMesh_IncrementalMesh.hxx>
 #include <GProp_GProps.hxx>
 #include <Poly_Triangulation.hxx>
 
@@ -51,6 +52,7 @@
 #include <BRepPrimAPI_MakeSphere.hxx>
 #include <BRepPrimAPI_MakeTorus.hxx>
 
+#include "OcctCsg.hpp"
 #include "OcctTypeAliases.hpp"
 #include "base/ModelFormat.hpp"
 #include "base/encoding_convert.hpp"
@@ -352,6 +354,23 @@ void OcctModel::BoundingBox(Eigen::Vector3f& min, Eigen::Vector3f& max) const
 
 std::pair<Eigen::MatrixXf, Eigen::MatrixXi> OcctModel::TriangleMesh() const
 {
+    // The loop below only reads the triangulation OCCT keeps per face, and a shape that came from a
+    // file, from a CSG script or from a boolean has none until somebody asks for it: without this
+    // call the function quietly returns an empty mesh, which slices as "nothing to print".
+    // Meshing here rather than wherever a shape_ is assigned, because every transform produces a new
+    // shape and would have to repeat it, and BRepMesh_IncrementalMesh keeps the triangles it already
+    // made, so a repeat call only fills the faces that lost theirs.
+    // Linear deflection is relative to each edge, which tracks the size of the part instead of
+    // guessing one absolute value for both a 1 mm pin and a 300 mm plate. Parallelism stays off:
+    // jobs run on their own models but share TShapes across layers, and one call is not worth a
+    // task pool per slice.
+    constexpr double kLinearDeflection = 0.001;
+    constexpr double kAngularDeflection = 0.3;
+    if (!shape_.IsNull())
+    {
+        BRepMesh_IncrementalMesh(shape_, kLinearDeflection, Standard_True, kAngularDeflection, Standard_False);
+    }
+
     std::vector<Eigen::Vector3f> vertices;
     std::vector<Eigen::Vector3i> faces;
     for (TopExp_Explorer anExpSF(shape_, TopAbs_FACE); anExpSF.More(); anExpSF.Next())
@@ -446,6 +465,11 @@ OcctModel OcctModel::CreateTorus(const float majorRadius, const float minorRadiu
 {
     BRepPrimAPI_MakeTorus maker{majorRadius, minorRadius};
     return OcctModel(maker.Shape());
+}
+
+OcctModel OcctModel::CreateFromCsg(std::string_view script, std::string_view shapeName)
+{
+    return OcctModel(ShapeFromCsgScript(script, shapeName));
 }
 
 OcctModel Union(const OcctModel& left, const OcctModel& right)

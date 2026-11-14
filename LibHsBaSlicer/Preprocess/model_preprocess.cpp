@@ -9,6 +9,9 @@
 #include <utility>
 
 #include "base/error.hpp"
+#ifdef USE_OCCT
+#include "cadmodel/OcctModel.hpp"
+#endif
 #include "preprocess/ModelLoader.hpp"
 
 namespace HsBa::Slicer
@@ -200,5 +203,20 @@ HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanXor(const std::string& leftNa
 }
 
 #endif  // USE_CGAL
+
+#ifdef USE_OCCT
+
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> BuildCsgModel(const std::string& name, std::string_view script,
+                                                          std::string_view shapeName)
+{
+    return GuardModel(
+        [&]
+        {
+            return GetLoader().InsertModel(name,
+                                           std::make_shared<OcctModel>(OcctModel::CreateFromCsg(script, shapeName)));
+        });
+}
+
+#endif  // USE_OCCT
 
 }  // namespace HsBa::Slicer

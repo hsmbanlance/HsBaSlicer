@@ -106,6 +106,17 @@ public:
     static OcctModel CreatePrime(const PolygonD& poly, const Eigen::Vector3f& direction);
     /// Extrude a set of polygons along the given direction into a solid.
     static OcctModel CreatePrime(const PolygonsD& paths, const Eigen::Vector3f& direction);
+    /**
+     * @brief Build a model from an OCCT DRAW Test Harness script (text CSG).
+     *
+     * The script uses the DRAW command language: primitives (box, pcylinder, pcone,
+     * psphere, ptorus), transforms (ttranslate, ...) and booleans (bcut, bfuse,
+     * bcommon). See ShapeFromCsgScript for the registered command groups.
+     * @param script DRAW commands, one per line.
+     * @param shapeName DRAW variable holding the result; empty selects "result".
+     * @throws InvalidArgumentError|NotFoundError|NotSupportedError see ShapeFromCsgScript.
+     */
+    static OcctModel CreateFromCsg(std::string_view script, std::string_view shapeName = {});
 
     friend struct std::hash<OcctModel>;
 

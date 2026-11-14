@@ -186,6 +186,28 @@ HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanXor(const std::string& leftNa
                                                        const std::string& resultName);
 #endif  // USE_CGAL
 
+#ifdef USE_OCCT
+// ----- Text CSG model construction (requires the OCCT CAD kernel) -----
+
+/**
+ * @brief Build an OcctModel from an OCCT DRAW Test Harness script and store it in the pool.
+ *
+ * The script is text CSG in the DRAW command language: primitives (box, pcylinder,
+ * pcone, psphere, ptorus), transforms (ttranslate, ...) and boolean operations
+ * (bcut, bfuse, bcommon), one command per line. Requires OpenCASCADE built with its
+ * Draw module (vcpkg feature opencascade[tcl]).
+ * @param name Unique model name for the result.
+ * @param script DRAW commands, lines separated by '\n'.
+ * @param shapeName DRAW variable holding the result; empty selects "result".
+ * @return Shared pointer to the resulting model.
+ * @throws InvalidArgumentError If the name already exists or the script is malformed.
+ * @throws NotFoundError If the script leaves no shape under @p shapeName.
+ * @throws NotSupportedError If this build has no DRAW Test Harness.
+ */
+HSBA_SLICER_LIB_API std::shared_ptr<IModel> BuildCsgModel(const std::string& name, std::string_view script,
+                                                          std::string_view shapeName = {});
+#endif  // USE_OCCT
+
 }  // namespace HsBa::Slicer
 
 #endif  // !HSBA_SLICER_MODEL_PREPROCESS_HPP

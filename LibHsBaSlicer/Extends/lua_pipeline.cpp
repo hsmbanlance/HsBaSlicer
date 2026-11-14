@@ -318,6 +318,32 @@ int Lp_loadModel(lua_State* L)
     return 1;
 }
 
+// HsBa.buildCsgModel(name, script[, shapeName]) -> true
+// script is OCCT DRAW Test Harness text (one command per line): the shape left in
+// the DRAW variable shapeName (default "result") becomes the pooled model.
+int Lp_buildCsgModel(lua_State* L)
+{
+    // Gated on the capability the script actually needs (the DRAW bridge), not merely on the
+    // CAD kernel: without it BuildCsgModel only throws NotSupportedError later on, which would
+    // end the whole pipeline instead of raising a catchable Lua error here.
+#ifdef USE_OCCT_DRAW
+    std::string_view const name = luaL_checkstring(L, 1);
+    std::string_view const script = luaL_checkstring(L, 2);
+    std::string_view const shapeName = luaL_optstring(L, 3, "");
+    // BuildCsgModel reports failures by throwing and never returns null, so the branch below
+    // is a safety net. Keeping the model in the condition instead of a named local leaves this
+    // frame with nothing to destruct, whichever way it is exited.
+    if (!BuildCsgModel(std::string(name), script, shapeName))
+    {
+        return raise_lua_error_with_where(L, "Failed to build model '{}' from CSG script", name);
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+#else
+    return raise_lua_error_with_where(L, "CSG scripts need the OCCT DRAW Test Harness, which is not in this build");
+#endif
+}
+
 // HsBa.modelInfo(name) -> {bbox_min={x,y,z}, bbox_max={x,y,z}, volume, layerHeight, firstLayerHeight}
 int Lp_modelInfo(lua_State* L)
 {
@@ -849,6 +875,7 @@ const luaL_Reg hsba_ops[] = {
     {.name = "readFile", .func = Lp_readFile},
     {.name = "writeFile", .func = Lp_writeFile},
     {.name = "loadModel", .func = Lp_loadModel},
+    {.name = "buildCsgModel", .func = Lp_buildCsgModel},
     {.name = "modelInfo", .func = Lp_modelInfo},
     {.name = "translateModel", .func = Lp_translateModel},
     {.name = "rotateModel", .func = Lp_rotateModel},

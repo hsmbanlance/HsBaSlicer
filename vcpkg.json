@@ -104,7 +104,10 @@
         },
         {
           "name": "opencascade",
-          "platform": "windows | linux | osx "
+          "features": [
+            "tcl"
+          ],
+          "platform": "windows | linux | osx"
         }
       ]
     },
