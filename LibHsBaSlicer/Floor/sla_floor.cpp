@@ -45,6 +45,13 @@ Polygons ComputeFootprint(const Polygons& bottom_layer, const SlaFloorConfig& co
     }
     return bottom_layer;
 }
+
+// Offset() consumes integer-coordinate paths, so its delta is measured in coordinate
+// units, while every SlaFloorConfig length is documented in millimetres. ZigzagFill is
+// the opposite: it un-integerizes its input first and takes spacing in millimetres.
+// Passing a raw millimetre value to Offset shrinks the raft by a factor of
+// integerization (1e6), which silently collapses it onto the part footprint.
+double OffsetUnits(double millimetres) { return millimetres * integerization; }
 }  // namespace
 
 HSBA_SLICER_LIB_API Polygons GenerateFloorContact(const Polygons& bottom_layer, const SlaFloorConfig& config)
@@ -57,11 +64,11 @@ HSBA_SLICER_LIB_API Polygons GenerateFloorBorder(const Polygons& bottom_layer, c
     Polygons const footprint = ComputeFootprint(bottom_layer, config);
 
     // Outward offset to expand the footprint into raft area
-    Polygons const raft_outer = Offset(footprint, config.raft_offset + config.border_width,
+    Polygons const raft_outer = Offset(footprint, OffsetUnits(config.raft_offset + config.border_width),
                                        Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
 
     // Inward offset to carve out the interior fill region
-    Polygons const raft_inner = Offset(raft_outer, config.border_width * config.border_count,
+    Polygons const raft_inner = Offset(raft_outer, -OffsetUnits(config.border_width * config.border_count),
                                        Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
 
     // Border = outer - inner
@@ -73,11 +80,11 @@ HSBA_SLICER_LIB_API Polygons GenerateFloorFill(const Polygons& bottom_layer, con
     Polygons const footprint = ComputeFootprint(bottom_layer, config);
 
     // Expand footprint to raft boundary
-    Polygons const raft_outer = Offset(footprint, config.raft_offset + config.border_width,
+    Polygons const raft_outer = Offset(footprint, OffsetUnits(config.raft_offset + config.border_width),
                                        Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
 
     // Carve out border region so fill stays inside the border
-    Polygons const fill_region = Offset(raft_outer, -config.border_width * config.border_count,
+    Polygons const fill_region = Offset(raft_outer, -OffsetUnits(config.border_width * config.border_count),
                                         Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
 
     if (fill_region.empty())
@@ -93,17 +100,22 @@ HSBA_SLICER_LIB_API Polygons GenerateFloorRaft(const Polygons& bottom_layer, con
     Polygons const footprint = ComputeFootprint(bottom_layer, config);
 
     // Step 1: Outward offset to create full raft boundary
-    Polygons const raft_outer = Offset(footprint, config.raft_offset + config.border_width,
+    Polygons const raft_outer = Offset(footprint, OffsetUnits(config.raft_offset + config.border_width),
                                        Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
 
-    // Step 2: Generate border loops using composite offset fill
-    //   - border_count inward loops at border_width spacing
-    //   - then zigzag fill for the interior
-    Polygons border_loops =
-        Offset(raft_outer, -config.border_width / 2.0, Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
+    // Step 2: border_count inward loops, each centred in a border_width-wide band of the
+    // raft margin. A single Offset call cannot produce them: Clipper returns one ring per
+    // delta, so border_count would otherwise be ignored.
+    Polygons border_loops;
+    for (int loop = 0; loop < std::max(1, config.border_count); ++loop)
+    {
+        Polygons const inset = Offset(raft_outer, -OffsetUnits(config.border_width * (loop + 0.5)),
+                                      Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
+        border_loops.insert(border_loops.end(), inset.begin(), inset.end());
+    }
 
     // Step 3: Interior fill region (inside the last border loop)
-    Polygons const fill_region = Offset(raft_outer, -config.border_width * config.border_count,
+    Polygons const fill_region = Offset(raft_outer, -OffsetUnits(config.border_width * config.border_count),
                                         Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
 
     Polygons result = std::move(border_loops);

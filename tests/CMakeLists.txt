@@ -392,6 +392,7 @@ set(ALL_TEST_TARGETS
   robot_path_test
   path_generator_test
   int_polygon_test
+  sla_floor_test
 )
 
 if(TARGET HsBaSlicerCADModel)
@@ -1307,6 +1308,38 @@ add_test(
 if(HSBA_RUN_TESTS_AFTER_BUILD)
   add_custom_command(TARGET fdm_support_lib_test POST_BUILD
     COMMAND ${CMAKE_CTEST_COMMAND} -V -R fdm_support_lib_test
+  )
+endif()
+
+## SlaFloor (LibHsBaSlicer raft/border generation) tests
+add_executable(sla_floor_test
+    "Floor/sla_floor_test.cpp"
+)
+
+target_link_libraries(sla_floor_test
+    LibHsBaSlicer
+    HsBaSlicer2D
+    HsBaSlicerBase
+    Boost::unit_test_framework
+    ${LUA_LIBRARIES}
+)
+
+target_include_directories(sla_floor_test PRIVATE ${LUA_INCLUDE_DIR} ${CMAKE_SOURCE_DIR})
+
+target_compile_definitions(sla_floor_test
+  PRIVATE
+      BOOST_TEST_DYN_LINK
+)
+
+enable_testing()
+add_test(
+  NAME sla_floor_test
+  COMMAND $<TARGET_FILE:sla_floor_test>
+)
+
+if(HSBA_RUN_TESTS_AFTER_BUILD)
+  add_custom_command(TARGET sla_floor_test POST_BUILD
+    COMMAND ${CMAKE_CTEST_COMMAND} -V -R sla_floor_test
   )
 endif()
 
