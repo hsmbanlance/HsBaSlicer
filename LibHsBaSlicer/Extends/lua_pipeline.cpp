@@ -103,6 +103,14 @@ bool GetBoolField(lua_State* L, int index, const char* name, bool def)
     {
         v = lua_toboolean(L, -1) != 0;
     }
+    else if (t == LUA_TNUMBER)
+    {
+        // The C ABI spells the very same fields as int 0/1 (HsBa*PipelineConfig_t), so a
+        // script that mirrors a native config table hands over numbers. Accepting only
+        // LUA_TBOOLEAN here dropped them without a word: use_convex_hull = 1 read back as
+        // the default 0 and the run silently took the other branch.
+        v = lua_tonumber(L, -1) != 0.0;
+    }
     lua_pop(L, 1);
     return v;
 }

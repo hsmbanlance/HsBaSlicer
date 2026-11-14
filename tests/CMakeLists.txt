@@ -1629,6 +1629,30 @@ if(TARGET DllHsBaSlicer)
       COMMAND ${CMAKE_CTEST_COMMAND} -V -R gui_job_control_test
     )
   endif()
+
+  # custom Lua pipeline through the C ABI (HsBa table, config readers, result strings)
+  add_executable(gui_custom_pipeline_test
+      GuiApi/custom_pipeline_test.cpp
+  )
+
+  target_link_libraries(gui_custom_pipeline_test
+      PRIVATE
+      DllHsBaSlicer
+      HsBaPipelineTypes
+      Boost::unit_test_framework
+  )
+
+  target_include_directories(gui_custom_pipeline_test PRIVATE ${CMAKE_SOURCE_DIR})
+  target_compile_definitions(gui_custom_pipeline_test PRIVATE BOOST_TEST_DYN_LINK)
+
+  enable_testing()
+  add_test(NAME gui_custom_pipeline_test COMMAND $<TARGET_FILE:gui_custom_pipeline_test>)
+
+  if(HSBA_RUN_TESTS_AFTER_BUILD)
+    add_custom_command(TARGET gui_custom_pipeline_test POST_BUILD
+      COMMAND ${CMAKE_CTEST_COMMAND} -V -R gui_custom_pipeline_test
+    )
+  endif()
 endif()
 
 # ---------------------------------------------------------------------------
