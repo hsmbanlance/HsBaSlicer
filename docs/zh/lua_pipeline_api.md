@@ -86,6 +86,29 @@ HsBaSlicer 中的 Lua 脚本按用途分为两类：
 | `HsBa.scaleModel(name, s)` 或 `(name, {x,y,z})` | — | 缩放模型（标量或逐轴） |
 | `HsBa.removeModel(name)` | — | 从模型池移除 |
 | `HsBa.modelNames()` | table | 返回模型池中所有模型名的数组 |
+| `HsBa.buildCsgModel(name, script[, shapeName])` | true | 用 OCCT DRAW 脚本文本直接构造 B-Rep 模型并入池；失败抛出错误 |
+
+#### 文本 CSG（`buildCsgModel`）
+
+`script` 是 OCCT DRAW Test Harness 的命令文本，一行一条，可用 Tcl 的 `set`/`expr` 做参数代入：
+
+```lua
+HsBa.buildCsgModel("bracket", [[
+  set    t 3
+  box    base 60 40 $t
+  pcylinder boss 8 12
+  ttranslate boss 30 20 $t
+  bfuse  result base boss
+]])
+HsBa.slice("bracket", 1.5)
+```
+
+- 已注册的几何命令：图元 `box`/`wedge`/`pcylinder`/`pcone`/`psphere`/`ptorus`；变换 `ttranslate`/`trotate`/`tscale`/`tmirror`/`tcopy`/`reset`；仓库工具 `compound`/`explode`/`orientation`/`nbshapes`/`checkshape`/`vprops`（线、面属性另为 `lprops`/`sprops`）；布尔 `bcut`/`bfuse`/`bcommon`/`bsection` 及 `bop*` 系列。
+- 返回值取回 `shapeName` 指定的 DRAW 变量，缺省为 `result`；脚本结束时该变量必须已绑定 shape，否则报 `NotFoundError`。每次调用都是隔离的：本次调用新建的形状对象在返回时解绑（DRAW 把几何挂在 Tcl 变量上，取消变量即释放几何），因此脚本不会读到上一次调用留下的中间形状，反复调用也不会让几何持续驻留。但脚本用 `set` 建立的普通标量变量不在回收范围内，仍可能跨调用可见，所以变量名应当复用而不是逐次递增。
+- 布尔命令的产物是 compound；需要单一实体时在脚本里 `explode`，或只取其一个子体。
+- 需要 OpenCASCADE 带 Draw 模块构建（vcpkg 特性 `opencascade[tcl]`）；缺少时 CMake 配置阶段即失败（`HSBA_REQUIRE_TEXT_CSG`，默认 ON），确实不要该能力时显式设为 OFF，此时调用报 `NotSupportedError`。
+- 可直接运行的完整流水线见 `samples/Custom/scripts/my_csg_pipeline.lua`：它把 `machine.csg_script` 当作 CSG 文本的来源（未提供时用脚本自带的支架），因此调用方只需通过 `pipeline_lua_source` 注入几何描述即可，REST 的 `POST /api/jobs/custom` 也是这样提交一个不含模型文件的作业的（端到端用例见 `webui/test/e2e.test.js` 的 “builds models from text CSG”）。
+- **脚本不受沙箱限制**：上面取舍的只是几何命令集，解释器本身是完整的 Tcl。`exec`/`open`/`source`/`file` 等 Tcl 内建命令，以及 `readbrep`/`binsave`/`binrestore` 这些能读写文件的 DRAW 命令全部可用，一段脚本等价于一次本机 shell 调用。只能执行可信来源的脚本；Lua 环境本身也是 `luaL_openlibs` 全开的（`os.execute` 直接可用），两者信任级别相同。
 
 ### A.4 切片
 

@@ -86,6 +86,29 @@ The custom pipeline is the only environment that owns the global `HsBa` table. T
 | `HsBa.scaleModel(name, s)` or `(name, {x,y,z})` | — | Scale the model (uniform or per-axis) |
 | `HsBa.removeModel(name)` | — | Remove from the model pool |
 | `HsBa.modelNames()` | table | Array of all model names in the pool |
+| `HsBa.buildCsgModel(name, script[, shapeName])` | true | Build a B-Rep model straight from an OCCT DRAW script (text CSG) and put it in the pool; raises an error on failure |
+
+#### Text CSG (`buildCsgModel`)
+
+`script` is OCCT DRAW Test Harness text, one command per line, with Tcl `set`/`expr` available for parameter substitution:
+
+```lua
+HsBa.buildCsgModel("bracket", [[
+  set    t 3
+  box    base 60 40 $t
+  pcylinder boss 8 12
+  ttranslate boss 30 20 $t
+  bfuse  result base boss
+]])
+HsBa.slice("bracket", 1.5)
+```
+
+- Registered geometry commands: primitives `box`/`wedge`/`pcylinder`/`pcone`/`psphere`/`ptorus`; transforms `ttranslate`/`trotate`/`tscale`/`tmirror`/`tcopy`/`reset`; bank utilities `compound`/`explode`/`orientation`/`nbshapes`/`checkshape`/`vprops` (line and surface properties are `lprops`/`sprops`); booleans `bcut`/`bfuse`/`bcommon`/`bsection` and the `bop*` family.
+- The model is the DRAW variable named by `shapeName`, `result` by default; it must hold a shape when the script ends, otherwise a `NotFoundError` is raised. Each call is isolated: the shape objects a call adds are unbound when it returns (DRAW hangs shapes on Tcl variables, so unsetting one releases the geometry). A script therefore cannot read an intermediate shape left by another call, and calling with fresh names does not grow memory without bound. Plain scalar variables created with `set` are not reclaimed and may still be visible across calls, so reuse names rather than inventing a new one per call.
+- Boolean commands produce a compound; run `explode` in the script when a single solid is required.
+- Requires OpenCASCADE built with its Draw module (vcpkg feature `opencascade[tcl]`). When it is missing, the CMake configuration fails outright (`HSBA_REQUIRE_TEXT_CSG`, ON by default); set it to OFF to build without text CSG on purpose, and the call then raises `NotSupportedError`.
+- `samples/Custom/scripts/my_csg_pipeline.lua` is a runnable pipeline of this shape: it takes its CSG text from `machine.csg_script` (falling back to the bracket it carries), so a caller only has to inject the geometry description through `pipeline_lua_source`. `POST /api/jobs/custom` is used exactly that way, without a model file, in the “builds models from text CSG” cases of `webui/test/e2e.test.js`.
+- **Scripts are not sandboxed**: the selection above only limits the geometry vocabulary, the interpreter itself is a full Tcl one. The Tcl built-ins `exec`/`open`/`source`/`file` and the DRAW commands `readbrep`/`binsave`/`binrestore` are all reachable, so a script is equivalent to a local shell invocation. Only evaluate trusted scripts; the Lua environment is equally open (`luaL_openlibs`, so `os.execute` is available), and both sit at the same trust level.
 
 ### A.4 Slicing
 

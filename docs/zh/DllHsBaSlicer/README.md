@@ -534,7 +534,7 @@ void HsBaFreeCustomPipelineResult(HsBaCustomPipelineResult_t* result);
 | --- | --- |
 | 回报 | `progress(pct[, stage])`、`setLayers(n)`、`setOutputPath(path)` |
 | 文件 | `readFile(path)`、`writeFile(path, content)` |
-| 模型 | `loadModel(n, path)`、`modelInfo(n)`、`translateModel`、`rotateModel`、`scaleModel`、`removeModel`、`modelNames` |
+| 模型 | `loadModel(n, path)`、`buildCsgModel(n, script[, shape])`、`modelInfo(n)`、`translateModel`、`rotateModel`、`scaleModel`、`removeModel`、`modelNames` |
 | 切片 | `layerCount(n, lh, flh)`、`layerZ(i, lh, flh)`、`slice(n, z)`、`sliceUnsafe(n, z)`、`toInt`、`toDouble` |
 | 工艺 | `fill(polys[, cfg])`、`fdmSupport(layers, cfg)`、`slaSupport(layers, cfg)`、`floor(bottom, cfg)` |
 | 输出 | `toGcode(layers, cfg)`、`saveSlaPackage(tbl)`、`saveSlsPackage(tbl)`、`renderImage(polys, w, h, path)` |

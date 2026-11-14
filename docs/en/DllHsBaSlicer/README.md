@@ -539,7 +539,7 @@ Injected globals: `HsBa` (operations table), `model_name`, `model_path`, `output
 | --- | --- |
 | Reporting | `progress(pct[, stage])`, `setLayers(n)`, `setOutputPath(path)` |
 | Files | `readFile(path)`, `writeFile(path, content)` |
-| Model | `loadModel(n, path)`, `modelInfo(n)`, `translateModel`, `rotateModel`, `scaleModel`, `removeModel`, `modelNames` |
+| Model | `loadModel(n, path)`, `buildCsgModel(n, script[, shape])`, `modelInfo(n)`, `translateModel`, `rotateModel`, `scaleModel`, `removeModel`, `modelNames` |
 | Slicing | `layerCount(n, lh, flh)`, `layerZ(i, lh, flh)`, `slice(n, z)`, `sliceUnsafe(n, z)`, `toInt`, `toDouble` |
 | Process | `fill(polys[, cfg])`, `fdmSupport(layers, cfg)`, `slaSupport(layers, cfg)`, `floor(bottom, cfg)` |
 | Output | `toGcode(layers, cfg)`, `saveSlaPackage(tbl)`, `saveSlsPackage(tbl)`, `renderImage(polys, w, h, path)` |
