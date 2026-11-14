@@ -1,6 +1,7 @@
 #define BOOST_TEST_MODULE support_test
 #include <boost/test/included/unit_test.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -30,6 +31,38 @@ bool AreaApprox(const PolygonsD& polys, double expected, double tolerance = 1.0)
     for (const auto& p : polys)
         total += std::abs(Area(p));
     return std::abs(total - expected) < tolerance;
+}
+
+// Helper: axis aligned box around a polygon set, used to pin where a support column lands
+struct Box
+{
+    double min_x = 0.0;
+    double min_y = 0.0;
+    double max_x = 0.0;
+    double max_y = 0.0;
+};
+
+Box BoundsOf(const PolygonsD& polys)
+{
+    Box box{1e18, 1e18, -1e18, -1e18};
+    for (const auto& poly : polys)
+    {
+        for (const auto& pt : poly)
+        {
+            box.min_x = std::min(box.min_x, pt.x);
+            box.min_y = std::min(box.min_y, pt.y);
+            box.max_x = std::max(box.max_x, pt.x);
+            box.max_y = std::max(box.max_y, pt.y);
+        }
+    }
+    return box;
+}
+
+bool SameBox(const Box& box, double min_x, double min_y, double max_x, double max_y)
+{
+    const double tol = 1e-6;
+    return std::abs(box.min_x - min_x) < tol && std::abs(box.min_y - min_y) < tol &&
+           std::abs(box.max_x - max_x) < tol && std::abs(box.max_y - max_y) < tol;
 }
 }  // namespace
 
@@ -312,27 +345,112 @@ BOOST_AUTO_TEST_SUITE_END()
 // ============================================================================
 BOOST_AUTO_TEST_SUITE(generate_all)
 
+// A support is not an answer on its own layer: the region that layer i leaves unsupported has
+// to be re-deposited on layer i-1, and so on down, until solid model carries it. So the ring
+// that layer 1 sticks out beyond layer 0 is supported *inside layer 0*, and the overhang never
+// spawns a slab on the layer that creates it.
+// layer_height 0 disables the bridging erosion, which keeps every expected coordinate exact.
 BOOST_AUTO_TEST_CASE(generate_all_layers)
 {
     std::vector<PolygonsD> layers = {
+        {MakeSquare(2, 2, 10)},  // [2,12]
+        {MakeSquare(0, 0, 15)},  // [0,15] -> overhangs as the ring between [2,12] and [0,15]
+        {MakeSquare(3, 3, 9)},   // [3,12] -> inside layer 1, nothing to support
+    };
+
+    FdmPlaneSupport support;
+    SupportConfig config;
+    config.layer_height = 0.0f;
+    config.support_gap = 0.0f;
+    config.support_diameter = 2.0f;
+
+    auto results = support.GenerateAll(layers, config);
+    BOOST_REQUIRE_EQUAL(results.size(), layers.size());
+    // Layer 0 carries the column for layer 1's overhang: the ring [2,12]..[0,15] grown by the
+    // column radius 1 -> outer [-1,16], hole [1,13], so two rings come back.
+    BOOST_REQUIRE_EQUAL(results[0].size(), 2u);
+    BOOST_CHECK_MESSAGE(SameBox(BoundsOf(results[0]), -1.0, -1.0, 16.0, 16.0), "layer 0 support box");
+    // Layer 1 is where the overhang appears, but its support belongs one layer down.
+    BOOST_CHECK(results[1].empty());
+    // Layer 2 is smaller than layer 1, so it needs nothing.
+    BOOST_CHECK(results[2].empty());
+}
+
+// Regression for the bottom-layer misjudgement: Detect(current, {}) treats the whole footprint
+// as unsupported, which used to bury a support slab inside the first slice. A straight prism
+// rests on the plate everywhere, so no layer may receive support.
+BOOST_AUTO_TEST_CASE(generate_all_prism_gets_no_support_at_the_plate)
+{
+    std::vector<PolygonsD> layers = {
         {MakeSquare(0, 0, 10)},
-        {MakeSquare(0, 0, 15)},
+        {MakeSquare(0, 0, 10)},
         {MakeSquare(0, 0, 10)},
     };
 
     FdmPlaneSupport support;
     SupportConfig config;
+    config.layer_height = 0.0f;
     config.support_gap = 0.0f;
     config.support_diameter = 2.0f;
 
     auto results = support.GenerateAll(layers, config);
-    BOOST_CHECK_EQUAL(results.size(), layers.size());
-    // First layer: no prev, so entire layer is overhang -> support generated
-    BOOST_CHECK(!results[0].empty());
-    // Second layer: larger than first -> overhang -> support
-    BOOST_CHECK(!results[1].empty());
-    // Third layer: smaller than second -> no overhang -> no support
+    BOOST_REQUIRE_EQUAL(results.size(), layers.size());
+    BOOST_CHECK(results[0].empty());
+    BOOST_CHECK(results[1].empty());
     BOOST_CHECK(results[2].empty());
+}
+
+// The column stops the moment a layer below can carry the whole region: the wide bottom plate
+// covers the ring, so the support is written on layer 1 only and nothing reaches the plate.
+BOOST_AUTO_TEST_CASE(generate_all_column_stops_on_solid_model)
+{
+    std::vector<PolygonsD> layers = {
+        {MakeSquare(0, 0, 20)},  // [0,20] wide enough to carry everything above
+        {MakeSquare(5, 5, 10)},  // [5,15]
+        {MakeSquare(0, 0, 20)},  // [0,20] again -> ring [5,15]..[0,20] overhangs layer 1
+    };
+
+    FdmPlaneSupport support;
+    SupportConfig config;
+    config.layer_height = 0.0f;
+    config.support_gap = 0.0f;
+    config.support_diameter = 2.0f;
+
+    auto results = support.GenerateAll(layers, config);
+    BOOST_REQUIRE_EQUAL(results.size(), layers.size());
+    BOOST_CHECK(results[2].empty());
+    // Layer 1 holds the column for layer 2: ring grown by radius 1 -> outer [-1,21], hole [4,16].
+    BOOST_REQUIRE_EQUAL(results[1].size(), 2u);
+    BOOST_CHECK_MESSAGE(SameBox(BoundsOf(results[1]), -1.0, -1.0, 21.0, 21.0), "layer 1 support box");
+    // Layer 0 is solid under the whole region, so the column does not continue downward.
+    BOOST_CHECK(results[0].empty());
+}
+
+// While nothing below can carry the region it keeps travelling down to the plate: the middle
+// layer is narrow, so layer 2's overhang is supported on layer 1 *and* on layer 0, unchanged.
+BOOST_AUTO_TEST_CASE(generate_all_column_reaches_the_plate)
+{
+    std::vector<PolygonsD> layers = {
+        {MakeSquare(5, 5, 10)},  // [5,15]
+        {MakeSquare(5, 5, 10)},  // [5,15] identical -> no new overhang, but no carrier either
+        {MakeSquare(0, 0, 20)},  // [0,20] ring [5,15]..[0,20]
+    };
+
+    FdmPlaneSupport support;
+    SupportConfig config;
+    config.layer_height = 0.0f;
+    config.support_gap = 0.0f;
+    config.support_diameter = 2.0f;
+
+    auto results = support.GenerateAll(layers, config);
+    BOOST_REQUIRE_EQUAL(results.size(), layers.size());
+    BOOST_CHECK(results[2].empty());
+    BOOST_REQUIRE_EQUAL(results[1].size(), 2u);
+    BOOST_REQUIRE_EQUAL(results[0].size(), 2u);
+    const Box upper = BoundsOf(results[1]);
+    const Box lower = BoundsOf(results[0]);
+    BOOST_CHECK_MESSAGE(SameBox(lower, upper.min_x, upper.min_y, upper.max_x, upper.max_y),
+                        "support column changes shape on its way down");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

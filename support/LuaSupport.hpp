@@ -63,9 +63,19 @@ public:
     PolygonsD Generate(const PolygonsD& current_layer, const PolygonsD& prev_layer, float layer_height,
                        const SupportConfig& config) override;
 
+    /**
+     * @brief Plain per-layer loop, one script call per layer.
+     *
+     * The base GenerateAll performs the overhang detection itself and only hands the
+     * resulting region to the generator; a script is expected to see the raw
+     * current_layer/prev_layer pair and decide the whole support structure on its own,
+     * including the bottom layer. So the shared-column pass does not apply here.
+     */
+    std::vector<PolygonsD> GenerateAll(const std::vector<PolygonsD>& layers, const SupportConfig& config) override;
+
     /// Lua scripts may share interpreters, external registrations, or filesystem
-    /// side effects, so GenerateAll stays on the serial path even though a
-    /// per-call lua_State is created inside Generate.
+    /// side effects, so nothing about them may be assumed layer-independent even
+    /// though Generate creates a private lua_State per call.
     bool IsLayerIndependent() const override { return false; }
 
     /// Set external Lua registration functions (2D+3D) to be applied at Lua state init.
