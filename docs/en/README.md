@@ -38,12 +38,13 @@ HsBaSlicer is a high-performance C++ software framework for 3D printing slicing,
 - **Paths** - Output path management (layer paths, point paths, image paths, robot paths)
 - **Support** - Support generation (FDM/SLA support, overhang detection, Lua custom support)
 - **[LibHsBaSlicer](./LibHsBaSlicer/)** - Core C++ static library providing five major interfaces: Preprocess, Slice, Support, Fill, Path Generation
-- **DllHsBaSlicer** - Upper-level C dynamic library providing coroutine-optimized full-pipeline interfaces (FDM / SLA / SLS / SLM / LOM / 3DP / WAAM / file transfer / custom Lua)
+- **DllHsBaSlicer** - Upper-level C dynamic library providing coroutine-optimized full-pipeline interfaces (FDM / SLA / SLS / SLM / LOM / 3DP / WAAM / file transfer / custom Lua), a reflection-driven config JSON codec, and text CSG (OCCT DRAW) model building
+- **ModuleHsBaSlicer** - C++20 module interface (`import hsba.slicer;`) wrapping the Lib free functions as classes, sharing the Lib pipeline orchestration kernel with the Dll layer
 - **HsBaSlicer** - Final application entry point
 
 ### Other
 
-- **Samples** - Usage examples (e.g., FDM process pipeline examples)
+- **Samples** - Usage examples (FDM process pipeline, text CSG via OCCT DRAW, etc.)
 - **Tests / Static Tests** - Unit test and static test suites
 - **Android** - Android platform project
 - **Version** - Version information
@@ -64,7 +65,7 @@ HsBaSlicer is a high-performance C++ software framework for 3D printing slicing,
 ### Slicing Core
 
 - [LibHsBaSlicer Module](./LibHsBaSlicer/) - Preprocess, Slice, Support, Fill, Path Generation
-- [DllHsBaSlicer Module](./DllHsBaSlicer/) - C export layer, FDM/SLA/SLS/SLM/LOM/3DP/WAAM full pipelines, Qt/wxWidgets and Unity/UE cross-platform integration guides, GUI support API (structured progress / layer geometry / job cancellation)
+- [DllHsBaSlicer Module](./DllHsBaSlicer/) - C export layer, FDM/SLA/SLS/SLM/LOM/3DP/WAAM full pipelines, config JSON codec, text CSG (OCCT DRAW) and triangle-mesh export, Qt/wxWidgets and Unity/UE cross-platform integration guides, GUI support API (structured progress / layer geometry / job cancellation)
 - [REST API Module](./restapi/) - Optional `HsBaSlicerRestServer` executable exposing the C ABI over HTTP (JSON/XML), gated by `HSBA_BUILD_REST_API`
 
 ### Quick Start
@@ -114,12 +115,13 @@ HsBaSlicer is a high-performance C++ software framework for 3D printing slicing,
 - **Paths** - Output path management (layer paths, point paths, image paths, robot paths)
 - **Support** - Support generation (FDM/SLA support, overhang detection, Lua custom support)
 - **LibHsBaSlicer** - Core C++ static library providing five major interfaces: Preprocess, Slice, Support, Fill, Path Generation
-- **DllHsBaSlicer** - Upper-level C dynamic library providing coroutine-optimized full-pipeline interfaces (FDM / SLA / SLS / SLM / LOM / 3DP / WAAM / file transfer / custom Lua)
+- **DllHsBaSlicer** - Upper-level C dynamic library providing coroutine-optimized full-pipeline interfaces (FDM / SLA / SLS / SLM / LOM / 3DP / WAAM / file transfer / custom Lua), a reflection-driven config JSON codec, and text CSG (OCCT DRAW) model building
+- **ModuleHsBaSlicer** - C++20 module interface (`import hsba.slicer;`) wrapping the Lib free functions as classes, sharing the Lib pipeline orchestration kernel with the Dll layer
 - **HsBaSlicer** - Final application entry point
 
 ### Other
 
-- **Samples** - Usage examples (e.g., FDM process pipeline examples)
+- **Samples** - Usage examples (FDM process pipeline, text CSG via OCCT DRAW, etc.)
 - **Tests / Static Tests** - Unit test and static test suites
 - **Android** - Android platform project
 - **Version** - Version information

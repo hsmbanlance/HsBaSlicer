@@ -38,12 +38,13 @@ HsBaSlicer 是一个面向 3D 打印切片领域的高性能 C++ 软件框架，
 - **Paths** - 输出路径管理（层路径、点路径、图像路径、机器人路径）
 - **Support** - 支撑生成（FDM/SLA 支撑、悬垂检测、Lua 自定义支撑）
 - **[LibHsBaSlicer](./LibHsBaSlicer/)** - 底层 C++ 静态库，提供预处理、切片、支撑、填充、路径生成五大核心接口
-- **DllHsBaSlicer** - 上层 C 动态库，提供基于协程优化的全流程 Pipeline 接口（FDM / SLA / SLS / SLM / LOM / 3DP / WAAM / 文件传输 / 自定义 Lua）
+- **DllHsBaSlicer** - 上层 C 动态库，提供基于协程优化的全流程 Pipeline 接口（FDM / SLA / SLS / SLM / LOM / 3DP / WAAM / 文件传输 / 自定义 Lua）、反射驱动的配置 JSON 编解码以及文本 CSG（OCCT DRAW）建模
+- **ModuleHsBaSlicer** - C++20 模块接口（`import hsba.slicer;`），将 Lib 自由函数包装为类，与 Dll 层共享 Lib 的工艺编排内核
 - **HsBaSlicer** - 最终应用程序入口
 
 ### 其他
 
-- **Samples** - 使用示例（如 FDM 工艺流水线示例）
+- **Samples** - 使用示例（FDM 工艺流水线、OCCT DRAW 文本 CSG 等）
 - **Tests / Static Tests** - 单元测试与静态测试套件
 - **Android** - Android 平台工程
 - **Version** - 版本信息
@@ -64,7 +65,7 @@ HsBaSlicer 是一个面向 3D 打印切片领域的高性能 C++ 软件框架，
 ### 切片核心
 
 - [LibHsBaSlicer 模块](./LibHsBaSlicer/) - 预处理、切片、支撑、填充、路径生成
-- [DllHsBaSlicer 模块](./DllHsBaSlicer/) - C 导出层，FDM/SLA/SLS/SLM/LOM/3DP/WAAM 全流程流水线，Qt/wxWidgets 与 Unity/UE 跨平台集成指南，GUI 支撑 API（结构化进度 / 层几何 / 作业取消）
+- [DllHsBaSlicer 模块](./DllHsBaSlicer/) - C 导出层，FDM/SLA/SLS/SLM/LOM/3DP/WAAM 全流程流水线，配置 JSON 编解码、文本 CSG（OCCT DRAW）与三角网格导出，Qt/wxWidgets 与 Unity/UE 跨平台集成指南，GUI 支撑 API（结构化进度 / 层几何 / 作业取消）
 - [REST API 模块](./restapi/) - 可选的 `HsBaSlicerRestServer` 进程，通过 HTTP（JSON/XML）暴露 C ABI，由 `HSBA_BUILD_REST_API` 门控
 
 ### 快速开始
@@ -114,12 +115,13 @@ HsBaSlicer 是一个面向 3D 打印切片领域的高性能 C++ 软件框架，
 - **Paths** - 输出路径管理（层路径、点路径、图像路径、机器人路径）
 - **Support** - 支撑生成（FDM/SLA 支撑、悬垂检测、Lua 自定义支撑）
 - **LibHsBaSlicer** - 底层 C++ 静态库，提供预处理、切片、支撑、填充、路径生成五大核心接口
-- **DllHsBaSlicer** - 上层 C 动态库，提供基于协程优化的全流程 Pipeline 接口（FDM / SLA / SLS / SLM / LOM / 3DP / WAAM / 文件传输 / 自定义 Lua）
+- **DllHsBaSlicer** - 上层 C 动态库，提供基于协程优化的全流程 Pipeline 接口（FDM / SLA / SLS / SLM / LOM / 3DP / WAAM / 文件传输 / 自定义 Lua）、反射驱动的配置 JSON 编解码以及文本 CSG（OCCT DRAW）建模
+- **ModuleHsBaSlicer** - C++20 模块接口（`import hsba.slicer;`），将 Lib 自由函数包装为类，与 Dll 层共享 Lib 的工艺编排内核
 - **HsBaSlicer** - 最终应用程序入口
 
 ### 其他
 
-- **Samples** - 使用示例（如 FDM 工艺流水线示例）
+- **Samples** - 使用示例（FDM 工艺流水线、OCCT DRAW 文本 CSG 等）
 - **Tests / Static Tests** - 单元测试与静态测试套件
 - **Android** - Android 平台工程
 - **Version** - 版本信息

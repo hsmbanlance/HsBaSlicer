@@ -40,11 +40,12 @@ HsBaSlicer 是一个面向 3D 打印切片领域的高性能 C++ 软件框架，
 - `utils` / 工具：配置、序列化、Lua 绑定等辅助模块。
 - `fileoperator` / 文件：ZIP、SQLite、配置树、Lua 适配器。
 - `meshmodel` / 网格：CGAL / IGL / OpenCascade 后端。
-- `cadmodel` / CAD：基于 OpenCascade 的 B-Rep 与布尔运算。
+- `cadmodel` / CAD：基于 OpenCascade 的 B-Rep 与布尔运算（含 OCCT DRAW 文本 CSG）。
 - `paths` / 路径：层路径、点路径、机器人路径输出。
 - `support` / 支撑：FDM/SLA 支撑生成与悬垂检测。
-- `LibHsBaSlicer` / 静态库：核心切片接口集合。
-- `DllHsBaSlicer` / 动态库：导出 C ABI 的运行时流水线接口。
+- `LibHsBaSlicer` / 静态库：核心切片接口集合，含 `Pipeline/` 工艺编排内核（被 Dll 与 Module 共享），以及 `Preprocess/`、`ParamStore/` 等子模块。
+- `DllHsBaSlicer` / 动态库：导出 C ABI 的运行时流水线接口，按调用 `LibHsBaSlicer/Pipeline` 内核实现。
+- `ModuleHsBaSlicer` / C++20 模块：以 `import hsba.slicer;` 提供类风格 API，复用同一份 `LibHsBaSlicer/Pipeline` 内核。
 
 （更多模块和细节见源码树）
 
@@ -116,7 +117,8 @@ Android 编译通常在 Linux 环境下完成，需安装 Android SDK/NDK，并�
 | 目标 | 类型 | 说明 |
 |------|------|------|
 | `DllHsBaSlicer` | 共享库 (.dll/.so) | C ABI 流水线接口，供外部语言（Java/C#/Python 等）调用 |
-| `LibHsBaSlicer` | 静态/共享库 | C++ 全流程切片能力封装 |
+| `LibHsBaSlicer` | 静态/共享库 | C++ 全流程切片能力封装，含 `Pipeline/` 工艺编排内核（被 Dll 与 Module 共享） |
+| `ModuleHsBaSlicer` | C++20 模块（可选） | `import hsba.slicer;` 提供的类风格 API，需编译器与 `HSBA_SLICER_MODULE` 同时支持 |
 | `HsBaSlicerLog` | 静态库 | 日志模块 |
 | `HsBaSlicerBase` | 静态库 | 基础类型与工具 |
 | `HsBaSlicerUtils` | 静态库 | 序列化、配置、Lua 绑定等辅助 |
@@ -140,6 +142,11 @@ Android 编译通常在 Linux 环境下完成，需安装 Android SDK/NDK，并�
 ├── dllexport.h                  # DllHsBaSlicer C API
 ├── fdm_pipeline.h
 ├── sla_pipeline.h
+├── sls_pipeline.h / slm_pipeline.h / lom_pipeline.h
+├── tdp_pipeline.h / waam_pipeline.h
+├── custom_pipeline.h            # 完全由 Lua 脚本定义的流水线
+├── config_json_pipeline.h       # PipelineConfig ↔ JSON 反射编解码 C ABI
+├── model_preprocess.h           # 含文本 CSG（OCCT DRAW）与三角导出
 ├── initialize.h
 ├── version.hpp                  # 版本信息
 ├── base/                        # 基础类型
@@ -147,11 +154,15 @@ Android 编译通常在 Linux 环境下完成，需安装 Android SDK/NDK，并�
 ├── LibHsBaSlicer/               # C++ 全流程 API
 │   ├── export.h
 │   ├── version_info.hpp
+│   ├── Pipeline/kernel_types.hpp           # 工艺编排内核共享类型
+│   ├── Pipeline/{fdm,sla,sls,slm,lom,tdp,waam,custom}_pipeline.hpp
 │   ├── Slice/mesh_slice.hpp
 │   ├── Preprocess/model_preprocess.hpp
 │   ├── Support/fdm_support.hpp
 │   ├── Fill/polygon_fill.hpp
 │   ├── Path/path_generator.hpp
+│   ├── ParamStore/param_store_ops.hpp
+│   ├── ParamStore/config_json_ops.hpp      # 配置 JSON 反射编解码
 │   └── Floor/sla_floor.hpp
 ├── 2D/                          # 多边形处理
 ├── meshmodel/                   # 网格模型
