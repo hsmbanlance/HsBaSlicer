@@ -4,7 +4,7 @@ LibHsBaSlicer is the core C++ library of HsBaSlicer, providing the full slicing 
 
 ## Submodule List
 
-- [Preprocess (Model Preprocessing)](./model_preprocess.md) - Model loading, transformation, information queries, boolean operations and shelling
+- [Preprocess (Model Preprocessing)](./model_preprocess.md) - Model loading, transformation, information queries, boolean operations, shelling, text CSG (OCCT DRAW) and triangle-mesh export
 - [Slice (Mesh Slicing)](./mesh_slice.md) - Z-axis plane slicing for generating layer contours
 - [Support (Support Generation)](./fdm_support.md) - FDM/SLA/Lua support cross-section generation
 - [Fill (Polygon Fill)](./polygon_fill.md) - Polygon infill with various patterns
@@ -12,21 +12,23 @@ LibHsBaSlicer is the core C++ library of HsBaSlicer, providing the full slicing 
 - **Floor (SLA Floor/Render/Package)** - SLA raft generation, layer image rendering and zip packaging
 - **Path/SLS Export** - SLS Lua-script-driven export (no standard format)
 - **Transfer (File Transfer)** - Remote executor file transfer (pooled TCP connections)
-- **ParamStore (Process Parameter Store)** - Persist/reuse per-pipeline process-parameter structs by writing/reading a database
+- **ParamStore (Process Parameter Store)** - Persist/reuse per-pipeline process-parameter structs by writing/reading a database, plus reflection-driven PipelineConfig ↔ JSON codec (`config_json_ops.hpp`)
+- **Pipeline (Orchestration Kernel)** - The shared stage-logic kernel that both `DllHsBaSlicer` (C ABI) and `ModuleHsBaSlicer` (C++20 module) call, so the two surfaces behave identically
 - **Extends (Extension Registration)** - External Lua function pools, event callbacks and C++ event sources
 
 ## Architecture
 
 ```
 LibHsBaSlicer
-├── Preprocess/    Model loading, transformation, boolean operations & shelling
+├── Preprocess/    Model loading, transformation, boolean operations, shelling, text CSG (OCCT DRAW) and triangle export
 ├── Slice/         Mesh slicing at specified heights
 ├── Support/       FDM/SLA/Lua support generation
 ├── Fill/          Polygon infill patterns
 ├── Path/          G-code path generation + region path optimization + SLS Lua export
 ├── Floor/         SLA floor/raft generation, layer rendering, zip packaging
 ├── Transfer/      Remote file transfer (pooled connections)
-├── ParamStore/    Process-parameter write/read (wraps fileoperator ParamStore)
+├── Pipeline/      Per-process orchestration kernel shared by Dll (C ABI) and Module (C++20 module)
+├── ParamStore/    Process-parameter write/read + PipelineConfig ↔ JSON reflection codec (wraps fileoperator ParamStore)
 └── Extends/       External Lua function registration + C++ event sources (Zipper/DB)
 ```
 
@@ -45,6 +47,16 @@ To use LibHsBaSlicer, include the corresponding header files:
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"            // SLA floor/render/package
 #include "LibHsBaSlicer/Transfer/file_transfer.hpp"     // File transfer
 #include "LibHsBaSlicer/ParamStore/param_store_ops.hpp"  // Process parameter store
+#include "LibHsBaSlicer/ParamStore/config_json_ops.hpp"  // PipelineConfig <-> JSON reflection codec
+#include "LibHsBaSlicer/Pipeline/kernel_types.hpp"       // Kernel::Hooks / Kernel::GeometryCapture
+#include "LibHsBaSlicer/Pipeline/fdm_pipeline.hpp"       // Kernel::RunFdm
+#include "LibHsBaSlicer/Pipeline/sla_pipeline.hpp"       // Kernel::RunSla
+#include "LibHsBaSlicer/Pipeline/sls_pipeline.hpp"       // Kernel::RunSls
+#include "LibHsBaSlicer/Pipeline/slm_pipeline.hpp"       // Kernel::RunSlm
+#include "LibHsBaSlicer/Pipeline/lom_pipeline.hpp"       // Kernel::RunLom
+#include "LibHsBaSlicer/Pipeline/tdp_pipeline.hpp"       // Kernel::RunTdp
+#include "LibHsBaSlicer/Pipeline/waam_pipeline.hpp"      // Kernel::RunWaam
+#include "LibHsBaSlicer/Pipeline/custom_pipeline.hpp"    // Kernel::RunCustom
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"     // Lua extension registration
 #include "LibHsBaSlicer/Extends/EventSourceFunction.hpp" // C++ event sources
 #include "LibHsBaSlicer/version_info.hpp"               // Version info
@@ -170,6 +182,116 @@ if (loaded.success) {
 - The `const char*` fields filled during a load are owned by `std::malloc` and must be released with `FreeLoadedConfigStrings`.
 - The underlying storage/reflection/CRUD capabilities (`List`/`Update`/`Delete`/Lua) live in fileoperator's `ParamStore`; this layer only exposes write/read against the C config structs.
 - Optional encryption at rest: when `conn.cryptoKey` is non-empty the config is serialized and encrypted with AES-256-CBC (key derived by `HsBaCipher`) into the `param_blob` column; leaving it empty keeps the original plaintext behaviour. Loading an encrypted row without the correct key yields `success=false`. See [fileoperator/param_store.md](../fileoperator/param_store.md).
+
+## Pipeline Configuration JSON Codec
+
+`ParamStore/config_json_ops.hpp` is the reflection-driven `PipelineConfig` ↔ JSON codec used by
+the REST server (`restapi/config_bridge`). It is exposed in the shared core so a directly linked
+GUI host or the Dll C ABI (`config_json_pipeline.h`) can build config editors without an HTTP
+round-trip. The codec walks the same `TypeInfo::fields` table as `param_reflect` and converges
+each field through `param_convert` (`FieldToAny` / `AnyToField`); only the three reflected kinds
+(`const char*`, double/float, int/int64_t/enum) appear in JSON, anything else is silently
+skipped so the struct's existing value stays intact.
+
+```cpp
+#include "LibHsBaSlicer/ParamStore/config_json_ops.hpp"
+using namespace HsBa::Slicer;
+
+// (1) Default-config JSON, mirrors a freshly initialized HsBa*ConfigDefault() struct
+std::string defaults = DefaultConfigJson(ParamPipelineKind::Fdm);
+
+// (2) Serialize any caller-owned config struct to pretty JSON
+HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+cfg.layer_height = 0.2f;
+std::string json = ConfigToJson(ParamPipelineKind::Fdm, &cfg);
+
+// (3) Decode into an existing struct; pre-initialize so every const char* field starts NULL
+HsBaFdmPipelineConfig_t out = HsBaFdmConfigDefault();
+if (ConfigFromJson(ParamPipelineKind::Fdm, json, &out)) {
+    // out.model_name etc. were malloc'd by the codec when present in the JSON
+    FreeLoadedConfigStrings(ParamPipelineKind::Fdm, &out);
+}
+```
+
+The Dll layer wraps the same three functions as `HsBaGetDefaultConfigJson` / `HsBaConfigToJson` /
+`HsBaConfigFromJson` (see [DllHsBaSlicer README](../DllHsBaSlicer/README.md)). Ownership rule:
+decoded strings are `std::malloc`'d and must be released via `FreeLoadedConfigStrings` /
+`HsBaFreeLoadedPipelineConfig`, identical to `LoadPipelineParams`.
+
+## Pipeline Orchestration Kernel (`Pipeline/`)
+
+`Pipeline/*_pipeline.hpp` carries the per-process stage logic (Slice → Support → Fill → Path for
+FDM; Preprocess → Slice → Floor → Support → Export for SLA; the Lua-script-driven export flow for
+SLS/SLM/LOM/TDP/WAAM; and the Lua-environment entry for Custom) that previously lived inside the
+Dll coroutines. Both `DllHsBaSlicer/*_pipeline.cpp` and `ModuleHsBaSlicer` call into one kernel
+implementation, so they cannot drift apart on stage order, percentages, spiral/vase handling,
+top/bottom solid layering, density-driven spacing, seam staggering, cooperative cancellation or
+layer-geometry capture.
+
+### Shared types
+
+```cpp
+#include "LibHsBaSlicer/Pipeline/kernel_types.hpp"
+namespace HsBa::Slicer::Kernel {
+    struct GeometryCapture {                 // Populated only when cfg.capture_geometry was set
+        bool valid;
+        std::vector<PolygonsD> outlines;     // Part contours per layer
+        std::vector<PolygonsD> fills;        // FDM infill / SLA floor rings per layer
+        std::vector<PolygonsD> supports;     // Support cross sections per layer
+        std::vector<double>  zs;             // Layer platform heights (mm)
+        std::vector<double>  path_xyz;       // Flattened x,y,z triples for a continuous (spiral) path
+    };
+    struct Hooks {                           // Native callbacks the kernel invokes
+        std::function<void(int, std::string_view)> progress; // [0,100], stage text
+        const std::atomic<bool>* cancel_flag = nullptr;      // Polled at stage boundaries and inside layer loops
+    };
+}
+```
+
+### Per-process entry points
+
+| Header | Function | Input | Output struct |
+| --- | --- | --- | --- |
+| `fdm_pipeline.hpp` | `Kernel::RunFdm` | `HsBaFdmPipelineConfig_t` + `Hooks` | `Kernel::FdmOutput` (`success`, `total_layers`, `gcode`, `error`, `elapsed_seconds`, `cancelled`, `geometry`) |
+| `sla_pipeline.hpp` | `Kernel::RunSla` | `HsBaSlaPipelineConfig_t` + `Hooks` | `Kernel::SlaOutput` |
+| `sls_pipeline.hpp` | `Kernel::RunSls` | `HsBaSlsPipelineConfig_t` + `Hooks` | `Kernel::SlsOutput` |
+| `slm_pipeline.hpp` | `Kernel::RunSlm` | `HsBaSlmPipelineConfig_t` + `Hooks` | `Kernel::SlmOutput` |
+| `lom_pipeline.hpp` | `Kernel::RunLom` | `HsBaLomPipelineConfig_t` + `Hooks` | `Kernel::LomOutput` |
+| `tdp_pipeline.hpp` | `Kernel::RunTdp` | `HsBaTdpPipelineConfig_t` + `Hooks` | `Kernel::TdpOutput` |
+| `waam_pipeline.hpp` | `Kernel::RunWaam` | `HsBaWaamPipelineConfig_t` + `Hooks` | `Kernel::WaamOutput` |
+| `custom_pipeline.hpp` | `Kernel::RunCustom` | `HsBaCustomPipelineConfig_t` + `Hooks` | `Kernel::CustomOutput` |
+
+Each kernel entry takes the C-ABI config struct (the common currency both callers already hold)
+and returns a native output struct holding `std::string` errors / G-code / export paths plus the
+optional `GeometryCapture`. The Dll converts the output into `HsBa*PipelineResult_t` (malloc'ing
+strings, parking the geometry into its snapshot pool); the module returns it as the corresponding
+`*Result` class so a `FdmPipeline::run()` keeps native lifetimes.
+
+```cpp
+#include "LibHsBaSlicer/Pipeline/fdm_pipeline.hpp"
+#include "pipelinetypes/pipeline_types.h"
+#include <atomic>
+
+HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+cfg.model_path = "model.stl";
+cfg.output_path = "out.gcode";
+
+std::atomic<bool> cancel{false};
+HsBa::Slicer::Kernel::Hooks hooks{
+    [](int pct, std::string_view stage) { /* UI hook */ },
+    &cancel,
+};
+auto out = HsBa::Slicer::Kernel::RunFdm(cfg, hooks);
+if (out.success) {
+    // out.gcode / out.total_layers / out.geometry
+}
+```
+
+> The kernel is **synchronous**: `ParallelForLayers` in `base/parallel.hpp` is byte-identical to
+> the coroutine wrapper when driven blocking, which is exactly how the Dll synchronous entry
+> (`task.get_result()`) and the module's `run()` consume it. Asynchronous semantics belong to the
+> caller: the Dll wraps the kernel inside a coroutine task / `HsBaSubmitJob` job; the module
+> composes the kernel into its own `Task`/`Job` types.
 
 ## SLA Floor / Render / Package
 
@@ -403,6 +525,72 @@ GetModelNames();           // all names
 CleanupModels();           // remove unreferenced models
 ```
 
+### Triangle-mesh export
+
+`GetModelTriangles` returns the model as an `Eigen` vertex / face pair (igl style). Mesh models
+answer from their stored data; BRep models (STEP / IGES / BREP, text CSG) are tessellated on
+demand, so the triangle count follows the kernel's default deflection.
+
+```cpp
+auto [vertices, faces] = GetModelTriangles("merged");   // vertices: N x 3 (mm), faces: M x 3 (0-based)
+```
+
+The Dll C ABI exposes the same data as `HsBaGetModelTriangles` / `HsBaFreeModelTriangles`, packed
+into a single `malloc`'d block (the same ownership contract as `HsBaLayerGeometry_t`).
+
+### Process-wide publishing (`PublishModel` / `UnpublishModel`)
+
+The model pool is **thread local**, and a pipeline coroutine runs its stages on executor threads,
+so a model the caller registered on the UI thread is invisible to `RunFdm` / `RunSla` / ... by
+name. `PublishModel(name)` keeps a second, process-wide reference under the same name that every
+lookup in this file falls back to; transforms stay visible across threads until the model is
+unpublished or removed. Concurrent publishes overwrite: the last publisher's instance is shared.
+
+```cpp
+LoadModel("body", "models/body.step");     // Caller-thread pool
+PublishModel("body");                       // Make it visible to pipeline executor threads
+Kernel::RunFdm(cfg, hooks);                 // cfg.model_name = "body" resolves on the worker thread
+UnpublishModel("body");                     // Drop the process-wide copy; the local entry remains
+```
+
+`RemoveModel` drops both the caller-thread pool entry and any published copy.
+
+### Text CSG via OCCT DRAW (`BuildCsgModel`)
+
+When OpenCASCADE is built with its Draw module (vcpkg feature `opencascade[tcl]`), a B-Rep model
+can be defined by a *text* CSG script rather than a file. `HasTextCsgSupport()` reports whether
+the running binary can evaluate such scripts; `BuildCsgModel(name, script, shapeName)` returns a
+model that is fully interchangeable with one loaded from a file (transformable, queryable,
+sliceable).
+
+The script is OCCT DRAW Test Harness text, one command per line:
+
+| Group | Commands |
+| --- | --- |
+| Primitives | `box`, `wedge`, `pcylinder`, `pcone`, `psphere`, `ptorus` |
+| Transforms | `ttranslate`, `trotate`, `tscale`, `tmirror`, `tcopy`, `reset` |
+| Booleans | `bcut`, `bfuse`, `bcommon`, `bsection` and the `bop*` family |
+| Utilities | `compound`, `explode`, `orientation`, `nbshapes`, `checkshape`, `vprops` |
+| Tcl | `set`, `expr` for parameter substitution |
+
+```cpp
+if (HasTextCsgSupport()) {
+    static const char* bracket =
+        "set t 3\n"
+        "box base 60 40 $t\n"
+        "pcylinder boss 8 12\n"
+        "ttranslate boss 30 20 $t\n"
+        "bfuse result base boss\n";
+    auto model = BuildCsgModel("bracket", bracket);   // shapeName defaults to "result"
+}
+```
+
+Failures surface as project exceptions: `InvalidArgumentError` (name collision / malformed
+script), `NotFoundError` (the script left no shape under `shapeName`), `NotSupportedError`
+(no DRAW Test Harness in this build). The interpreter is a full Tcl one and is **not sandboxed**
+(`exec`, `open`, `source`, `file`, `readbrep`, `binsave`, ... all reachable); only trusted scripts
+should be passed.
+
 ### Kernel Routing Strategy
 
 | Operation | BRep Model (OCCT) | Mesh Model (IGL/CGAL) |
@@ -470,6 +658,7 @@ All APIs are in the `HsBa::Slicer` namespace.
 
 - `samples/LibHsBaSlicer/main_header.cpp` — Full FDM slicing workflow using traditional #include
 - `samples/LibHsBaSlicer/main_module.cpp` — C++20 module version (`import hsba.slicer;`, class-based API)
+- `samples/CsgModel/main.cpp` — Text CSG (OCCT DRAW) C ABI workflow; primitives, Tcl parameters, fuse / cut, handoff to the FDM pipeline, and failure-reason probing
 
 ## C++20 Module Version (ModuleHsBaSlicer)
 

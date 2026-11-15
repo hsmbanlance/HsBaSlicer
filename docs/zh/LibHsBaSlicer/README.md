@@ -4,7 +4,7 @@ LibHsBaSlicer 是 HsBaSlicer 的核心 C++ 库，提供完整的切片流水线�
 
 ## 子模块列表
 
-- [Preprocess（模型预处理）](./model_preprocess.md) - 模型加载、变换、信息查询、布尔运算与抽壳
+- [Preprocess（模型预处理）](./model_preprocess.md) - 模型加载、变换、信息查询、布尔运算与抽壳、文本 CSG（OCCT DRAW）与三角网格导出
 - [Slice（网格切片）](./mesh_slice.md) - Z 轴平面切片，生成层轮廓
 - [Support（支撑生成）](./fdm_support.md) - FDM/SLA/Lua 支撑截面生成
 - [Fill（多边形填充）](./polygon_fill.md) - 多种模式的多边形填充
@@ -12,21 +12,23 @@ LibHsBaSlicer 是 HsBaSlicer 的核心 C++ 库，提供完整的切片流水线�
 - **Floor（SLA 地板/渲染/打包）** - SLA 底座生成、层图渲染与 zip 打包导出
 - **Path/SLS 导出** - SLS Lua 脚本驱动导出（无标准格式）
 - **Transfer（文件传输）** - 远程执行器文件传输（连接池化 TCP 传输）
-- **ParamStore（工艺参数存储）** - 将各流水线工艺参数结构体写入/读取数据库以供复用
+- **ParamStore（工艺参数存储）** - 将各流水线工艺参数结构体写入/读取数据库以供复用，同时提供反射驱动的 PipelineConfig ↔ JSON 编解码（`config_json_ops.hpp`）
+- **Pipeline（工艺编排内核）** - DllHsBaSlicer（C ABI）与 ModuleHsBaSlicer（C++20 模块）共同调用的阶段逻辑内核，两个表面行为一致
 - **Extends（扩展注册）** - 外部 Lua 函数注册池、事件回调与 C++ 事件源
 
 ## 架构
 
 ```
 LibHsBaSlicer
-├── Preprocess/    模型加载、变换、布尔运算与抽壳
+├── Preprocess/    模型加载、变换、布尔运算、抽壳、文本 CSG（OCCT DRAW）与三角导出
 ├── Slice/         指定高度的网格切片
 ├── Support/       FDM/SLA/Lua 支撑生成
 ├── Fill/          多边形填充模式
 ├── Path/          G-code 路径生成 + 区域路径优化 + SLS Lua 导出
 ├── Floor/         SLA 地板/筏生成、层图渲染、zip 打包
 ├── Transfer/      远程文件传输（连接池化）
-├── ParamStore/    工艺参数写入/读取（封装 fileoperator ParamStore）
+├── Pipeline/      供 Dll（C ABI）与 Module（C++20 模块）共享的工艺编排内核
+├── ParamStore/    工艺参数写入/读取 + PipelineConfig ↔ JSON 反射编解码（封装 fileoperator ParamStore）
 └── Extends/       外部 Lua 函数注册 + C++ 事件源（Zipper/DB）
 ```
 
@@ -45,6 +47,16 @@ LibHsBaSlicer
 #include "LibHsBaSlicer/Floor/sla_floor.hpp"            // SLA 地板/渲染/打包
 #include "LibHsBaSlicer/Transfer/file_transfer.hpp"     // 文件传输
 #include "LibHsBaSlicer/ParamStore/param_store_ops.hpp"  // 工艺参数存储
+#include "LibHsBaSlicer/ParamStore/config_json_ops.hpp"  // PipelineConfig ↔ JSON 反射编解码
+#include "LibHsBaSlicer/Pipeline/kernel_types.hpp"       // Kernel::Hooks / Kernel::GeometryCapture
+#include "LibHsBaSlicer/Pipeline/fdm_pipeline.hpp"       // Kernel::RunFdm
+#include "LibHsBaSlicer/Pipeline/sla_pipeline.hpp"       // Kernel::RunSla
+#include "LibHsBaSlicer/Pipeline/sls_pipeline.hpp"       // Kernel::RunSls
+#include "LibHsBaSlicer/Pipeline/slm_pipeline.hpp"       // Kernel::RunSlm
+#include "LibHsBaSlicer/Pipeline/lom_pipeline.hpp"       // Kernel::RunLom
+#include "LibHsBaSlicer/Pipeline/tdp_pipeline.hpp"       // Kernel::RunTdp
+#include "LibHsBaSlicer/Pipeline/waam_pipeline.hpp"      // Kernel::RunWaam
+#include "LibHsBaSlicer/Pipeline/custom_pipeline.hpp"    // Kernel::RunCustom
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"     // Lua 扩展注册
 #include "LibHsBaSlicer/Extends/EventSourceFunction.hpp" // C++ 事件源
 #include "LibHsBaSlicer/version_info.hpp"               // 版本信息
@@ -170,6 +182,99 @@ if (loaded.success) {
 - 读取回填的 `const char*` 字段由 `std::malloc` 持有，须用 `FreeLoadedConfigStrings` 释放。
 - 底层存储/反射/CRUD（含 `List`/`Update`/`Delete`/Lua）能力位于 fileoperator 的 `ParamStore`，本层仅面向 C 配置结构体暴露写入/读取。
 - 可选静态加密：`conn.cryptoKey` 非空时，配置会被序列化并经 AES-256-CBC（口令由 `HsBaCipher` 派生）加密存入 `param_blob` 列；留空则维持原明文行为。读取加密行时口令缺失或错误会使 `success=false`。详见 [fileoperator/param_store.md](../fileoperator/param_store.md)。
+
+## 流水线配置 JSON 编解码
+
+`ParamStore/config_json_ops.hpp` 是反射驱动的 PipelineConfig ↔ JSON 编解码器，REST 服务（`restapi/config_bridge`）同样依赖本机制。本层把它加到共享核心后，直接链接的 GUI 宿主与 Dll C ABI（`config_json_pipeline.h`）可以不经过 HTTP 往返就搭建配置编辑器。编码器走与 `param_reflect` 相同的 `TypeInfo::fields` 表，逐字段交由 `param_convert`（`FieldToAny` / `AnyToField`）收敛；仅三类反射类型（`const char*`、double/float、int/int64_t/枚举）进入 JSON，其他字段被静默跳过以保留结构体原值。
+
+```cpp
+#include "LibHsBaSlicer/ParamStore/config_json_ops.hpp"
+using namespace HsBa::Slicer;
+
+// (1) 默认配置 JSON，与刚刚 HsBa*ConfigDefault() 初始化出的结构体一致
+std::string defaults = DefaultConfigJson(ParamPipelineKind::Fdm);
+
+// (2) 序列化调用方持有的配置结构体
+HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+cfg.layer_height = 0.2f;
+std::string json = ConfigToJson(ParamPipelineKind::Fdm, &cfg);
+
+// (3) 解码到现有结构体；需预先初始化以保证所有 const char* 字段为 NULL
+HsBaFdmPipelineConfig_t out = HsBaFdmConfigDefault();
+if (ConfigFromJson(ParamPipelineKind::Fdm, json, &out)) {
+    // out.model_name 等字段出现于 JSON 时由编码器 malloc 分配
+    FreeLoadedConfigStrings(ParamPipelineKind::Fdm, &out);
+}
+```
+
+Dll 层以 `HsBaGetDefaultConfigJson` / `HsBaConfigToJson` / `HsBaConfigFromJson` 提供同一组函数（见
+[DllHsBaSlicer README](../DllHsBaSlicer/README.md)）。所有权规则：解码出的字符串由 `std::malloc` 持有，
+需以 `FreeLoadedConfigStrings` / `HsBaFreeLoadedPipelineConfig` 释放，与 `LoadPipelineParams` 一致。
+
+## 工艺编排内核（`Pipeline/`）
+
+`Pipeline/*_pipeline.hpp` 携带了原本住在 Dll 协程里的逐工艺阶段逻辑（FDM：切片→支撑→填充→路径；SLA：预处理→切片→地板→支撑→导出；SLS/SLM/LOM/TDP/WAAM：Lua 脚本驱动导出；Custom：Lua 环境入口）。`DllHsBaSlicer/*_pipeline.cpp` 与 `ModuleHsBaSlicer` 都只调用本内核一份实现，阶段顺序、进度百分比、螺旋/花瓶处理、顶底实体分层、密度驱动间距、接缝随机化、合作取消与层几何捕获都不会出现两代码路径不一致。
+
+### 共享类型
+
+```cpp
+#include "LibHsBaSlicer/Pipeline/kernel_types.hpp"
+namespace HsBa::Slicer::Kernel {
+    struct GeometryCapture {                 // 仅在 cfg.capture_geometry 启用时填充
+        bool valid;
+        std::vector<PolygonsD> outlines;     // 每层零件轮廓
+        std::vector<PolygonsD> fills;        // 每层 FDM 填充 / SLA 地板环
+        std::vector<PolygonsD> supports;     // 每层支撑截面
+        std::vector<double>  zs;             // 每层平台高度（mm）
+        std::vector<double>  path_xyz;       // 连续（螺旋）路径的 x,y,z 三元组手序
+    };
+    struct Hooks {                           // 内核运行期调用的原生回调
+        std::function<void(int, std::string_view)> progress; // [0,100]，阶段文本
+        const std::atomic<bool>* cancel_flag = nullptr;      // 阶段边界与层循环轮询
+    };
+}
+```
+
+### 逐工艺入口
+
+| 头文件 | 入口 | 输入 | 输出结构 |
+| --- | --- | --- | --- |
+| `fdm_pipeline.hpp` | `Kernel::RunFdm` | `HsBaFdmPipelineConfig_t` + `Hooks` | `Kernel::FdmOutput`（`success`、`total_layers`、`gcode`、`error`、`elapsed_seconds`、`cancelled`、`geometry`） |
+| `sla_pipeline.hpp` | `Kernel::RunSla` | `HsBaSlaPipelineConfig_t` + `Hooks` | `Kernel::SlaOutput` |
+| `sls_pipeline.hpp` | `Kernel::RunSls` | `HsBaSlsPipelineConfig_t` + `Hooks` | `Kernel::SlsOutput` |
+| `slm_pipeline.hpp` | `Kernel::RunSlm` | `HsBaSlmPipelineConfig_t` + `Hooks` | `Kernel::SlmOutput` |
+| `lom_pipeline.hpp` | `Kernel::RunLom` | `HsBaLomPipelineConfig_t` + `Hooks` | `Kernel::LomOutput` |
+| `tdp_pipeline.hpp` | `Kernel::RunTdp` | `HsBaTdpPipelineConfig_t` + `Hooks` | `Kernel::TdpOutput` |
+| `waam_pipeline.hpp` | `Kernel::RunWaam` | `HsBaWaamPipelineConfig_t` + `Hooks` | `Kernel::WaamOutput` |
+| `custom_pipeline.hpp` | `Kernel::RunCustom` | `HsBaCustomPipelineConfig_t` + `Hooks` | `Kernel::CustomOutput` |
+
+每个内核入口接受 C ABI 配置结构体（两个调用者都拿得出的共同货币），返回原生输出结构，里面是
+`std::string` 的错误/G-code/导出路径加上可选的 `GeometryCapture`。Dll 拿到后转换为
+`HsBa*PipelineResult_t`（ malloc 字符串、把几何放进快照池）；Module 直接映射成对应的 `*Result`，保留原生生命周期。
+
+```cpp
+#include "LibHsBaSlicer/Pipeline/fdm_pipeline.hpp"
+#include "pipelinetypes/pipeline_types.h"
+#include <atomic>
+
+HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+cfg.model_path = "model.stl";
+cfg.output_path = "out.gcode";
+
+std::atomic<bool> cancel{false};
+HsBa::Slicer::Kernel::Hooks hooks{
+    [](int pct, std::string_view stage) { /* UI 钩子 */ },
+    &cancel,
+};
+auto out = HsBa::Slicer::Kernel::RunFdm(cfg, hooks);
+if (out.success) {
+    // out.gcode / out.total_layers / out.geometry
+}
+```
+
+> 内核是**同步**的：`base/parallel.hpp` 中的 `ParallelForLayers` 在驱动为阻塞时与协程包裹逐字节一致，这
+> 正是 Dll 同步入口（`task.get_result()`）与 Module 的 `run()` 使用它的方式。异步语义属于调用方：Dll
+> 在内核外面罩了一层协程任务 / `HsBaSubmitJob`；Module 则把内核组合进自身的 `Task`/`Job`。
 
 ## SLA 地板/渲染/打包
 
@@ -400,6 +505,65 @@ GetModelNames();           // all names
 CleanupModels();           // remove unreferenced models
 ```
 
+### 三角网格导出
+
+`GetModelTriangles` 以 igl 风格的 `Eigen` 顶点/面片对返回模型。网格模型直接返回存储数据；BRep 模型（STEP / IGES / BREP，文本 CSG）需要依赖内核默认偏转量现场细分，三角面数随质量设置变化。
+
+```cpp
+auto [vertices, faces] = GetModelTriangles("merged");   // vertices: N x 3 (mm)，faces: M x 3 (0 基下标)
+```
+
+Dll C ABI 以 `HsBaGetModelTriangles` / `HsBaFreeModelTriangles` 暴露同一组数据，两个数组住在同一个 `malloc` 块里（与 `HsBaLayerGeometry_t` 同样的所有权契约）。
+
+### 跨线程发布（`PublishModel` / `UnpublishModel`）
+
+模型池是**按线程隔离**的，流水线协程的各阶段在 executor 线程上运行；调用线程上以名字加载的模型在
+`RunFdm` / `RunSla` / ... 里不会命中。`PublishModel(name)` 会在进程范围内保留一份同名的引用，本文件
+里的所有查询都会回退到它，变换也随实例可见；直到调用 `UnpublishModel` 或 `RemoveModel` 才撤销。同名并发
+发布会覆盖：后发布者的实例被共享。
+
+```cpp
+LoadModel("body", "models/body.step");     // 调用线程本地池
+PublishModel("body");                       // 跨线程按名可见
+Kernel::RunFdm(cfg, hooks);                 // cfg.model_name = "body" 在 worker 线程解析成功
+UnpublishModel("body");                     // 仅撤进程级副本，调用线程本地项仍在
+```
+
+`RemoveModel` 同时撤本线程池项与发布副本。
+
+### 文本 CSG（`BuildCsgModel`，OCCT DRAW）
+
+OpenCASCADE 带 Draw 模块（vcpkg 特性 `opencascade[tcl]`）编译时，可以以**文本** CSG 脚本定义 B-Rep
+模型而不依赖文件。`HasTextCsgSupport()` 返回当前二进制是否可以求值这类脚本；`BuildCsgModel(name,
+script, shapeName)` 返回的模型与从文件加载的完全同位，可变换、可查询、可切片。
+
+脚本使用 OCCT DRAW Test Harness 命令，一行一条：
+
+| 类别 | 命令 |
+| --- | --- |
+| 图元 | `box`、`wedge`、`pcylinder`、`pcone`、`psphere`、`ptorus` |
+| 变换 | `ttranslate`、`trotate`、`tscale`、`tmirror`、`tcopy`、`reset` |
+| 布尔 | `bcut`、`bfuse`、`bcommon`、`bsection` 及 `bop*` 系列 |
+| 仓库 | `compound`、`explode`、`orientation`、`nbshapes`、`checkshape`、`vprops` |
+| Tcl | `set`、`expr` 用于参数代入 |
+
+```cpp
+if (HasTextCsgSupport()) {
+    static const char* bracket =
+        "set t 3\n"
+        "box base 60 40 $t\n"
+        "pcylinder boss 8 12\n"
+        "ttranslate boss 30 20 $t\n"
+        "bfuse result base boss\n";
+    auto model = BuildCsgModel("bracket", bracket);   // shapeName 默认 "result"
+}
+```
+
+失败以项目异常报出：`InvalidArgumentError`（名字冲突/脚本不合法）、`NotFoundError`（脚本未在
+`shapeName` 下留下形状）、`NotSupportedError`（本构建未带 DRAW Test Harness）。解释器是完整的 Tcl，
+**未受沙箱限制**（`exec`、`open`、`source`、`file`、`readbrep`、`binsave` 等都可达），只能执行可信来源
+的脚本。
+
 ### 内核路由策略
 
 | 操作 | BRep 模型 (OCCT) | 网格模型 (IGL/CGAL) |
@@ -467,6 +631,7 @@ gcode_path->SaveGCode("output/model.gcode", GCodeFirmware::Marlin);
 
 - `samples/LibHsBaSlicer/main_header.cpp` — 完整 FDM 切片流程（传统 #include）
 - `samples/LibHsBaSlicer/main_module.cpp` — C++20 模块版（`import hsba.slicer;`，类风格 API）
+- `samples/CsgModel/main.cpp` — 文本 CSG（OCCT DRAW）C ABI 示例；图元、Tcl 参数、fuse/cut、交给 FDM 流水线以及三类失败原因输出
 
 ## C++20 模块版（ModuleHsBaSlicer）
 
