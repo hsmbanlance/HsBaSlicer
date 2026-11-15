@@ -15,12 +15,19 @@ module;
 #endif
 
 // Standard library
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
+#include <utility>
 #include <vector>
 
 // Third-party: Clipper2
@@ -60,6 +67,19 @@ module;
 #include "LibHsBaSlicer/Extends/LuaAddFunction.hpp"
 #include "LibHsBaSlicer/Extends/EventSourceFunction.hpp"
 #include "LibHsBaSlicer/Extends/lua_pipeline.hpp"
+#include "LibHsBaSlicer/Path/spiral_path.hpp"
+#include "LibHsBaSlicer/ParamStore/config_json_ops.hpp"
+
+// Pipeline orchestration kernel (shared with the C ABI Dll layer)
+#include "LibHsBaSlicer/Pipeline/kernel_types.hpp"
+#include "LibHsBaSlicer/Pipeline/fdm_pipeline.hpp"
+#include "LibHsBaSlicer/Pipeline/sla_pipeline.hpp"
+#include "LibHsBaSlicer/Pipeline/sls_pipeline.hpp"
+#include "LibHsBaSlicer/Pipeline/slm_pipeline.hpp"
+#include "LibHsBaSlicer/Pipeline/lom_pipeline.hpp"
+#include "LibHsBaSlicer/Pipeline/tdp_pipeline.hpp"
+#include "LibHsBaSlicer/Pipeline/waam_pipeline.hpp"
+#include "LibHsBaSlicer/Pipeline/custom_pipeline.hpp"
 
 // ---- Module interface ----
 export module hsba.slicer;
@@ -158,6 +178,200 @@ HsBaTdpPipelineConfig_t defaultTdpConfig();
 HsBaWaamPipelineConfig_t defaultWaamConfig();
 
 // ===========================================================================
+// Shared async / geometry types (③ cooperative job control, ④ geometry export)
+// ===========================================================================
+
+/// @brief Progress report callback: percent 0-100 and human readable stage text.
+using ProgressFunc = std::function<void(int, std::string_view)>;
+
+/// @brief Terminal state of a pipeline run (mirrors the kernel's Output flags).
+enum class RunStatus
+{
+    Ok,         ///< Completed successfully
+    Cancelled,  ///< Stopped by a cooperative cancel request
+    Failed,     ///< Pipeline reported a failure
+};
+
+/// @brief Layer geometry a run captured (④). Native counterpart of the C ABI
+///        geometry snapshot: valid only when the run produced geometry.
+struct Geometry
+{
+    bool valid = false;
+    std::vector<PolygonsD> outlines;   ///< Part contours per layer
+    std::vector<PolygonsD> fills;      ///< FDM infill / SLA floor rings per layer
+    std::vector<PolygonsD> supports;   ///< Support cross sections per layer
+    std::vector<double> zs;            ///< Layer platform heights (mm)
+    std::vector<SpiralPoint> path;     ///< Continuous (spiral) path; empty when not produced
+};
+
+/// @brief Worker result carrying the mapped output plus terminal status.
+template <class ResultT>
+struct JobOutcome
+{
+    RunStatus status = RunStatus::Ok;
+    ResultT value{};
+    std::string error;
+};
+
+enum class JobState
+{
+    Pending,
+    Running,
+    Succeeded,
+    Failed,
+    Cancelled,
+};
+
+/// @brief Native asynchronous pipeline job with cooperative cancellation (③).
+///
+/// A Job owns a worker thread that drives the shared kernel; @ref cancel sets the
+/// flag the kernel polls at stage boundaries and inside per-layer loops, so a run
+/// stops mid-way rather than only before it starts. Move-only: exactly one owner
+/// joins the thread (in @ref get or the destructor).
+template <class ResultT>
+class Job
+{
+public:
+    Job() = default;
+    Job(Job&&) = default;
+    Job& operator=(Job&&) = default;
+    Job(const Job&) = delete;
+    Job& operator=(const Job&) = delete;
+
+    ~Job()
+    {
+        if (impl_)
+            impl_->join();
+    }
+
+    /// @brief Launch a job. @p fn runs on the worker thread: it receives the
+    ///        cooperative cancel flag and a progress emitter, and returns the
+    ///        mapped outcome. @p progress forwards kernel progress to the caller.
+    template <class Fn>
+    static Job Start(Fn fn, ProgressFunc progress = {})
+    {
+        Job job;
+        auto impl = std::make_shared<Impl>();
+        impl->state.store(JobState::Running);
+        impl->worker = std::thread([impl, fn = std::move(fn), progress = std::move(progress)]() {
+            ProgressFunc emit = [impl, &progress](int percent, std::string_view stage) {
+                impl->progress_percent.store(percent);
+                if (progress)
+                    progress(percent, stage);
+            };
+            JobOutcome<ResultT> outcome = fn(impl->cancel, emit);
+            std::lock_guard<std::mutex> lock(impl->mtx);
+            impl->error = std::move(outcome.error);
+            if (outcome.status == RunStatus::Ok)
+            {
+                impl->result.emplace(std::move(outcome.value));
+                impl->state.store(JobState::Succeeded);
+            }
+            else if (outcome.status == RunStatus::Cancelled)
+            {
+                impl->state.store(JobState::Cancelled);
+            }
+            else
+            {
+                impl->state.store(JobState::Failed);
+            }
+            impl->cv.notify_all();
+        });
+        job.impl_ = std::move(impl);
+        return job;
+    }
+
+    /// @brief Current job state.
+    JobState state() const
+    {
+        return impl_ ? impl_->state.load() : JobState::Pending;
+    }
+
+    /// @brief Whether the job reached a terminal state.
+    bool done() const
+    {
+        const JobState s = state();
+        return s == JobState::Succeeded || s == JobState::Failed || s == JobState::Cancelled;
+    }
+
+    /// @brief Last progress percent reported by the kernel (0-100).
+    int progress() const
+    {
+        return impl_ ? impl_->progress_percent.load() : 0;
+    }
+
+    /// @brief Request cooperative cancellation; the kernel stops at the next checkpoint.
+    void cancel()
+    {
+        if (impl_)
+            impl_->cancel.store(true);
+    }
+
+    /// @brief Block until the job finishes.
+    void wait() const
+    {
+        if (!impl_)
+            return;
+        std::unique_lock<std::mutex> lock(impl_->mtx);
+        impl_->cv.wait(lock, [this] { return done(); });
+    }
+
+    /// @brief Block up to @p ms for completion; returns true when done.
+    bool wait(std::chrono::milliseconds ms) const
+    {
+        if (!impl_)
+            return true;
+        std::unique_lock<std::mutex> lock(impl_->mtx);
+        return impl_->cv.wait_for(lock, ms, [this] { return done(); });
+    }
+
+    /// @brief Join the worker and return the result.
+    /// @throws SlicerError when the job was cancelled or failed.
+    ResultT get()
+    {
+        if (!impl_)
+            throw SlicerError("Job not started");
+        impl_->join();
+        switch (impl_->state.load())
+        {
+        case JobState::Cancelled:
+            throw SlicerError(impl_->error.empty() ? "Job cancelled" : impl_->error);
+        case JobState::Failed:
+            throw SlicerError(impl_->error.empty() ? "Job failed" : impl_->error);
+        case JobState::Succeeded:
+            if (impl_->result)
+                return std::move(*impl_->result);
+            [[fallthrough]];
+        default:
+            throw SlicerError("Job produced no result");
+        }
+    }
+
+private:
+    struct Impl
+    {
+        std::thread worker;
+        mutable std::mutex mtx;
+        std::condition_variable cv;
+        std::atomic<JobState> state{JobState::Pending};
+        std::atomic<bool> cancel{false};
+        std::atomic<int> progress_percent{0};
+        std::optional<ResultT> result;
+        std::string error;
+        bool joined = false;
+
+        void join()
+        {
+            if (worker.joinable())
+                worker.join();
+            joined = true;
+        }
+    };
+
+    std::shared_ptr<Impl> impl_;
+};
+
+// ===========================================================================
 // Model (RAII wrapper)
 // ===========================================================================
 
@@ -197,10 +411,58 @@ public:
     /// @brief Model name.
     inline const std::string& name() const;
 
+    // ---- Pool queries (②, mirror the C ABI model-management surface) ----
+
+    /// @brief Whether a model with this name exists (local pool or published).
+    static bool exists(std::string_view name);
+    /// @brief Number of models in the caller's pool.
+    static std::size_t count();
+    /// @brief Names of all models in the pool.
+    static std::vector<std::string> names();
+    /// @brief Remove models no longer referenced externally; returns count removed.
+    static std::size_t cleanup();
+    /// @brief Adopt an already-loaded model by name (does not load a file).
+    /// @throws SlicerError when no model resolves under @p name.
+    static Model fromExisting(std::string name);
+
+    /// @brief Expose this pooled model to by-name lookups from other threads.
+    bool publish() const;
+    /// @brief Withdraw the process-wide reference created by publish().
+    bool unpublish() const;
+
+    /// @brief Export the triangle mesh (vertices N x 3 mm, faces M x 3 zero-based).
+    std::pair<Eigen::MatrixXf, Eigen::MatrixXi> triangles() const;
+
 private:
+    struct AdoptTag {};
+    Model(AdoptTag, std::string name, std::shared_ptr<IModel> ptr);
+
     std::string name_;
     std::shared_ptr<IModel> ptr_;
 };
+
+// ---- Advanced model operations (②, kernel-gated like model_preprocess.hpp) ----
+
+/// @brief Whether this build can evaluate text CSG scripts.
+inline bool hasTextCsgSupport();
+
+#ifdef USE_CGAL
+/// @brief Boolean union; the result is stored under @p resultName and adopted.
+inline Model booleanUnion(const std::string& left, const std::string& right, const std::string& resultName);
+/// @brief Boolean intersection.
+inline Model booleanIntersection(const std::string& left, const std::string& right, const std::string& resultName);
+/// @brief Boolean difference (left - right).
+inline Model booleanDifference(const std::string& left, const std::string& right, const std::string& resultName);
+/// @brief Boolean XOR.
+inline Model booleanXor(const std::string& left, const std::string& right, const std::string& resultName);
+/// @brief Thick-solid (inward shell) of a B-Rep model stored under @p resultName.
+inline Model thickSolidModel(const std::string& source, const std::string& resultName, float thickness);
+#endif  // USE_CGAL
+
+#ifdef USE_OCCT
+/// @brief Build a B-Rep model from an OCCT DRAW (text CSG) script.
+inline Model buildCsgModel(const std::string& name, std::string_view script, std::string_view shapeName = {});
+#endif  // USE_OCCT
 
 // ===========================================================================
 // FDM Pipeline
@@ -211,6 +473,7 @@ struct FdmResult
 {
     std::string gcode;
     int total_layers = 0;
+    Geometry geometry;   ///< Captured layer geometry (④); valid only when produced
 };
 
 /// @brief FDM full pipeline: Slice -> Support -> Fill -> Path.
@@ -219,9 +482,15 @@ class FdmPipeline
 public:
     explicit FdmPipeline(HsBaFdmPipelineConfig_t cfg = defaultFdmConfig());
 
-    /// @brief Run full pipeline on a model.
+    /// @brief Run full pipeline on a model via the shared kernel.
     /// @throws SlicerError on failure.
-    FdmResult run(const Model& model) const;
+    FdmResult run(const Model& model, ProgressFunc progress = {}) const;
+
+    /// @brief Launch the pipeline asynchronously with cooperative cancellation (③).
+    Job<FdmResult> runAsync(const Model& model, ProgressFunc progress = {}) const;
+
+    /// @brief Continuous spiralized outer-wall path for this model (④).
+    std::vector<SpiralPoint> spiralPath(const Model& model) const;
 
     /// @brief Slice all layers.
     inline std::vector<Polygons> sliceAll(const Model& model) const;
@@ -245,6 +514,8 @@ struct SlaResult
 {
     bool saved        = false;
     int total_layers  = 0;
+    std::string export_path;   ///< Produced package path
+    Geometry geometry;         ///< Captured layer geometry (④)
 };
 
 /// @brief SLA full pipeline: Slice -> Support -> Floor -> Render -> Package.
@@ -253,9 +524,16 @@ class SlaPipeline
 public:
     explicit SlaPipeline(HsBaSlaPipelineConfig_t cfg = defaultSlaConfig());
 
-    /// @brief Run full SLA pipeline and save to zip.
+    /// @brief Run full SLA pipeline via the shared kernel.
     /// @throws SlicerError on failure.
-    inline SlaResult run(const Model& model, const std::filesystem::path& output_zip) const;
+    /// NOTE: intentionally not inline - the body reaches the module-internal
+    /// kernel-bridge helpers, so an inlined copy in a consumer TU would not link.
+    SlaResult run(const Model& model, const std::filesystem::path& output_zip,
+                  ProgressFunc progress = {}) const;
+
+    /// @brief Launch the pipeline asynchronously with cooperative cancellation (③).
+    Job<SlaResult> runAsync(const Model& model, const std::filesystem::path& output_zip,
+                            ProgressFunc progress = {}) const;
 
     /// @brief Generate floor/raft from bottom layer.
     inline Polygons generateFloor(const Polygons& bottom_layer) const;
@@ -273,15 +551,27 @@ private:
 // SLS Pipeline
 // ===========================================================================
 
+/// @brief SLS pipeline result (C++ style).
+struct SlsResult
+{
+    bool saved        = false;
+    int total_layers  = 0;
+    std::string export_path;
+    Geometry geometry;
+};
+
 /// @brief SLS pipeline (Lua-driven export).
 class SlsPipeline
 {
 public:
     explicit SlsPipeline(HsBaSlsPipelineConfig_t cfg = defaultSlsConfig());
 
-    /// @brief Run SLS export via Lua script.
+    /// @brief Run SLS export via the shared kernel.
     /// @throws SlicerError on failure.
-    inline bool run(const Model& model) const;
+    SlsResult run(const Model& model, ProgressFunc progress = {}) const;
+
+    /// @brief Launch the pipeline asynchronously with cooperative cancellation (③).
+    Job<SlsResult> runAsync(const Model& model, ProgressFunc progress = {}) const;
 
 private:
     HsBaSlsPipelineConfig_t cfg_;
@@ -291,15 +581,27 @@ private:
 // SLM Pipeline (metal powder-bed, Lua-driven export like SLS)
 // ===========================================================================
 
+/// @brief SLM pipeline result (C++ style).
+struct SlmResult
+{
+    bool saved        = false;
+    int total_layers  = 0;
+    std::string export_path;
+    Geometry geometry;
+};
+
 /// @brief SLM pipeline (Lua-driven export).
 class SlmPipeline
 {
 public:
     explicit SlmPipeline(HsBaSlmPipelineConfig_t cfg = defaultSlmConfig());
 
-    /// @brief Run SLM export via Lua script.
+    /// @brief Run SLM export via the shared kernel.
     /// @throws SlicerError on failure.
-    inline bool run(const Model& model) const;
+    SlmResult run(const Model& model, ProgressFunc progress = {}) const;
+
+    /// @brief Launch the pipeline asynchronously with cooperative cancellation (③).
+    Job<SlmResult> runAsync(const Model& model, ProgressFunc progress = {}) const;
 
 private:
     HsBaSlmPipelineConfig_t cfg_;
@@ -309,15 +611,27 @@ private:
 // LOM Pipeline (laminated sheets, Lua-driven export like SLS)
 // ===========================================================================
 
+/// @brief LOM pipeline result (C++ style).
+struct LomResult
+{
+    bool saved        = false;
+    int total_layers  = 0;
+    std::string export_path;
+    Geometry geometry;
+};
+
 /// @brief LOM pipeline (Lua-driven export).
 class LomPipeline
 {
 public:
     explicit LomPipeline(HsBaLomPipelineConfig_t cfg = defaultLomConfig());
 
-    /// @brief Run LOM export via Lua script.
+    /// @brief Run LOM export via the shared kernel.
     /// @throws SlicerError on failure.
-    inline bool run(const Model& model) const;
+    LomResult run(const Model& model, ProgressFunc progress = {}) const;
+
+    /// @brief Launch the pipeline asynchronously with cooperative cancellation (③).
+    Job<LomResult> runAsync(const Model& model, ProgressFunc progress = {}) const;
 
 private:
     HsBaLomPipelineConfig_t cfg_;
@@ -327,15 +641,30 @@ private:
 // 3DP Pipeline (binder jetting, Lua-driven export like SLS)
 // ===========================================================================
 
+/// @brief 3DP pipeline result (C++ style).
+struct TdpResult
+{
+    bool saved        = false;
+    int total_layers  = 0;
+    std::string export_path;
+    Geometry geometry;
+};
+
 /// @brief 3DP pipeline (Lua-driven export).
 class TdpPipeline
 {
 public:
     explicit TdpPipeline(HsBaTdpPipelineConfig_t cfg = defaultTdpConfig());
 
-    /// @brief Run 3DP export via Lua script.
+    /// @brief Run 3DP export via the shared kernel.
     /// @throws SlicerError on failure.
-    inline bool run(const Model& model) const;
+    TdpResult run(const Model& model, ProgressFunc progress = {}) const;
+
+    /// @brief Launch the pipeline asynchronously with cooperative cancellation (③).
+    Job<TdpResult> runAsync(const Model& model, ProgressFunc progress = {}) const;
+
+    /// @brief Continuous spiralized outer-wall path for this model (④).
+    std::vector<SpiralPoint> spiralPath(const Model& model) const;
 
 private:
     HsBaTdpPipelineConfig_t cfg_;
@@ -345,15 +674,30 @@ private:
 // WAAM Pipeline (wire arc deposition, robot-program export)
 // ===========================================================================
 
+/// @brief WAAM pipeline result (C++ style).
+struct WaamResult
+{
+    bool saved        = false;
+    int total_layers  = 0;
+    std::string output_path;
+    Geometry geometry;
+};
+
 /// @brief WAAM pipeline (robot path export).
 class WaamPipeline
 {
 public:
     explicit WaamPipeline(HsBaWaamPipelineConfig_t cfg = defaultWaamConfig());
 
-    /// @brief Run WAAM robot-program export.
+    /// @brief Run WAAM robot-program export via the shared kernel.
     /// @throws SlicerError on failure.
-    inline bool run(const Model& model) const;
+    WaamResult run(const Model& model, ProgressFunc progress = {}) const;
+
+    /// @brief Launch the pipeline asynchronously with cooperative cancellation (③).
+    Job<WaamResult> runAsync(const Model& model, ProgressFunc progress = {}) const;
+
+    /// @brief Continuous spiralized outer-wall path for this model (④).
+    std::vector<SpiralPoint> spiralPath(const Model& model) const;
 
 private:
     HsBaWaamPipelineConfig_t cfg_;
@@ -440,22 +784,39 @@ public:
     /// @brief Upsert a config struct under @p key; returns the stored row id.
     ///        @p cfg must point to the C config struct matching @p kind.
     /// @throws SlicerError on failure.
-    inline long long save(ParamStoreKind kind, const void* cfg, const std::string& key,
-                          const std::string& table = {}) const;
+    /// NOTE: out-of-line definitions (not inline) so the bodies can reach the
+    /// module-internal ToLibKind/ToLibConn helpers from a single linked copy.
+    long long save(ParamStoreKind kind, const void* cfg, const std::string& key,
+                   const std::string& table = {}) const;
 
     /// @brief Load config under @p key into @p outCfg (a C config struct matching @p kind).
     ///        The const char* fields of outCfg are heap-allocated by the library and must
     ///        be released with freeLoaded().
     /// @throws SlicerError on failure or when the key is not found.
-    inline long long load(ParamStoreKind kind, const std::string& key, void* outCfg,
-                          const std::string& table = {}) const;
+    long long load(ParamStoreKind kind, const std::string& key, void* outCfg,
+                   const std::string& table = {}) const;
 
     /// @brief Release the heap strings produced by load() for this config struct.
-    inline void freeLoaded(ParamStoreKind kind, void* cfg) const;
+    void freeLoaded(ParamStoreKind kind, void* cfg) const;
 
 private:
     ParamStoreConnection conn_;
 };
+
+// ===========================================================================
+// Config JSON codec (①, thin forwarding over the Lib reflection-driven codec)
+// ===========================================================================
+
+/// @brief Pretty-printed JSON of a kind's factory-default config.
+std::string defaultConfigJson(ParamStoreKind kind);
+/// @brief Serialize @p cfg (a C config struct matching @p kind) to pretty JSON.
+std::string configToJson(ParamStoreKind kind, const void* cfg);
+/// @brief Land @p json into @p cfg (a default-initialized struct matching @p kind).
+///        On success the non-null const char* fields are malloc-owned; release them
+///        with ParamStorePipeline::freeLoaded() before discarding the struct.
+/// NOTE: these are out-of-line (not inline) so their bodies can reach the
+/// module-internal ToLibKind helper from a single linked copy.
+bool configFromJson(ParamStoreKind kind, std::string_view json, void* cfg);
 
 // ===========================================================================
 // Custom Lua Pipeline (fully Lua-driven workflow)
@@ -482,9 +843,13 @@ public:
     /// @brief Set the progress callback driven by `HsBa.progress()` in Lua.
     void setProgressFunc(std::function<void(int, std::string_view)> func);
 
-    /// @brief Run the custom pipeline.
+    /// @brief Run the custom pipeline via the shared kernel.
     /// @throws SlicerError on failure.
     CustomLuaResult run() const;
+
+    /// @brief Launch the custom pipeline asynchronously with cooperative cancellation (③).
+    /// @throws SlicerError when no script/source is configured.
+    Job<CustomLuaResult> runAsync();
 
 private:
     HsBaCustomPipelineConfig_t cfg_;
@@ -578,6 +943,78 @@ HsBaTdpPipelineConfig_t defaultTdpConfig() { return HsBaTdpConfigDefault(); }
 HsBaWaamPipelineConfig_t defaultWaamConfig() { return HsBaWaamConfigDefault(); }
 
 // ===========================================================================
+// Kernel bridge helpers (shared by every pipeline run()/runAsync()).
+// ===========================================================================
+
+namespace
+{
+
+/// @brief Convert a kernel geometry capture into the module's native Geometry (④).
+Geometry ToGeometry(const Kernel::GeometryCapture& cap)
+{
+    Geometry g;
+    g.valid = cap.valid;
+    g.outlines = cap.outlines;
+    g.fills = cap.fills;
+    g.supports = cap.supports;
+    g.zs = cap.zs;
+    g.path.reserve(cap.path_xyz.size() / 3);
+    for (std::size_t i = 0; i + 2 < cap.path_xyz.size(); i += 3)
+        g.path.push_back(SpiralPoint{cap.path_xyz[i], cap.path_xyz[i + 1], cap.path_xyz[i + 2]});
+    return g;
+}
+
+/// @brief Build kernel hooks from a module progress callback and cancel flag.
+Kernel::Hooks MakeHooks(const ProgressFunc& progress, const std::atomic<bool>* cancel)
+{
+    Kernel::Hooks hooks;
+    hooks.progress = progress;
+    hooks.cancel_flag = cancel;
+    return hooks;
+}
+
+/// @brief Fold an Output (success/cancelled/error) into a job outcome (③).
+template <class ResultT>
+JobOutcome<ResultT> ToOutcome(const bool success, const bool cancelled, const std::string& error,
+                              ResultT value)
+{
+    JobOutcome<ResultT> oc;
+    oc.value = std::move(value);
+    if (cancelled)
+    {
+        oc.status = RunStatus::Cancelled;
+        oc.error = error.empty() ? "Cancelled" : error;
+    }
+    else if (!success)
+    {
+        oc.status = RunStatus::Failed;
+        oc.error = error.empty() ? "Pipeline failed" : error;
+    }
+    return oc;
+}
+
+/// @brief Slice a model into per-layer double contours and spiralize the outer wall (④).
+std::vector<SpiralPoint> SpiralFromModel(const Model& model, float layer_height, float first_layer_height)
+{
+    const ModelInfo mi     = model.info();
+    const float height     = mi.bbox_max.z() - mi.bbox_min.z();
+    const int layers       = static_cast<int>(height / layer_height) + 1;
+    std::vector<PolygonsD> sections;
+    std::vector<double> zs;
+    sections.reserve(static_cast<std::size_t>(layers));
+    zs.reserve(static_cast<std::size_t>(layers));
+    for (int i = 0; i < layers; ++i)
+    {
+        const float z = (i == 0) ? first_layer_height : first_layer_height + i * layer_height;
+        sections.push_back(UnIntegerization(Slice(model.raw(), z)));
+        zs.push_back(z);
+    }
+    return SpiralizeOuterWall(sections, zs);
+}
+
+}  // namespace
+
+// ===========================================================================
 // Model
 // ===========================================================================
 
@@ -630,6 +1067,72 @@ PolygonsD Model::sliceD(float height) const
 
 const IModel& Model::raw() const { return *ptr_; }
 const std::string& Model::name() const { return name_; }
+
+// ---- Advanced model operations (②) ----
+
+Model::Model(AdoptTag, std::string name, std::shared_ptr<IModel> ptr)
+    : name_(std::move(name)), ptr_(std::move(ptr))
+{
+}
+
+bool Model::exists(std::string_view name) { return ContainsModel(std::string(name)); }
+std::size_t Model::count() { return ModelCount(); }
+std::vector<std::string> Model::names() { return GetModelNames(); }
+std::size_t Model::cleanup() { return CleanupModels(); }
+
+Model Model::fromExisting(std::string name)
+{
+    auto ptr = GetModel(name);
+    if (!ptr)
+        throw SlicerError("No model resolves under name: " + name);
+    return Model(AdoptTag{}, std::move(name), std::move(ptr));
+}
+
+bool Model::publish() const { return PublishModel(name_); }
+bool Model::unpublish() const { return UnpublishModel(name_); }
+
+std::pair<Eigen::MatrixXf, Eigen::MatrixXi> Model::triangles() const
+{
+    return GetModelTriangles(name_);
+}
+
+bool hasTextCsgSupport() { return HasTextCsgSupport(); }
+
+#ifdef USE_CGAL
+Model booleanUnion(const std::string& left, const std::string& right, const std::string& resultName)
+{
+    BooleanUnion(left, right, resultName);
+    return Model::fromExisting(resultName);
+}
+Model booleanIntersection(const std::string& left, const std::string& right, const std::string& resultName)
+{
+    BooleanIntersection(left, right, resultName);
+    return Model::fromExisting(resultName);
+}
+Model booleanDifference(const std::string& left, const std::string& right, const std::string& resultName)
+{
+    BooleanDifference(left, right, resultName);
+    return Model::fromExisting(resultName);
+}
+Model booleanXor(const std::string& left, const std::string& right, const std::string& resultName)
+{
+    BooleanXor(left, right, resultName);
+    return Model::fromExisting(resultName);
+}
+Model thickSolidModel(const std::string& source, const std::string& resultName, float thickness)
+{
+    ThickSolidModel(source, resultName, thickness);
+    return Model::fromExisting(resultName);
+}
+#endif  // USE_CGAL
+
+#ifdef USE_OCCT
+Model buildCsgModel(const std::string& name, std::string_view script, std::string_view shapeName)
+{
+    BuildCsgModel(name, script, shapeName);
+    return Model::fromExisting(name);
+}
+#endif  // USE_OCCT
 
 // ===========================================================================
 // FdmPipeline
@@ -718,53 +1221,54 @@ std::unique_ptr<GCodePath> FdmPipeline::generatePath(const std::vector<LayerPath
     return GenerateGCodePathV2(data, pc, printer_cfg);
 }
 
-FdmResult FdmPipeline::run(const Model& model) const
+FdmResult FdmPipeline::run(const Model& model, ProgressFunc progress) const
 {
-    // 1. Slice
-    auto contours = sliceAll(model);
-    const int total_layers = static_cast<int>(contours.size());
+    HsBaFdmPipelineConfig_t cfg = cfg_;
+    cfg.model_name = model.name().c_str();
+    cfg.capture_geometry = 1;
+    cfg.cancel_flag = nullptr;
 
-    // 2. Convert to double for support
-    std::vector<PolygonsD> layers_d;
-    layers_d.reserve(total_layers);
-    for (const auto& c : contours)
-        layers_d.push_back(UnIntegerization(c));
-
-    // 3. Support
-    auto supports = generateSupports(layers_d);
-
-    // 4. Fill + assemble layer data
-    std::vector<LayerPathData> all_data;
-    all_data.reserve(total_layers);
-    for (int i = 0; i < total_layers; ++i)
-    {
-        LayerPathData ld;
-        ld.z_height = (i == 0) ? cfg_.first_layer_height
-                               : cfg_.first_layer_height + i * cfg_.layer_height;
-        ld.outlines = layers_d[i];
-
-        if (!contours[i].empty())
-            ld.fills = UnIntegerization(fill(contours[i]));
-
-        if (i < static_cast<int>(supports.size()))
-            ld.supports = supports[i];
-
-        all_data.push_back(std::move(ld));
-    }
-
-    // 5. Path generation
-    auto path = generatePath(all_data);
+    const Kernel::FdmOutput out = Kernel::RunFdm(cfg, MakeHooks(progress, nullptr));
+    if (out.cancelled)
+        throw SlicerError(out.error.empty() ? "Cancelled" : out.error);
+    if (!out.success)
+        throw SlicerError(out.error);
 
     FdmResult result;
-    result.total_layers = total_layers;
-    auto firmware = static_cast<GCodeFirmware>(static_cast<int>(cfg_.gcode_firmware));
-    result.gcode        = path->ToGCode(firmware);
-
-    // 6. Optional save to file
-    if (cfg_.output_path)
-        path->SaveGCode(cfg_.output_path, firmware);
-
+    result.total_layers = out.total_layers;
+    result.gcode = out.gcode;
+    result.geometry = ToGeometry(out.geometry);
     return result;
+}
+
+Job<FdmResult> FdmPipeline::runAsync(const Model& model, ProgressFunc progress) const
+{
+    HsBaFdmPipelineConfig_t cfg = cfg_;
+    std::string name = model.name();
+    if (!PublishModel(name))
+        throw SlicerError("Model not available for async run: " + name);
+
+    return Job<FdmResult>::Start(
+        [cfg, name](const std::atomic<bool>& cancel, const ProgressFunc& emit) {
+            HsBaFdmPipelineConfig_t c = cfg;
+            c.model_name = name.c_str();
+            c.capture_geometry = 1;
+            c.cancel_flag = &cancel;
+            const Kernel::FdmOutput out = Kernel::RunFdm(c, MakeHooks(emit, &cancel));
+
+            FdmResult value;
+            value.total_layers = out.total_layers;
+            value.gcode = out.gcode;
+            value.geometry = ToGeometry(out.geometry);
+            UnpublishModel(name);
+            return ToOutcome(out.success, out.cancelled, out.error, std::move(value));
+        },
+        std::move(progress));
+}
+
+std::vector<SpiralPoint> FdmPipeline::spiralPath(const Model& model) const
+{
+    return SpiralFromModel(model, cfg_.layer_height, cfg_.first_layer_height);
 }
 
 // ===========================================================================
@@ -807,69 +1311,57 @@ bool SlaPipeline::savePackage(const SlaPackage& pkg, const std::string& output_z
     return SaveSlaPackage(pkg, output_zip);
 }
 
-SlaResult SlaPipeline::run(const Model& model, const std::filesystem::path& output_zip) const
+SlaResult SlaPipeline::run(const Model& model, const std::filesystem::path& output_zip,
+                           ProgressFunc progress) const
 {
-    // 1. Slice all layers
-    const auto mi      = model.info();
-    const float height = mi.bbox_max.z() - mi.bbox_min.z();
-    const int layers   = static_cast<int>(height / cfg_.layer_height) + 1;
+    HsBaSlaPipelineConfig_t cfg = cfg_;
+    const std::string out = output_zip.string();
+    cfg.model_name = model.name().c_str();
+    cfg.output_path = out.c_str();
+    cfg.capture_geometry = 1;
+    cfg.cancel_flag = nullptr;
 
-    std::vector<PolygonsD> layers_d;
-    layers_d.reserve(layers);
-    for (int i = 0; i < layers; ++i)
-    {
-        float z = (i == 0) ? cfg_.first_layer_height
-                           : cfg_.first_layer_height + i * cfg_.layer_height;
-        layers_d.push_back(UnIntegerization(Slice(model.raw(), z)));
-    }
-
-    // 2. Support
-    std::vector<PolygonsD> supports;
-    if (cfg_.enable_support)
-    {
-        Support::SlaSupportConfig sc;
-        sc.overhang_angle_threshold = cfg_.overhang_angle;
-        sc.layer_height             = cfg_.layer_height;
-        sc.support_gap              = cfg_.support_gap;
-        sc.support_diameter         = cfg_.support_diameter;
-        sc.support_density          = cfg_.support_density;
-
-        if (cfg_.support_lua_script)
-        {
-            supports = GenerateAllLuaSupport(layers_d, sc, cfg_.support_lua_script,
-                                            cfg_.support_lua_func ? cfg_.support_lua_func : "generate_support");
-        }
-        else
-        {
-            supports = GenerateAllSlaSupport(layers_d, sc);
-        }
-    }
-
-    // 3. Floor
-    PolygonsD floor_polygons;
-    if (!layers_d.empty())
-    {
-        auto bottom_int = Integerization(layers_d.front());
-        auto floor_int  = generateFloor(bottom_int);
-        floor_polygons  = UnIntegerization(floor_int);
-    }
-
-    // 4. Package
-    static const char* kImageExts[] = { ".png", ".jpg", ".svg" };
-    const char* ext = kImageExts[static_cast<int>(cfg_.image_type)];
-
-    SlaPackage pkg;
-    pkg.layer_outlines  = std::move(layers_d);
-    pkg.layer_supports  = std::move(supports);
-    pkg.floor_polygons  = std::move(floor_polygons);
-    pkg.image_width     = cfg_.image_width;
-    pkg.image_height    = cfg_.image_height;
-    pkg.image_extension = ext;
+    const Kernel::SlaOutput o = Kernel::RunSla(cfg, MakeHooks(progress, nullptr));
+    if (o.cancelled)
+        throw SlicerError(o.error.empty() ? "Cancelled" : o.error);
+    if (!o.success)
+        throw SlicerError(o.error);
 
     SlaResult result;
-    result.total_layers = static_cast<int>(pkg.layer_outlines.size());
-    result.saved        = savePackage(pkg, output_zip.string());
+    result.saved = true;
+    result.total_layers = o.total_layers;
+    result.export_path = o.export_path;
+    result.geometry = ToGeometry(o.geometry);
     return result;
+}
+
+Job<SlaResult> SlaPipeline::runAsync(const Model& model, const std::filesystem::path& output_zip,
+                                     ProgressFunc progress) const
+{
+    HsBaSlaPipelineConfig_t cfg = cfg_;
+    std::string name = model.name();
+    std::string out = output_zip.string();
+    if (!PublishModel(name))
+        throw SlicerError("Model not available for async run: " + name);
+
+    return Job<SlaResult>::Start(
+        [cfg, name, out](const std::atomic<bool>& cancel, const ProgressFunc& emit) {
+            HsBaSlaPipelineConfig_t c = cfg;
+            c.model_name = name.c_str();
+            c.output_path = out.c_str();
+            c.capture_geometry = 1;
+            c.cancel_flag = &cancel;
+            const Kernel::SlaOutput o = Kernel::RunSla(c, MakeHooks(emit, &cancel));
+
+            SlaResult value;
+            value.saved = o.success;
+            value.total_layers = o.total_layers;
+            value.export_path = o.export_path;
+            value.geometry = ToGeometry(o.geometry);
+            UnpublishModel(name);
+            return ToOutcome(o.success, o.cancelled, o.error, std::move(value));
+        },
+        std::move(progress));
 }
 
 // ===========================================================================
@@ -878,29 +1370,50 @@ SlaResult SlaPipeline::run(const Model& model, const std::filesystem::path& outp
 
 SlsPipeline::SlsPipeline(HsBaSlsPipelineConfig_t cfg) : cfg_(cfg) {}
 
-bool SlsPipeline::run(const Model& model) const
+SlsResult SlsPipeline::run(const Model& model, ProgressFunc progress) const
 {
-    if (!cfg_.export_lua_script)
-        throw SlicerError("SLS pipeline requires export_lua_script");
+    HsBaSlsPipelineConfig_t cfg = cfg_;
+    cfg.model_name = model.name().c_str();
+    cfg.capture_geometry = 1;
+    cfg.cancel_flag = nullptr;
 
-    // Slice
-    const auto mi      = model.info();
-    const float height = mi.bbox_max.z() - mi.bbox_min.z();
-    const int layers   = static_cast<int>(height / cfg_.layer_height) + 1;
+    const Kernel::SlsOutput o = Kernel::RunSls(cfg, MakeHooks(progress, nullptr));
+    if (o.cancelled)
+        throw SlicerError(o.error.empty() ? "Cancelled" : o.error);
+    if (!o.success)
+        throw SlicerError(o.error);
 
-    SlsPackage pkg;
-    pkg.layer_outlines.reserve(layers);
-    pkg.layer_z_heights.reserve(layers);
-    for (int i = 0; i < layers; ++i)
-    {
-        float z = cfg_.first_layer_height + i * cfg_.layer_height;
-        pkg.layer_outlines.push_back(UnIntegerization(Slice(model.raw(), z)));
-        pkg.layer_z_heights.push_back(z);
-    }
+    SlsResult result;
+    result.saved = true;
+    result.total_layers = o.total_layers;
+    result.export_path = o.export_path;
+    result.geometry = ToGeometry(o.geometry);
+    return result;
+}
 
-    const char* output = cfg_.output_path ? cfg_.output_path : "";
-    return SaveSlsPackageLua(pkg, output, cfg_.export_lua_script,
-                             cfg_.export_lua_func ? cfg_.export_lua_func : "export_sls");
+Job<SlsResult> SlsPipeline::runAsync(const Model& model, ProgressFunc progress) const
+{
+    HsBaSlsPipelineConfig_t cfg = cfg_;
+    std::string name = model.name();
+    if (!PublishModel(name))
+        throw SlicerError("Model not available for async run: " + name);
+
+    return Job<SlsResult>::Start(
+        [cfg, name](const std::atomic<bool>& cancel, const ProgressFunc& emit) {
+            HsBaSlsPipelineConfig_t c = cfg;
+            c.model_name = name.c_str();
+            c.capture_geometry = 1;
+            c.cancel_flag = &cancel;
+            const Kernel::SlsOutput o = Kernel::RunSls(c, MakeHooks(emit, &cancel));
+            SlsResult value;
+            value.saved = o.success;
+            value.total_layers = o.total_layers;
+            value.export_path = o.export_path;
+            value.geometry = ToGeometry(o.geometry);
+            UnpublishModel(name);
+            return ToOutcome(o.success, o.cancelled, o.error, std::move(value));
+        },
+        std::move(progress));
 }
 
 // ===========================================================================
@@ -909,28 +1422,50 @@ bool SlsPipeline::run(const Model& model) const
 
 SlmPipeline::SlmPipeline(HsBaSlmPipelineConfig_t cfg) : cfg_(cfg) {}
 
-bool SlmPipeline::run(const Model& model) const
+SlmResult SlmPipeline::run(const Model& model, ProgressFunc progress) const
 {
-    if (!cfg_.export_lua_script)
-        throw SlicerError("SLM pipeline requires export_lua_script");
+    HsBaSlmPipelineConfig_t cfg = cfg_;
+    cfg.model_name = model.name().c_str();
+    cfg.capture_geometry = 1;
+    cfg.cancel_flag = nullptr;
 
-    const auto mi      = model.info();
-    const float height = mi.bbox_max.z() - mi.bbox_min.z();
-    const int layers   = static_cast<int>(height / cfg_.layer_height) + 1;
+    const Kernel::SlmOutput o = Kernel::RunSlm(cfg, MakeHooks(progress, nullptr));
+    if (o.cancelled)
+        throw SlicerError(o.error.empty() ? "Cancelled" : o.error);
+    if (!o.success)
+        throw SlicerError(o.error);
 
-    SlsPackage pkg;
-    pkg.layer_outlines.reserve(layers);
-    pkg.layer_z_heights.reserve(layers);
-    for (int i = 0; i < layers; ++i)
-    {
-        float z = cfg_.first_layer_height + i * cfg_.layer_height;
-        pkg.layer_outlines.push_back(UnIntegerization(Slice(model.raw(), z)));
-        pkg.layer_z_heights.push_back(z);
-    }
+    SlmResult result;
+    result.saved = true;
+    result.total_layers = o.total_layers;
+    result.export_path = o.export_path;
+    result.geometry = ToGeometry(o.geometry);
+    return result;
+}
 
-    const char* output = cfg_.output_path ? cfg_.output_path : "";
-    return SaveSlsPackageLua(pkg, output, cfg_.export_lua_script,
-                             cfg_.export_lua_func ? cfg_.export_lua_func : "export_slm");
+Job<SlmResult> SlmPipeline::runAsync(const Model& model, ProgressFunc progress) const
+{
+    HsBaSlmPipelineConfig_t cfg = cfg_;
+    std::string name = model.name();
+    if (!PublishModel(name))
+        throw SlicerError("Model not available for async run: " + name);
+
+    return Job<SlmResult>::Start(
+        [cfg, name](const std::atomic<bool>& cancel, const ProgressFunc& emit) {
+            HsBaSlmPipelineConfig_t c = cfg;
+            c.model_name = name.c_str();
+            c.capture_geometry = 1;
+            c.cancel_flag = &cancel;
+            const Kernel::SlmOutput o = Kernel::RunSlm(c, MakeHooks(emit, &cancel));
+            SlmResult value;
+            value.saved = o.success;
+            value.total_layers = o.total_layers;
+            value.export_path = o.export_path;
+            value.geometry = ToGeometry(o.geometry);
+            UnpublishModel(name);
+            return ToOutcome(o.success, o.cancelled, o.error, std::move(value));
+        },
+        std::move(progress));
 }
 
 // ===========================================================================
@@ -939,28 +1474,50 @@ bool SlmPipeline::run(const Model& model) const
 
 LomPipeline::LomPipeline(HsBaLomPipelineConfig_t cfg) : cfg_(cfg) {}
 
-bool LomPipeline::run(const Model& model) const
+LomResult LomPipeline::run(const Model& model, ProgressFunc progress) const
 {
-    if (!cfg_.export_lua_script)
-        throw SlicerError("LOM pipeline requires export_lua_script");
+    HsBaLomPipelineConfig_t cfg = cfg_;
+    cfg.model_name = model.name().c_str();
+    cfg.capture_geometry = 1;
+    cfg.cancel_flag = nullptr;
 
-    const auto mi      = model.info();
-    const float height = mi.bbox_max.z() - mi.bbox_min.z();
-    const int layers   = static_cast<int>(height / cfg_.layer_height) + 1;
+    const Kernel::LomOutput o = Kernel::RunLom(cfg, MakeHooks(progress, nullptr));
+    if (o.cancelled)
+        throw SlicerError(o.error.empty() ? "Cancelled" : o.error);
+    if (!o.success)
+        throw SlicerError(o.error);
 
-    SlsPackage pkg;
-    pkg.layer_outlines.reserve(layers);
-    pkg.layer_z_heights.reserve(layers);
-    for (int i = 0; i < layers; ++i)
-    {
-        float z = cfg_.first_layer_height + i * cfg_.layer_height;
-        pkg.layer_outlines.push_back(UnIntegerization(Slice(model.raw(), z)));
-        pkg.layer_z_heights.push_back(z);
-    }
+    LomResult result;
+    result.saved = true;
+    result.total_layers = o.total_layers;
+    result.export_path = o.export_path;
+    result.geometry = ToGeometry(o.geometry);
+    return result;
+}
 
-    const char* output = cfg_.output_path ? cfg_.output_path : "";
-    return SaveSlsPackageLua(pkg, output, cfg_.export_lua_script,
-                             cfg_.export_lua_func ? cfg_.export_lua_func : "export_lom");
+Job<LomResult> LomPipeline::runAsync(const Model& model, ProgressFunc progress) const
+{
+    HsBaLomPipelineConfig_t cfg = cfg_;
+    std::string name = model.name();
+    if (!PublishModel(name))
+        throw SlicerError("Model not available for async run: " + name);
+
+    return Job<LomResult>::Start(
+        [cfg, name](const std::atomic<bool>& cancel, const ProgressFunc& emit) {
+            HsBaLomPipelineConfig_t c = cfg;
+            c.model_name = name.c_str();
+            c.capture_geometry = 1;
+            c.cancel_flag = &cancel;
+            const Kernel::LomOutput o = Kernel::RunLom(c, MakeHooks(emit, &cancel));
+            LomResult value;
+            value.saved = o.success;
+            value.total_layers = o.total_layers;
+            value.export_path = o.export_path;
+            value.geometry = ToGeometry(o.geometry);
+            UnpublishModel(name);
+            return ToOutcome(o.success, o.cancelled, o.error, std::move(value));
+        },
+        std::move(progress));
 }
 
 // ===========================================================================
@@ -969,28 +1526,55 @@ bool LomPipeline::run(const Model& model) const
 
 TdpPipeline::TdpPipeline(HsBaTdpPipelineConfig_t cfg) : cfg_(cfg) {}
 
-bool TdpPipeline::run(const Model& model) const
+TdpResult TdpPipeline::run(const Model& model, ProgressFunc progress) const
 {
-    if (!cfg_.export_lua_script)
-        throw SlicerError("3DP pipeline requires export_lua_script");
+    HsBaTdpPipelineConfig_t cfg = cfg_;
+    cfg.model_name = model.name().c_str();
+    cfg.capture_geometry = 1;
+    cfg.cancel_flag = nullptr;
 
-    const auto mi      = model.info();
-    const float height = mi.bbox_max.z() - mi.bbox_min.z();
-    const int layers   = static_cast<int>(height / cfg_.layer_height) + 1;
+    const Kernel::TdpOutput o = Kernel::RunTdp(cfg, MakeHooks(progress, nullptr));
+    if (o.cancelled)
+        throw SlicerError(o.error.empty() ? "Cancelled" : o.error);
+    if (!o.success)
+        throw SlicerError(o.error);
 
-    SlsPackage pkg;
-    pkg.layer_outlines.reserve(layers);
-    pkg.layer_z_heights.reserve(layers);
-    for (int i = 0; i < layers; ++i)
-    {
-        float z = cfg_.first_layer_height + i * cfg_.layer_height;
-        pkg.layer_outlines.push_back(UnIntegerization(Slice(model.raw(), z)));
-        pkg.layer_z_heights.push_back(z);
-    }
+    TdpResult result;
+    result.saved = true;
+    result.total_layers = o.total_layers;
+    result.export_path = o.export_path;
+    result.geometry = ToGeometry(o.geometry);
+    return result;
+}
 
-    const char* output = cfg_.output_path ? cfg_.output_path : "";
-    return SaveSlsPackageLua(pkg, output, cfg_.export_lua_script,
-                             cfg_.export_lua_func ? cfg_.export_lua_func : "export_tdp");
+Job<TdpResult> TdpPipeline::runAsync(const Model& model, ProgressFunc progress) const
+{
+    HsBaTdpPipelineConfig_t cfg = cfg_;
+    std::string name = model.name();
+    if (!PublishModel(name))
+        throw SlicerError("Model not available for async run: " + name);
+
+    return Job<TdpResult>::Start(
+        [cfg, name](const std::atomic<bool>& cancel, const ProgressFunc& emit) {
+            HsBaTdpPipelineConfig_t c = cfg;
+            c.model_name = name.c_str();
+            c.capture_geometry = 1;
+            c.cancel_flag = &cancel;
+            const Kernel::TdpOutput o = Kernel::RunTdp(c, MakeHooks(emit, &cancel));
+            TdpResult value;
+            value.saved = o.success;
+            value.total_layers = o.total_layers;
+            value.export_path = o.export_path;
+            value.geometry = ToGeometry(o.geometry);
+            UnpublishModel(name);
+            return ToOutcome(o.success, o.cancelled, o.error, std::move(value));
+        },
+        std::move(progress));
+}
+
+std::vector<SpiralPoint> TdpPipeline::spiralPath(const Model& model) const
+{
+    return SpiralFromModel(model, cfg_.layer_height, cfg_.first_layer_height);
 }
 
 // ===========================================================================
@@ -999,34 +1583,55 @@ bool TdpPipeline::run(const Model& model) const
 
 WaamPipeline::WaamPipeline(HsBaWaamPipelineConfig_t cfg) : cfg_(cfg) {}
 
-bool WaamPipeline::run(const Model& model) const
+WaamResult WaamPipeline::run(const Model& model, ProgressFunc progress) const
 {
-    const auto mi      = model.info();
-    const float height = mi.bbox_max.z() - mi.bbox_min.z();
-    const int layers   = static_cast<int>(height / cfg_.layer_height) + 1;
+    HsBaWaamPipelineConfig_t cfg = cfg_;
+    cfg.model_name = model.name().c_str();
+    cfg.capture_geometry = 1;
+    cfg.cancel_flag = nullptr;
 
-    WaamRobotPackage pkg;
-    pkg.layer_outlines.reserve(layers);
-    pkg.layer_z_heights.reserve(layers);
-    for (int i = 0; i < layers; ++i)
-    {
-        float z = cfg_.first_layer_height + i * cfg_.layer_height;
-        pkg.layer_outlines.push_back(UnIntegerization(Slice(model.raw(), z)));
-        pkg.layer_z_heights.push_back(z);
-    }
+    const Kernel::WaamOutput o = Kernel::RunWaam(cfg, MakeHooks(progress, nullptr));
+    if (o.cancelled)
+        throw SlicerError(o.error.empty() ? "Cancelled" : o.error);
+    if (!o.success)
+        throw SlicerError(o.error);
 
-    pkg.bead_width = cfg_.bead_width;
-    pkg.robot_type = static_cast<int>(cfg_.robot_type);
-    pkg.weld.current = cfg_.arc_current;
-    pkg.weld.voltage = cfg_.arc_voltage;
-    pkg.weld.wire_feed_speed = cfg_.wire_feed_speed;
-    pkg.weld.gas_flow_rate = cfg_.gas_flow_rate;
-    pkg.weld.travel_speed = cfg_.travel_speed;
-    pkg.weld.process = (cfg_.welding_process == HSBA_WAAM_WELD_LASER) ? 1 : 0;
+    WaamResult result;
+    result.saved = true;
+    result.total_layers = o.total_layers;
+    result.output_path = o.output_path;
+    result.geometry = ToGeometry(o.geometry);
+    return result;
+}
 
-    const char* output = cfg_.output_path ? cfg_.output_path : "waam_robot.txt";
-    const char* script = cfg_.path_lua_script ? cfg_.path_lua_script : "";
-    return SaveWaamRobotPath(pkg, output, script, cfg_.path_lua_func ? cfg_.path_lua_func : "export_waam");
+Job<WaamResult> WaamPipeline::runAsync(const Model& model, ProgressFunc progress) const
+{
+    HsBaWaamPipelineConfig_t cfg = cfg_;
+    std::string name = model.name();
+    if (!PublishModel(name))
+        throw SlicerError("Model not available for async run: " + name);
+
+    return Job<WaamResult>::Start(
+        [cfg, name](const std::atomic<bool>& cancel, const ProgressFunc& emit) {
+            HsBaWaamPipelineConfig_t c = cfg;
+            c.model_name = name.c_str();
+            c.capture_geometry = 1;
+            c.cancel_flag = &cancel;
+            const Kernel::WaamOutput o = Kernel::RunWaam(c, MakeHooks(emit, &cancel));
+            WaamResult value;
+            value.saved = o.success;
+            value.total_layers = o.total_layers;
+            value.output_path = o.output_path;
+            value.geometry = ToGeometry(o.geometry);
+            UnpublishModel(name);
+            return ToOutcome(o.success, o.cancelled, o.error, std::move(value));
+        },
+        std::move(progress));
+}
+
+std::vector<SpiralPoint> WaamPipeline::spiralPath(const Model& model) const
+{
+    return SpiralFromModel(model, cfg_.layer_height, cfg_.first_layer_height);
 }
 
 // ===========================================================================
@@ -1157,6 +1762,19 @@ void ParamStorePipeline::freeLoaded(ParamStoreKind kind, void* cfg) const
 }
 
 // ===========================================================================
+// Config JSON codec (①)
+// ===========================================================================
+
+std::string defaultConfigJson(ParamStoreKind kind) { return DefaultConfigJson(ToLibKind(kind)); }
+
+std::string configToJson(ParamStoreKind kind, const void* cfg) { return ConfigToJson(ToLibKind(kind), cfg); }
+
+bool configFromJson(ParamStoreKind kind, std::string_view json, void* cfg)
+{
+    return ConfigFromJson(ToLibKind(kind), json, cfg);
+}
+
+// ===========================================================================
 // CustomLuaPipeline
 // ===========================================================================
 
@@ -1172,20 +1790,11 @@ CustomLuaResult CustomLuaPipeline::run() const
     if (!cfg_.pipeline_lua_script && !cfg_.pipeline_lua_source)
         throw SlicerError("Custom Lua pipeline requires pipeline_lua_script or pipeline_lua_source");
 
-    LuaPipelineContext ctx;
-    ctx.script = cfg_.pipeline_lua_source ? cfg_.pipeline_lua_source : "";
-    ctx.script_file = cfg_.pipeline_lua_script ? cfg_.pipeline_lua_script : "";
-    ctx.entry_func = (cfg_.entry_func && *cfg_.entry_func) ? cfg_.entry_func : "run_pipeline";
-    ctx.config_json = cfg_.config_json ? cfg_.config_json : "";
-    ctx.output_path = cfg_.output_path ? cfg_.output_path : "";
-    ctx.model_name = cfg_.model_name ? cfg_.model_name : "";
-    ctx.model_path = cfg_.model_path ? cfg_.model_path : "";
-    if (progress_)
-        ctx.progress_cb = [p = progress_](int percent, std::string_view stage) { p(percent, stage); };
-
-    const LuaPipelineOutput out = RunLuaPipeline(ctx);
+    const Kernel::CustomOutput out = Kernel::RunCustom(cfg_, MakeHooks(progress_, nullptr));
+    if (out.cancelled)
+        throw SlicerError(out.error.empty() ? "Cancelled" : out.error);
     if (!out.success)
-        throw SlicerError(out.error_message.empty() ? "Custom Lua pipeline failed" : out.error_message);
+        throw SlicerError(out.error.empty() ? "Custom Lua pipeline failed" : out.error);
 
     CustomLuaResult result;
     result.success = out.success;
@@ -1193,6 +1802,28 @@ CustomLuaResult CustomLuaPipeline::run() const
     result.output_path = out.output_path;
     result.result_string = out.result_string;
     return result;
+}
+
+Job<CustomLuaResult> CustomLuaPipeline::runAsync()
+{
+    if (!cfg_.pipeline_lua_script && !cfg_.pipeline_lua_source)
+        throw SlicerError("Custom Lua pipeline requires pipeline_lua_script or pipeline_lua_source");
+
+    HsBaCustomPipelineConfig_t cfg = cfg_;
+    ProgressFunc progress = progress_;
+    return Job<CustomLuaResult>::Start(
+        [cfg](const std::atomic<bool>& cancel, const ProgressFunc& emit) {
+            HsBaCustomPipelineConfig_t c = cfg;
+            c.cancel_flag = &cancel;
+            const Kernel::CustomOutput out = Kernel::RunCustom(c, MakeHooks(emit, &cancel));
+            CustomLuaResult value;
+            value.success = out.success;
+            value.total_layers = out.total_layers;
+            value.output_path = out.output_path;
+            value.result_string = out.result_string;
+            return ToOutcome(out.success, out.cancelled, out.error, std::move(value));
+        },
+        std::move(progress));
 }
 
 // ===========================================================================
