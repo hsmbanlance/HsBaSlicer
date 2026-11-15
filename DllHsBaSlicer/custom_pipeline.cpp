@@ -1,71 +1,29 @@
 ﻿/** @file custom_pipeline.cpp
- * @brief Implementation of the fully Lua-driven custom pipeline C ABI.
+ * @brief C ABI adapter for the custom pipeline: marshals the shared kernel output into the C result.
+ *
+ * The full custom-pipeline entry now lives in the Lib kernel (LibHsBaSlicer/Pipeline/custom_pipeline.cpp),
+ * which the C ABI and the C++20 module both call. This file only validates C arguments, wraps the
+ * C progress callback into the kernel's native hooks and converts the native output into the
+ * malloc-owned C result. A Lua pipeline never contributes a layer-geometry snapshot.
  * @author HsBa
  */
 #include "custom_pipeline.h"
 
-#include <atomic>
-#include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
-#include "LibHsBaSlicer/Extends/LuaCommonTypes.hpp"
-#include "LibHsBaSlicer/Extends/lua_pipeline.hpp"
-#include "base/coroutine.hpp"
-#include "base/error.hpp"
+#include "LibHsBaSlicer/Pipeline/custom_pipeline.hpp"
 #include "job_control.h"
 
 namespace HsBa::Slicer::Pipeline
 {
 namespace
 {
-
-struct InternalCustomResult
-{
-    bool success = false;
-    int total_layers = 0;
-    std::string output_path;
-    std::string result_string;
-    std::string error_message;
-    double elapsed_seconds = 0.0;
-    bool cancelled = false;
-};
-
-struct InternalCustomConfig
-{
-    std::string pipeline_lua_script;
-    std::string pipeline_lua_source;
-    std::string entry_func;
-    std::string config_json;
-    std::string model_name;
-    std::string model_path;
-    std::string output_path;
-    HsBaCustomProgressCallback progress_cb = nullptr;
-    void* progress_user_data = nullptr;
-    const void* cancel_flag = nullptr;  ///< std::atomic<bool>* set by the host or by its job handle
-
-    // A Lua pipeline is one opaque library call: it neither polls the flag nor can it be
-    // interrupted without unwinding through the Lua VM, so cancellation is honoured right
-    // before the call and, when requested during it, on the way out (see the Run body).
-    // capture_geometry is ignored because the geometry a script produces is unknown here.
-    /** @brief Whether the host asked this run to stop. */
-    bool CancelRequested() const
-    {
-        return cancel_flag && static_cast<const std::atomic<bool>*>(cancel_flag)->load(std::memory_order_relaxed);
-    }
-
-    /** @brief Throw at a cancellation point so the run unwinds as a cancelled result. */
-    void CheckCancel() const
-    {
-        if (CancelRequested())
-        {
-            throw CancelledError("pipeline cancelled");
-        }
-    }
-};
 
 struct OwnedCString
 {
@@ -107,105 +65,36 @@ struct OwnedCString
     char* release() { return std::exchange(data, nullptr); }
 };
 
-InternalCustomConfig BuildCustomConfig(const HsBaCustomPipelineConfig_t* cfg, HsBaCustomProgressCallback cb, void* ud)
+HsBaCustomPipelineResult_t ToCCustomResult(const HsBa::Slicer::Kernel::CustomOutput& out)
 {
-    InternalCustomConfig ic;
-    ic.pipeline_lua_script = cfg->pipeline_lua_script ? cfg->pipeline_lua_script : "";
-    ic.pipeline_lua_source = cfg->pipeline_lua_source ? cfg->pipeline_lua_source : "";
-    ic.entry_func = cfg->entry_func ? cfg->entry_func : "";
-    ic.config_json = cfg->config_json ? cfg->config_json : "";
-    ic.model_name = cfg->model_name ? cfg->model_name : "";
-    ic.model_path = cfg->model_path ? cfg->model_path : "";
-    ic.output_path = cfg->output_path ? cfg->output_path : "";
-    ic.progress_cb = cb;
-    ic.progress_user_data = ud;
-    ic.cancel_flag = cfg->cancel_flag;
-    return ic;
-}
-
-HsBaCustomPipelineResult_t ToCCustomResult(const InternalCustomResult& ir)
-{
-    OwnedCString output_path(ir.output_path);
-    OwnedCString result_string(ir.result_string);
-    OwnedCString error(ir.error_message);
+    OwnedCString output_path(out.output_path);
+    OwnedCString result_string(out.result_string);
+    OwnedCString error(out.error);
 
     HsBaCustomPipelineResult_t cr{};
-    cr.success = ir.success ? 1 : 0;
-    cr.total_layers = ir.total_layers;
+    cr.success = out.success ? 1 : 0;
+    cr.total_layers = out.total_layers;
     cr.output_path = output_path.release();
     cr.result_string = result_string.release();
     cr.error_message = error.release();
-    cr.elapsed_seconds = ir.elapsed_seconds;
+    cr.elapsed_seconds = out.elapsed_seconds;
     cr.geometry_id = 0;  // A Lua pipeline never contributes a layer-geometry snapshot
     return cr;
 }
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-reference-coroutine-parameters) caller keeps cfg alive
-Utils::Task<InternalCustomResult> RunCustomPipelineAsync(const InternalCustomConfig& cfg)
+// Bridges the C progress callback into the kernel's native std::function hook.
+HsBa::Slicer::Kernel::Hooks MakeHooks(HsBaCustomProgressCallback callback, void* user_data)
 {
-    // Load the AnyObject/Lua registration functions for common custom types into the generic registry pool for the
-    // pipeline Lua environment to use
-    HsBa::Slicer::InstallCommonAnyObjectTypes();
-
-    InternalCustomResult result;
-    auto start_time = std::chrono::steady_clock::now();
-
-    if (cfg.pipeline_lua_script.empty() && cfg.pipeline_lua_source.empty())
+    HsBa::Slicer::Kernel::Hooks hooks;
+    if (callback)
     {
-        result.error_message = "Custom pipeline requires pipeline_lua_script or pipeline_lua_source";
-        auto end_time = std::chrono::steady_clock::now();
-        result.elapsed_seconds = std::chrono::duration<double>(end_time - start_time).count();
-        co_return result;
-    }
-
-    LuaPipelineContext ctx;
-    ctx.script = cfg.pipeline_lua_source;
-    ctx.script_file = cfg.pipeline_lua_script;
-    ctx.entry_func = cfg.entry_func.empty() ? "run_pipeline" : cfg.entry_func;
-    ctx.config_json = cfg.config_json;
-    ctx.output_path = cfg.output_path;
-    ctx.model_name = cfg.model_name;
-    ctx.model_path = cfg.model_path;
-    ctx.progress_cb = [&cfg](int percent, std::string_view stage)
-    {
-        if (cfg.progress_cb)
+        hooks.progress = [callback, user_data](int percent, std::string_view stage)
         {
-            cfg.progress_cb(percent, std::string(stage).c_str(), cfg.progress_user_data);
-        }
-    };
-
-    try
-    {
-        cfg.CheckCancel();
-        const LuaPipelineOutput out = RunLuaPipeline(ctx);
-
-        result.success = out.success;
-        result.total_layers = out.total_layers;
-        result.output_path = out.output_path;
-        result.result_string = out.result_string;
-        result.error_message = out.error_message;
-        if (cfg.CancelRequested())
-        {
-            // The script ran to completion because it cannot be interrupted, but the host
-            // asked to stop, so the run is published as cancelled instead of successful.
-            result.success = false;
-            result.cancelled = true;
-            result.error_message = "Cancelled: pipeline cancelled during the Lua script";
-        }
+            std::string text(stage);
+            callback(percent, text.c_str(), user_data);
+        };
     }
-    catch (const CancelledError& e)
-    {
-        result.success = false;
-        result.cancelled = true;
-        // The "Cancelled" prefix is what the C ABI callers use to tell a cancelled run
-        // apart from a failed one, since the result structs carry no status field.
-        result.error_message = std::string("Cancelled: ") + e.what();
-    }
-
-    auto end_time = std::chrono::steady_clock::now();
-    result.elapsed_seconds = std::chrono::duration<double>(end_time - start_time).count();
-
-    co_return result;
+    return hooks;
 }
 
 // Carries the caller's result callback across the job thread boundary.
@@ -230,7 +119,7 @@ void DeliverCustomResult(void* typed_result, void* thunk)
     }
 }
 
-}  // anonymous namespace
+}  // namespace
 
 }  // namespace HsBa::Slicer::Pipeline
 
@@ -244,10 +133,21 @@ HSBA_SLICER_API HsBaCustomPipelineConfig_t HsBaCreateDefaultCustomConfig(void)
 HSBA_SLICER_API HsBaCustomPipelineResult_t HsBaRunCustomPipeline(const HsBaCustomPipelineConfig_t* config,
                                                                  HsBaCustomProgressCallback callback, void* user_data)
 {
-    auto ic = HsBa::Slicer::Pipeline::BuildCustomConfig(config, callback, user_data);
-    auto task = HsBa::Slicer::Pipeline::RunCustomPipelineAsync(ic);
-    auto ir = task.get_result();
-    return HsBa::Slicer::Pipeline::ToCCustomResult(ir);
+    if (!config)
+    {
+        HsBaCustomPipelineResult_t cr{};
+        cr.success = 0;
+        cr.total_layers = 0;
+        cr.error_message = static_cast<char*>(std::malloc(std::strlen("null configuration") + 1));
+        if (cr.error_message)
+        {
+            std::memcpy(cr.error_message, "null configuration", std::strlen("null configuration") + 1);
+        }
+        return cr;
+    }
+    auto hooks = HsBa::Slicer::Pipeline::MakeHooks(callback, user_data);
+    auto out = HsBa::Slicer::Kernel::RunCustom(*config, hooks);
+    return HsBa::Slicer::Pipeline::ToCCustomResult(out);
 }
 
 HSBA_SLICER_API void HsBaRunCustomPipelineAsync(const HsBaCustomPipelineConfig_t* config,

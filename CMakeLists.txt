@@ -524,6 +524,7 @@ if(HSBA_SLICER_BUILD_SAMPLES)
   add_subdirectory("samples/TDP")
   add_subdirectory("samples/WAAM")
   add_subdirectory("samples/Custom")
+  add_subdirectory("samples/CsgModel")
   add_subdirectory("samples/LibHsBaSlicer")
 endif()
 
@@ -607,6 +608,7 @@ install(FILES
     DllHsBaSlicer/file_transfer_pipeline.h
     DllHsBaSlicer/custom_pipeline.h
     DllHsBaSlicer/param_store_pipeline.h
+    DllHsBaSlicer/config_json_pipeline.h
     DllHsBaSlicer/pipeline_convert.h
     DllHsBaSlicer/initialize.h
     DllHsBaSlicer/model_preprocess.h
@@ -666,6 +668,15 @@ install(FILES
     LibHsBaSlicer/Path/sls_export.hpp
     LibHsBaSlicer/Floor/sla_floor.hpp
     LibHsBaSlicer/ParamStore/param_store_ops.hpp
+    LibHsBaSlicer/Pipeline/kernel_types.hpp
+    LibHsBaSlicer/Pipeline/fdm_pipeline.hpp
+    LibHsBaSlicer/Pipeline/sla_pipeline.hpp
+    LibHsBaSlicer/Pipeline/sls_pipeline.hpp
+    LibHsBaSlicer/Pipeline/slm_pipeline.hpp
+    LibHsBaSlicer/Pipeline/lom_pipeline.hpp
+    LibHsBaSlicer/Pipeline/tdp_pipeline.hpp
+    LibHsBaSlicer/Pipeline/waam_pipeline.hpp
+    LibHsBaSlicer/Pipeline/custom_pipeline.hpp
     LibHsBaSlicer/Extends/lua_pipeline.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/HsBaSlicer/LibHsBaSlicer
 )

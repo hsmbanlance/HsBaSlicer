@@ -14,6 +14,16 @@
     Floor/sla_floor.hpp
     Transfer/file_transfer.hpp
     ParamStore/param_store_ops.hpp
+    ParamStore/config_json_ops.hpp
+    Pipeline/kernel_types.hpp
+    Pipeline/fdm_pipeline.hpp
+    Pipeline/sla_pipeline.hpp
+    Pipeline/sls_pipeline.hpp
+    Pipeline/slm_pipeline.hpp
+    Pipeline/lom_pipeline.hpp
+    Pipeline/tdp_pipeline.hpp
+    Pipeline/waam_pipeline.hpp
+    Pipeline/custom_pipeline.hpp
     version_info.cpp
     Slice/mesh_slice.cpp
     Preprocess/model_preprocess.cpp
@@ -27,6 +37,15 @@
     Floor/sla_floor.cpp
     Transfer/file_transfer.cpp
     ParamStore/param_store_ops.cpp
+    ParamStore/config_json_ops.cpp
+    Pipeline/fdm_pipeline.cpp
+    Pipeline/sla_pipeline.cpp
+    Pipeline/sls_pipeline.cpp
+    Pipeline/slm_pipeline.cpp
+    Pipeline/lom_pipeline.cpp
+    Pipeline/tdp_pipeline.cpp
+    Pipeline/waam_pipeline.cpp
+    Pipeline/custom_pipeline.cpp
     Extends/LuaAddFunction.hpp
     Extends/LuaAddFunction.cpp
     Extends/EventSourceFunction.hpp
@@ -52,6 +71,16 @@ else()
     Floor/sla_floor.hpp
     Transfer/file_transfer.hpp
     ParamStore/param_store_ops.hpp
+    ParamStore/config_json_ops.hpp
+    Pipeline/kernel_types.hpp
+    Pipeline/fdm_pipeline.hpp
+    Pipeline/sla_pipeline.hpp
+    Pipeline/sls_pipeline.hpp
+    Pipeline/slm_pipeline.hpp
+    Pipeline/lom_pipeline.hpp
+    Pipeline/tdp_pipeline.hpp
+    Pipeline/waam_pipeline.hpp
+    Pipeline/custom_pipeline.hpp
     version_info.cpp
     Slice/mesh_slice.cpp
     Preprocess/model_preprocess.cpp
@@ -65,6 +94,15 @@ else()
     Floor/sla_floor.cpp
     Transfer/file_transfer.cpp
     ParamStore/param_store_ops.cpp
+    ParamStore/config_json_ops.cpp
+    Pipeline/fdm_pipeline.cpp
+    Pipeline/sla_pipeline.cpp
+    Pipeline/sls_pipeline.cpp
+    Pipeline/slm_pipeline.cpp
+    Pipeline/lom_pipeline.cpp
+    Pipeline/tdp_pipeline.cpp
+    Pipeline/waam_pipeline.cpp
+    Pipeline/custom_pipeline.cpp
     Extends/LuaAddFunction.hpp
     Extends/LuaAddFunction.cpp
     Extends/EventSourceFunction.hpp
@@ -89,6 +127,7 @@ HsBaSlicerMesh
 HsBaSlicer2D
 HsBaSupport
 HsBaPaths
+HsBaPipelineTypes
 )
 
 # PRIVATE: internal implementation only

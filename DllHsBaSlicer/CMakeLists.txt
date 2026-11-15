@@ -33,8 +33,10 @@ if(IOS OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
   pipeline_parallel.hpp
   file_transfer_pipeline.h
   param_store_pipeline.h
+  config_json_pipeline.h
   file_transfer_pipeline.cpp
   param_store_pipeline.cpp
+  config_json_pipeline.cpp
   model_preprocess.h
   model_preprocess.cpp
   pipeline_convert.h
@@ -78,8 +80,10 @@ else()
   pipeline_parallel.hpp
   file_transfer_pipeline.h
   param_store_pipeline.h
+  config_json_pipeline.h
   file_transfer_pipeline.cpp
   param_store_pipeline.cpp
+  config_json_pipeline.cpp
   model_preprocess.h
   model_preprocess.cpp
   pipeline_convert.h
