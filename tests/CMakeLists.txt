@@ -1653,6 +1653,91 @@ if(TARGET DllHsBaSlicer)
       COMMAND ${CMAKE_CTEST_COMMAND} -V -R gui_custom_pipeline_test
     )
   endif()
+
+  # text CSG through the C ABI (capability probe, script build, failure reasons).
+  # Gated on the CAD kernel like occt_model_test: without it the probe answers 0.
+  if(TARGET HsBaSlicerCADModel)
+    add_executable(gui_csg_cabi_test
+        GuiApi/csg_cabi_test.cpp
+    )
+
+    target_link_libraries(gui_csg_cabi_test
+        PRIVATE
+        DllHsBaSlicer
+        HsBaPipelineTypes
+        Boost::unit_test_framework
+    )
+
+    target_include_directories(gui_csg_cabi_test PRIVATE ${CMAKE_SOURCE_DIR})
+    target_compile_definitions(gui_csg_cabi_test PRIVATE BOOST_TEST_DYN_LINK)
+
+    enable_testing()
+    add_test(NAME gui_csg_cabi_test COMMAND $<TARGET_FILE:gui_csg_cabi_test>)
+
+    if(HSBA_RUN_TESTS_AFTER_BUILD)
+      add_custom_command(TARGET gui_csg_cabi_test POST_BUILD
+        COMMAND ${CMAKE_CTEST_COMMAND} -V -R gui_csg_cabi_test
+      )
+    endif()
+  endif()
+
+  # triangle export through the C ABI (HsBaGetModelTriangles / HsBaFreeModelTriangles).
+  # Not gated on the CAD kernel: the case feeds itself an ASCII STL cube, so plain
+  # mesh loading is the only capability it exercises.
+  add_executable(gui_triangle_export_test
+    GuiApi/triangle_export_cabi_test.cpp
+  )
+
+  target_link_libraries(gui_triangle_export_test
+      PRIVATE
+      DllHsBaSlicer
+      Boost::unit_test_framework
+  )
+
+  target_include_directories(gui_triangle_export_test PRIVATE ${CMAKE_SOURCE_DIR})
+  target_compile_definitions(gui_triangle_export_test PRIVATE BOOST_TEST_DYN_LINK)
+
+  enable_testing()
+  add_test(NAME gui_triangle_export_test COMMAND $<TARGET_FILE:gui_triangle_export_test>)
+
+  if(HSBA_RUN_TESTS_AFTER_BUILD)
+    add_custom_command(TARGET gui_triangle_export_test POST_BUILD
+      COMMAND ${CMAKE_CTEST_COMMAND} -V -R gui_triangle_export_test
+    )
+  endif()
+endif()
+
+# ---------------------------------------------------------------------------
+# C++20 module smoke tests. Unlike the GuiApi tests these link ModuleHsBaSlicer
+# and drive the native class API via `import hsba.slicer;`, so they are gated on
+# the same feature probe (HSBA_SLICER_MODULE) that builds the module target. The
+# module propagates its FILE_SET/BMI through PUBLIC linking, exactly like the
+# lib_sample_module consumer.
+# ---------------------------------------------------------------------------
+if(HSBA_SLICER_MODULE AND TARGET ModuleHsBaSlicer)
+  add_executable(module_hsba_slicer_test
+      Module/hsba_slicer_module_test.cpp
+  )
+
+  target_link_libraries(module_hsba_slicer_test
+      PRIVATE
+      ModuleHsBaSlicer
+      HsBaPipelineTypes
+      Eigen3::Eigen
+      Boost::unit_test_framework
+  )
+
+  target_include_directories(module_hsba_slicer_test PRIVATE ${CMAKE_SOURCE_DIR})
+  target_compile_definitions(module_hsba_slicer_test PRIVATE BOOST_TEST_DYN_LINK)
+
+  enable_testing()
+  add_test(NAME module_hsba_slicer_test COMMAND $<TARGET_FILE:module_hsba_slicer_test>)
+
+  if(HSBA_RUN_TESTS_AFTER_BUILD)
+    add_custom_command(TARGET module_hsba_slicer_test POST_BUILD
+      COMMAND ${CMAKE_CTEST_COMMAND} -V -R module_hsba_slicer_test
+    )
+  endif()
 endif()
 
 # ---------------------------------------------------------------------------
