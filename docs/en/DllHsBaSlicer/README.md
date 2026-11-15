@@ -46,6 +46,7 @@ All public headers are exported to `include/HsBaSlicer/` in the install tree.
 | `waam_pipeline.h` | WAAM arc-additive (robot) full-pipeline interface |
 | `file_transfer_pipeline.h` | File transfer pipeline interface (sync/async) |
 | `param_store_pipeline.h` | Process-parameter store pipeline interface (save/load) |
+| `config_json_pipeline.h` | Reflection-driven PipelineConfig ↔ JSON codec (default JSON, encode, decode) |
 | `custom_pipeline.h` | Custom Lua pipeline interface (sync/async) |
 | `pipeline_convert.h` | Proto serialized bytes ↔ C struct conversion |
 | `lua_register.h` | Lua extension function registration (2D/3D/File/Event callbacks) |
@@ -93,6 +94,66 @@ int HsBaScaleModel(const char* name, float sx, float sy, float sz);            /
 ```c
 int HsBaGetModelInfo(const char* name, float out_bbox_min[3], float out_bbox_max[3], float* out_volume);
 ```
+
+#### Triangle-Mesh Export
+
+```c
+typedef struct HsBaModelTriangles
+{
+    int          vertex_count;   // Number of stored vertices
+    const float* xyz;            // Flattened interleaved coords, length 3 * vertex_count, owns the malloc'd block
+    int          face_count;     // Number of stored triangles
+    const int*   indices;        // Flattened 0-based vertex indices, length 3 * face_count, inside the same block
+} HsBaModelTriangles_t;
+
+int  HsBaGetModelTriangles(const char* name, HsBaModelTriangles_t* out);
+void HsBaFreeModelTriangles(HsBaModelTriangles_t* tris);   // NULL or already freed: no-op
+```
+
+Both arrays live inside a single `malloc`'d block starting at `xyz`, the same ownership contract as
+`HsBaLayerGeometry_t`: never `free` the arrays individually; call `HsBaFreeModelTriangles` exactly
+once. An empty face section still hands back a valid (shared) address inside the block rather than
+NULL, so a mesh-less model exports successfully with both counts at zero. Mesh models return their
+stored triangles; BRep models (STEP / IGES / BREP, text CSG) are tessellated on demand and the
+count depends on the kernel's deflection settings.
+
+#### Text CSG (OCCT DRAW)
+
+When OpenCASCADE is built with its Draw module (vcpkg feature `opencascade[tcl]`), a B-Rep model can
+be defined by a *text* CSG script instead of a file. Scripts are not sandboxed: the interpreter is a
+full Tcl one, so only scripts from a trusted source should be passed.
+
+```c
+int   HsBaTextCsgAvailable(void);                                              // 1 if HsBaBuildCsgModel can succeed
+void* HsBaBuildCsgModel(const char* name, const char* script, const char* shape_name,
+                        char* error_out, int error_cap);                      // opaque handle, NULL on failure
+```
+
+`script` is DRAW Test Harness text, one command per line: primitives (`box`, `wedge`, `pcylinder`,
+`pcone`, `psphere`, `ptorus`), transforms (`ttranslate`, `trotate`, `tscale`, ...), utilities
+(`compound`, `explode`, `checkshape`, `vprops`, ...) and booleans (`bcut`, `bfuse`, `bcommon`,
+`bsection`, `bop*`); Tcl `set` / `expr` provide parameter substitution. The model can then be
+transformed, queried and sliced like one loaded from a file.
+
+Unlike the boolean helpers that simply return NULL, `HsBaBuildCsgModel` always writes a NUL-
+terminated UTF-8 reason into `error_out` (empty on success), so one print covers both outcomes.
+A NULL `error_out` or `error_cap = 0` skips the message. An existing `name` is reported as a failure
+rather than silently replaced.
+
+#### Cross-thread Publishing
+
+The model pool is **thread local** and pipeline coroutines run their stages on executor threads, so
+a model built or loaded on the caller's thread is invisible to `HsBaRun*Pipeline` by name until
+published. `HsBaPublishModel(name)` keeps a process-wide reference under the same name; queries,
+transforms, triangle export and pipelines then share one instance.
+
+```c
+int HsBaPublishModel(const char* name);     // 1 if exists (locally or already published)
+int HsBaUnpublishModel(const char* name);   // 1 if a published copy was dropped
+```
+
+`HsBaRemoveModel` drops both the caller-thread pool entry and the published copy. Concurrent
+publishes overwrite: the last publisher's instance is shared.
 
 #### Advanced Operations (require CGAL/OCCT)
 
@@ -474,6 +535,54 @@ void HsBaFreeParamStoreResult(HsBaParamStoreResult_t* result);
 
 > **Backend availability**: the MySQL/PostgreSQL branches are gated at compile time by `HSBA_USE_MYSQL` / `HSBA_USE_PGSQL`; when not compiled in, calls against those backends return `success=0` with an error message instead of crashing.
 
+### Config JSON Pipeline
+
+Exposes the same reflection-driven PipelineConfig ↔ JSON codec that the REST server uses
+(`restapi/config_bridge`) as in-process C exports, so a GUI host that direct-links the core can
+build config editors without an HTTP round-trip. Field name/type/default metadata comes from the
+shared `param_reflect` `TypeInfo::fields` table and converges each field through `param_convert`
+(`FieldToAny` / `AnyToField`); only the three reflected kinds (`const char*`, double/float,
+int/int64_t/enum) appear in JSON. The wire-level Proto converters below remain unchanged; this
+section is a sibling JSON path.
+
+```c
+// 1) Default JSON for a pipeline kind, mirrors a freshly initialized HsBa*ConfigDefault() struct
+const char* HsBaGetDefaultConfigJson(HsBaPipelineKind kind);
+
+// 2) Serialize a caller-owned config struct to pretty JSON
+const char* HsBaConfigToJson(HsBaPipelineKind kind, const void* cfg);
+
+// 3) Decode a JSON object into an existing struct (must be pre-initialized so const char* fields
+//    start NULL). Returns 1 on success, 0 for an invalid kind, NULL pointers or malformed JSON.
+int HsBaConfigFromJson(HsBaPipelineKind kind, const char* json, void* cfg);
+```
+
+> **String ownership**: `HsBaGetDefaultConfigJson` / `HsBaConfigToJson` return library-owned pointers
+> that stay valid only until the next call of the same function on the same thread and **must not**
+> be freed by the caller. `HsBaConfigFromJson` writes JSON-supplied strings into `cfg` with
+> `std::malloc`; before discarding or reusing `cfg`, release them with `HsBaFreeLoadedPipelineConfig`
+> (the same contract as `HsBaLoadPipelineParams`).
+
+```c
+HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+const char* defaults = HsBaGetDefaultConfigJson(HSBA_PIPELINE_FDM);  // do not free
+printf("%s\n", defaults);
+
+cfg.layer_height = 0.2f;
+const char* json = HsBaConfigToJson(HSBA_PIPELINE_FDM, &cfg);        // do not free
+
+HsBaFdmPipelineConfig_t out = HsBaFdmConfigDefault();
+if (HsBaConfigFromJson(HSBA_PIPELINE_FDM, json, &out)) {
+    // use out.layer_height / out.model_name ...
+    HsBaFreeLoadedPipelineConfig(HSBA_PIPELINE_FDM, &out);
+}
+```
+
+The underlying Lib functions live in `LibHsBaSlicer/ParamStore/config_json_ops.hpp`
+(`DefaultConfigJson` / `ConfigToJson` / `ConfigFromJson`); the Dll entry points above only marshal
+between the C ABI and the native `std::string` return type. See
+[LibHsBaSlicer README](../LibHsBaSlicer/README.md) for the C++ surface.
+
 #### Example
 
 ```c
@@ -833,5 +942,6 @@ int main(void)
 - `samples/TDP/` — 3DP binder-jetting pipeline with Lua export example
 - `samples/WAAM/` — WAAM arc-additive robot path export example
 - `samples/Custom/` — Fully Lua-script-defined pipeline example (FDM / SLA / inline script / async / Protobuf bytes)
+- `samples/CsgModel/` — Text CSG (OCCT DRAW) C ABI workflow: primitives, Tcl parameters, fuse/cut, handoff to the FDM pipeline and failure-reason probing
 - `android/` — Android JNI sample project
 - `ios/HsBaSlicerExample/` — iOS Swift bridging sample

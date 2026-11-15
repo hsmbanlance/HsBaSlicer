@@ -46,6 +46,7 @@ LibHsBaSlicer  ← C++ 静态库：预处理 / 切片 / 支撑 / 填充 / 路径
 | `waam_pipeline.h` | WAAM 电弧增材（机器人）全流程接口 |
 | `file_transfer_pipeline.h` | 文件传输流水线接口（同步/异步） |
 | `param_store_pipeline.h` | 工艺参数存储流水线接口（写入/读取） |
+| `config_json_pipeline.h` | 反射驱动的 PipelineConfig ↔ JSON 编解码（默认 JSON、编码、解码） |
 | `custom_pipeline.h` | 自定义 Lua 流水线接口（同步/异步） |
 | `pipeline_convert.h` | Proto 序列化字节 ↔ C 结构体转换 |
 | `lua_register.h` | Lua 扩展函数注册接口（2D/3D/File/事件回调） |
@@ -93,6 +94,48 @@ int HsBaScaleModel(const char* name, float sx, float sy, float sz);            /
 ```c
 int HsBaGetModelInfo(const char* name, float out_bbox_min[3], float out_bbox_max[3], float* out_volume);
 ```
+
+#### 三角网格导出
+
+```c
+typedef struct HsBaModelTriangles
+{
+    int          vertex_count;   // 存储的顶点数
+    const float* xyz;            // 展平交错坐标，长度 3 * vertex_count，持有 malloc 块
+    int          face_count;     // 存储的三角面片数
+    const int*   indices;        // 展平 0 基顶点索引，长度 3 * face_count，位于同一块内
+} HsBaModelTriangles_t;
+
+int  HsBaGetModelTriangles(const char* name, HsBaModelTriangles_t* out);
+void HsBaFreeModelTriangles(HsBaModelTriangles_t* tris);   // NULL 或已释放：无操作
+```
+
+两个数组都位于从 `xyz` 开始、由单个 `malloc` 分配的块内，所有权契约与 `HsBaLayerGeometry_t` 相同：切勿单独 `free` 数组；只调用一次 `HsBaFreeModelTriangles`。即使面片区为空，也会返回块内一个有效（共享）地址而非 NULL，因此无网格模型导出成功且两个计数均为 0。网格模型返回其存储的三角面片；BRep 模型（STEP / IGES / BREP、文本 CSG）按需离散化，数量取决于内核的偏差设置。
+
+#### 文本 CSG（OCCT DRAW）
+
+当 OpenCASCADE 携带其 Draw 模块构建时（vcpkg 特性 `opencascade[tcl]`），可用一段*文本* CSG 脚本来定义 B-Rep 模型，而不必依赖文件。脚本不受沙箱限制：解释器是完整的 Tcl，因此只应传入可信来源的脚本。
+
+```c
+int   HsBaTextCsgAvailable(void);                              // 返回 1 表示 HsBaBuildCsgModel 可用
+void* HsBaBuildCsgModel(const char* name, const char* script, const char* shape_name,
+                        char* error_out, int error_cap);      // 不透明句柄，失败返回 NULL
+```
+
+`script` 是 DRAW Test Harness 文本，一行一条命令：图元（`box`、`wedge`、`pcylinder`、`pcone`、`psphere`、`ptorus`）、变换（`ttranslate`、`trotate`、`tscale` 等）、工具命令（`compound`、`explode`、`checkshape`、`vprops` 等）以及布尔（`bcut`、`bfuse`、`bcommon`、`bsection`、`bop*`）；Tcl 的 `set` / `expr` 用于参数代入。构建出的模型随后可像从文件加载的模型一样被变换、查询和切片。
+
+与仅返回 NULL 的布尔辅助函数不同，`HsBaBuildCsgModel` 总是把一个以 NUL 结尾的 UTF-8 原因写入 `error_out`（成功时为空），因此一次打印即可覆盖两种结果。`error_out` 为 NULL 或 `error_cap = 0` 时跳过写消息。已存在的 `name` 会被报为失败而非静默替换。
+
+#### 跨线程发布
+
+模型池是**线程局部**的，而流水线协程在执行器线程上运行各阶段，因此在调用方线程构建或加载的模型按名字对 `HsBaRun*Pipeline` 不可见，除非先发布。`HsBaPublishModel(name)` 以同一名字持有一份进程级引用；此后查询、变换、三角导出和流水线共享同一个实例。
+
+```c
+int HsBaPublishModel(const char* name);     // 存在（本线程或已发布）时返回 1
+int HsBaUnpublishModel(const char* name);   // 丢弃了一份已发布副本时返回 1
+```
+
+`HsBaRemoveModel` 会同时删除调用方线程池条目与已发布副本。并发发布相互覆盖：最后发布者持有的实例被共享。
 
 #### 高级操作（需要 CGAL/OCCT）
 
@@ -469,6 +512,41 @@ void HsBaFreeParamStoreResult(HsBaParamStoreResult_t* result);
 
 > **后端可用性**：MySQL/PostgreSQL 分支在编译时受 `HSBA_USE_MYSQL` / `HSBA_USE_PGSQL` 控制；未编译进时对应后端调用返回 `success=0` 并给出错误信息，不会崩溃。
 
+### 配置 JSON 流水线
+
+把 REST 服务器（`restapi/config_bridge`）所使用的同一种反射驱动 PipelineConfig ↔ JSON 编解码以进程内 C 导出的形式暴露出来，使直接链接核心的 GUI 宿主无需 HTTP 往返即可构建配置编辑器。字段名/类型/默认值的元数据来自共享的 `param_reflect` `TypeInfo::fields` 表，并经由 `param_convert`（`FieldToAny` / `AnyToField`）收敛每个字段；只有三种被反射的种类（`const char*`、double/float、int/int64_t/enum）出现在 JSON 中。下文的 wire 级 Proto 转换器保持不变，本节是一条并列的 JSON 路径。
+
+```c
+// 1) 某工艺种类的默认 JSON，等同于 freshly initialized HsBa*ConfigDefault() 结构体
+const char* HsBaGetDefaultConfigJson(HsBaPipelineKind kind);
+
+// 2) 把调用方持有的配置结构体序列化为美化 JSON
+const char* HsBaConfigToJson(HsBaPipelineKind kind, const void* cfg);
+
+// 3) 把一个 JSON 对象解码进已存在的结构体（须预先初始化，使 const char* 字段起始为 NULL）
+//    成功返回 1，无效 kind、NULL 指针或畸形 JSON 返回 0
+int HsBaConfigFromJson(HsBaPipelineKind kind, const char* json, void* cfg);
+```
+
+> **字符串所有权**：`HsBaGetDefaultConfigJson` / `HsBaConfigToJson` 返回库持有的指针，仅在同线程下次调用同一函数前有效，调用方**不得**释放。`HsBaConfigFromJson` 用 `std::malloc` 把 JSON 提供的字符串写入 `cfg`；在丢弃或复用 `cfg` 前，须用 `HsBaFreeLoadedPipelineConfig` 释放（与 `HsBaLoadPipelineParams` 同一契约）。
+
+```c
+HsBaFdmPipelineConfig_t cfg = HsBaFdmConfigDefault();
+const char* defaults = HsBaGetDefaultConfigJson(HSBA_PIPELINE_FDM);  // 不要 free
+printf("%s\n", defaults);
+
+cfg.layer_height = 0.2f;
+const char* json = HsBaConfigToJson(HSBA_PIPELINE_FDM, &cfg);        // 不要 free
+
+HsBaFdmPipelineConfig_t out = HsBaFdmConfigDefault();
+if (HsBaConfigFromJson(HSBA_PIPELINE_FDM, json, &out)) {
+    // 使用 out.layer_height / out.model_name ...
+    HsBaFreeLoadedPipelineConfig(HSBA_PIPELINE_FDM, &out);
+}
+```
+
+底层 Lib 函数位于 `LibHsBaSlicer/ParamStore/config_json_ops.hpp`（`DefaultConfigJson` / `ConfigToJson` / `ConfigFromJson`）；上述 Dll 入口点仅在 C ABI 与原生 `std::string` 返回类型之间做转换。C++ 接口参见 [LibHsBaSlicer 文档](../LibHsBaSlicer/README.md)。
+
 #### 调用示例
 
 ```c
@@ -825,5 +903,6 @@ int main(void)
 - `samples/TDP/` —— 3DP 粘结剂喷射流水线与 Lua 导出示例
 - `samples/WAAM/` —— WAAM 电弧增材机器人路径导出示例
 - `samples/Custom/` —— 整条流水线完全由 Lua 脚本定义的示例（FDM/SLA/内联脚本/异步/Protobuf 字节流）
+- `samples/CsgModel/` —— 文本 CSG（OCCT DRAW）C ABI 工作流：图元、Tcl 参数、fuse/cut、交予 FDM 流水线及失败原因探测
 - `android/` —— Android JNI 调用示例工程
 - `ios/HsBaSlicerExample/` —— iOS Swift 桥接调用示例
