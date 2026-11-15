@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <Eigen/Core>
@@ -41,10 +42,37 @@ HSBA_SLICER_LIB_API std::shared_ptr<IModel> LoadModel(const std::string& name, s
 
 /**
  * @brief Get a loaded model.
+ *
+ * Resolves against the caller's thread-local pool first, then against the copies
+ * created by PublishModel.
  * @param name Model name.
  * @return Model shared pointer, nullptr if not found.
  */
 HSBA_SLICER_LIB_API std::shared_ptr<IModel> GetModel(const std::string& name);
+
+/**
+ * @brief Expose a pooled model to by-name lookups from other threads.
+ *
+ * The model pool is thread local, and a pipeline coroutine starts its stages on executor
+ * threads, so a model the caller registered under a name is otherwise invisible to the
+ * pipeline that slices it. Publishing keeps a second, process-wide reference under the
+ * same name that every lookup in this file falls back to, so the name resolves (and
+ * transforms stay visible) on pipeline threads until it is unpublished or removed.
+ * Concurrent publishes of one name overwrite: the last publisher's instance is shared.
+ * @param name Model name.
+ * @return True if a model with this name exists (locally or already published).
+ */
+HSBA_SLICER_LIB_API bool PublishModel(const std::string& name);
+
+/**
+ * @brief Drop the process-wide reference created by PublishModel.
+ *
+ * The thread-local pool entry of the publishing thread is untouched; after this call only
+ * threads that still hold their own reference can see the model.
+ * @param name Model name.
+ * @return True if a published copy existed and was dropped.
+ */
+HSBA_SLICER_LIB_API bool UnpublishModel(const std::string& name);
 
 /**
  * @brief Apply translation transform to a model.
@@ -82,7 +110,22 @@ HSBA_SLICER_LIB_API void ScaleModel(const std::string& name, const Eigen::Vector
 HSBA_SLICER_LIB_API ModelInfo GetModelInfo(const std::string& name);
 
 /**
+ * @brief Export the triangle mesh of a model in igl style.
+ *
+ * Mesh models answer from their stored data; BRep models are tessellated on demand, so the
+ * returned triangles are an approximation whose deflection follows the kernel's default.
+ * @param name Model name.
+ * @return Pair of vertex matrix (N x 3, millimetres) and face matrix (M x 3, zero-based indices).
+ * @throws NotFoundError If no model exists under @p name.
+ * @throws RuntimeError If the model cannot produce a triangle mesh.
+ */
+HSBA_SLICER_LIB_API std::pair<Eigen::MatrixXf, Eigen::MatrixXi> GetModelTriangles(const std::string& name);
+
+/**
  * @brief Remove a model from the pool.
+ *
+ * Also drops the process-wide copy created by PublishModel, so after this call no thread
+ * resolves the name anymore.
  * @param name Model name.
  */
 HSBA_SLICER_LIB_API void RemoveModel(const std::string& name);
@@ -98,6 +141,8 @@ HSBA_SLICER_LIB_API std::shared_ptr<IModel> InsertModel(const std::string& name,
 
 /**
  * @brief Check whether a model with the given name exists.
+ *
+ * Covers both the caller's thread-local pool and the process-wide published copies.
  * @param name Model name.
  * @return true if the model exists.
  */
@@ -185,6 +230,18 @@ HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanDifference(const std::string&
 HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanXor(const std::string& leftName, const std::string& rightName,
                                                        const std::string& resultName);
 #endif  // USE_CGAL
+
+/**
+ * @brief Whether this build can evaluate text CSG scripts.
+ *
+ * Text CSG needs two things a consumer cannot tell apart from this header: the OCCT CAD
+ * kernel (which gates the declaration below) and OpenCASCADE's DRAW Test Harness, reported
+ * by the CAD target through a macro that stays inside LibHsBaSlicer. Asking the kernel here
+ * instead keeps a caller from reading "BuildCsgModel is declared" as "a script will work".
+ * @return True when BuildCsgModel can produce a model, false when it can only throw
+ *         NotSupportedError.
+ */
+HSBA_SLICER_LIB_API bool HasTextCsgSupport();
 
 #ifdef USE_OCCT
 // ----- Text CSG model construction (requires the OCCT CAD kernel) -----

@@ -5,11 +5,15 @@
 #include "model_preprocess.hpp"
 
 #include <exception>
+#include <format>
+#include <mutex>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 #include "base/error.hpp"
 #ifdef USE_OCCT
+#include "cadmodel/OcctCsg.hpp"
 #include "cadmodel/OcctModel.hpp"
 #endif
 #include "preprocess/ModelLoader.hpp"
@@ -23,6 +27,43 @@ ModelLoader& GetLoader()
 {
     thread_local ModelLoader loader;
     return loader;
+}
+
+// Process-wide second tier for published models.
+//
+// The pool above is thread local on purpose (jobs stay isolated), but a pipeline
+// coroutine starts its stages on executor threads, so a caller-pooled model would
+// never be visible there. PublishModel copies the shared_ptr into this map and every
+// by-name lookup below falls back to it, which bridges exactly the names the caller
+// chose to share without dissolving the thread isolation of ordinary pool entries.
+struct SharedTier
+{
+    std::mutex mutex;
+    std::unordered_map<std::string, std::shared_ptr<IModel>> models;
+};
+
+SharedTier& Tier()
+{
+    static SharedTier tier;
+    return tier;
+}
+
+std::shared_ptr<IModel> FindShared(const std::string& name)
+{
+    const std::lock_guard<std::mutex> lock(Tier().mutex);
+    const auto it = Tier().models.find(name);
+    return it != Tier().models.end() ? it->second : nullptr;
+}
+
+// The single lookup every exported operation below resolves names through: local pool
+// first, published copies second, so both tiers behave like one name space per caller.
+std::shared_ptr<IModel> FindModel(const std::string& name)
+{
+    if (auto model = GetLoader().GetModel(name))
+    {
+        return model;
+    }
+    return FindShared(name);
 }
 
 // Translation boundary for the model/geometry subsystem.
@@ -57,12 +98,48 @@ auto GuardModel(Fn&& fn) -> decltype(fn())
 
 HSBA_SLICER_LIB_API std::shared_ptr<IModel> LoadModel(const std::string& name, std::string_view filePath)
 {
-    return GuardModel([&] { return GetLoader().LoadModel(name, filePath); });
+    return GuardModel(
+        [&]
+        {
+            // A published name is owned by another context; loading a second instance
+            // under it would silently split the geometry behind one name.
+            if (FindShared(name))
+            {
+                throw AlreadyExistsError(std::format("Model '{}' is published across threads", name));
+            }
+            return GetLoader().LoadModel(name, filePath);
+        });
 }
 
 HSBA_SLICER_LIB_API std::shared_ptr<IModel> GetModel(const std::string& name)
 {
-    return GuardModel([&] { return GetLoader().GetModel(name); });
+    return GuardModel([&] { return FindModel(name); });
+}
+
+HSBA_SLICER_LIB_API bool PublishModel(const std::string& name)
+{
+    return GuardModel(
+        [&]
+        {
+            auto model = FindModel(name);
+            if (!model)
+            {
+                return false;
+            }
+            const std::lock_guard<std::mutex> lock(Tier().mutex);
+            Tier().models.insert_or_assign(name, std::move(model));
+            return true;
+        });
+}
+
+HSBA_SLICER_LIB_API bool UnpublishModel(const std::string& name)
+{
+    return GuardModel(
+        [&]
+        {
+            const std::lock_guard<std::mutex> lock(Tier().mutex);
+            return Tier().models.erase(name) > 0;
+        });
 }
 
 HSBA_SLICER_LIB_API void TranslateModel(const std::string& name, const Eigen::Vector3f& translation)
@@ -70,7 +147,7 @@ HSBA_SLICER_LIB_API void TranslateModel(const std::string& name, const Eigen::Ve
     GuardModel(
         [&]
         {
-            auto model = GetLoader().GetModel(name);
+            auto model = FindModel(name);
             if (model)
             {
                 model->Translate(translation);
@@ -83,7 +160,7 @@ HSBA_SLICER_LIB_API void RotateModel(const std::string& name, const Eigen::Quate
     GuardModel(
         [&]
         {
-            auto model = GetLoader().GetModel(name);
+            auto model = FindModel(name);
             if (model)
             {
                 model->Rotate(rotation);
@@ -96,7 +173,7 @@ HSBA_SLICER_LIB_API void ScaleModel(const std::string& name, float scale)
     GuardModel(
         [&]
         {
-            auto model = GetLoader().GetModel(name);
+            auto model = FindModel(name);
             if (model)
             {
                 model->Scale(scale);
@@ -109,7 +186,7 @@ HSBA_SLICER_LIB_API void ScaleModel(const std::string& name, const Eigen::Vector
     GuardModel(
         [&]
         {
-            auto model = GetLoader().GetModel(name);
+            auto model = FindModel(name);
             if (model)
             {
                 model->Scale(scale);
@@ -123,7 +200,7 @@ HSBA_SLICER_LIB_API ModelInfo GetModelInfo(const std::string& name)
         [&]
         {
             ModelInfo info;
-            auto model = GetLoader().GetModel(name);
+            auto model = FindModel(name);
             if (model)
             {
                 model->BoundingBox(info.bbox_min, info.bbox_max);
@@ -133,19 +210,49 @@ HSBA_SLICER_LIB_API ModelInfo GetModelInfo(const std::string& name)
         });
 }
 
+HSBA_SLICER_LIB_API std::pair<Eigen::MatrixXf, Eigen::MatrixXi> GetModelTriangles(const std::string& name)
+{
+    return GuardModel(
+        [&]
+        {
+            auto model = FindModel(name);
+            if (!model)
+            {
+                throw NotFoundError(std::format("Model '{}' not found", name));
+            }
+            return model->TriangleMesh();
+        });
+}
+
 HSBA_SLICER_LIB_API void RemoveModel(const std::string& name)
 {
-    GuardModel([&] { GetLoader().RemoveModel(name); });
+    GuardModel(
+        [&]
+        {
+            GetLoader().RemoveModel(name);
+            // Removing is the one operation that clears both tiers, so a caller that
+            // published by accident cannot leave the name resolving on other threads.
+            const std::lock_guard<std::mutex> lock(Tier().mutex);
+            Tier().models.erase(name);
+        });
 }
 
 HSBA_SLICER_LIB_API std::shared_ptr<IModel> InsertModel(const std::string& name, std::shared_ptr<IModel> model)
 {
-    return GuardModel([&] { return GetLoader().InsertModel(name, std::move(model)); });
+    return GuardModel(
+        [&]
+        {
+            if (FindShared(name))
+            {
+                throw AlreadyExistsError(std::format("Model '{}' is published across threads", name));
+            }
+            return GetLoader().InsertModel(name, std::move(model));
+        });
 }
 
 HSBA_SLICER_LIB_API bool ContainsModel(const std::string& name)
 {
-    return GuardModel([&] { return GetLoader().ContainsModel(name); });
+    return GuardModel([&] { return GetLoader().ContainsModel(name) || FindShared(name) != nullptr; });
 }
 
 HSBA_SLICER_LIB_API std::size_t ModelCount()
@@ -204,6 +311,17 @@ HSBA_SLICER_LIB_API std::shared_ptr<IModel> BooleanXor(const std::string& leftNa
 
 #endif  // USE_CGAL
 
+HSBA_SLICER_LIB_API bool HasTextCsgSupport()
+{
+#ifdef USE_OCCT
+    // The DRAW macro belongs to the CAD target, whose interface this library consumes
+    // privately; reading it here is what lets a caller outside ask instead of guess.
+    return HasCsgSupport();
+#else
+    return false;
+#endif
+}
+
 #ifdef USE_OCCT
 
 HSBA_SLICER_LIB_API std::shared_ptr<IModel> BuildCsgModel(const std::string& name, std::string_view script,
@@ -212,8 +330,10 @@ HSBA_SLICER_LIB_API std::shared_ptr<IModel> BuildCsgModel(const std::string& nam
     return GuardModel(
         [&]
         {
-            return GetLoader().InsertModel(name,
-                                           std::make_shared<OcctModel>(OcctModel::CreateFromCsg(script, shapeName)));
+            // Through the exported InsertModel so a name already published from another
+            // context is refused instead of silently shadowed by the local pool.
+            return InsertModel(
+                name, std::make_shared<OcctModel>(OcctModel::CreateFromCsg(script, shapeName)));
         });
 }
 
