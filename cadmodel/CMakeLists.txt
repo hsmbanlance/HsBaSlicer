@@ -32,6 +32,16 @@ option(HSBA_REQUIRE_TEXT_CSG
 
 if(OpenCASCADE_WITH_TCL AND TARGET TKDraw AND TARGET TKTopTest)
   target_compile_definitions(HsBaSlicerCADModel PUBLIC USE_OCCT_DRAW)
+  # The exit-time Tcl_Exit fault that ~Draw_Interpretor() triggers is specific to a static
+  # link, where the opencascade[tcl] overlay merges libtcl into every consumer - the same
+  # thing that makes Tcl_FindExecutable linkable there. Reuse the root's authoritative
+  # static/dynamic switch (BUILD_SHARED_LIBS: Linux/macOS/Android/static -> OFF, Windows/
+  # dynamic -> ON) instead of guessing a single triplet, so macOS static is covered and the
+  # default Windows dynamic build stays excluded. PUBLIC, not INTERFACE: OcctCsg.cpp is
+  # compiled by this very target.
+  if(NOT BUILD_SHARED_LIBS)
+    target_compile_definitions(HsBaSlicerCADModel PUBLIC HSBA_OCCT_STATIC_TCL)
+  endif()
   message(STATUS "Text CSG (OCCT DRAW Test Harness): enabled")
 else()
   # An OpenCASCADE package without the Draw module compiles and tests fine while every CSG

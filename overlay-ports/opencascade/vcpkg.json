@@ -57,9 +57,14 @@
       ]
     },
     "tcl": {
-      "description": "Enable the DRAW Test Harness (TKDraw, TKTopTest) which provides the Tcl command interface for building B-Rep shapes from text scripts (primitives + boolean operations). Only Tcl is required; Tk support stays disabled.",
+      "description": "Enable the DRAW Test Harness (TKDraw, TKTopTest) which provides the Tcl command interface for building B-Rep shapes from text scripts (primitives + boolean operations). Only Tcl is required; Tk support stays disabled. rapidjson is pulled in because enabling BUILD_MODULE_Draw under a static triplet defines OCCT_NO_PLUGINS, which makes the always-compiled DRAWEXE include XSDRAWGLTF.hxx unconditionally; that header is only generated when TKXSDRAWGLTF (USE_RAPIDJSON) is built.",
       "dependencies": [
-        "tcl"
+        "tcl",
+        {
+          "name": "opencascade",
+          "default-features": false,
+          "features": [ "rapidjson" ]
+        }
       ]
     },
     "tbb": {

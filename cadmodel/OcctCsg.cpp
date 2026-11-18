@@ -41,6 +41,29 @@ std::mutex g_csgMutex;
 // dependency the rest of the project neither sees nor satisfies.
 constexpr int kTclOk = 0;
 
+#ifdef HSBA_OCCT_STATIC_TCL
+// A non-DRAWEXE binary that merely links OCCT's DRAW toolkits still destroys the file-scope
+// global theCommands at exit, and ~Draw_Interpretor() calls Tcl_Exit(). DRAWEXE avoids the fault
+// by starting Tcl from its own main via Tcl_FindExecutable; an embedded consumer has no such
+// main, so that finalisation walks a never-started Tcl thread allocator and aborts the process
+// after every test already passed - even when the CSG bridge itself is never called. Starting
+// Tcl once at load makes the exit-time Tcl_Exit safe. Guarded by HSBA_OCCT_STATIC_TCL, which
+// cadmodel's CMakeLists defines for static (non-shared) builds - Linux and macOS, per the root
+// BUILD_SHARED_LIBS switch: the fault is specific to how a static link merges libtcl into every
+// consumer (the same thing that makes Tcl_FindExecutable linkable there), and the default Windows
+// dynamic build must stay excluded. Declared by hand so this TU still does not depend on <tcl.h>
+// (see kTclOk above).
+extern "C" void Tcl_FindExecutable(const char* argv0);
+
+// Namespace-scope initialisation runs before main and before any exit handler, so it is
+// order-independent with respect to ~theCommands (unlike an atexit/on_exit guard would be).
+const bool g_tclRuntimeStarted = []
+{
+    Tcl_FindExecutable(nullptr);
+    return true;
+}();
+#endif  // HSBA_OCCT_STATIC_TCL
+
 // Shapes live in the process wide DRAW bank, and OCCT exposes no call to remove a name. The
 // bank is nonetheless walkable: it is the set Draw::Drawables(), each entry bound to a Tcl
 // variable, and Draw::Set() with an empty handle unsets that variable - which is what releases

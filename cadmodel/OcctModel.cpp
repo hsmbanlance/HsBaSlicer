@@ -368,7 +368,7 @@ std::pair<Eigen::MatrixXf, Eigen::MatrixXi> OcctModel::TriangleMesh() const
     constexpr double kAngularDeflection = 0.3;
     if (!shape_.IsNull())
     {
-        BRepMesh_IncrementalMesh(shape_, kLinearDeflection, Standard_True, kAngularDeflection, Standard_False);
+        BRepMesh_IncrementalMesh(shape_, kLinearDeflection, true, kAngularDeflection, false);
     }
 
     std::vector<Eigen::Vector3f> vertices;
