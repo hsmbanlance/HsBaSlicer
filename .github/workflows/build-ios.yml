@@ -11,12 +11,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Install build dependencies
-        shell: bash
-        run: |
-          brew update
-          brew install cmake ninja python autoconf automake libtool autoconf-archive
-          # Install PowerShell for version generation script
-          brew install --cask powershell@preview
+        uses: ./.github/actions/macos-toolchain
 
       - name: Clone vcpkg and bootstrap
         shell: bash
