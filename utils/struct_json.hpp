@@ -104,39 +104,25 @@ requires std::is_arithmetic_v<T> T ArithmeticFromJson(const rapidjson::Value& js
         return static_cast<ValueType>(json.GetUint64());
 }
 
-// Helper: expand reflectable fields into add_member calls (works around MSVC template-lambda parsing)
+// Helper: expand reflectable fields into add_member calls (works around MSVC template-lambda parsing).
+// Declared here and defined after the complete add_member overload set: a dependent call resolves its
+// ordinary lookup in the definition context, so defining this helper before the constrained overloads
+// bound every field to the unconstrained fallback below, and on the Itanium ABI that fallback and the
+// constrained overload mangle identically (constraints are not mangled) -> "symbol is already defined"
+// once both get instantiated in one translation unit.
 template <typename FieldType, std::size_t... Is>
 void add_reflectable_members_impl(rapidjson::Value& parent, const FieldType& field,
-                                  rapidjson::Document::AllocatorType& allocator, std::index_sequence<Is...>)
-{
-    if constexpr (sizeof...(Is) > 0)
-    {
-        int dummy[] = {((add_member(parent, StaticReflect::Reflector<FieldType>::template FieldName<Is>(),
-                                    StaticReflect::Reflector<FieldType>::template GetField<Is>(field), allocator),
-                         0))...};
-        (void)dummy;
-    }
-}
+                                  rapidjson::Document::AllocatorType& allocator, std::index_sequence<Is...>);
 
 // Forward declaration so dependent calls in set_reflectable_fields_impl can find overloads
 template <typename FieldType>
 void set_field_from_json(FieldType& field, const rapidjson::Value& field_json);
 
-// Helper: expand reflectable fields into set_field_from_json calls (works around MSVC template-lambda parsing)
+// Helper: expand reflectable fields into set_field_from_json calls (works around MSVC template-lambda
+// parsing). Declared here, defined after the complete set_field_from_json overload set for the same
+// two-phase-lookup / mangling reason as add_reflectable_members_impl.
 template <typename T, std::size_t... Is>
-void set_reflectable_fields_impl(const rapidjson::Value& json, T& value, std::index_sequence<Is...>)
-{
-    if constexpr (sizeof...(Is) > 0)
-    {
-        int dummy[] = {((json.HasMember(StaticReflect::Reflector<T>::template FieldName<Is>().data())
-                             ? (set_field_from_json(StaticReflect::Reflector<T>::template GetField<Is>(value),
-                                                    json[StaticReflect::Reflector<T>::template FieldName<Is>().data()]),
-                                0)
-                             : 0),
-                        0)...};
-        (void)dummy;
-    }
-}
+void set_reflectable_fields_impl(const rapidjson::Value& json, T& value, std::index_sequence<Is...>);
 
 template <RapidJsonValueConvertible FieldType>
 void add_member(rapidjson::Value& parent, std::string_view name, const FieldType& field,
@@ -334,6 +320,21 @@ void add_member(rapidjson::Value&, std::string_view, const FieldType&, rapidjson
     throw RuntimeError("Unsupported field type in to_json_impl");
 }
 
+// Definition of the forward-declared helper; placed after every add_member overload so the dependent
+// call below selects the constrained overload matching the field type instead of this fallback.
+template <typename FieldType, std::size_t... Is>
+void add_reflectable_members_impl(rapidjson::Value& parent, const FieldType& field,
+                                  rapidjson::Document::AllocatorType& allocator, std::index_sequence<Is...>)
+{
+    if constexpr (sizeof...(Is) > 0)
+    {
+        int dummy[] = {((add_member(parent, StaticReflect::Reflector<FieldType>::template FieldName<Is>(),
+                                    StaticReflect::Reflector<FieldType>::template GetField<Is>(field), allocator),
+                         0))...};
+        (void)dummy;
+    }
+}
+
 template <Aggregte T>
 requires(!Reflectable<T>) void to_json_impl(const T& value, rapidjson::Value& json,
                                             rapidjson::Document::AllocatorType& allocator)
@@ -480,6 +481,23 @@ template <typename FieldType>
 void set_field_from_json(FieldType&, const rapidjson::Value&)
 {
     throw RuntimeError("Unsupported field type in from_json_impl");
+}
+
+// Definition of the forward-declared helper; placed after every set_field_from_json overload so the
+// dependent call below selects the constrained overload matching the field type instead of this fallback.
+template <typename T, std::size_t... Is>
+void set_reflectable_fields_impl(const rapidjson::Value& json, T& value, std::index_sequence<Is...>)
+{
+    if constexpr (sizeof...(Is) > 0)
+    {
+        int dummy[] = {((json.HasMember(StaticReflect::Reflector<T>::template FieldName<Is>().data())
+                             ? (set_field_from_json(StaticReflect::Reflector<T>::template GetField<Is>(value),
+                                                    json[StaticReflect::Reflector<T>::template FieldName<Is>().data()]),
+                                0)
+                             : 0),
+                        0)...};
+        (void)dummy;
+    }
 }
 
 template <Aggregte T>

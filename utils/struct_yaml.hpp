@@ -73,18 +73,14 @@ void add_member(YAML::Node& parent, std::string_view name, const FieldType& fiel
 template <typename FieldType>
 void set_field_from_yaml(FieldType& field, const YAML::Node& field_node);
 
-// Helper: expand reflectable fields into add_member calls
+// Helper: expand reflectable fields into add_member calls.
+// Declared here and defined after the complete add_member overload set: a dependent call resolves its
+// ordinary lookup in the definition context, so defining this helper before the constrained overloads
+// would bind every reflectable field to the unconstrained primary template below, which on the Itanium
+// ABI mangles identically to the constrained overload for the same field type (constraints are not
+// mangled) -> "symbol is already defined" once both get instantiated in one translation unit.
 template <typename FieldType, std::size_t... Is>
-void add_reflectable_members_impl(YAML::Node& parent, const FieldType& field, std::index_sequence<Is...>)
-{
-    if constexpr (sizeof...(Is) > 0)
-    {
-        int dummy[] = {((add_member(parent, StaticReflect::Reflector<FieldType>::template FieldName<Is>(),
-                                    StaticReflect::Reflector<FieldType>::template GetField<Is>(field)),
-                         0))...};
-        (void)dummy;
-    }
-}
+void add_reflectable_members_impl(YAML::Node& parent, const FieldType& field, std::index_sequence<Is...>);
 
 // Helper: expand reflectable fields into set_field_from_yaml calls
 template <typename T, std::size_t... Is>
@@ -265,6 +261,20 @@ void add_member(YAML::Node& parent, std::string_view name, const Opt& opt)
 // {
 // 	throw RuntimeError("Unsupported field type in to_yaml_impl");
 // }
+
+// Definition of the forward-declared helper; placed after every add_member overload so the dependent
+// call below selects the constrained overload matching the field type instead of the primary template.
+template <typename FieldType, std::size_t... Is>
+void add_reflectable_members_impl(YAML::Node& parent, const FieldType& field, std::index_sequence<Is...>)
+{
+    if constexpr (sizeof...(Is) > 0)
+    {
+        int dummy[] = {((add_member(parent, StaticReflect::Reflector<FieldType>::template FieldName<Is>(),
+                                    StaticReflect::Reflector<FieldType>::template GetField<Is>(field)),
+                         0))...};
+        (void)dummy;
+    }
+}
 
 template <Aggregte T>
 requires(!Reflectable<T>) void to_yaml_impl(const T& value, YAML::Node& node)

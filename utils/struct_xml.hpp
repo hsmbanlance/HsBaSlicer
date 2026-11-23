@@ -61,40 +61,25 @@ template <typename FieldType>
 void add_element(tinyxml2::XMLElement* parent, std::string_view name, const FieldType& field,
                  tinyxml2::XMLDocument* doc);
 
-// Helper: expand reflectable fields into add_element calls
+// Helper: expand reflectable fields into add_element calls.
+// Declared here and defined after the complete add_element overload set: a dependent call resolves its
+// ordinary lookup in the definition context, so defining this helper before the constrained overloads
+// bound every field to the unconstrained fallback below, and on the Itanium ABI that fallback and the
+// constrained overload mangle identically (constraints are not mangled) -> "symbol is already defined"
+// once both get instantiated in one translation unit.
 template <typename FieldType, std::size_t... Is>
 void add_reflectable_elements_impl(tinyxml2::XMLElement* parent, const FieldType& field, tinyxml2::XMLDocument* doc,
-                                   std::index_sequence<Is...>)
-{
-    if constexpr (sizeof...(Is) > 0)
-    {
-        int dummy[] = {((add_element(parent, StaticReflect::Reflector<FieldType>::template FieldName<Is>(),
-                                     StaticReflect::Reflector<FieldType>::template GetField<Is>(field), doc),
-                         0))...};
-        (void)dummy;
-    }
-}
+                                   std::index_sequence<Is...>);
 
 // Forward declaration so dependent calls in set_reflectable_fields_impl can find overloads
 template <typename FieldType>
 void set_field_from_xml(FieldType& field, const tinyxml2::XMLElement* field_element);
 
-// Helper: expand reflectable fields into set_field_from_xml calls
+// Helper: expand reflectable fields into set_field_from_xml calls (works around MSVC template-lambda
+// parsing). Declared here, defined after the complete set_field_from_xml overload set for the same
+// two-phase-lookup / mangling reason as add_reflectable_elements_impl.
 template <typename T, std::size_t... Is>
-void set_reflectable_fields_impl(const tinyxml2::XMLElement* element, T& value, std::index_sequence<Is...>)
-{
-    if constexpr (sizeof...(Is) > 0)
-    {
-        int dummy[] = {((element->FirstChildElement(StaticReflect::Reflector<T>::template FieldName<Is>().data())
-                             ? (set_field_from_xml(StaticReflect::Reflector<T>::template GetField<Is>(value),
-                                                   element->FirstChildElement(
-                                                       StaticReflect::Reflector<T>::template FieldName<Is>().data())),
-                                0)
-                             : 0),
-                        0)...};
-        (void)dummy;
-    }
-}
+void set_reflectable_fields_impl(const tinyxml2::XMLElement* element, T& value, std::index_sequence<Is...>);
 
 template <TinyXmlConvertible FieldType>
 void add_element(tinyxml2::XMLElement* parent, std::string_view name, const FieldType& field,
@@ -305,6 +290,21 @@ void add_element(tinyxml2::XMLElement*, std::string_view, const FieldType&, tiny
     throw RuntimeError("Unsupported field type in to_xml_impl");
 }
 
+// Definition of the forward-declared helper; placed after every add_element overload so the dependent
+// call below selects the constrained overload matching the field type instead of this fallback.
+template <typename FieldType, std::size_t... Is>
+void add_reflectable_elements_impl(tinyxml2::XMLElement* parent, const FieldType& field, tinyxml2::XMLDocument* doc,
+                                   std::index_sequence<Is...>)
+{
+    if constexpr (sizeof...(Is) > 0)
+    {
+        int dummy[] = {((add_element(parent, StaticReflect::Reflector<FieldType>::template FieldName<Is>(),
+                                     StaticReflect::Reflector<FieldType>::template GetField<Is>(field), doc),
+                         0))...};
+        (void)dummy;
+    }
+}
+
 template <Aggregte T>
 requires(!Reflectable<T>) void to_xml_impl(const T& value, tinyxml2::XMLElement* element, tinyxml2::XMLDocument* doc)
 {
@@ -512,6 +512,24 @@ template <typename FieldType>
 void set_field_from_xml(FieldType&, const tinyxml2::XMLElement*)
 {
     throw RuntimeError("Unsupported field type in from_xml_impl");
+}
+
+// Definition of the forward-declared helper; placed after every set_field_from_xml overload so the
+// dependent call below selects the constrained overload matching the field type instead of this fallback.
+template <typename T, std::size_t... Is>
+void set_reflectable_fields_impl(const tinyxml2::XMLElement* element, T& value, std::index_sequence<Is...>)
+{
+    if constexpr (sizeof...(Is) > 0)
+    {
+        int dummy[] = {((element->FirstChildElement(StaticReflect::Reflector<T>::template FieldName<Is>().data())
+                             ? (set_field_from_xml(StaticReflect::Reflector<T>::template GetField<Is>(value),
+                                                   element->FirstChildElement(
+                                                       StaticReflect::Reflector<T>::template FieldName<Is>().data())),
+                                0)
+                             : 0),
+                        0)...};
+        (void)dummy;
+    }
 }
 
 template <Aggregte T>
