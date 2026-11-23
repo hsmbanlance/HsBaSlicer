@@ -41,7 +41,12 @@
     "boost-pfr",
     "boost-graph",
     "clipper2",
-    "libjpeg-turbo",
+    {
+      "name": "libjpeg-turbo",
+      "features": [
+        "turbojpeg"
+      ]
+    },
     "libpng",
     {
       "name": "opencv",
