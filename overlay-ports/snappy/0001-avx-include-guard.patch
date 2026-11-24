@@ -1,0 +1,25 @@
+Keep <immintrin.h> in sync with the __AVX__ guard in MemCopy64.
+
+The port forces -DSNAPPY_HAVE_X86_CRC32=OFF and -DSNAPPY_HAVE_BMI2=OFF in
+portfile.cmake, so the include below is dropped, but the 64-byte copy further
+down is selected by the live target macro __AVX__ instead of those cached
+variables. Any toolchain whose default ISA already has AVX therefore compiles
+the AVX branch without the intrinsic declarations:
+
+  snappy.cc:1242:3: error: '__m256i' was not declared in this scope
+
+Extend the include guard with the exact condition the copy site uses. Targets
+without AVX keep the current behaviour (the branch stays preprocessed out);
+targets with AVX get the header the branch requires.
+
+--- a/snappy.cc
++++ b/snappy.cc
+@@ -60,7 +60,7 @@
+ #endif
+ #endif  // !defined(SNAPPY_HAVE_NEON_CRC32)
+ 
+-#if SNAPPY_HAVE_BMI2 || SNAPPY_HAVE_X86_CRC32
++#if SNAPPY_HAVE_BMI2 || SNAPPY_HAVE_X86_CRC32 || (defined(__x86_64__) && defined(__AVX__))
+ // Please do not replace with <x86intrin.h>. or with headers that assume more
+ // advanced SSE versions without checking with all the OWNERS.
+ #include <immintrin.h>
