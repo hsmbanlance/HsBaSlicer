@@ -1,7 +1,6 @@
 name: macOS toolchain setup
 description: >-
-  Installs the Homebrew tools HsBaSlicer needs on macOS / iOS runners and pins
-  CMake to a release Boost 1.92 can configure with.
+  Installs the Homebrew tools HsBaSlicer needs on macOS / iOS runners.
 
 runs:
   using: composite
@@ -10,42 +9,12 @@ runs:
       shell: bash
       run: |
         brew update
-        # cmake is deliberately NOT installed from Homebrew: brew ships the rolling
-        # 4.5.x release, whose stricter source_group(TREE) check makes vcpkg's
-        # boost-locale port fail to configure
+        # Homebrew ships the rolling CMake 4.5.x, whose stricter source_group(TREE)
+        # check used to make vcpkg's boost-locale port fail to configure
         # (".../libs/locale/include/boost/locale is not a prefix of file
-        #   .../libs/locale/include/boost/locale.hpp").
-        brew install ninja python autoconf automake libtool autoconf-archive
+        #   .../libs/locale/include/boost/locale.hpp"). The pinned baseline now
+        # carries ports/boost-locale/fix-source-group.patch, which moves
+        # locale.hpp out of that TREE listing, so no version pin is required.
+        brew install cmake ninja python autoconf automake libtool autoconf-archive
         # Install PowerShell for version generation script
         brew install --cask powershell@preview
-
-    - name: Install pinned CMake
-      shell: bash
-      run: |
-        set -euo pipefail
-        cmake_ver=4.2.8
-        curl -fsSL -o "$RUNNER_TEMP/cmake.tar.gz" \
-          "https://github.com/Kitware/CMake/releases/download/v${cmake_ver}/cmake-${cmake_ver}-macos-universal.tar.gz"
-        mkdir -p "$RUNNER_TEMP/cmake"
-        tar -xzf "$RUNNER_TEMP/cmake.tar.gz" -C "$RUNNER_TEMP/cmake"
-        # The archive nests the binary under CMake.app/Contents/bin, so locate it
-        # instead of hard-coding the layout.
-        cmake_bin="$(find "$RUNNER_TEMP/cmake" -type f -path '*/bin/cmake' | head -n 1)"
-        test -n "${cmake_bin}"
-        # GITHUB_PATH entries are prepended, so the pinned cmake wins over
-        # /opt/homebrew/bin; vcpkg's nested port configures reuse ${CMAKE_COMMAND}.
-        echo "$(dirname "${cmake_bin}")" >> "$GITHUB_PATH"
-        echo "HSBA_CMAKE_VERSION=${cmake_ver}" >> "$GITHUB_ENV"
-        "${cmake_bin}" --version | head -n 1
-
-    - name: Verify CMake pin
-      shell: bash
-      run: |
-        set -euo pipefail
-        found="$(cmake --version | head -n 1 | awk '{print $3}')"
-        if [ "${found}" != "${HSBA_CMAKE_VERSION}" ]; then
-          echo "ERROR: expected cmake ${HSBA_CMAKE_VERSION} first on PATH, found ${found} at $(command -v cmake)"
-          echo "A cmake >= 4.5 breaks the boost-locale port; check Homebrew PATH shadowing."
-          exit 1
-        fi
-        echo "Using cmake ${found} at $(command -v cmake)"
