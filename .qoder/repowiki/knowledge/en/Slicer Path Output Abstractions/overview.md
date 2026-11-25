@@ -1,0 +1,1 @@
+Defines the IPath interface and concrete output-path implementations (points, layers, images, robot, weld-robot, G-code) that serialize slicer products to files or strings with optional Lua post-processing.

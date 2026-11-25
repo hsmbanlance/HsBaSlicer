@@ -17,6 +17,14 @@
 - [my_fdm_pipeline.lua](file://samples/Custom/scripts/my_fdm_pipeline.lua)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Updated Core Components section to reflect the new downward stacking algorithm for support pillars
+- Enhanced Architecture Overview with improved sequence diagram showing proper column growth
+- Added detailed explanation of the two-phase support generation process
+- Updated Troubleshooting Guide with information about the fix for first-layer support placement
+- Enhanced Performance Considerations with guidance on the new parallel detection approach
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -32,9 +40,11 @@
 ## Introduction
 This document explains Fused Deposition Modeling (FDM) support structure generation in the project. It covers three built-in support patterns: plane supports, tree supports, and honeycomb supports. For each pattern, it documents the algorithmic approach, configuration parameters, material usage strategies, and practical examples for different print scenarios. It also describes how to integrate custom FDM support algorithms through Lua scripting, and provides guidance on performance tuning for large models while balancing printability and material efficiency.
 
+The system now features an enhanced two-phase support generation process that properly stacks support columns downward to build plate or solid geometry, eliminating incorrect support placement on the first layer.
+
 ## Project Structure
 The FDM support system is implemented under the support module and exposed via LibHsBaSlicer APIs. The key components are:
-- Abstract support generator interface
+- Abstract support generator interface with enhanced downward column growth
 - Built-in FDM support generators: plane, tree, honeycomb
 - Overhang detection utility
 - Configuration structures shared by all support generators
@@ -89,22 +99,25 @@ LS --> IS
 - [fdm_support.cpp:14-51](file://LibHsBaSlicer/Support/fdm_support.cpp#L14-L51)
 
 ## Core Components
-- ISupport: Abstract interface defining per-layer support generation and a default layer iterator.
-- FdmPlaneSupport: Generates simple column supports from overhang regions using offset operations.
-- FdmTreeSupport: Places circular branch tips within overhang areas and merges overlapping circles.
-- FdmHoneycombSupport: Fills overhang regions with hexagonal cells intersected against the overhang shape.
-- OverhangDetector: Computes unsupported regions between adjacent layers based on angle threshold and layer height.
-- SupportConfig: Shared configuration including overhang angle, gap, diameter, density, pattern selection, tree parameters, and honeycomb cell size.
-- LuaSupport: Custom support generator driven by Lua scripts, exposing polygon helpers and support utilities.
+- **ISupport**: Abstract interface defining per-layer support generation with enhanced downward column growth and a default layer iterator. Now includes sophisticated two-phase processing for proper support stacking.
+- **FdmPlaneSupport**: Generates simple column supports from overhang regions using offset operations.
+- **FdmTreeSupport**: Places circular branch tips within overhang areas and merges overlapping circles.
+- **FdmHoneycombSupport**: Fills overhang regions with hexagonal cells intersected against the overhang shape.
+- **OverhangDetector**: Computes unsupported regions between adjacent layers based on angle threshold and layer height.
+- **SupportConfig**: Shared configuration including overhang angle, gap, diameter, density, pattern selection, tree parameters, and honeycomb cell size.
+- **LuaSupport**: Custom support generator driven by Lua scripts, exposing polygon helpers and support utilities.
 
 Key responsibilities:
-- Detect where supports are needed.
+- Detect where supports are needed using parallelizable overhang detection.
 - Apply model-support separation (gap).
+- **NEW**: Properly stack support columns downward to build plate or solid geometry.
 - Produce per-layer support polygons for downstream path planning.
+
+**Updated** The core support generation now uses a two-phase approach: first detecting overhangs in parallel, then growing support columns downward to ensure proper structural integrity.
 
 **Section sources**
 - [ISupport.hpp:22-45](file://support/ISupport.hpp#L22-L45)
-- [ISupport.cpp:9-20](file://support/ISupport.cpp#L9-L20)
+- [ISupport.cpp:30-98](file://support/ISupport.cpp#L30-L98)
 - [FdmSupport.hpp:19-63](file://support/FdmSupport.hpp#L19-L63)
 - [OverhangDetector.hpp:20-49](file://support/OverhangDetector.hpp#L20-L49)
 - [SupportConfig.hpp:14-43](file://support/SupportConfig.hpp#L14-L43)
@@ -112,6 +125,10 @@ Key responsibilities:
 
 ## Architecture Overview
 The public API selects a concrete support generator based on the configured pattern and runs either single-layer or all-layers generation. Each generator uses OverhangDetector to find unsupported regions, applies a gap, and then constructs support cross-sections according to its pattern.
+
+The enhanced architecture now implements a two-phase process:
+1. **Phase 1 - Detection**: Parallel overhang detection across layers
+2. **Phase 2 - Column Growth**: Downward stacking of support columns to build plate/solid geometry
 
 ```mermaid
 sequenceDiagram
@@ -122,18 +139,16 @@ participant OD as "OverhangDetector"
 participant Poly as "Polygon Operations"
 Client->>API : "layers, config"
 API->>Gen : "select generator by config.support_pattern"
-loop "for each layer"
+Note over API,Gen : Phase 1 - Parallel Detection
+loop "for each layer (parallel)"
 API->>Gen : "Generate(current_layer, prev_layer, layer_height, config)"
 Gen->>OD : "Detect(current_layer, prev_layer, layer_height, angle_threshold)"
 OD-->>Gen : "overhang polygons"
-Gen->>Poly : "Offset(overhang, -gap)"
-alt "plane"
-Gen->>Poly : "Offset(gapped, +radius)"
-else "tree"
-Gen->>Poly : "Grid sample + MakeCircle + Union"
-else "honeycomb"
-Gen->>Poly : "Hex grid + Intersect(union_hex, gapped)"
 end
+Note over API,Gen : Phase 2 - Downward Column Growth
+loop "for each layer (bottom-up)"
+API->>Gen : "GenerateFromOverhangs(pending, layer_height, config)"
+Gen->>Poly : "Stack downward to build plate/solid"
 Gen-->>API : "support polygons"
 end
 API-->>Client : "vector<PolygonsD>"
@@ -141,6 +156,7 @@ API-->>Client : "vector<PolygonsD>"
 
 **Diagram sources**
 - [fdm_support.cpp:14-51](file://LibHsBaSlicer/Support/fdm_support.cpp#L14-L51)
+- [ISupport.cpp:30-98](file://support/ISupport.cpp#L30-L98)
 - [FdmSupport.cpp:48-76](file://support/FdmSupport.cpp#L48-L76)
 - [FdmSupport.cpp:145-168](file://support/FdmSupport.cpp#L145-L168)
 - [FdmSupport.cpp:244-267](file://support/FdmSupport.cpp#L244-L267)
@@ -254,6 +270,52 @@ Intersect --> Result["Return honeycomb support polygons"]
 **Section sources**
 - [FdmSupport.cpp:173-242](file://support/FdmSupport.cpp#L173-L242)
 - [FdmSupport.cpp:244-267](file://support/FdmSupport.cpp#L244-L267)
+
+### Enhanced Two-Phase Support Generation
+**New** The core ISupport::GenerateAll method now implements a sophisticated two-phase approach:
+
+**Phase 1 - Parallel Detection:**
+- Detects overhang regions for each layer independently
+- Uses parallel processing when supported (IsLayerIndependent returns true)
+- Skips the bottom layer since it rests on the build plate
+- Stores detected overhangs for Phase 2 processing
+
+**Phase 2 - Downward Column Growth:**
+- Processes layers from top to bottom (i = total-1 down to 1)
+- Maintains a pending region that carries unsupported areas downward
+- Unions pending regions with current layer overhangs
+- Subtracts solid model geometry to avoid placing supports inside the model
+- Calls GenerateFromOverhangs to create actual support patterns
+- Ensures proper stacking until reaching build plate or solid model
+
+This approach eliminates the previous issue where support slabs were incorrectly buried inside the first slice layer.
+
+```mermaid
+flowchart TD
+Start(["Start GenerateAll"]) --> Phase1["Phase 1: Parallel Detection"]
+Phase1 --> DetectLayers["Detect overhangs for each layer"]
+DetectLayers --> SkipBottom["Skip bottom layer (build plate)"]
+SkipBottom --> Phase2["Phase 2: Downward Column Growth"]
+Phase2 --> InitPending["Initialize pending = empty"]
+InitPending --> LoopLayers["Loop i from total-1 to 1"]
+LoopLayers --> CheckPending{"pending empty?"}
+CheckPending --> |Yes| SetPending["Set pending = overhang[i-1]"]
+CheckPending --> |No| UnionPending["Union pending with overhang[i-1]"]
+SetPending --> SubtractModel["Subtract solid model geometry"]
+UnionPending --> SubtractModel
+SubtractModel --> EmptyCheck{"pending empty?"}
+EmptyCheck --> |Yes| NextLayer["Continue to next layer"]
+EmptyCheck --> |No| GeneratePattern["GenerateFromOverhangs(pending)"]
+GeneratePattern --> NextLayer
+NextLayer --> LoopLayers
+LoopLayers --> End(["End"])
+```
+
+**Diagram sources**
+- [ISupport.cpp:30-98](file://support/ISupport.cpp#L30-L98)
+
+**Section sources**
+- [ISupport.cpp:30-98](file://support/ISupport.cpp#L30-L98)
 
 ### Overhang Detection
 Algorithm:
@@ -390,15 +452,22 @@ LuaAPI --> LuaSup["LuaSupport"]
 - Large models:
   - Prefer tree supports for large overhangs to reduce material and improve printability compared to dense plane supports.
   - Increase honeycomb_cell_size to reduce polygon count and computational cost when rigidity allows.
+  - **NEW**: The enhanced two-phase approach significantly improves performance through parallel overhang detection.
 - Overhang detection:
   - Adjust overhang_angle_threshold to balance support quantity and bridging capability.
   - Smaller layer_height improves detection accuracy but increases processing time.
+  - **NEW**: Detection phase is now parallelized when IsLayerIndependent() returns true.
 - Polygon operations:
   - Offset and union operations dominate runtime; minimize unnecessary offsets and keep gap reasonable.
+  - **NEW**: The downward column growth phase avoids repeated widening by carrying regions instead of patterns.
 - Memory usage:
   - Avoid excessive subdivision in tree sampling; tune support_diameter and spacing to limit candidate points.
+  - **NEW**: Pending region tracking reduces memory overhead by avoiding duplicate pattern generation.
 - Parallelization:
-  - Use GenerateAll to iterate layers; consider parallelizing across layers if integrating with a thread pool.
+  - Use GenerateAll to iterate layers; the detection phase automatically parallelizes when supported.
+  - **NEW**: HSBA_PIPELINE_THREADS=1 restores serial iteration for regression comparison if needed.
+
+**Updated** Performance has been significantly improved through parallel detection and optimized column growth algorithms.
 
 [No sources needed since this section provides general guidance]
 
@@ -416,15 +485,24 @@ Common issues and remedies:
 - Lua script errors:
   - Check script syntax and ensure return value is a table of polygons.
   - Validate function name and global variables availability.
+- **NEW**: Incorrect support placement on first layer:
+  - **Fixed**: The enhanced two-phase algorithm now properly stacks support columns downward.
+  - Ensure the bottom layer is skipped during detection (it rests on build plate).
+  - Verify that pending regions are correctly subtracted from solid model geometry.
+
+**Updated** Added troubleshooting guidance for the newly fixed first-layer support placement issue.
 
 **Section sources**
 - [FdmSupport.cpp:48-76](file://support/FdmSupport.cpp#L48-L76)
 - [FdmSupport.cpp:145-168](file://support/FdmSupport.cpp#L145-L168)
 - [FdmSupport.cpp:244-267](file://support/FdmSupport.cpp#L244-L267)
 - [LuaSupport.cpp:141-178](file://support/LuaSupport.cpp#L141-L178)
+- [ISupport.cpp:30-98](file://support/ISupport.cpp#L30-L98)
 
 ## Conclusion
-The FDM support system offers flexible, efficient support generation through plane, tree, and honeycomb patterns. By tuning overhang detection, gap, diameter, density, and pattern-specific parameters, users can optimize for strength, printability, and material efficiency. Lua scripting enables full customization of support algorithms, integrating seamlessly with the existing pipeline. For large models, tree and honeycomb patterns typically provide better balance between structural integrity and material consumption.
+The FDM support system offers flexible, efficient support generation through plane, tree, and honeycomb patterns. The enhanced two-phase approach now ensures proper structural integrity by stacking support columns downward to build plate or solid geometry, eliminating incorrect support placement on the first layer. By tuning overhang detection, gap, diameter, density, and pattern-specific parameters, users can optimize for strength, printability, and material efficiency. The parallel detection phase significantly improves performance for large models. Lua scripting enables full customization of support algorithms, integrating seamlessly with the existing pipeline. For large models, tree and honeycomb patterns typically provide better balance between structural integrity and material consumption.
+
+**Updated** The system now provides robust support generation with proper column stacking and enhanced performance through parallel processing.
 
 [No sources needed since this section summarizes without analyzing specific files]
 

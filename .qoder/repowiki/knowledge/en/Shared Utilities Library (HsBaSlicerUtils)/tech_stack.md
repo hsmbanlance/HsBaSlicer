@@ -1,0 +1,1 @@
+C++20 concepts + SFINAE; Boost.Graph (adjacency_list, dijkstra, astar, boykov_kolmogorov_max_flow, kruskal, prim, connected_components, strong_components, topological_sort) plus Boost.DLL for runtime symbol resolution; RapidJSON, TinyXML2, yaml-cpp for serialization; Lua C API for AnyObject bridge; Boost.Date_Time dependency declared in CMake.

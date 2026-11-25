@@ -1,0 +1,1 @@
+Build-time feature flags control optional components: `-DHSBA_HSBA_USE_BIT7Z=ON` enables the bit7z zipper/unzipper and its Lua registration; `-DHSBA_USE_MYSQL` / `-DHSBA_USE_PGSQL` compile MySQL/PostgreSQL adapters; Android/iOS/game-console builds drop Boost.Log, bit7z, and non-SQLite sqlpp11 backends.

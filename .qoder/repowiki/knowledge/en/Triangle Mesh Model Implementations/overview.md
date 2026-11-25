@@ -1,0 +1,1 @@
+Triangle-mesh model implementations backing the IModel interface, providing libigl-based geometry primitives and a topology-reconstructed slicing engine with optional CGAL boolean operations.

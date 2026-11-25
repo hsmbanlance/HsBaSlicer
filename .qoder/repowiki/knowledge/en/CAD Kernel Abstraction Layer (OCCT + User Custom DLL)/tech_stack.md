@@ -1,0 +1,1 @@
+OpenCASCADE (BRep/TopoDS) as the primary CAD kernel; optional OCCT DRAW Test Harness (TKDraw/TKTopTest with Tcl) for text CSG scripts; Boost.DLL for loading user-provided CAD libraries at runtime; Eigen for geometry math; libigl-style vertex/face mesh output.

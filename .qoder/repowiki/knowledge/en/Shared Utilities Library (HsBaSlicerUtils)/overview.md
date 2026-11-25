@@ -1,0 +1,1 @@
+Static CMake library providing cross-cutting utilities: typed graph wrappers over Boost.Graph, reflectable struct serialization (JSON/XML/YAML), Lua AnyObject bridge, runtime DLL loader, and application configuration singleton.

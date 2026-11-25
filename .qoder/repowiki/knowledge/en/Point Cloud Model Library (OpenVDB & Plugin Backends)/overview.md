@@ -1,0 +1,1 @@
+Provides point cloud model implementations backed by OpenVDB voxel grids and user-supplied DLL/SO plugins, exposing a unified IModel interface for the slicer pipeline.

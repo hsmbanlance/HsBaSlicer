@@ -1,0 +1,3 @@
+- Each CAD backend exposes itself as a concrete class deriving from `IModel` and overrides the same set of virtual methods (`Load`, `Save`, `Translate`, `Rotate`, `Scale`, `Transform`, `BoundingBox`, `Volume`, `TriangleMesh`), keeping backends interchangeable at the slicer level.
+- Optional features are gated by CMake-detected compile definitions (`USE_OCCT_DRAW`, `HSBA_TEXT_CSG_DISABLED`, `HSBA_OCCT_STATIC_TCL`) rather than runtime checks, so consumers see a uniform API shape.
+- User-supplied CAD libraries communicate through raw function-pointer typedefs on the `IUserCustomCAD` interface (e.g. `CreateModelFunc`, `BooleanOperationFunc`, `CreatePrismFunc`) instead of C++ vtables, enabling cross-process/DLL boundaries.

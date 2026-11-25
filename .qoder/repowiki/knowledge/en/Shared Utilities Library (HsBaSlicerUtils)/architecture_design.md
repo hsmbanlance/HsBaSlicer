@@ -1,0 +1,9 @@
+Built as the `HsBaSlicerUtils` static library (`utils/CMakeLists.txt`) linking Boost.Date_Time, rapidjson, tinyxml2, yaml-cpp, and Lua; depends on `HsBaSlicerBase` and `HsBaSlicerFileOperator`. Internally organized into four orthogonal sub-areas:
+
+- Struct serialization: `struct_concepts.hpp` defines the `Aggregte` / `Reflectable` C++20 concepts; `struct_json.hpp`, `struct_xml.hpp`, `struct_yaml.hpp` provide parallel `to_json`/`from_json`/`write_*`/`read_*` template APIs dispatching via those concepts onto RapidJSON, TinyXML2, and yaml-cpp respectively.
+- Lua interop: `LuaNewObject.hpp` + `LuaAnyObject.hpp` implement a CRTP hierarchy (`LuaAnyObjectNewCastBase` → `LuaAnyObjectNewCastAbstract` → `LuaAnyObjectNewCastImpl<T, TypeName>`) plus built-in specializations for int/long/double/string/etc., exposing `AnyObject` values to/from Lua via metatables named by `AnyObjectTypeName`; `RegisterAnyObject` registers adapters in a `lua_State*`.
+- Runtime plugin loading: `LuaDllLoader.hpp`/`.cpp` wrap `boost::dll::shared_library` behind `DllLoader` and expose `get_<sig>` / `call_<sig>` Lua functions generated per signature via `LuaDllGetFunction<TName, Ret, Args...>`, gated by `HSBA_NO_DLL_LOADER`.
+- Graph algorithms: `Graph.hpp` exposes `graph::BaseGraph<V, VP, EP, W, DirectionTag, Description>` wrapping `boost::adjacency_list` with id↔descriptor maps; `DirectedGraph` / `UndirectedGraph` are tag-specializations; `graph::algorithm` adds BFS/DFS/Dijkstra/Bellman-Ford/A*/Prim/Kruskal/connected-components/strong-components/topological-sort/max-flow and a `GeneticTSP` solver.
+- App config: `app_config.hpp`/`.cpp` implement a thread-safe `AppConfigSingletone` singleton (mutex-guarded) exposing settings like the 7-Zip path.
+
+Dependency direction is one-way outward: this module consumes `base/*` (concepts, error types, StaticReflect) but is not consumed by them; it is consumed by higher layers (restapi, samples/Lua, slicer engine).

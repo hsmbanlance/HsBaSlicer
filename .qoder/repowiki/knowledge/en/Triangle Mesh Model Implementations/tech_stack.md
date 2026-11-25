@@ -1,0 +1,1 @@
+libigl + Eigen for geometry; optional CGAL copyleft kernel gated by the `HSBA_COPL` CMake flag; Lua scripting integration via `<lua.hpp>` for custom slice scripts.

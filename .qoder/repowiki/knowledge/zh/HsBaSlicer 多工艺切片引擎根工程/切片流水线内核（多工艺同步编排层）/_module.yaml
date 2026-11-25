@@ -1,0 +1,25 @@
+schema_version: 1
+module_path: pipeline_kernel
+title: 切片流水线内核（多工艺同步编排层）
+scope:
+    - LibHsBaSlicer/Pipeline/kernel_types.hpp
+    - LibHsBaSlicer/Pipeline/fdm_pipeline.cpp
+    - LibHsBaSlicer/Pipeline/fdm_pipeline.hpp
+    - LibHsBaSlicer/Pipeline/sla_pipeline.cpp
+    - LibHsBaSlicer/Pipeline/sla_pipeline.hpp
+    - LibHsBaSlicer/Pipeline/sls_pipeline.cpp
+    - LibHsBaSlicer/Pipeline/sls_pipeline.hpp
+    - LibHsBaSlicer/Pipeline/slm_pipeline.cpp
+    - LibHsBaSlicer/Pipeline/slm_pipeline.hpp
+    - LibHsBaSlicer/Pipeline/lom_pipeline.cpp
+    - LibHsBaSlicer/Pipeline/lom_pipeline.hpp
+    - LibHsBaSlicer/Pipeline/tdp_pipeline.cpp
+    - LibHsBaSlicer/Pipeline/tdp_pipeline.hpp
+    - LibHsBaSlicer/Pipeline/waam_pipeline.cpp
+    - LibHsBaSlicer/Pipeline/waam_pipeline.hpp
+    - LibHsBaSlicer/Pipeline/custom_pipeline.cpp
+    - LibHsBaSlicer/Pipeline/custom_pipeline.hpp
+source_files: []
+depends_on: []
+related_to:
+    - path: csg_model_sample

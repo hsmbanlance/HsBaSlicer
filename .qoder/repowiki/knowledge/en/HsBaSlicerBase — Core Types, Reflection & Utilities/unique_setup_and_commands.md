@@ -1,0 +1,1 @@
+Build via the parent CMake project; the library target is `HsBaSlicerBase`. On Android/iOS/`HSBA_GAME_CONSOLE` builds Boost.Locale/Nowide are skipped and iconv is required on iOS. Define `HSBA_SLICER_USE_TESTS=ON` at configure time to enable `HSBA_ANY_OBJECT_ENABLE_MOCK` so the mock/stub facility compiles into production binaries.

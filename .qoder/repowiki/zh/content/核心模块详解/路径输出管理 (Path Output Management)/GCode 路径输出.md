@@ -13,6 +13,14 @@
 - [path_generator_test.cpp](file://tests/PathsOut/path_generator_test.cpp)
 </cite>
 
+## 更新摘要
+**所做更改**   
+- 更新了连续螺旋墙与花瓶模式章节，详细说明实心底层保留机制
+- 增强了 GenerateGCodePathSpiral API 文档，包含 solid_bottom_layers 参数说明
+- 添加了 ContinuousWallPlacement 枚举的详细解释
+- 更新了螺旋模式工作流程图，展示实心层和螺旋墙的生成顺序
+- 完善了故障排除部分，包含螺旋模式相关问题的解决方案
+
 ## 目录
 1. [简介](#简介)
 2. [项目结构定位](#项目结构定位)
@@ -33,7 +41,7 @@ GCodePath 是 HsBaSlicer 中面向 FDM 3D 打印机的多层路径输出器。�
 - 按固件类型生成带温度、回抽、挤出模式、风扇和速度因子的完整 G-code 头尾。
 - 通过 GCodePrinterConfig 控制喷嘴直径、耗材直径、温度、回抽、速度、层高、线宽、挤出倍率等参数。
 - 支持相对/绝对挤出模式（M82/M83）。
-- 提供连续螺旋墙接口，用于花瓶模式或连续外壁打印。
+- 提供连续螺旋墙接口，用于花瓶模式或连续外壁打印，支持实心底层保留功能。
 - 暴露 ToGCode() 与 SaveGCode() API，并支持 Lua 后处理脚本替换或增强输出。
 
 ## 项目结构定位
@@ -51,19 +59,19 @@ A["用户调用<br/>GenerateGCodePathV2 / GenerateGCodePathSpiral"] --> B["path_
 B --> C["gcodepath.cpp<br/>ToGCode / SaveGCode"]
 C --> D["固件特定头尾<br/>Marlin / RepRap / Klipper"]
 C --> E["层 G-code 生成<br/>挤出、回抽、速度"]
-C --> F["连续螺旋墙<br/>花瓶模式"]
+C --> F["连续螺旋墙<br/>花瓶模式 + 实心底层"]
 C --> G["Lua 后处理<br/>gcode / firmware / printer_config"]
 ```
 
 **图表来源**
-- [path_generator.cpp:97-140](file://LibHsBaSlicer/Path/path_generator.cpp#L97-L140)
-- [gcodepath.cpp:69-456](file://paths/gcodepath.cpp#L69-L456)
+- [path_generator.cpp:116-208](file://LibHsBaSlicer/Path/path_generator.cpp#L116-L208)
+- [gcodepath.cpp:370-413](file://paths/gcodepath.cpp#L370-L413)
 
 **章节来源**
-- [gcodepath.hpp:1-112](file://paths/gcodepath.hpp#L1-L112)
-- [gcodepath.cpp:1-459](file://paths/gcodepath.cpp#L1-L459)
-- [path_generator.hpp:1-96](file://LibHsBaSlicer/Path/path_generator.hpp#L1-L96)
-- [path_generator.cpp:1-143](file://LibHsBaSlicer/Path/path_generator.cpp#L1-L143)
+- [gcodepath.hpp:1-165](file://paths/gcodepath.hpp#L1-L165)
+- [gcodepath.cpp:1-521](file://paths/gcodepath.cpp#L1-L521)
+- [path_generator.hpp:1-111](file://LibHsBaSlicer/Path/path_generator.hpp#L1-L111)
+- [path_generator.cpp:1-211](file://LibHsBaSlicer/Path/path_generator.cpp#L1-L211)
 
 ## 核心概念
 - **LayersPath**：层路径抽象，保存每层的配置字符串和多边形集合，并提供原生序列化与 Lua 扩展点。
@@ -72,6 +80,7 @@ C --> G["Lua 后处理<br/>gcode / firmware / printer_config"]
 - **GCodePrinterConfig**：打印机配置结构体，决定温度、回抽、速度、层高、线宽、挤出倍率、挤出模式等。
 - **PathPoint3D**：连续螺旋墙的点结构，每个点携带独立 Z 高度，用于跨层连续挤出。
 - **LayerPathData**：高层路径生成 API 使用的单层数据，包含轮廓、填充、支撑和 Z 高度。
+- **ContinuousWallPlacement**：控制连续墙相对于层数据的放置位置（BeforeLayers 或 AfterLayers）。
 
 ```mermaid
 classDiagram
@@ -92,8 +101,9 @@ class GCodePath {
 +SaveGCode(path, firmware) void
 +ToGCode(firmware, script, lua_reg) string
 +printerConfig() GCodePrinterConfig
-+setContinuousWall(wall) void
++setContinuousWall(wall, placement) void
 +hasContinuousWall() bool
++continuousWallPlacement() ContinuousWallPlacement
 -GenerateHeader(fw) string
 -GenerateFooter(fw) string
 -GenerateLayerGCode(idx, fw) string
@@ -101,6 +111,7 @@ class GCodePath {
 -CalcExtrusion(length) double
 -printer_config_
 -continuous_wall_
+-wall_placement_
 }
 class GCodePrinterConfig {
 +nozzle_diameter float
@@ -123,19 +134,25 @@ class PathPoint3D {
 +y double
 +z double
 }
+class ContinuousWallPlacement {
+<<enumeration>>
+BeforeLayers
+AfterLayers
+}
 IPath <|-- LayersPath
 LayersPath <|-- GCodePath
 GCodePath --> GCodePrinterConfig : "使用"
 GCodePath --> PathPoint3D : "螺旋墙"
+GCodePath --> ContinuousWallPlacement : "控制放置"
 ```
 
 **图表来源**
 - [layerspath.hpp:25-60](file://paths/layerspath.hpp#L25-L60)
-- [gcodepath.hpp:33-107](file://paths/gcodepath.hpp#L33-L107)
+- [gcodepath.hpp:93-160](file://paths/gcodepath.hpp#L93-L160)
 
 **章节来源**
 - [layerspath.hpp:17-60](file://paths/layerspath.hpp#L17-L60)
-- [gcodepath.hpp:24-107](file://paths/gcodepath.hpp#L24-L107)
+- [gcodepath.hpp:24-160](file://paths/gcodepath.hpp#L24-L160)
 
 ## 架构总览
 GCodePath 的输出流程可概括为：
@@ -167,19 +184,19 @@ GC-->>App : 最终 gcode
 ```
 
 **图表来源**
-- [path_generator.cpp:97-140](file://LibHsBaSlicer/Path/path_generator.cpp#L97-L140)
-- [gcodepath.cpp:332-456](file://paths/gcodepath.cpp#L332-L456)
+- [path_generator.cpp:116-208](file://LibHsBaSlicer/Path/path_generator.cpp#L116-L208)
+- [gcodepath.cpp:370-413](file://paths/gcodepath.cpp#L370-L413)
 
 **章节来源**
-- [path_generator.cpp:97-140](file://LibHsBaSlicer/Path/path_generator.cpp#L97-L140)
-- [gcodepath.cpp:332-456](file://paths/gcodepath.cpp#L332-L456)
+- [path_generator.cpp:116-208](file://LibHsBaSlicer/Path/path_generator.cpp#L116-L208)
+- [gcodepath.cpp:370-413](file://paths/gcodepath.cpp#L370-L413)
 
 ## GCodePath 类详解
 ### 职责与边界
 - 继承 LayersPath，复用层数据存储与 Lua 扩展机制。
 - 封装固件相关的 G-code 头尾命令。
 - 根据配置计算挤出量，支持相对/绝对挤出。
-- 支持连续螺旋墙，用于花瓶模式。
+- 支持连续螺旋墙，用于花瓶模式，支持实心底层保留。
 - 提供 ToGCode 与 SaveGCode 两种输出方式。
 - 支持 Lua 后处理脚本，允许替换或增强输出。
 
@@ -187,8 +204,9 @@ GC-->>App : 最终 gcode
 - `ToGCode(GCodeFirmware)`：生成指定固件的标准 G-code 字符串。
 - `SaveGCode(const std::filesystem::path&, GCodeFirmware)`：将 G-code 保存到文件，失败抛出 RuntimeError。
 - `ToGCode(GCodeFirmware, std::string_view, const std::function<void(lua_State*)>&)`：执行 Lua 后处理，返回最终 G-code。
-- `setContinuousWall(std::vector<PathPoint3D>)`：设置连续螺旋墙。
+- `setContinuousWall(std::vector<PathPoint3D>, ContinuousWallPlacement)`：设置连续螺旋墙及其放置位置。
 - `hasContinuousWall()`：判断是否设置了连续螺旋墙。
+- `continuousWallPlacement()`：获取连续墙的放置位置。
 - `printerConfig()`：读取打印机配置。
 
 ### 内部逻辑要点
@@ -202,8 +220,10 @@ GC-->>App : 最终 gcode
 flowchart TD
 Start(["进入 ToGCode"]) --> Header["生成固件头部"]
 Header --> SpiralCheck{"是否有连续螺旋墙?"}
-SpiralCheck --> |是| Spiral["生成连续螺旋墙"]
-SpiralCheck --> |否| LayersLoop["遍历层数据"]
+SpiralCheck --> |是| WallPlacement{"检查放置位置"}
+WallPlacement --> |BeforeLayers| Spiral["生成连续螺旋墙"]
+WallPlacement --> |AfterLayers| LayersLoop["遍历层数据"]
+SpiralCheck --> |否| LayersLoop
 Spiral --> LayersLoop
 LayersLoop --> LayerGen["GenerateLayerGCode"]
 LayerGen --> Footer["生成固件尾部"]
@@ -211,12 +231,12 @@ Footer --> End(["返回 G-code"])
 ```
 
 **图表来源**
-- [gcodepath.cpp:332-350](file://paths/gcodepath.cpp#L332-L350)
-- [gcodepath.cpp:211-329](file://paths/gcodepath.cpp#L211-L329)
+- [gcodepath.cpp:370-413](file://paths/gcodepath.cpp#L370-L413)
+- [gcodepath.cpp:329-368](file://paths/gcodepath.cpp#L329-L368)
 
 **章节来源**
-- [gcodepath.hpp:66-107](file://paths/gcodepath.hpp#L66-L107)
-- [gcodepath.cpp:57-350](file://paths/gcodepath.cpp#L57-L350)
+- [gcodepath.hpp:93-160](file://paths/gcodepath.hpp#L93-L160)
+- [gcodepath.cpp:58-368](file://paths/gcodepath.cpp#L58-L368)
 
 ## GCodePrinterConfig 配置参考
 GCodePrinterConfig 是所有 G-code 输出的核心参数源，直接影响温度、回抽、速度、层高、线宽、挤出模式和挤出量计算。
@@ -247,39 +267,67 @@ GCodePrinterConfig 是所有 G-code 输出的核心参数源，直接影响温�
 - **enable_retraction**：关闭后可减少回抽指令，适合某些材料或硬件，但可能增加拉丝。
 
 **章节来源**
-- [gcodepath.hpp:33-49](file://paths/gcodepath.hpp#L33-L49)
-- [gcodepath.cpp:57-67](file://paths/gcodepath.cpp#L57-L67)
-- [gcodepath.cpp:211-288](file://paths/gcodepath.cpp#L211-L288)
+- [gcodepath.hpp:33-50](file://paths/gcodepath.hpp#L33-L50)
+- [gcodepath.cpp:58-68](file://paths/gcodepath.cpp#L58-L68)
+- [gcodepath.cpp:249-327](file://paths/gcodepath.cpp#L249-L327)
 
 ## 连续螺旋墙与花瓶模式
 ### 原理
 连续螺旋墙是一组 PathPoint3D，每个点携带独立的 X、Y、Z。GCodePath 将其视为一条连续的挤出路径，不在点之间插入回抽或抬 Z，从而形成从底层到顶层的连续螺旋外壁。该功能由 `setContinuousWall` 设置，并由 `GenerateContinuousWall` 输出。
 
+**更新** 新增实心底层保留机制，确保花瓶底部有完整的实体层，避免底部悬空问题。
+
 ### 使用场景
 - 花瓶模式：仅输出连续外壁，不输出填充和支撑。
 - 均匀截面模型：棱柱形或近似棱柱形模型，外壁可平滑上升。
 - 需要减少层间停顿、提升表面连续性的场景。
+- 需要底部实体支撑的花瓶模型。
 
-### 生成方式
-高层 API `GenerateGCodePathSpiral` 会将每层外轮廓合并为一条螺旋线，并设置到 GCodePath 的连续墙中。此时 ToGCode 只输出头部、螺旋墙、尾部，不包含逐层多边形。
+### 实心底层保留机制
+**新增** `GenerateGCodePathSpiral` API 现在支持 `solid_bottom_layers` 参数，允许指定前 N 层作为普通实体层打印，其余层才生成螺旋墙。这解决了纯花瓶模式下底部没有实体层的问题。
+
+工作流程：
+1. 前 `solid_bottom_layers` 层作为普通层打印（轮廓 + 填充）
+2. 剩余层生成连续螺旋墙
+3. 根据是否有实心底层，自动设置墙的放置位置：
+   - 有实心底层：`AfterLayers`（墙在最后）
+   - 无实心底层：`BeforeLayers`（墙在最前）
 
 ```mermaid
 flowchart TD
-Input["输入每层外轮廓与 Z 高度"] --> Spiralize["SpiralizeOuterWall<br/>生成螺旋点序列"]
+Input["输入每层外轮廓与 Z 高度"] --> SolidCheck{"是否有实心底层?"}
+SolidCheck --> |是| SolidLayers["打印前 N 层实体层<br/>轮廓 + 填充"]
+SolidCheck --> |否| PureVase["纯花瓶模式"]
+SolidLayers --> TrimLayers["裁剪剩余层"]
+PureVase --> Spiralize["SpiralizeOuterWall<br/>生成螺旋点序列"]
+TrimLayers --> Spiralize
 Spiralize --> Wall["PathPoint3D 列表"]
-Wall --> SetWall["GCodePath.setContinuousWall"]
-SetWall --> Output["ToGCode 输出头部 + 螺旋墙 + 尾部"]
+Wall --> Placement{"设置放置位置"}
+Placement --> |AfterLayers| SetWall["GCodePath.setContinuousWall<br/>wall_placement = AfterLayers"]
+Placement --> |BeforeLayers| SetWall2["GCodePath.setContinuousWall<br/>wall_placement = BeforeLayers"]
+SetWall --> Output["ToGCode 输出头部 + 实体层 + 螺旋墙 + 尾部"]
+SetWall2 --> Output2["ToGCode 输出头部 + 螺旋墙 + 尾部"]
 ```
 
 **图表来源**
-- [path_generator.cpp:120-140](file://LibHsBaSlicer/Path/path_generator.cpp#L120-L140)
-- [gcodepath.cpp:291-330](file://paths/gcodepath.cpp#L291-L330)
+- [path_generator.cpp:153-208](file://LibHsBaSlicer/Path/path_generator.cpp#L153-L208)
+- [gcodepath.cpp:329-368](file://paths/gcodepath.cpp#L329-L368)
+
+### 生成方式
+高层 API `GenerateGCodePathSpiral` 现在支持两个新参数：
+- `solid_bottom_layers`：指定前 N 层作为实体层
+- `solid_bottom_fills`：这些实体层的填充路径
+
+此时 ToGCode 根据放置位置输出不同的组合：
+- `BeforeLayers`：头部 + 螺旋墙 + 尾部
+- `AfterLayers`：头部 + 实体层 + 螺旋墙 + 尾部
 
 **章节来源**
-- [gcodepath.hpp:51-60](file://paths/gcodepath.hpp#L51-L60)
-- [gcodepath.hpp:87-96](file://paths/gcodepath.hpp#L87-L96)
-- [path_generator.cpp:120-140](file://LibHsBaSlicer/Path/path_generator.cpp#L120-L140)
-- [gcodepath.cpp:291-330](file://paths/gcodepath.cpp#L291-L330)
+- [gcodepath.hpp:52-87](file://paths/gcodepath.hpp#L52-L87)
+- [gcodepath.hpp:114-135](file://paths/gcodepath.hpp#L114-L135)
+- [path_generator.hpp:65-95](file://LibHsBaSlicer/Path/path_generator.hpp#L65-L95)
+- [path_generator.cpp:153-208](file://LibHsBaSlicer/Path/path_generator.cpp#L153-L208)
+- [gcodepath.cpp:329-368](file://paths/gcodepath.cpp#L329-L368)
 
 ## 固件格式差异对比
 ### Marlin
@@ -307,11 +355,11 @@ table
 ```
 
 **图表来源**
-- [gcodepath.cpp:69-158](file://paths/gcodepath.cpp#L69-L158)
-- [gcodepath.cpp:160-209](file://paths/gcodepath.cpp#L160-L209)
+- [gcodepath.cpp:103-196](file://paths/gcodepath.cpp#L103-L196)
+- [gcodepath.cpp:198-247](file://paths/gcodepath.cpp#L198-L247)
 
 **章节来源**
-- [gcodepath.cpp:69-209](file://paths/gcodepath.cpp#L69-L209)
+- [gcodepath.cpp:103-247](file://paths/gcodepath.cpp#L103-L247)
 - [gcode_path_test.cpp:43-82](file://tests/PathsOut/gcode_path_test.cpp#L43-L82)
 
 ## Lua 后处理脚本集成
@@ -356,10 +404,10 @@ Fallback --> End
 ```
 
 **图表来源**
-- [gcodepath.cpp:364-456](file://paths/gcodepath.cpp#L364-L456)
+- [gcodepath.cpp:426-518](file://paths/gcodepath.cpp#L426-L518)
 
 **章节来源**
-- [gcodepath.cpp:364-456](file://paths/gcodepath.cpp#L364-L456)
+- [gcodepath.cpp:426-518](file://paths/gcodepath.cpp#L426-L518)
 - [gcode_path_test.cpp:192-238](file://tests/PathsOut/gcode_path_test.cpp#L192-L238)
 
 ## API 参考
@@ -370,25 +418,27 @@ Fallback --> End
 - `void SaveGCode(const std::filesystem::path& path, GCodeFirmware firmware) const`
 - `std::string ToGCode(GCodeFirmware firmware, std::string_view script, const std::function<void(lua_State*)>& lua_reg = {}) const`
 - `const GCodePrinterConfig& printerConfig() const`
-- `void setContinuousWall(std::vector<PathPoint3D> wall)`
+- `void setContinuousWall(std::vector<PathPoint3D> wall, ContinuousWallPlacement placement = BeforeLayers)`
 - `bool hasContinuousWall() const`
+- `ContinuousWallPlacement continuousWallPlacement() const`
 
 ### 高层路径生成 API
 - `std::unique_ptr<GCodePath> GenerateGCodePathV2(const std::vector<LayerPathData>& layer_data, const FdmPathConfig& config, const GCodePrinterConfig& printer_config)`
-- `std::unique_ptr<GCodePath> GenerateGCodePathSpiral(const std::vector<PolygonsD>& layer_outlines, const std::vector<double>& layer_zs, const GCodePrinterConfig& printer_config)`
+- `std::unique_ptr<GCodePath> GenerateGCodePathSpiral(const std::vector<PolygonsD>& layer_outlines, const std::vector<double>& layer_zs, const GCodePrinterConfig& printer_config, std::size_t solid_bottom_layers = 0, const std::vector<PolygonsD>& solid_bottom_fills = {})`
 
 ### 使用示例说明
 - 生成 V2 路径：传入层数据、路径配置和打印机配置，得到 GCodePath。
 - 输出 Marlin G-code：调用 `ToGCode(GCodeFirmware::Marlin)`。
 - 输出 Klipper G-code：调用 `ToGCode(GCodeFirmware::Klipper)`。
 - 保存到文件：调用 `SaveGCode("output/model.gcode", GCodeFirmware::Marlin)`。
-- 花瓶模式：调用 `GenerateGCodePathSpiral`，然后调用 `ToGCode`。
+- 纯花瓶模式：调用 `GenerateGCodePathSpiral` 不带实心底层参数，然后调用 `ToGCode`。
+- 带实心底层的螺旋模式：调用 `GenerateGCodePathSpiral(outlines, zs, printer, 2, fills)`，其中 2 表示前两层作为实体层。
 - Lua 后处理：调用 `ToGCode(firmware, script, lua_reg)`，脚本可返回新字符串或设置 `result`。
 
 **章节来源**
-- [gcodepath.hpp:66-107](file://paths/gcodepath.hpp#L66-L107)
-- [path_generator.hpp:60-80](file://LibHsBaSlicer/Path/path_generator.hpp#L60-L80)
-- [path_generator.cpp:97-140](file://LibHsBaSlicer/Path/path_generator.cpp#L97-L140)
+- [gcodepath.hpp:96-145](file://paths/gcodepath.hpp#L96-L145)
+- [path_generator.hpp:61-95](file://LibHsBaSlicer/Path/path_generator.hpp#L61-L95)
+- [path_generator.cpp:116-208](file://LibHsBaSlicer/Path/path_generator.cpp#L116-L208)
 - [gcode_path_test.cpp:171-190](file://tests/PathsOut/gcode_path_test.cpp#L171-L190)
 
 ## 性能与质量优化建议
@@ -397,6 +447,7 @@ Fallback --> End
 - 避免重复 Lua 初始化：Lua 后处理开销较大，仅在需要时启用。
 - 合理设置层数与多边形数量：过多层或多边形会显著增加字符串拼接与挤出计算成本。
 - 使用相对挤出模式可减少 E 值累积误差，但需确保固件兼容。
+- 螺旋模式优化：对于大型模型，考虑使用适当的 `solid_bottom_layers` 参数来平衡底部质量和打印时间。
 
 ### 质量
 - 校准耗材直径与线宽：确保挤出体积准确，避免过挤或欠挤。
@@ -404,8 +455,13 @@ Fallback --> End
 - 首层速度较低：提升附着力，减少翘边。
 - 花瓶模式适用于均匀截面模型，不适用于复杂内腔或支撑需求。
 - Klipper 用户可结合压力前馈和流量因子获得更稳定挤出。
+- **螺旋模式质量优化**：
+  - 使用 `solid_bottom_layers` 确保底部有足够的实体层支撑
+  - 对于高花瓶模型，适当增加实心底层数量以提高底部强度
+  - 确保螺旋墙起始点与实体层正确衔接，避免底部悬空
 
-[本节为通用指导，不直接分析具体源码文件]
+**章节来源**
+- [path_generator.cpp:153-208](file://LibHsBaSlicer/Path/path_generator.cpp#L153-L208)
 
 ## 故障排除
 ### 常见问题
@@ -414,18 +470,26 @@ Fallback --> End
 - **连续螺旋墙无效**：如果连续墙点数少于 2，GenerateContinuousWall 不会输出任何内容。
 - **回抽未生效**：检查 enable_retraction 是否为 true，以及是否有多边形导致移动间回抽。
 - **挤出异常**：检查 relative_extrusion 是否与固件期望一致，确认 line_width、layer_height、extrusion_multiplier 配置正确。
+- **螺旋模式底部悬空**：检查是否正确设置了 `solid_bottom_layers` 参数，确保底部有实体层。
+- **螺旋墙位置错误**：检查 `ContinuousWallPlacement` 设置，有实心底层时应使用 `AfterLayers`。
+
+### 螺旋模式特定问题
+- **底部没有实体层**：确保调用 `GenerateGCodePathSpiral` 时设置了合适的 `solid_bottom_layers` 参数。
+- **螺旋墙出现在实体层之前**：检查 `continuousWallPlacement()` 返回值，有实心底层时应为 `AfterLayers`。
+- **螺旋墙与实体层不衔接**：确保螺旋墙的起始 Z 坐标与最后一个实体层的顶部 Z 坐标匹配。
+- **纯花瓶模式出现意外层**：检查是否误传了非零的 `solid_bottom_layers` 参数。
 
 ### 调试建议
 - 先输出基础 G-code，再逐步启用 Lua 后处理。
 - 使用测试用例中的断言思路，检查关键 G-code 片段是否存在。
 - 对固件差异进行分固件验证，确保头尾命令符合预期。
+- 对于螺旋模式，检查生成的 G-code 中实体层和螺旋墙的顺序是否正确。
+- 使用 `continuousWallPlacement()` 方法验证螺旋墙的放置位置是否符合预期。
 
 **章节来源**
-- [gcodepath.cpp:353-362](file://paths/gcodepath.cpp#L353-L362)
-- [gcodepath.cpp:422-456](file://paths/gcodepath.cpp#L422-L456)
-- [gcode_path_test.cpp:171-238](file://tests/PathsOut/gcode_path_test.cpp#L171-L238)
+- [gcodepath.cpp:415-424](file://paths/gcodepath.cpp#L415-L424)
+- [gcodepath.cpp:484-518](file://paths/gcodepath.cpp#L484-L518)
+- [path_generator_test.cpp:138-206](file://tests/PathsOut/path_generator_test.cpp#L138-L206)
 
 ## 结论
-GCodePath 是 HsBaSlicer 中 FDM G-code 输出的核心组件，提供了清晰的固件适配、精确的挤出计算、灵活的回抽控制、完整的 Lua 扩展点和花瓶模式支持。通过 GCodePrinterConfig 精细控制打印参数，并结合 GenerateGCodePathV2 与 GenerateGCodePathSpiral，用户可以在多种固件环境下获得高质量、可定制的 G-code 输出。实际使用中应重视参数校准、固件差异和 Lua 脚本健壮性，以获得稳定可靠的打印结果。
-
-[本节为总结性内容，不直接分析具体源码文件]
+GCodePath 是 HsBaSlicer 中 FDM G-code 输出的核心组件，提供了清晰的固件适配、精确的挤出计算、灵活的回抽控制、完整的 Lua 扩展点和花瓶模式支持。**最新更新**增强了螺旋模式的实心底层保留功能，确保花瓶底部有完整的实体层支撑，解决了底部悬空问题。通过 GCodePrinterConfig 精细控制打印参数，并结合 GenerateGCodePathV2 与 GenerateGCodePathSpiral，用户可以在多种固件环境下获得高质量、可定制的 G-code 输出。实际使用中应重视参数校准、固件差异、螺旋模式配置和 Lua 脚本健壮性，以获得稳定可靠的打印结果。新的实心底层机制特别适用于需要底部强度的花瓶模型，同时保持了纯花瓶模式的向后兼容性。

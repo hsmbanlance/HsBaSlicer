@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: csg_model_sample
+title: 文本 CSG 模型示例（DRAW 脚本 → B-Rep → FDM）
+scope:
+    - samples/CsgModel/CMakeLists.txt
+    - samples/CsgModel/main.cpp
+source_files: []
+depends_on: []
+related_to:
+    - path: pipeline_kernel

@@ -1,0 +1,1 @@
+Build behavior changes with CMake flags: `HSBA_COPL` enables OCCT/CAD linking (disabled on Android/iOS/game consoles per CMakeLists.txt); `USE_OPENVDB` and `USE_CGAL` gates compile-time blocks and pulls in `HsBaSlicerPointCloud`/Eigen dependencies.

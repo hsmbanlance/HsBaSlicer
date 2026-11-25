@@ -1,0 +1,8 @@
+Single-class facade `HsBa::Slicer::ModelLoader` (ModelLoader.hpp/.cpp) built as the `HsBaPreprocess` static library. It owns a `NamedObjectPool<IModel, HSBA_MODEL_POOL_SIZE>` (`base/object_pool.hpp`) keyed by string names; `LoadModel` inspects the file extension via `base/ModelFormat.hpp` (`IsPointCloudFormat` / `IsMeshFormat` / `IsBrepFormat`) and instantiates `OpenVdbModel`, `IglModel`, or `OcctModel` accordingly, returning all results as `std::shared_ptr<IModel>`.
+
+Optional feature groups are gated by CMake-defined macros:
+- `USE_OCCT` — CAD/BRep loading and thick-solid + boolean ops (Union/Intersection/Difference/Xor), with an OCCT fast path that falls back to CGAL-based `IglModel` booleans when both inputs are meshes.
+- `USE_OPENVDB` — point-cloud loading and reconstruction (PointCloudToMesh, MergePointClouds, DownsamplePointCloud, RemovePointCloudOutliers, Centroid, Normals, PointCount).
+- `USE_CGAL` — required for the mesh-side boolean fallback and Eigen types used in thick-solid closing-face APIs.
+
+Dependency direction is one-way: this module depends on `HsBaSlicerBase` (IModel, error types, ModelFormat) and `HsBaSlicerMesh` (IglModel); it optionally links `HsBaSlicerCADModel` and `HsBaSlicerPointCloud` only when the corresponding platform flags allow it (see CMakeLists.txt conditional on ANDROID/IOS/HSBA_GAME_CONSOLE/HSBA_COPL). The class itself has no copy/move semantics to enforce single ownership of the pool.

@@ -1,0 +1,6 @@
+The module is a static library `HsBaSlicerConverter` (declared in `CMakeLists.txt`) that sits at the boundary between three internal layers:
+- Geometry layer: `Eigen2Msg.*` / `Msg2Eigen.*` convert `Eigen::Vector3f`, `Quaternionf`, `Transform`, `Isometry`, and point-path vectors to/from `msg_*` protobuf messages (`path.pb.h`, `point.pb.h`, `transform.pb.h`, `vector.pb.h`).
+- Mesh layer: `FullTopoModel2Msg.*` / `Msg2FullTopoModel.*` bridge the native `FullTopoModel` mesh type (from `HsBaSlicerMesh`) with its protobuf counterpart.
+- Pipeline-config layer: `PipelineConfig2Msg.*` / `Msg2PipelineConfig.*` translate each pipeline's C config/result struct from `pipelinetypes/pipeline_types.h` (FDM, SLA, SLS, SLM, LOM, TDP, WAAM, FileTransfer, Custom) into the corresponding `*_pipeline.pb.h` message.
+
+Dependency direction is strictly outward: this module depends on `Eigen3::Eigen`, `HsBaSlicerProto`, `HsBaSlicerMesh`, and `HsBaPipelineTypes`; it exposes no runtime state and provides only free functions under the `HsBa::Slicer` namespace. There is no reverse dependency — callers in other modules consume these headers but are not included by them.

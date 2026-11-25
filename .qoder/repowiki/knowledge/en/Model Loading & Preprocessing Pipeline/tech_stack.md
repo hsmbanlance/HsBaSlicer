@@ -1,0 +1,1 @@
+C++17 STL filesystem/format; optional third-party kernels selected at build time — OpenCASCADE (OCCT) for BRep, libigl for mesh formats, CGAL for mesh boolean fallback, OpenVDB for point clouds, Eigen for vector/matrix types.

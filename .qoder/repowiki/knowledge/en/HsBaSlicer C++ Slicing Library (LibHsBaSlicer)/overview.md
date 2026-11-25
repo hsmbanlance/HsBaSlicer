@@ -1,0 +1,1 @@
+C++ library that orchestrates the full HsBaSlicer slicing pipeline across FDM/SLA/SLS/SLM/LOM/TDP/WAAM/CUSTOM processes, exposing a shared kernel plus Lua-driven custom pipelines.

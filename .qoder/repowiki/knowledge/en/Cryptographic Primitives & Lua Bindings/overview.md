@@ -1,0 +1,1 @@
+Static library providing stateless Base64/hex encoding, symmetric/asymmetric encryption (AES/3DES/RSA), hashing (MD5/SHA1/SHA256), and a Lua binding exposing these primitives to scripts.

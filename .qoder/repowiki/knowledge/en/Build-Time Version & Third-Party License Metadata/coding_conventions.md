@@ -1,0 +1,3 @@
+- Public headers use the `HsBa::Slicer::Version` namespace and guard against multiple inclusion with an `HSBA_SLICER_VERSION_HPP` include guard.
+- Generated C++ strings are produced as `std::string_view` members of `VersionInfo`, keeping the generated source free of heap allocations.
+- Third-party dependency metadata (name, license, homepage) is maintained centrally in a PowerShell map rather than scattered across C++, so adding a new dependency means updating `libInfoMap` once.

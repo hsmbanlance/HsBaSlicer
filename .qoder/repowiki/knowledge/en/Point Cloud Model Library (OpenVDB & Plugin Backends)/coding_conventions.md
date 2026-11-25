@@ -1,0 +1,3 @@
+- Each backend implements the full `IModel` transform/bound/mesh interface plus a matching set of point-cloud helpers (`AddPoint/AddPoints/Points/KNN/RadiusSearch/Voxelize/Downsample/Centroid/Merge/RemoveStatisticalOutliers/ComputeNormals`) so that callers can swap `OpenVdbModel` and `UserCustomPointCloudModel` transparently.
+- Heavy or platform-specific implementation is split into separate `.cpp` files per concern (mesh generation, analysis, internal helpers) rather than kept in the main source file.
+- Plugin ABI symbols are exposed as raw C function-pointer typedefs (`CreateModelFunc`, `DestroyModelFunc`, `AddPointFunc`, …) typed against the `HsBaVector3f_t` POD vector type, and resolved at runtime via `UserCustomPointCloudDll`.

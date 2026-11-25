@@ -1,0 +1,1 @@
+CMake + PowerShell Core (`pwsh`/`powershell`) code generation; vcpkg manifest parsing drives both the third-party library inventory and the project license selection.

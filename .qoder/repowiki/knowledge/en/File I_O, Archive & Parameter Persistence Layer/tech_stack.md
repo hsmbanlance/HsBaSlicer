@@ -1,0 +1,1 @@
+C++17 with miniz for default ZIP I/O, optional bit7z (via `HSBA_HSBA_USE_BIT7Z`) for richer archive formats, sqlpp11 for SQLite/MySQL/PostgreSQL access, rapidjson for JSON where clauses, HsBaCipher for AES-256-CBC at-rest encryption of persisted parameter blobs, and Lua C API for scripting bindings.

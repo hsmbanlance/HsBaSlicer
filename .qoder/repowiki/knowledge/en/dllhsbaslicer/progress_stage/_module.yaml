@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: dllhsbaslicer/progress_stage
+title: progress_stage
+scope:
+    - DllHsBaSlicer/progress_stage.cpp
+    - DllHsBaSlicer/progress_stage.h
+    - DllHsBaSlicer/pipeline_parallel.hpp
+source_files: []
+depends_on: []
+related_to: []

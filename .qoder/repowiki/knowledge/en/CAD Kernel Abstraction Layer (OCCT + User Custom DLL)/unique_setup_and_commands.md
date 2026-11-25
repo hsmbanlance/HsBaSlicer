@@ -1,0 +1,1 @@
+The OCCT DRAW-based text CSG feature requires OpenCASCADE built with the `tcl` overlay port (`overlay-ports/opencascade`) so that `TKDraw` and `TKTopTest` targets exist; configure with `-DHSBA_REQUIRE_TEXT_CSG=OFF` to intentionally build without it, otherwise CMake fails with `FATAL_ERROR`.

@@ -1,0 +1,1 @@
+Unified model loader and preprocessing facade that dispatches files to IGL mesh, OCCT BRep, or OpenVDB point-cloud kernels and exposes named model pooling plus boolean/thick-solid/point-cloud operations.

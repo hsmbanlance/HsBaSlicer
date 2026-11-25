@@ -1,0 +1,1 @@
+Built as the `HsBaPaths` static library target in `paths/CMakeLists.txt`; requires `LUA_INCLUDE_DIR` and `LUA_LIBRARIES` to be configured before this directory is added to the build.

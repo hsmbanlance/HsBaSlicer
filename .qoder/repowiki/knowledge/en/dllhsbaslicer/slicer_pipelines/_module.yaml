@@ -1,0 +1,16 @@
+schema_version: 1
+module_path: dllhsbaslicer/slicer_pipelines
+title: slicer_pipelines
+scope:
+    - DllHsBaSlicer/fdm_pipeline.cpp
+    - DllHsBaSlicer/sla_pipeline.cpp
+    - DllHsBaSlicer/slm_pipeline.cpp
+    - DllHsBaSlicer/sls_pipeline.cpp
+    - DllHsBaSlicer/tdp_pipeline.cpp
+    - DllHsBaSlicer/waam_pipeline.cpp
+    - DllHsBaSlicer/lom_pipeline.cpp
+    - DllHsBaSlicer/file_transfer_pipeline.cpp
+    - DllHsBaSlicer/param_store_pipeline.cpp
+source_files: []
+depends_on: []
+related_to: []

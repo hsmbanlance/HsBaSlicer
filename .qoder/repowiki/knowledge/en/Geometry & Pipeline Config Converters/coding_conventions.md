@@ -1,0 +1,5 @@
+- Each converter pair is split into a `.hpp` header declaring free functions and a `.cpp` implementation file, both guarded by an `HSBA_SLICER_<NAME>_HPP` include guard.
+- Converters are named as `<Source><Target>` (e.g. `EigenVector3f2Msg`, `MsgPath2Eigen`, `FdmConfigToMsg`) so the source and destination types are visible in the function name.
+- Geometry conversions come in symmetric pairs: every `Eigen*2Msg` function has a matching `Msg*2Eigen` counterpart taking the same protobuf message and writing into an Eigen reference.
+- Pipeline-config converters follow a `<Pipeline>ConfigToMsg` / `<Pipeline>ResultToMsg` naming scheme, one pair per pipeline technology (FDM, SLA, SLS, SLM, LOM, TDP, WAAM, FileTransfer, Custom).
+- All public API lives in the `HsBa::Slicer` namespace and is exposed purely through header-only declarations of free functions.

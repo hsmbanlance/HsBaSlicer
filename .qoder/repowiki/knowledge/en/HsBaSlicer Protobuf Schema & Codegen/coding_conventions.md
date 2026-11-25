@@ -1,0 +1,5 @@
+- Every `.proto` file declares `syntax = "proto3"` and `package HsbaProto;` as its first two lines.
+- Message names follow the `msg_<domain><entity>` prefix pattern (e.g. `msg_point3`, `msg_stlmeshes`, `msg_fdm_pipeline_config`, `msg_slice_config`).
+- Each pipeline technology gets its own `.proto` file that pairs a `msg_<tech>_pipeline_config` config message with a `msg_<tech>_pipe_result` result envelope.
+- Pipeline enums use the `msg_<tech>_<enum>` naming scheme (e.g. `msg_fdm_filltype`, `msg_fdm_support_pattern`, `msg_fdm_gcode_firmware`) and include inline comments describing each value.
+- Primitive geometry types (`msg_point2`, `msg_point3`, `msg_vector3`) are defined once and imported by other schemas rather than redeclared.

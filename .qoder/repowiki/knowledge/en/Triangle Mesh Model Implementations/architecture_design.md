@@ -1,0 +1,6 @@
+The module builds the `HsBaSlicerMesh` static library (`CMakeLists.txt`) and exposes two concrete mesh representations plus one slicing-specific topology layer:
+- `IglModel` (IglModel.hpp/.cpp) — libigl-backed triangle mesh implementing `base::IModel`; owns Eigen vertex/face/normal matrices and provides file I/O, affine transforms, bounding-box/volume queries, normal computation, CSG friends (`Union`/`Intersection`/`Difference`/`Xor`), and primitive factories (`CreateBox`/`Sphere`/`Cylinder`/`Cone`/`Torus`/`CreatePrime`).
+- `FullTopoModel` (FullTopoModel.hpp/.cpp) — read-only, topology-reconstructed mesh dedicated to slicing; rebuilds vertex/edge/face adjacency in the constructor, exposes `CheckTopo`, `EulerCharacteristic`, and three slicing APIs (`Slice`, `UnSafeSlice`, `SliceFast`) plus Lua-scriptable `SliceLua` variants that push V/E/F tables into a `lua_State`.
+- `CgalModel` (CgalModel.hpp/.cpp) — conditional CGAL-backed implementation of `IModel`, compiled only when `HSBA_COPL` is enabled in CMake.
+
+Dependency direction: this module depends on `HsBaSlicerBase` (for `IModel`), `HsBaSlicerProto`, `HsBaSlicer2D` (for `Polygon`/`Polygons`), and `igl::igl_core`; CGAL is an optional copyleft kernel linked via `igl_copyleft`. `FullTopoModel` consumes any `IModel` implementation, decoupling the slicing pipeline from the underlying mesh representation.

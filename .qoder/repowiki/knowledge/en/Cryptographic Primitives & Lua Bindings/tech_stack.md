@@ -1,0 +1,1 @@
+OpenSSL for all crypto (AES-256-CBC/ECB, DES-EDE3, RSA-OAEP, MD5/SHA1/SHA256); Lua C API exposed through `find_package(Lua REQUIRED)`; built as a CMake static library linked against `HsBaSlicerBase` + `OpenSSL::SSL` + `OpenSSL::Crypto`.

@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: cadmodel
+title: CAD Kernel Abstraction Layer (OCCT + User Custom DLL)
+scope:
+    - cadmodel/
+source_files: []
+depends_on: []
+related_to: []

@@ -1,0 +1,5 @@
+- Each feature is a header-only interface in a single `.hpp` paired with an implementation `.cpp`, all under the `HsBa::Slicer::Cipher` namespace.
+- Public APIs are exposed as `static` member functions on a dedicated class (`Encoder`, `Hasher`, `Encrypt`) — no global functions, no instance state.
+- Overloaded convenience wrappers accept `std::string_view` and internally convert to `std::vector<unsigned char>` before delegating to the byte-oriented core function.
+- Binary data is passed as `std::vector<unsigned char>` while text keys/passwords use `std::string_view`; return values are owned vectors rather than out-parameters.
+- Header files carry Doxygen-style `@file`/`@brief`/`@class` comments and use `#pragma once` guards.

@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: dllhsbaslicer/dll_bootstrap
+title: dll_bootstrap
+scope:
+    - DllHsBaSlicer/initialize.cpp
+    - DllHsBaSlicer/dllexport.h
+    - DllHsBaSlicer/version_info.cpp
+source_files: []
+depends_on: []
+related_to: []

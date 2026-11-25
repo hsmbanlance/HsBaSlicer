@@ -1,0 +1,1 @@
+Foundational C++ library providing the IModel interface, model-format registry, type-erased reflection (AnyObject), error types, concurrency primitives and geometry helpers shared by all slicer components.

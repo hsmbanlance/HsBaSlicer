@@ -23,6 +23,10 @@
 - [restapi.ini](file://restapi/restapi.ini)
 - [Dockerfile](file://docker/Dockerfile)
 - [Dockerfile.dockerignore](file://docker/Dockerfile.dockerignore)
+- [config_json_ops.hpp](file://LibHsBaSlicer/ParamStore/config_json_ops.hpp)
+- [config_json_ops.cpp](file://LibHsBaSlicer/ParamStore/config_json_ops.cpp)
+- [config_json_pipeline.h](file://DllHsBaSlicer/config_json_pipeline.h)
+- [config_json_pipeline.cpp](file://DllHsBaSlicer/config_json_pipeline.cpp)
 </cite>
 
 ## Update Summary
@@ -34,6 +38,7 @@
 - Enhanced geometry export endpoints for layer visualization
 - Added Docker containerization support with environment variable injection
 - Updated security configuration validation and TLS policy enforcement
+- **New**: Integrated reflection-driven configuration JSON system providing ConfigToJson, DefaultConfigJson, and ConfigFromJson functions for dynamic configuration management
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -44,15 +49,16 @@
 6. [File Upload Management](#file-upload-management)
 7. [Job Cancellation and Geometry Export](#job-cancellation-and-geometry-export)
 8. [HTTPS and Container Support](#https-and-container-support)
-9. [Detailed Component Analysis](#detailed-component-analysis)
-10. [Dependency Analysis](#dependency-analysis)
-11. [Performance Considerations](#performance-considerations)
-12. [Troubleshooting Guide](#troubleshooting-guide)
-13. [Conclusion](#conclusion)
-14. [Appendices](#appendices)
+9. [Reflection-Driven Configuration System](#reflection-driven-configuration-system)
+10. [Detailed Component Analysis](#detailed-component-analysis)
+11. [Dependency Analysis](#dependency-analysis)
+12. [Performance Considerations](#performance-considerations)
+13. [Troubleshooting Guide](#troubleshooting-guide)
+14. [Conclusion](#conclusion)
+15. [Appendices](#appendices)
 
 ## Introduction
-This document describes the optional `HsBaSlicerRestServer` process, a desktop-only RESTful HTTP service that exposes HsBaSlicer slicing pipelines over HTTP. It is built behind the `HSBA_BUILD_REST_API` CMake option and depends on the cpp-httplib package exposed as `httplib::httplib`. The server now includes comprehensive authentication, HTTPS support, file upload management, and enhanced job control capabilities.
+This document describes the optional `HsBaSlicerRestServer` process, a desktop-only RESTful HTTP service that exposes HsBaSlicer slicing pipelines over HTTP. It is built behind the `HSBA_BUILD_REST_API` CMake option and depends on the cpp-httplib package exposed as `httplib::httplib`. The server now includes comprehensive authentication, HTTPS support, file upload management, enhanced job control capabilities, and a reflection-driven configuration JSON system.
 
 The server:
 
@@ -62,6 +68,7 @@ The server:
 - Exposes synchronous metadata/configuration endpoints and an asynchronous job queue for pipeline execution.
 - Bridges to `DllHsBaSlicer` through its C ABI for configuration creation, pipeline execution, result handling, and parameter persistence.
 - Provides secure deployment options including Bearer token authentication, X-API-Key support, and HTTPS via OpenSSL.
+- **New**: Offers reflection-driven configuration JSON serialization/deserialization for dynamic configuration management without requiring the REST server dependency.
 
 The implementation is intentionally layered: HTTP routing is separate from job scheduling, which is separate from pipeline execution, which is separate from configuration serialization. Security concerns are handled at the pre-routing level to protect all endpoints uniformly.
 
@@ -80,6 +87,7 @@ Routes --> Exec["PipelineExecutor<br/>kind dispatch"]
 Exec --> Dll["DllHsBaSlicer C ABI"]
 Routes --> Bridge["ConfigBridge<br/>JSON/XML reflection bridge"]
 Routes --> UploadStore["UploadStore<br/>TTL-based cleanup"]
+Dll --> JsonCodec["Config JSON Codec<br/>ConfigToJson/DefaultConfigJson/ConfigFromJson"]
 ```
 
 **Diagram sources**
@@ -87,6 +95,7 @@ Routes --> UploadStore["UploadStore<br/>TTL-based cleanup"]
 - [routes.cpp:1105-1125](file://restapi/routes.cpp#L1105-L1125)
 - [auth_gate.cpp:115-133](file://restapi/auth_gate.cpp#L115-L133)
 - [upload_store.cpp:41-60](file://restapi/upload_store.cpp#L41-L60)
+- [config_json_pipeline.cpp:83-112](file://DllHsBaSlicer/config_json_pipeline.cpp#L83-L112)
 
 **Section sources**
 - [CMakeLists.txt:1-66](file://restapi/CMakeLists.txt#L1-L66)
@@ -95,7 +104,7 @@ Routes --> UploadStore["UploadStore<br/>TTL-based cleanup"]
 - [Dockerfile:1-25](file://docker/Dockerfile#L1-L25)
 
 ## Core Components
-The REST server is composed of eight core components:
+The REST server is composed of nine core components:
 
 | Component | Responsibility | Key Interfaces |
 |---|---|---|
@@ -105,6 +114,7 @@ The REST server is composed of eight core components:
 | Job manager | Thread-safe async job queue with worker pool, progress, TTL, pagination | `Submit`, `Status`, `Outcome`, `List`, `Remove`, `SetProgress` |
 | Pipeline executor | Kind-dispatched wrapper around `DllHsBaSlicer` C ABI | `CreateDefaultConfig`, `RunPipeline`, `DestroyConfig`, `ConfigFromProto`, `ConfigToProto` |
 | Config bridge | Reflection-driven JSON/XML serialization for flat C config structs | `SerializeConfig`, `DeserializeConfig` |
+| Config JSON codec | Reflection-driven JSON-only serialization for dynamic configuration | `ConfigToJson`, `DefaultConfigJson`, `ConfigFromJson` |
 | Upload store | File upload management with TTL-based cleanup and retention policies | `Adopt`, `MarkInUse`, `MarkTerminal`, `Sweep`, `EvictLocked` |
 | Server configuration | Load `restapi.ini` into `ServerConfig` with defaults and validation | `LoadServerConfig`, `ServerConfig` fields |
 
@@ -115,6 +125,7 @@ The REST server is composed of eight core components:
 - [job_manager.hpp:85-159](file://restapi/job_manager.hpp#L85-L159)
 - [pipeline_executor.hpp:20-85](file://restapi/pipeline_executor.hpp#L20-L85)
 - [config_bridge.hpp:26-51](file://restapi/config_bridge.hpp#L26-L51)
+- [config_json_ops.hpp:26-58](file://LibHsBaSlicer/ParamStore/config_json_ops.hpp#L26-L58)
 - [upload_store.cpp:41-60](file://restapi/upload_store.cpp#L41-L60)
 - [server_config.hpp:21-51](file://restapi/server_config.hpp#L21-L51)
 
@@ -130,6 +141,7 @@ participant Routes as "Route Handlers"
 participant Jobs as "JobManager"
 participant Exec as "PipelineExecutor"
 participant Dll as "DllHsBaSlicer C ABI"
+participant JsonCodec as "Config JSON Codec"
 Client->>Http : POST /api/jobs?kind=fdm
 Http->>Auth : Pre-routing auth check
 Auth->>Auth : Validate Authorization/X-API-Key
@@ -268,6 +280,58 @@ The server supports HTTPS deployment through OpenSSL integration and provides Do
 - [routes.cpp:1130-1157](file://restapi/routes.cpp#L1130-L1157)
 - [Dockerfile:1-25](file://docker/Dockerfile#L1-L25)
 - [Dockerfile.dockerignore:1-29](file://docker/Dockerfile.dockerignore#L1-L29)
+
+## Reflection-Driven Configuration System
+**New Feature**: The server now integrates a comprehensive reflection-driven configuration JSON system that provides dynamic configuration management capabilities without requiring the REST server dependency.
+
+### Core Functions
+The configuration system provides three primary functions:
+
+- **`ConfigToJson(ParamPipelineKind kind, const void* cfg)`**: Serializes any config struct's reflected fields to pretty JSON
+- **`DefaultConfigJson(ParamPipelineKind kind)`**: Generates default configuration JSON for a pipeline kind
+- **`ConfigFromJson(ParamPipelineKind kind, std::string_view json, void* cfg)`**: Deserializes JSON into an existing config struct
+
+### Architecture
+The system operates across multiple layers:
+
+1. **Lib Layer** (`LibHsBaSlicer/ParamStore/config_json_ops.*`): Core reflection-driven JSON codec
+2. **DLL Layer** (`DllHsBaSlicer/config_json_pipeline.*`): C ABI wrapper exposing functions to external consumers
+3. **REST Integration**: Existing `config_bridge` continues to provide JSON/XML support for HTTP endpoints
+
+```mermaid
+graph TB
+Sub["Subscribers<br/>GUI Hosts, External Apps"] --> CABI["C ABI<br/>HsBaGetDefaultConfigJson<br/>HsBaConfigToJson<br/>HsBaConfigFromJson"]
+CABI --> LibLayer["Lib Layer<br/>ConfigToJson/DefaultConfigJson/ConfigFromJson"]
+LibLayer --> Reflection["Reflection Engine<br/>TypeInfo::fields + FieldToAny/AnyToField"]
+Reflection --> Structs["PipelineConfig Structs<br/>HsBaFdmConfig_t, etc."]
+REST["REST Server"] --> ConfigBridge["Config Bridge<br/>JSON/XML Support"]
+ConfigBridge --> Reflection
+```
+
+**Diagram sources**
+- [config_json_pipeline.h:21-60](file://DllHsBaSlicer/config_json_pipeline.h#L21-L60)
+- [config_json_ops.hpp:26-58](file://LibHsBaSlicer/ParamStore/config_json_ops.hpp#L26-L58)
+- [config_bridge.cpp:5-13](file://restapi/config_bridge.cpp#L5-L13)
+
+### Supported Pipeline Kinds
+The system supports all pipeline types: FDM, SLA, SLS, SLM, LOM, TDP, WAAM, Custom, and FileTransfer.
+
+### Memory Management
+- **String Ownership**: JSON-decoded string fields use `std::malloc` ownership
+- **Cleanup**: Use `FreeLoadedConfigStrings` or `HsBaFreeLoadedPipelineConfig` to release allocated strings
+- **Thread Safety**: Library-owned string results are valid until next call on same thread
+
+### Benefits
+- **Dynamic Configuration**: Generate and modify configurations at runtime
+- **Type Safety**: Reflection ensures field names and types match the underlying structs
+- **Extensibility**: New pipeline kinds automatically supported through reflection registration
+- **Performance**: Direct struct access without intermediate conversion layers
+
+**Section sources**
+- [config_json_ops.hpp:1-63](file://LibHsBaSlicer/ParamStore/config_json_ops.hpp#L1-L63)
+- [config_json_ops.cpp:1-306](file://LibHsBaSlicer/ParamStore/config_json_ops.cpp#L1-L306)
+- [config_json_pipeline.h:1-66](file://DllHsBaSlicer/config_json_pipeline.h#L1-L66)
+- [config_json_pipeline.cpp:1-113](file://DllHsBaSlicer/config_json_pipeline.cpp#L1-L113)
 
 ## Detailed Component Analysis
 
@@ -435,14 +499,21 @@ class ConfigBridge {
 +SerializeConfig(typeInfo, cfg, fmt) string
 +DeserializeConfig(typeInfo, body, fmt, cfg, arena) void
 }
+class ConfigJsonCodec {
++ConfigToJson(kind, cfg) string
++DefaultConfigJson(kind) string
++ConfigFromJson(kind, json, cfg) bool
+}
 PipelineExecutor --> SliceOutcome : "produces"
 PipelineExecutor --> ConfigBridge : "uses for JSON/XML"
+PipelineExecutor --> ConfigJsonCodec : "uses for JSON-only"
 ```
 
 **Diagram sources**
 - [pipeline_executor.hpp:20-85](file://restapi/pipeline_executor.hpp#L20-L85)
 - [pipeline_executor.cpp:50-170](file://restapi/pipeline_executor.cpp#L50-L170)
 - [config_bridge.hpp:26-51](file://restapi/config_bridge.hpp#L26-L51)
+- [config_json_ops.hpp:26-58](file://LibHsBaSlicer/ParamStore/config_json_ops.hpp#L26-L58)
 
 **Section sources**
 - [pipeline_executor.hpp:20-85](file://restapi/pipeline_executor.hpp#L20-L85)
@@ -487,10 +558,12 @@ Rest --> FileOp["HsBaSlicerFileOperator"]
 Rest --> Utils["HsBaSlicerUtils"]
 Rest --> Base["HsBaSlicerBase"]
 Rest --> Types["HsBaPipelineTypes"]
+Dll --> JsonCodec["Config JSON Codec"]
 ```
 
 **Diagram sources**
 - [CMakeLists.txt:41-48](file://restapi/CMakeLists.txt#L41-L48)
+- [config_json_pipeline.cpp:9-10](file://DllHsBaSlicer/config_json_pipeline.cpp#L9-L10)
 
 **Section sources**
 - [CMakeLists.txt:10-48](file://restapi/CMakeLists.txt#L10-L48)
@@ -504,6 +577,7 @@ Rest --> Types["HsBaPipelineTypes"]
 - **File downloads**: Large exported files are read into memory before being sent; consider external storage or streaming for very large outputs.
 - **Upload cleanup**: Background sweeper thread periodically cleans up expired uploads; tune `sweep_interval_seconds` based on expected upload volume.
 - **Authentication overhead**: Pre-routing authentication adds minimal overhead but protects all endpoints uniformly.
+- **Configuration serialization**: Reflection-based JSON operations add minimal overhead compared to manual serialization; the shared codec avoids duplicate code paths.
 
 ## Troubleshooting Guide
 
@@ -588,8 +662,18 @@ Rest --> Types["HsBaPipelineTypes"]
 **Section sources**
 - [routes.cpp:1137-1155](file://restapi/routes.cpp#L1137-L1155)
 
+### Configuration JSON Issues
+- **Empty JSON output**: Check if pipeline kind is registered and config pointer is valid.
+- **Memory leaks**: Ensure `FreeLoadedConfigStrings` or `HsBaFreeLoadedPipelineConfig` is called for JSON-decoded configs.
+- **Invalid JSON**: Verify JSON structure matches the expected schema for the pipeline kind.
+- **Thread safety**: Library-owned string results are valid only until next call on same thread.
+
+**Section sources**
+- [config_json_ops.cpp:208-303](file://LibHsBaSlicer/ParamStore/config_json_ops.cpp#L208-L303)
+- [config_json_pipeline.cpp:83-112](file://DllHsBaSlicer/config_json_pipeline.cpp#L83-L112)
+
 ## Conclusion
-`HsBaSlicerRestServer` provides a clean, layered REST interface to HsBaSlicer's slicing pipelines with comprehensive security features. It separates HTTP concerns from job scheduling and pipeline execution, supports both JSON and XML, integrates with the existing `DllHsBaSlicer` C ABI and parameter store, and includes robust authentication, HTTPS support, and file upload management. For production use, configure authentication tokens, enable HTTPS with proper certificates, tune concurrency and job capacity according to workload characteristics, and set up the parameter store backend when persistent configuration management is required.
+`HsBaSlicerRestServer` provides a clean, layered REST interface to HsBaSlicer's slicing pipelines with comprehensive security features. It separates HTTP concerns from job scheduling and pipeline execution, supports both JSON and XML, integrates with the existing `DllHsBaSlicer` C ABI and parameter store, and includes robust authentication, HTTPS support, and file upload management. The new reflection-driven configuration JSON system enables dynamic configuration management without requiring the REST server dependency. For production use, configure authentication tokens, enable HTTPS with proper certificates, tune concurrency and job capacity according to workload characteristics, and set up the parameter store backend when persistent configuration management is required.
 
 ## Appendices
 
@@ -641,17 +725,17 @@ Rest --> Types["HsBaPipelineTypes"]
 | `[paramstore]` | `sqlite_path` | String | `hsba_params.db` | SQLite database file |
 | `[paramstore]` | `host` | String | Empty | Database host |
 | `[paramstore]` | `user` | String | Empty | Database user |
-| `[paramstore]` | `password` | String | Empty | Database password |
-| `[paramstore]` | `database` | String | Empty | Database name |
-| `[paramstore]` | `port` | Integer | `0` | Database port |
-| `[paramstore]` | `crypto_password` | String | Empty | Optional encryption password |
-| `[upload]` | `dir` | String | Empty | Upload storage directory |
-| `[upload]` | `max_request_mb` | Integer | `100` | Max request size in MB |
-| `[upload]` | `max_files` | Integer | `1000` | Maximum upload files |
-| `[upload]` | `max_total_mb` | Integer | `10240` | Total storage in MB |
-| `[upload]` | `ttl_seconds` | Integer | `86400` | Upload retention time |
-| `[upload]` | `evict_mode` | String | `both` | `ttl`, `count`, `both` |
-| `[upload]` | `sweep_interval_seconds` | Integer | `60` | Cleanup interval |
+- `[paramstore]` | `password` | String | Empty | Database password |
+- `[paramstore]` | `database` | String | Empty | Database name |
+- `[paramstore]` | `port` | Integer | `0` | Database port |
+- `[paramstore]` | `crypto_password` | String | Empty | Optional encryption password |
+- `[upload]` | `dir` | String | Empty | Upload storage directory |
+- `[upload]` | `max_request_mb` | Integer | `100` | Max request size in MB |
+- `[upload]` | `max_files` | Integer | `1000` | Maximum upload files |
+- `[upload]` | `max_total_mb` | Integer | `10240` | Total storage in MB |
+- `[upload]` | `ttl_seconds` | Integer | `86400` | Upload retention time |
+- `[upload]` | `evict_mode` | String | `both` | `ttl`, `count`, `both` |
+- `[upload]` | `sweep_interval_seconds` | Integer | `60` | Cleanup interval |
 
 **Section sources**
 - [server_config.hpp:21-40](file://restapi/server_config.hpp#L21-L40)
@@ -674,3 +758,20 @@ Rest --> Types["HsBaPipelineTypes"]
 **Section sources**
 - [auth_gate.cpp:65-89](file://restapi/auth_gate.cpp#L65-L89)
 - [auth_gate.cpp:110-113](file://restapi/auth_gate.cpp#L110-L113)
+
+### Configuration JSON API Reference
+
+| Function | Purpose | Return Type | Memory Management |
+|---|---|---|---|
+| `ConfigToJson(kind, cfg)` | Serialize config struct to JSON | `std::string` | Caller owns returned string |
+| `DefaultConfigJson(kind)` | Generate default config JSON | `std::string` | Caller owns returned string |
+| `ConfigFromJson(kind, json, cfg)` | Deserialize JSON into config | `bool` | Allocates string fields in cfg |
+| `HsBaGetDefaultConfigJson(kind)` | C ABI default config JSON | `const char*` | Library-owned, thread-local |
+| `HsBaConfigToJson(kind, cfg)` | C ABI config serialization | `const char*` | Library-owned, thread-local |
+| `HsBaConfigFromJson(kind, json, cfg)` | C ABI JSON deserialization | `int` (0/1) | Allocates string fields in cfg |
+| `FreeLoadedConfigStrings(kind, cfg)` | Free allocated string fields | `void` | Required for JSON-decoded configs |
+| `HsBaFreeLoadedPipelineConfig(kind, cfg)` | C ABI string cleanup | `void` | Required for JSON-decoded configs |
+
+**Section sources**
+- [config_json_ops.hpp:26-58](file://LibHsBaSlicer/ParamStore/config_json_ops.hpp#L26-L58)
+- [config_json_pipeline.h:21-60](file://DllHsBaSlicer/config_json_pipeline.h#L21-L60)

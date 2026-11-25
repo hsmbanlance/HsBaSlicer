@@ -1,0 +1,1 @@
+Build requires `find_package(Lua REQUIRED)` and `find_package(boost_date_time CONFIG REQUIRED)`; the DLL loader is conditionally compiled out when `HSBA_NO_DLL_LOADER` is defined at compile time.

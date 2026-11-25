@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: android
+title: android
+scope:
+    - android/
+source_files: []
+depends_on: []
+related_to: []

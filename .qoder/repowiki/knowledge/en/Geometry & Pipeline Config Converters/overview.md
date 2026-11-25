@@ -1,0 +1,1 @@
+Bidirectional converters between Eigen geometry types, protobuf messages, the FullTopoModel mesh representation, and HsBaPipelineTypes C structs for serialization across the slicer's boundaries.

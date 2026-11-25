@@ -1,0 +1,4 @@
+- Concrete mesh classes derive from `base::IModel` and override its virtual surface (Load/Save/Transform/BoundingBox/TriangleMesh/Volume) rather than introducing their own interface.
+- Public API uses `Eigen::MatrixXf` / `Eigen::MatrixXi` for vertex/face storage and `Eigen::Vector3f` / `Eigen::Quaternionf` / `Eigen::Isometry3f` for geometric parameters.
+- Optional third-party backends are toggled at build time via CMake conditionals (`if(HSBA_COPL)`) rather than runtime selection, keeping the core library independent of copyleft dependencies.
+- Topology-heavy slicing helpers live in `FullTopoModel` as free functions or methods that take height/tolerance arguments and return `Polygons` / `UnSafePolygons` from `2D/FloatPolygons.hpp`.

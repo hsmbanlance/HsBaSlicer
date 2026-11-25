@@ -3,12 +3,332 @@ schema_version: 1
 locale: en-US
 branch: dev
 nodes_managed: true
-exported_at: "2026-11-09T12:36:08Z"
+exported_at: "2026-11-25T01:20:34Z"
 modules:
     "":
-        dir_name: HsBaSlicer Slicer Framework (Root)
-        title: HsBaSlicer Slicer Framework (Root)
+        dir_name: HsBaSlicer Slicer Framework Root
+        title: HsBaSlicer Slicer Framework Root
         scope: []
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    2d_geometry:
+        dir_name: 2D Polygon Geometry & Fill Primitives
+        title: 2D Polygon Geometry & Fill Primitives
+        scope:
+            - 2D/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    android:
+        dir_name: android
+        title: android
+        scope:
+            - android/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    base:
+        dir_name: HsBaSlicerBase — Core Types, Reflection & Utilities
+        title: HsBaSlicerBase — Core Types, Reflection & Utilities
+        scope:
+            - base/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    build_tooling:
+        dir_name: build_tooling
+        title: build_tooling
+        scope:
+            - cmake/
+            - scripts/
+            - static_check/
+            - overlay-ports/
+            - triplets/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    cadmodel:
+        dir_name: CAD Kernel Abstraction Layer (OCCT + User Custom DLL)
+        title: CAD Kernel Abstraction Layer (OCCT + User Custom DLL)
+        scope:
+            - cadmodel/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    cipher:
+        dir_name: Cryptographic Primitives & Lua Bindings
+        title: Cryptographic Primitives & Lua Bindings
+        scope:
+            - cipher/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    convert:
+        dir_name: Geometry & Pipeline Config Converters
+        title: Geometry & Pipeline Config Converters
+        scope:
+            - convert/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    dllhsbaslicer:
+        dir_name: dllhsbaslicer
+        title: dllhsbaslicer
+        scope:
+            - DllHsBaSlicer/
+        source_files: []
+        children:
+            - dllhsbaslicer/dll_bootstrap
+            - dllhsbaslicer/geometry_store
+            - dllhsbaslicer/job_control
+            - dllhsbaslicer/lua_register
+            - dllhsbaslicer/progress_stage
+            - dllhsbaslicer/shared_pipeline_core
+            - dllhsbaslicer/slicer_pipelines
+        depends_on: []
+        related_to: []
+    dllhsbaslicer/dll_bootstrap:
+        dir_name: dll_bootstrap
+        title: dll_bootstrap
+        scope:
+            - DllHsBaSlicer/initialize.cpp
+            - DllHsBaSlicer/dllexport.h
+            - DllHsBaSlicer/version_info.cpp
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    dllhsbaslicer/geometry_store:
+        dir_name: geometry_store
+        title: geometry_store
+        scope:
+            - DllHsBaSlicer/geometry_store.cpp
+            - DllHsBaSlicer/geometry_export.h
+            - DllHsBaSlicer/geometry_store.hpp
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    dllhsbaslicer/job_control:
+        dir_name: job_control
+        title: job_control
+        scope:
+            - DllHsBaSlicer/job_control.cpp
+            - DllHsBaSlicer/job_control.h
+            - DllHsBaSlicer/event_source_register.cpp
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    dllhsbaslicer/lua_register:
+        dir_name: lua_register
+        title: lua_register
+        scope:
+            - DllHsBaSlicer/lua_register.cpp
+            - DllHsBaSlicer/lua_register.h
+            - DllHsBaSlicer/model_preprocess.cpp
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    dllhsbaslicer/progress_stage:
+        dir_name: progress_stage
+        title: progress_stage
+        scope:
+            - DllHsBaSlicer/progress_stage.cpp
+            - DllHsBaSlicer/progress_stage.h
+            - DllHsBaSlicer/pipeline_parallel.hpp
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    dllhsbaslicer/shared_pipeline_core:
+        dir_name: shared_pipeline_core
+        title: shared_pipeline_core
+        scope:
+            - DllHsBaSlicer/config_json_pipeline.cpp
+            - DllHsBaSlicer/custom_pipeline.cpp
+            - DllHsBaSlicer/pipeline_convert.cpp
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    dllhsbaslicer/slicer_pipelines:
+        dir_name: slicer_pipelines
+        title: slicer_pipelines
+        scope:
+            - DllHsBaSlicer/fdm_pipeline.cpp
+            - DllHsBaSlicer/sla_pipeline.cpp
+            - DllHsBaSlicer/slm_pipeline.cpp
+            - DllHsBaSlicer/sls_pipeline.cpp
+            - DllHsBaSlicer/tdp_pipeline.cpp
+            - DllHsBaSlicer/waam_pipeline.cpp
+            - DllHsBaSlicer/lom_pipeline.cpp
+            - DllHsBaSlicer/file_transfer_pipeline.cpp
+            - DllHsBaSlicer/param_store_pipeline.cpp
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    docs:
+        dir_name: docs
+        title: docs
+        scope:
+            - docs/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    fileoperator:
+        dir_name: File I_O, Archive & Parameter Persistence Layer
+        title: File I/O, Archive & Parameter Persistence Layer
+        scope:
+            - fileoperator/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    libhsbaslicer:
+        dir_name: HsBaSlicer C++ Slicing Library (LibHsBaSlicer)
+        title: HsBaSlicer C++ Slicing Library (LibHsBaSlicer)
+        scope:
+            - LibHsBaSlicer/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    logger:
+        dir_name: Cross-Platform Logger Singleton
+        title: Cross-Platform Logger Singleton
+        scope:
+            - logger/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    meshmodel:
+        dir_name: Triangle Mesh Model Implementations
+        title: Triangle Mesh Model Implementations
+        scope:
+            - meshmodel/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    modulehsbaslicer:
+        dir_name: modulehsbaslicer
+        title: modulehsbaslicer
+        scope:
+            - ModuleHsBaSlicer/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    paths:
+        dir_name: Slicer Path Output Abstractions
+        title: Slicer Path Output Abstractions
+        scope:
+            - paths/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    pointcloud:
+        dir_name: Point Cloud Model Library (OpenVDB & Plugin Backends)
+        title: Point Cloud Model Library (OpenVDB & Plugin Backends)
+        scope:
+            - pointcloud/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    preprocess:
+        dir_name: Model Loading & Preprocessing Pipeline
+        title: Model Loading & Preprocessing Pipeline
+        scope:
+            - preprocess/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    proto:
+        dir_name: HsBaSlicer Protobuf Schema & Codegen
+        title: HsBaSlicer Protobuf Schema & Codegen
+        scope:
+            - proto/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    restapi:
+        dir_name: restapi
+        title: restapi
+        scope:
+            - restapi/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    samples:
+        dir_name: samples
+        title: samples
+        scope:
+            - samples/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    support:
+        dir_name: Support Generation Engine
+        title: Support Generation Engine
+        scope:
+            - support/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    tests:
+        dir_name: tests
+        title: tests
+        scope:
+            - tests/
+            - static_tests/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    utils:
+        dir_name: Shared Utilities Library (HsBaSlicerUtils)
+        title: Shared Utilities Library (HsBaSlicerUtils)
+        scope:
+            - utils/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    version:
+        dir_name: Build-Time Version & Third-Party License Metadata
+        title: Build-Time Version & Third-Party License Metadata
+        scope:
+            - version/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    webui:
+        dir_name: webui
+        title: webui
+        scope:
+            - webui/
         source_files: []
         children: []
         depends_on: []

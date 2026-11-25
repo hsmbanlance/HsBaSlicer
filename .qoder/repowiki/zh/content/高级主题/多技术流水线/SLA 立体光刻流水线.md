@@ -8,13 +8,22 @@
 - [sla_pipeline.proto](file://proto/sla_pipeline.proto)
 - [sla_floor.hpp](file://LibHsBaSlicer/Floor/sla_floor.hpp)
 - [sla_floor.cpp](file://LibHsBaSlicer/Floor/sla_floor.cpp)
+- [IntPolygon.hpp](file://2D/IntPolygon.hpp)
 - [SlaSupport.hpp](file://support/SlaSupport.hpp)
 - [SlaSupport.cpp](file://support/SlaSupport.cpp)
 - [SupportConfig.hpp](file://support/SupportConfig.hpp)
 - [FdmSupport.hpp](file://support/FdmSupport.hpp)
 - [FdmSupport.cpp](file://support/FdmSupport.cpp)
 - [main.cpp](file://samples/SLA/main.cpp)
+- [sla_floor_test.cpp](file://tests/Floor/sla_floor_test.cpp)
 </cite>
+
+## 更新摘要
+**已进行的更改**   
+- 更新了 SLA 底板生成算法的关键偏移计算修复说明
+- 添加了关于毫米单位与坐标单位转换的详细技术说明
+- 增强了底板几何计算的精度和可靠性描述
+- 补充了单元测试验证的几何约束条件
 
 ## 目录
 1. [引言](#引言)
@@ -35,6 +44,8 @@
 - 完整说明 `HsBaSlaPipelineConfig_t` 配置结构体及其默认值，涵盖层高、首层层高、底层曝光时间、普通层曝光时间、抬升距离、抬升速度、回抽速度、底板偏移、边框宽度、填充间距、填充角度、边框圈数、凸包选项、支撑开关、悬垂角度、支撑间隙、支撑直径、支撑密度、支撑图案、Lua 扩展脚本、输出路径、图像格式与尺寸等。
 - 对比 SLA 与 FDM 在支撑生成和层间粘合处理上的算法差异。
 - 提供 SLA 专用参数调优建议、最佳实践、API 调用方式以及性能优化方向。
+
+**重要更新**：SLA 底板生成算法现已修复关键的偏移计算问题，确保毫米单位的偏移量正确转换为内部坐标单位，避免了之前因单位不匹配导致的底板塌陷问题。
 
 ## 项目结构
 SLA 流水线由 C ABI 入口、C++ 内部实现、SLA 地板/打包导出、SLA 支撑生成、通用支撑配置、FDM 支撑参考实现、类型定义与 Proto 定义、示例程序共同组成。
@@ -69,7 +80,7 @@ B --> H["samples/SLA/main.cpp<br/>示例调用"]
 SLA 流水线核心由以下部分组成：
 - C ABI 接口：提供创建默认配置、同步运行、异步运行、释放结果的能力。
 - 流水线主流程：加载模型、计算层数、构建拓扑、并行切片、生成底板、生成支撑、构建配置 JSON、渲染层图像、打包导出。
-- SLA 地板系统：计算接触面、外扩边界、内缩填充区域、生成边框与填充，支持 Lua 自定义。
+- SLA 地板系统：计算接触面、外扩边界、内缩填充区域、生成边框与填充，支持 Lua 自定义。**已修复关键偏移计算问题**。
 - SLA 支撑系统：基于悬垂检测生成牺牲型支撑点，合并为圆形支撑截面。
 - 类型定义与 Proto：统一暴露 C 兼容配置结构体及跨语言消息定义。
 - 示例程序：演示如何设置 SLA 参数并调用流水线。
@@ -84,7 +95,7 @@ SLA 流水线核心由以下部分组成：
 - [main.cpp:89-118](file://samples/SLA/main.cpp#L89-L118)
 
 ## 架构总览
-SLA 流水线采用“预处理 → 切片 → 底板 → 支撑 → 导出”的阶段性流程，并通过协程与线程池实现并行化。
+SLA 流水线采用"预处理 → 切片 → 底板 → 支撑 → 导出"的阶段性流程，并通过协程与线程池实现并行化。
 
 ```mermaid
 sequenceDiagram
@@ -103,7 +114,7 @@ Model-->>Pipeline : ModelInfo
 Pipeline->>Slice : 构建拓扑 + 并行 SliceLayer
 Slice-->>Pipeline : 每层轮廓 PolygonsD
 Pipeline->>Floor : GenerateFloorRaft/LuaCustomFloorByFile
-Floor-->>Pipeline : 底板多边形
+Floor-->>Pipeline : 底板多边形已修复偏移计算
 Pipeline->>Support : GenerateAllSlaSupport/LuaSupport
 Support-->>Pipeline : 每层支撑多边形
 Pipeline->>Export : 构建 config.json + 渲染层图 + SaveSlaPackage
@@ -130,7 +141,7 @@ flowchart TD
 Start(["进入 RunSlaPipelineAsync"]) --> Load["加载模型/计算层数"]
 Load --> SliceTopo["构建切片拓扑"]
 SliceTopo --> ParallelSlice["并行 SliceLayer 生成每层轮廓"]
-ParallelSlice --> Floor["生成底板/raft"]
+ParallelSlice --> Floor["生成底板/raft已修复偏移计算"]
 Floor --> Support["生成支撑"]
 Support --> BuildJson["构建配置 JSON"]
 BuildJson --> Render["渲染层图像/底板/支撑图像"]
@@ -187,30 +198,42 @@ Package --> End(["返回结果"])
 - [pipeline_types.h:789-825](file://pipelinetypes/pipeline_types.h#L789-L825)
 - [sla_pipeline.proto:18-58](file://proto/sla_pipeline.proto#L18-L58)
 
-### SLA 底板与 Raft 生成
-SLA 底板用于增强模型与构建板的附着力。实现包括：
-- 计算接触面：可选凸包或凹包简化。
-- 外扩形成 raft 边界。
-- 内缩生成边框环。
-- 填充内部区域（Zigzag）。
-- 支持 Lua 自定义底板生成。
+### SLA 底板与 Raft 生成（已修复关键偏移计算）
+SLA 底板用于增强模型与构建板的附着力。**最新修复**解决了关键的偏移计算问题，确保毫米单位的偏移量正确转换为内部坐标单位。
+
+**关键修复内容**：
+- 引入了 `OffsetUnits()` 辅助函数，将毫米单位的偏移量乘以 `integerization` 常量（1e6）转换为内部坐标单位
+- 修正了所有 `Offset()` 调用中的偏移参数，避免直接将毫米值传递给期望坐标单位的函数
+- 确保了底板外扩、边框生成和填充区域的精确几何计算
 
 ```mermaid
 flowchart TD
 Bottom["首层轮廓"] --> Footprint["ComputeFootprint<br/>凸包/凹包/直接轮廓"]
-Footprint --> Outer["Offset 外扩得到 raft_outer"]
-Outer --> Border["Offset 内缩得到 border_loops"]
+Footprint --> OffsetConv["OffsetUnits() 转换<br/>mm → 坐标单位"]
+OffsetConv --> Outer["Offset 外扩得到 raft_outer"]
+Outer --> BorderCalc["Offset 内缩得到 border_loops"]
 Outer --> FillRegion["Offset 内缩得到 fill_region"]
-Border --> Result["边框 + 填充 = 底板"]
+BorderCalc --> Result["边框 + 填充 = 底板"]
 FillRegion --> Zigzag["ZigzagFill 生成填充"]
 ```
 
 **图示来源**
 - [sla_floor.cpp:34-118](file://LibHsBaSlicer/Floor/sla_floor.cpp#L34-L118)
 
+**修复前的问题**：
+- 直接使用毫米值调用 `Offset()` 函数，导致偏移量被缩小 1e6 倍
+- 底板完全塌陷到模型轮廓上，无法形成有效的支撑结构
+- 边框和内缩区域计算错误，导致几何结构失效
+
+**修复后的效果**：
+- 底板按配置的毫米偏移量正确外扩
+- 边框环和内缩区域精确计算
+- 填充区域保持正确的几何关系
+
 **章节来源**
 - [sla_floor.hpp:21-116](file://LibHsBaSlicer/Floor/sla_floor.hpp#L21-L116)
 - [sla_floor.cpp:34-118](file://LibHsBaSlicer/Floor/sla_floor.cpp#L34-L118)
+- [IntPolygon.hpp:16-17](file://2D/IntPolygon.hpp#L16-L17)
 
 ### SLA 支撑生成
 SLA 牺牲型支撑通过悬垂检测生成支撑点，并以小直径圆表示支撑截面，最终合并为支撑多边形。
@@ -324,7 +347,7 @@ SupportImgs --> Zip
 ## 依赖关系分析
 SLA 流水线依赖多个模块：
 - 模型与拓扑：通过 LibHsBaSlicer 的模型管理与切片拓扑构建。
-- 2D 几何：Clipper2Lib 用于多边形偏移、并集、交集等操作。
+- 2D 几何：Clipper2Lib 用于多边形偏移、并集、交集等操作。**关键依赖 integerization 常量进行单位转换**。
 - 填充算法：ZigzagFill 用于底板填充。
 - Lua 扩展：支持自定义底板、支撑与导出逻辑。
 - 并行化：协程与线程池用于并行切片与图像渲染。
@@ -337,6 +360,7 @@ SLA --> FLOOR["sla_floor.cpp"]
 SLA --> SUPPORT["SlaSupport.cpp"]
 FLOOR --> CLIPPER["Clipper2Lib"]
 FLOOR --> LUA["Lua 自定义"]
+FLOOR --> INTCONV["Integerization 单位转换"]
 SUPPORT --> OVERHANG["OverhangDetector"]
 SLICE --> TOPO["BuildSliceTopology"]
 ```
@@ -383,8 +407,9 @@ SLA 流水线在两个关键路径上使用并行化：
   - 抬升速度 60.0 mm/s，回抽速度 150.0 mm/s。
   - 过高抬升速度可能导致树脂撕裂，过低则降低效率。
 
-- 底板参数
+- 底板参数（已修复偏移计算）
   - 底板偏移 2.0 mm，边框宽度 1.0 mm，填充间距 0.5 mm，边框圈数 2。
+  - **重要**：现在偏移量计算正确，能够产生预期的几何效果。
   - 增大偏移与边框宽度提升附着力，但增加材料消耗。
   - 填充间距越小，底板越密实，但渲染与导出时间增加。
 
@@ -439,8 +464,12 @@ App->>Free : 释放结果字符串
 - 模型加载失败：检查 `model_name` 与 `model_path` 是否正确，确保模型文件存在且可读。
 - 层数为零：模型高度无效或层高设置异常，需检查 `layer_height` 与 `first_layer_height`。
 - 支撑为空：悬垂角度阈值过高或支撑间隙过大，导致无悬垂区域或悬垂被完全收缩。
-- 底板为空：底板偏移或边框宽度设置不当，导致外扩或内缩结果为空。
+- **底板为空或塌陷**：**已修复** - 现在偏移计算正确，如果仍出现问题，检查底板配置参数是否合理。
 - 导出失败：图像渲染失败或 zip 写入权限问题，检查图像尺寸与输出路径。
+
+**新增故障排除**：
+- **底板几何异常**：确认使用了最新版本，其中包含了偏移计算修复。
+- **单位混淆**：确保所有底板相关参数都使用毫米单位，系统会自动进行单位转换。
 
 错误处理机制：
 - 流水线捕获 `RuntimeError` 并返回错误消息。
@@ -451,4 +480,6 @@ App->>Free : 释放结果字符串
 - [sla_floor.cpp:526-530](file://LibHsBaSlicer/Floor/sla_floor.cpp#L526-L530)
 
 ## 结论
-HsBaSlicer 的 SLA 流水线提供了完整的树脂打印切片能力，涵盖模型加载、并行切片、底板生成、支撑生成与图像打包导出。通过 `HsBaSlaPipelineConfig_t` 可精细控制层高、曝光、抬升、底板与支撑参数，并支持 Lua 扩展以实现定制化流程。与 FDM 相比，SLA 支撑更强调牺牲型小直径支撑与易去除性，而 FDM 支撑则更注重柱状、树状与蜂窝结构的机械强度。在实际应用中，应根据树脂特性、模型几何与设备能力调优参数，并结合并行化与环境变量优化性能。
+HsBaSlicer 的 SLA 流水线提供了完整的树脂打印切片能力，涵盖模型加载、并行切片、底板生成、支撑生成与图像打包导出。**最新的偏移计算修复确保了底板生成的几何精度和可靠性**。通过 `HsBaSlaPipelineConfig_t` 可精细控制层高、曝光、抬升、底板与支撑参数，并支持 Lua 扩展以实现定制化流程。与 FDM 相比，SLA 支撑更强调牺牲型小直径支撑与易去除性，而 FDM 支撑则更注重柱状、树状与蜂窝结构的机械强度。在实际应用中，应根据树脂特性、模型几何与设备能力调优参数，并结合并行化与环境变量优化性能。
+
+**关键改进**：SLA 底板生成算法现在正确处理毫米单位到内部坐标单位的转换，消除了之前因单位不匹配导致的底板塌陷问题，确保了底板几何的正确性和可靠性。

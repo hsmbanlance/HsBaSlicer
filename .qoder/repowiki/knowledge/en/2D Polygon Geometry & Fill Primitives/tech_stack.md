@@ -1,0 +1,1 @@
+C++ with Clipper2 (`clipper.h`, `clipper.offset.h`) for exact integer arithmetic boolean set ops and polygon offsets; libpng + libjpeg-turbo for raster I/O; optional OpenCV for image processing; optional FreeType for text-to-polygon rendering; Lua C API for scripting integration.

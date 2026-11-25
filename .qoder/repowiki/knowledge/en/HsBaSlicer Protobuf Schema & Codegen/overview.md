@@ -1,0 +1,1 @@
+Defines the protobuf schema for HsBaSlicer's core data types (points, vectors, meshes, paths) and per-technology pipeline configs (FDM/SLA/SLS/SLM/TDP/WAAM/LoM), plus a multi-language code generator.

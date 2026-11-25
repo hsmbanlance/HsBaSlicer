@@ -1,0 +1,1 @@
+A successful CMake configure requires PowerShell to be installed (`find_program(POWERSHELL_EXECUTABLE NAMES pwsh powershell)`); if absent the build aborts with a FATAL_ERROR. The generator reads `vcpkg.json` from the repo root (or the path passed via `-VcpkgJsonPath`).

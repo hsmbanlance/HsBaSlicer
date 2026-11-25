@@ -1,0 +1,1 @@
+Provides ZIP compression/extraction backends, a multi-database SQL adapter abstraction, process-parameter persistence with reflection-driven schema, and Lua bindings for the file-operator subsystem.

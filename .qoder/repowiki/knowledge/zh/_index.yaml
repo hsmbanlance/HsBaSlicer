@@ -3,13 +3,62 @@ schema_version: 1
 locale: zh-CN
 branch: dev
 nodes_managed: true
-exported_at: "2026-11-09T12:38:25Z"
+exported_at: "2026-11-25T01:30:11Z"
 modules:
     "":
-        dir_name: HsBaSlicer 3D 打印切片框架（根项目）
-        title: HsBaSlicer 3D 打印切片框架（根项目）
+        dir_name: HsBaSlicer 多工艺切片引擎根工程
+        title: HsBaSlicer 多工艺切片引擎根工程
         scope: []
+        source_files: []
+        children:
+            - csg_model_sample
+            - macos_toolchain_action
+            - pipeline_kernel
+        depends_on: []
+        related_to: []
+    csg_model_sample:
+        dir_name: 文本 CSG 模型示例（DRAW 脚本 → B-Rep → FDM）
+        title: 文本 CSG 模型示例（DRAW 脚本 → B-Rep → FDM）
+        scope:
+            - samples/CsgModel/CMakeLists.txt
+            - samples/CsgModel/main.cpp
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: pipeline_kernel
+    macos_toolchain_action:
+        dir_name: macOS 工具链安装 GitHub Action
+        title: macOS 工具链安装 GitHub Action
+        scope:
+            - .github/actions/macos-toolchain/action.yml
         source_files: []
         children: []
         depends_on: []
         related_to: []
+    pipeline_kernel:
+        dir_name: 切片流水线内核（多工艺同步编排层）
+        title: 切片流水线内核（多工艺同步编排层）
+        scope:
+            - LibHsBaSlicer/Pipeline/kernel_types.hpp
+            - LibHsBaSlicer/Pipeline/fdm_pipeline.cpp
+            - LibHsBaSlicer/Pipeline/fdm_pipeline.hpp
+            - LibHsBaSlicer/Pipeline/sla_pipeline.cpp
+            - LibHsBaSlicer/Pipeline/sla_pipeline.hpp
+            - LibHsBaSlicer/Pipeline/sls_pipeline.cpp
+            - LibHsBaSlicer/Pipeline/sls_pipeline.hpp
+            - LibHsBaSlicer/Pipeline/slm_pipeline.cpp
+            - LibHsBaSlicer/Pipeline/slm_pipeline.hpp
+            - LibHsBaSlicer/Pipeline/lom_pipeline.cpp
+            - LibHsBaSlicer/Pipeline/lom_pipeline.hpp
+            - LibHsBaSlicer/Pipeline/tdp_pipeline.cpp
+            - LibHsBaSlicer/Pipeline/tdp_pipeline.hpp
+            - LibHsBaSlicer/Pipeline/waam_pipeline.cpp
+            - LibHsBaSlicer/Pipeline/waam_pipeline.hpp
+            - LibHsBaSlicer/Pipeline/custom_pipeline.cpp
+            - LibHsBaSlicer/Pipeline/custom_pipeline.hpp
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: csg_model_sample

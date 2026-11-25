@@ -1,0 +1,1 @@
+Provides the IModel implementations for the slicer: an OpenCASCADE BRep kernel and a pluggable user-supplied CAD library loaded at runtime via dynamic linking.

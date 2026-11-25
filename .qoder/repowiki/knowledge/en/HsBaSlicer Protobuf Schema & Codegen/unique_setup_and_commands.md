@@ -1,0 +1,1 @@
+Build requires `HSBA_PROTOBUF_OUT` to be set to enable the multi-language code generation stage; outputs land under `${HSBA_PROTOBUF_OUT}/cpp|cs|java|python|php/<proto_name>.pb.*`. The native C++ library `HsBaSlicerProto` is always built via the standard CMake target.

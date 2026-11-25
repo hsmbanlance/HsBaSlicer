@@ -1,0 +1,1 @@
+Generates a compiled-in version info object containing product metadata, build configuration, and an inventory of third-party dependencies with licenses derived from vcpkg.json.

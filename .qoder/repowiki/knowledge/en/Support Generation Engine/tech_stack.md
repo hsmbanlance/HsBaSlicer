@@ -1,0 +1,1 @@
+C++ static library built with CMake; geometry operations rely on Clipper2 (`PkgConfig::Clipper2`); extensibility through embedded Lua via `${LUA_LIBRARIES}` and `${LUA_INCLUDE_DIR}`.

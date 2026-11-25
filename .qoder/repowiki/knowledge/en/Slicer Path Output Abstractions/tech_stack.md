@@ -1,0 +1,1 @@
+C++ static library `HsBaPaths` built by CMake; Lua scripting engine linked via `${LUA_LIBRARIES}` for optional post-processing scripts invoked through `lua_State*` registration callbacks.

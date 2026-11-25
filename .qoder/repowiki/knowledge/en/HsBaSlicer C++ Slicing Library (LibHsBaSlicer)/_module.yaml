@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: libhsbaslicer
+title: HsBaSlicer C++ Slicing Library (LibHsBaSlicer)
+scope:
+    - LibHsBaSlicer/
+source_files: []
+depends_on: []
+related_to: []

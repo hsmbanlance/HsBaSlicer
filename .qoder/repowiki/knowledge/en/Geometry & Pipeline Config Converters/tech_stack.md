@@ -1,0 +1,1 @@
+C++ static library built with CMake; depends on Eigen3 for geometry math and Google Protobuf-generated headers (`*.pb.h`) for wire format; links against sibling libraries `HsBaSlicerMesh` and `HsBaPipelineTypes`.

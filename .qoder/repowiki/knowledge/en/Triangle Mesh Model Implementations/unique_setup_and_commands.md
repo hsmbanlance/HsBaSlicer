@@ -1,0 +1,1 @@
+Build requires enabling `HSBA_COPL` in CMake to compile the CGAL-backed `CgalModel` source files and link `CGAL::CGAL` plus `igl_copyleft` targets; without it the library still builds with just `IglModel` and `FullTopoModel`.

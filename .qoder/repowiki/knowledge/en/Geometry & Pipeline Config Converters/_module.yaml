@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: convert
+title: Geometry & Pipeline Config Converters
+scope:
+    - convert/
+source_files: []
+depends_on: []
+related_to: []

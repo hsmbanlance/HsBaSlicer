@@ -1,0 +1,6 @@
+- Geometry primitives are exposed as type aliases over Clipper2Lib types (`Point2 = Point64`, `Polygon = Path64`, `Polygons = Paths64`, and the same `*D` suffix for doubles) rather than custom classes.
+- Boolean operations and offset/simplify utilities are provided as free functions in the `HsBa::Slicer` namespace with parallel overloads for single polygon and polygon-set arguments.
+- Public headers use Doxygen-style `@file`/`@brief`/`@param` comments and include guards named after the header path (e.g. `HSBA_SLICER_INTPOLYGON_HPP`).
+- Optional heavy dependencies (Freetype, OpenCV) are conditionally compiled out via `#ifdef HSBA_HAVE_FREETYPE` / `#ifndef IOS AND NOT HSBA_GAME_CONSOLE` blocks in both CMake and source.
+- Lua integration follows a two-part pattern: per-type `Push*ToLua` / `LuaTableTo*` converters plus a `RegisterLua*Functions` registration function that binds all operations onto a `lua_State*`.
+- Debug-only SVG export is gated behind the `HSBA_POLYGON_DUMP` compile-time macro, with matching declarations in both the int and double polygon headers.

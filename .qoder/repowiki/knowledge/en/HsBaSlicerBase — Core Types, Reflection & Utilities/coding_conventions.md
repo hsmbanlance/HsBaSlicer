@@ -1,0 +1,6 @@
+- Public headers use `#pragma once` together with an `HSBA_SLICER_<NAME>_HPP` include guard for compatibility with older toolchains.
+- All user-facing types live in the `HsBa::Slicer` namespace, while utility helpers (AnyObject, ITranslator, ThreadPoolExecutor) are placed in `HsBa::Slicer::Utils`.
+- Errors are thrown as members of the `RuntimeError` hierarchy (e.g. `InvalidArgumentError`, `IOError`, `NotFoundError`) rather than raw `std::runtime_error`.
+- The `ModelFormat` enum is extended by adding entries in `IModel.hpp` and updating the `magic_enum::customize::enum_range` specialization plus the `ToString` switch in `ModelFormat.cpp` to keep string conversion in sync.
+- Optional third-party dependencies are gated behind platform checks in `CMakeLists.txt` (Android/iOS/game console vs desktop) so the same source tree builds across targets.
+- Test-only code is isolated behind compile-time macros: `HSBA_ANY_OBJECT_ENABLE_MOCK` (auto-detected from BOOST/GTEST/CATCH/DOCTEST macros or set via CMake) wraps the entire `Mock` namespace and `MockRegistry`.

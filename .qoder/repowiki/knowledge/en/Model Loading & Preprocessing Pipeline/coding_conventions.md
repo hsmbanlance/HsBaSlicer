@@ -1,0 +1,5 @@
+- Optional kernel functionality is isolated behind `#ifdef USE_OCCT` / `#ifdef USE_OPENVDB` / `#ifdef USE_CGAL` guards in both the header declarations and the implementation bodies.
+- Public methods return `std::shared_ptr<IModel>` and store results into the internal `pool_` via `pool_.insert(name, std::static_pointer_cast<IModel>(...))`, so callers always interact through the abstract interface.
+- Runtime errors for missing models use `InvalidArgumentError` with `std::format` messages naming the offending key; unsupported runtime conditions (wrong concrete type, disabled kernel) throw `RuntimeError` or `NotSupportedError`.
+- Type-specific helpers (`ToIglModel`, `ToOcctModel`, `AsOpenVdbModel`) perform `dynamic_cast` checks against the source model and throw descriptive errors when the cast fails, centralizing type validation before delegating to kernel functions.
+- The class disables copy and move construction/assignment to enforce unique ownership of the underlying `NamedObjectPool`.

@@ -1,0 +1,4 @@
+- Each generator is a class deriving from `ISupport` and overriding `Generate` (and optionally `GenerateAll` / `IsLayerIndependent`) rather than using free functions or enums.
+- Configuration flows uniformly through the `SupportConfig` hierarchy (`SupportConfig` → `FdmSupportConfig` / `SlaSupportConfig`), so generators receive parameters as a single typed struct instead of ad-hoc arguments.
+- Overhang detection is isolated in the stateless `OverhangDetector` static API, keeping per-layer geometry computation separate from strategy-specific support pattern generation.
+- Public headers use the `HSBA_SLER_<NAME>_HPP` include guard convention under the `HsBa::Slicer::Support` namespace.

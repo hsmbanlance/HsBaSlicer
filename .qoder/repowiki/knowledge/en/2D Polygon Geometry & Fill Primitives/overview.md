@@ -1,0 +1,1 @@
+Core 2D geometry library providing integer/double-precision polygon types, Clipper2-based boolean/offset operations, infill pattern generators, image↔polygon conversion, and Lua bindings.

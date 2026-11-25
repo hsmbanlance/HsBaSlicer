@@ -1,0 +1,1 @@
+C++20 library built with CMake; optional OCCT CAD kernel gated by `HSBA_COPL` (disabled on Android/iOS/game consoles); Lua embedding for custom pipelines; SQLite/MySQL/PostgreSQL backends via `HsBaSlicerFileOperator` for parameter persistence.

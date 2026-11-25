@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: dllhsbaslicer/job_control
+title: job_control
+scope:
+    - DllHsBaSlicer/job_control.cpp
+    - DllHsBaSlicer/job_control.h
+    - DllHsBaSlicer/event_source_register.cpp
+source_files: []
+depends_on: []
+related_to: []

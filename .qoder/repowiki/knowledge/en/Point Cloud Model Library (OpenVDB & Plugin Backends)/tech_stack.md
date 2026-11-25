@@ -1,0 +1,1 @@
+C++ with Eigen matrices, OpenVDB Vec3fGrid for voxel storage and level-set mesh reconstruction, Intel TBB for parallelism, Imath math types, Boost.Iostreams and Boost.DLL (desktop only); MSVC builds add `/bigobj` to `OpenVdbModel_mesh.cpp` to work around the 65535-section limit.

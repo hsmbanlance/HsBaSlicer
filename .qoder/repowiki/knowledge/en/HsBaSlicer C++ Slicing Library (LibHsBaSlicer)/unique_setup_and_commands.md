@@ -1,0 +1,1 @@
+Build as static or shared via the `BUILD_SHARED_LIBS` CMake flag; shared builds define `HSBA_SLICER_EXPORTS` and use `export.h`'s `HSBA_SLICER_LIB_API` for Windows `__declspec(dllexport/dllimport)`. The CAD model layer is only linked when `HSBA_COPL` is defined and none of `ANDROID`/`IOS`/`HSBA_GAME_CONSOLE` is set.

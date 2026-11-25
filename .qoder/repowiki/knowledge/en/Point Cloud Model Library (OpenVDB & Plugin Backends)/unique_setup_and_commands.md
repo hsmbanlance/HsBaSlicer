@@ -1,0 +1,1 @@
+Build requires TBB and Imath unconditionally; OpenVDB linkage is opt-in via `find_package(OpenVDB)` and pulls in blosc/ZLIB/Boost.iosystems. On Windows desktop builds Boost.dll is also linked. No special test command is defined in this module's CMakeLists.txt.

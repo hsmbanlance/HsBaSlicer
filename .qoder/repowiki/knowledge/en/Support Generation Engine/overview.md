@@ -1,0 +1,1 @@
+Per-layer support generation for FDM, SLA and custom Lua scripts, detecting overhang regions between adjacent layers and producing support cross-section polygons.

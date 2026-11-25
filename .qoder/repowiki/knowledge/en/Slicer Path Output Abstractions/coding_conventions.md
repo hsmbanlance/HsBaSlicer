@@ -1,0 +1,4 @@
+- Every `IPath` implementation exposes the same overload set of `Save(path)` and `ToString()` variants — plain, inline-script, inline-script+funcName, and script-file+funcName — each accepting an optional `std::function<void(lua_State*)>` registration callback.
+- Lua state is kept out of the public ABI by forward-declaring `struct lua_State` in headers and only including `lua.hpp` inside `.cpp` translation units.
+- Each class lives in its own paired `<name>.hpp` / `<name>.cpp` file under `paths/`, with the header guarded by an `HSBA_SLICER_<NAME>_PATH_HPP` macro and the class placed in namespace `HsBa::Slicer`.
+- Layered inheritance is used to share serialization infrastructure: `LayersPath` implements polygon+config storage and Lua hooks, while `GCodePath`, `RobotPath`, and `WeldRobotPath` specialize the final output format.

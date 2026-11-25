@@ -1,0 +1,4 @@
+- Each logging level (0–5) is dispatched through a single `switch(log_lv)` block in `LoggerSingletone::Log`, with per-platform branches (`#ifdef __ANDROID__` / `#elif defined(TARGET_OS_IOS)`) selecting the backend call, keeping the three backends in lockstep.
+- Public symbols are annotated with the `HSBA_SLICER_LOG_API` macro from `export.h` rather than raw `__declspec`, allowing consumers to import without knowing the build mode.
+- Source location is captured lazily via default arguments of type `const std::source_location&` using `std::source_location::current()`, so callers pay no overhead unless they pass a custom location.
+- The singleton is constructed only through the private nested struct tag `LoggerSingletone::Private`, preventing external construction while allowing `CreateInstance` and `GetInstance` to construct it.

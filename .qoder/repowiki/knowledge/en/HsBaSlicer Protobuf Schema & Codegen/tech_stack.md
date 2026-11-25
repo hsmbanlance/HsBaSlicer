@@ -1,0 +1,1 @@
+Protocol Buffers v3 (`syntax = "proto3"`); CMake + `find_package(Protobuf)` driving `protoc` for C++, C#, Java, Python, and PHP output targets.

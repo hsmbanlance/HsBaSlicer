@@ -1,0 +1,5 @@
+- Public entry points in this library are marked with the `HSBA_SLICER_LIB_API` macro from `export.h` rather than raw compiler attributes.
+- Each pipeline variant lives in its own `<kind>_pipeline.{cpp,hpp}` under `Pipeline/`, sharing the common `Kernel::Hooks` / `Kernel::GeometryCapture` types in `kernel_types.hpp` instead of duplicating orchestration logic.
+- Configuration marshalling between the C ABI (`pipelinetypes/pipeline_types.h`) and native code goes through free functions in `ParamStore/` (`SavePipelineParams`/`LoadPipelineParams`/`FreeLoadedConfigStrings`) so callers never touch `fileoperator` directly.
+- Expected failures in kernel calls surface through result structs carrying `success`/`error`/`cancelled` fields rather than throwing exceptions.
+- Progress reporting and cooperative cancellation are injected via the `Hooks` struct (a `std::function` progress callback plus an optional `std::atomic<bool>*` cancel flag) instead of global state.

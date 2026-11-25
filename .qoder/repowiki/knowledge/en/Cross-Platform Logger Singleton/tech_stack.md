@@ -1,0 +1,1 @@
+Boost.Log (desktop) with `boost/log/sources/severity_logger.hpp`, `text_file_backend`, `console`, plus `boost::property_tree` for INI parsing; Android NDK `android/log.h`; iOS `os_log` framework; C++20 `std::source_location` for source-location capture.

@@ -1,0 +1,1 @@
+Build requires PNG, JPEG, Lua, and Clipper2 packages; OpenCV is only linked when not targeting IOS or HSBA_GAME_CONSOLE. Optional features are toggled via CMake definitions: `-DFreetype_FOUND` enables `HSBA_HAVE_FREETYPE` (text rendering), `-DHSBA_POLYGON_DUMP` enables debug SVG dump functions.

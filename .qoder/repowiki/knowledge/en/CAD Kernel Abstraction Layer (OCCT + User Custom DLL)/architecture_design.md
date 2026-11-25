@@ -1,0 +1,6 @@
+Two parallel IModel implementations live side-by-side under `HsBa::Slicer`:
+- `OcctModel` (`OcctModel.{hpp,cpp}`) is the default implementation backed by OCCT's `TopoDS_Shape`, exposing STEP/IGES/VRML/BRep load/save, affine transforms, tessellation, boolean ops, thick-solid, and primitive factories (`CreateBox`/`Sphere`/`Cylinder`/`Cone`/`Torus`/`CreatePrime`).
+- `UserCustomCADModel` (`UserCustomCADModel.{hpp,cpp}`) is an adapter that dynamically loads an external DLL/SO implementing the `IUserCustomCAD` contract (function-pointer typedefs for create/destroy/boolean/thickness/prism factories) and forwards every `IModel` call to it; guarded by `#ifndef HSBA_NO_DLL_LOADER`.
+- `OcctCsg.{hpp,cpp}` implements text CSG via the OCCT DRAW Test Harness (`ShapeFromCsgScript`), exposed through `OcctModel::CreateFromCsg`; availability is controlled by `USE_OCCT_DRAW` / `HSBA_TEXT_CSG_DISABLED` compile definitions driven by CMake detection of `TKDraw`/`TKTopTest`.
+- `OcctTypeAliases.hpp` centralizes OCCT type aliases consumed across the module.
+- The CMake target `HsBaSlicerCADModel` links `OpenCASCADE_LIBRARIES`, `HsBaSlicerBase` (for `IModel`), `HsBaSlicerMesh`, and conditionally `Boost::dll` on desktop platforms. Dependency direction is one-way: this module depends on `base/IModel.hpp` and `2D/FloatPolygons.hpp`; nothing in `base/` or `2D/` knows about OCCT.

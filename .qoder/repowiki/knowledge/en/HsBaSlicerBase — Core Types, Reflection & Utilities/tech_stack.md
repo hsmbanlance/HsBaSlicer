@@ -1,0 +1,1 @@
+C++17 static library built with CMake; links Eigen3 and magic_enum unconditionally, and conditionally links Boost.Locale + Boost.Nowide (desktop) or iconv (iOS). The `IModel.hpp` header also exposes a flat `extern "C"` struct layout intended as the C ABI for foreign-language bindings.
